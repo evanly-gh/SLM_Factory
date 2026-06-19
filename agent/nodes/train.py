@@ -1,20 +1,10 @@
 # agent/nodes/train.py
 import os
-import json
 from concurrent.futures import ThreadPoolExecutor
 from agent.state import AgentState
 from training.slm_helpers import train as slm_train
 
 ARTIFACTS_DIR = "artifacts"
-
-
-def _save_dataset(examples: list[dict], version: int) -> str:
-    os.makedirs(ARTIFACTS_DIR, exist_ok=True)
-    path = os.path.join(ARTIFACTS_DIR, f"dataset_v{version}.jsonl")
-    with open(path, "w") as f:
-        for ex in examples:
-            f.write(json.dumps(ex) + "\n")
-    return path
 
 
 def train_node(state: AgentState) -> AgentState:
