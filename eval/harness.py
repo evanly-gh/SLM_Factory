@@ -2,11 +2,7 @@
 from dataclasses import dataclass
 from data.eval_set import EvalSet
 
-try:
-    from training.slm_helpers import infer_batch
-except ImportError:
-    def infer_batch(prompts, weights_ref, base_model, max_workers=20):
-        raise NotImplementedError("slm_helpers not yet available")
+from training.slm_helpers import infer_batch
 
 @dataclass
 class EvalResult:
