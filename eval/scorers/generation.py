@@ -41,8 +41,9 @@ def score(eval_set: EvalSet, predictions: list[str]) -> dict:
     avg_score = sum(scores) / len(scores) if scores else 0.0
     # For per-slice: convert to pass/fail labels at threshold 0.5
     pred_labels = ["correct" if s >= 0.5 else "wrong" for s in scores]
+    gold_labels_for_slice = ["correct"] * len(scores)  # all gold answers are "correct"
     from eval.metrics import per_slice_scores
-    slices = per_slice_scores(eval_set, pred_labels)
+    slices = per_slice_scores(eval_set, pred_labels, gold_labels=gold_labels_for_slice)
     failures = [
         {**ex, "predicted": pred, "judge_score": sc}
         for ex, pred, sc in zip(eval_set.all, predictions, scores)

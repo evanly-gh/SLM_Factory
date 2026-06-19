@@ -20,11 +20,13 @@ def train(
     batch_size: int,
     lora_rank: int | None,
     output_dir: str = "artifacts",
+    task_type: str = "classification",
 ) -> str:
     """
     Execute the full LoRA training loop.
     Returns weights_ref string for immediate inference.
     Always trains from base_model — never from a prior checkpoint.
+    task_type controls the prompt format used during training.
     """
     config = TrainingConfig(
         base_model=base_model,
@@ -32,8 +34,9 @@ def train(
         learning_rate=learning_rate,
         batch_size=batch_size,
         lora_rank=lora_rank,
+        task_type=task_type,
     )
-    return run_lora_training(dataset_path, config, output_dir=output_dir)
+    return run_lora_training(dataset_path, config, output_dir=output_dir, task_type=task_type)
 
 def infer(prompt: str, weights_ref: str, base_model: str, max_new_tokens: int = 50) -> str:
     """Load checkpoint and generate text. No deployment step required."""

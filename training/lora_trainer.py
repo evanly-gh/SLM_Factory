@@ -11,6 +11,7 @@ class TrainingConfig:
     learning_rate: float
     batch_size: int
     lora_rank: int | None  # None = full fine-tune
+    task_type: str = "classification"
 
     def __post_init__(self):
         if self.lora_rank is not None and self.lora_rank not in VALID_LORA_RANKS:
@@ -22,10 +23,15 @@ def _run_unsloth_training(
     dataset_path: str,
     config: TrainingConfig,
     output_dir: str,
+    task_type: str = "classification",
 ) -> str:
     """
     Run LoRA fine-tuning via Unsloth.
     Returns the path to the saved checkpoint directory.
+    task_type controls the prompt format:
+      - "classification": label classification prompt
+      - "NER": entity extraction prompt
+      - "generation": text-to-answer prompt
     """
     from unsloth import FastLanguageModel
     from transformers import TrainingArguments
@@ -53,12 +59,30 @@ def _run_unsloth_training(
     with open(dataset_path) as f:
         raw = [json.loads(line) for line in f if line.strip()]
 
-    PROMPT_TEMPLATE = (
-        "Classify this SMS message as spam or ham.\n\nMessage: {text}\n\nLabel: {label}"
-    )
-
-    def format_example(ex):
-        return {"text": PROMPT_TEMPLATE.format(**ex)}
+    if task_type == "classification":
+        def format_example(ex):
+            return {"text": (
+                f"Task: {task_type} classification.\n"
+                f"Input: {ex['text']}\n"
+                f"Label: {ex['label']}"
+            )}
+    elif task_type == "NER":
+        def format_example(ex):
+            entities_str = json.dumps(ex.get("entities", []))
+            return {"text": (
+                f"Extract named entities from the text.\n"
+                f"Text: {ex['text']}\n"
+                f"Entities (JSON): {entities_str}"
+            )}
+    elif task_type == "generation":
+        def format_example(ex):
+            prompt = ex.get("text", ex.get("prompt", ""))
+            completion = ex.get("answer", ex.get("response", ex.get("label", "")))
+            return {"text": f"{prompt}{completion}"}
+    else:
+        # Fallback: use text field as-is
+        def format_example(ex):
+            return {"text": ex.get("text", "")}
 
     from datasets import Dataset
     dataset = Dataset.from_list([format_example(e) for e in raw])
@@ -94,12 +118,15 @@ def run_lora_training(
     dataset_path: str,
     config: TrainingConfig,
     output_dir: str = "artifacts",
+    task_type: str | None = None,
 ) -> str:
     """
     Train model with LoRA (or full fine-tune if lora_rank is None).
     Returns weights_ref — a path string usable by infer() and infer_batch().
     Always trains from the base model, never from a prior checkpoint.
+    task_type defaults to config.task_type if not provided.
     """
     os.makedirs(output_dir, exist_ok=True)
-    checkpoint_path = _run_unsloth_training(dataset_path, config, output_dir)
+    effective_task_type = task_type if task_type is not None else config.task_type
+    checkpoint_path = _run_unsloth_training(dataset_path, config, output_dir, task_type=effective_task_type)
     return checkpoint_path
