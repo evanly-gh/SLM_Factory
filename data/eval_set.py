@@ -62,8 +62,9 @@ def build_eval_set(
     rng.shuffle(clear_ham)
     neg = clear_ham[:n_neg]
 
-    # Epos: clear spam
-    rng.shuffle(spam)
-    pos = spam[:n_pos]
+    # Epos: clear spam (exclude items already in boundary)
+    clear_spam = [e for e in spam if e["text"] not in boundary_texts]
+    rng.shuffle(clear_spam)
+    pos = clear_spam[:n_pos]
 
     return EvalSet(pos=pos, neg=neg, boundary=boundary)
