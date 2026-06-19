@@ -1,5 +1,6 @@
 # agent/graph.py
 from langgraph.graph import StateGraph, END
+from langgraph.graph.state import CompiledStateGraph
 from agent.state import AgentState
 from agent.nodes.task_analysis import task_analysis_node
 from agent.nodes.eval_setup import eval_setup_node
@@ -27,7 +28,7 @@ def _route_after_escalate(state: AgentState) -> str:
     return state.get("next_action", "terminate")
 
 
-def build_graph() -> StateGraph:
+def build_graph() -> CompiledStateGraph:
     graph = StateGraph(AgentState)
 
     # Add all nodes
