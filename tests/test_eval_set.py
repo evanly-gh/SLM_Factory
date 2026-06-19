@@ -23,3 +23,14 @@ def test_eval_set_never_in_training_data():
     # All eval texts should come from the examples passed in
     all_texts = {e["text"] for e in FAKE_EXAMPLES}
     assert eval_texts.issubset(all_texts)
+
+def test_eval_set_slices_are_disjoint():
+    es = build_eval_set(FAKE_EXAMPLES, n_boundary=10)
+    pos_texts = {e["text"] for e in es.pos}
+    neg_texts = {e["text"] for e in es.neg}
+    bnd_texts = {e["text"] for e in es.boundary}
+    assert pos_texts.isdisjoint(neg_texts)
+    assert pos_texts.isdisjoint(bnd_texts)
+    assert neg_texts.isdisjoint(bnd_texts)
+    # EvalSet.all must have no duplicates
+    assert len({e["text"] for e in es.all}) == len(es.all)
