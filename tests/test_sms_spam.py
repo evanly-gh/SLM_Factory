@@ -1,5 +1,5 @@
 # tests/test_sms_spam.py
-from data.sms_spam import download_sms_spam
+from data.loaders.sms_spam import download_sms_spam
 
 def test_download_returns_train_test():
     train, test = download_sms_spam()
