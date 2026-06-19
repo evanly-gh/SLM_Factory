@@ -3,7 +3,7 @@
 **Date:** 2026-06-19
 **Scope:** Phase 1 (Weeks 1–4) — Cold-start agentic fine-tuning loop, no hardware gating yet
 **Reference:** Pioneer Agent (arXiv:2604.09791, Fastino Labs, April 2026)
-**Goal:** Replicate Pioneer Agent's cold-start loop with the model search space bounded to Android-deployable sizes, demonstrably improving accuracy over 3–4 iterations on SMS Spam classification.
+**Goal:** Replicate Pioneer Agent's cold-start loop with the model search space bounded to Android-deployable sizes, demonstrably improving accuracy over 3–4 iterations. Phase 1 uses SMS Spam as the first concrete task to prove the loop works; the system is designed to generalize across all three task types from day one.
 
 ---
 
@@ -13,18 +13,31 @@ SLM Factory is an agentic fine-tuning loop that replicates Pioneer Agent's archi
 
 **Phase 1 goals (Weeks 1–4):**
 
-- Weeks 1–2: One working fine-tune-and-eval pass on SMS Spam with a base model from the Android pool. Prove the pipeline connects end-to-end.
+- Weeks 1–2: One working fine-tune-and-eval pass on SMS Spam (classification) with a base model from the Android pool. Prove the pipeline connects end-to-end.
 - Weeks 3–4: Add the iteration loop. Agent inspects failures, generates targeted training data, retrains, re-evaluates. 3–4 rounds. No hardware gating yet.
 - Week 4 checkpoint: a fine-tuned model on one task, demonstrably improving across ≥3 consecutive rounds.
 
-**Task:** SMS Spam binary classification (UCI SMS Spam Collection). Cold-start mode — agent downloads the dataset, builds the eval set, trains from scratch. This is the paper's SMS Spam trajectory (F1: 0.159 → 0.997 over 10 iterations with GLiNER2). We replicate with decoder models from the Android pool.
+**Task abstraction — three task types:**
+
+The system classifies every task into one of three types. This decision, made in `task_analysis`, routes the rest of the pipeline to type-appropriate logic:
+
+| Task type | Paper benchmarks covered | Supervision format | Eval metric | Curation strategy |
+|---|---|---|---|---|
+| `classification` | SMS Spam, CLINC150 | direct labels | accuracy / F1 | hard negatives at label boundaries |
+| `NER` | CoNLL-2003 | direct labels | entity F1 | entity diversification, no entity value >2–3× |
+| `generation` | ARC-Challenge, GSM8K, TriviaQA, HumanEval, XSum, SAMSum | chain-of-thought | LLM-as-judge [0,1] | teacher model annotation (DeepSeek-R1 / GPT-4.1) |
+
+Phase 1 proves the loop with SMS Spam (`classification`). The same code runs any of the nine paper benchmarks by passing a different `description` — no restructuring required.
+
+**Phase 1 first task:** SMS Spam binary classification (UCI SMS Spam Collection). Cold-start mode — agent downloads the dataset, builds the eval set, trains from scratch. We use decoder models from the Android pool (the paper used GLiNER2 encoder, which is not in our Android pool).
 
 **Success criteria:**
-- F1 improves across ≥3 consecutive rounds
+- Metric improves across ≥3 consecutive rounds on the Phase 1 task
 - At least one rollback occurs and is handled correctly (demonstrates the gate works)
 - Full run completes in <8 hours at <$50 total cost
 - All selected models fit within the Android pool bounds
 - `data-curation.md` provides a complete lineage trace of every intervention
+- Passing a different `description` (e.g., "fine-tune on ARC-Challenge reasoning") routes correctly through the same graph without code changes
 
 **Explicitly out of scope for Phase 1:**
 - On-device hardware gating (latency/power/memory thresholds as hard constraints)
@@ -97,17 +110,17 @@ Three sequential sub-stages executed before any data is touched:
 
 | Task type | Supervision format | Eval metric | Curation strategy |
 |---|---|---|---|
-| classification | direct labels | accuracy or F1 | hard negatives at label boundaries |
-| NER | direct labels | entity F1 | entity diversification |
-| generation | chain-of-thought | LLM-as-judge [0,1] | teacher model annotation |
+| `classification` | direct labels | accuracy or F1 | hard negatives at label boundaries |
+| `NER` | direct labels | entity F1 | entity diversification (no entity value >2–3×) |
+| `generation` | chain-of-thought | LLM-as-judge [0,1] | teacher model (DeepSeek-R1 for math/science; GPT-4.1 for code/QA) |
 
 Also selects the starting model from the Android pool (always Tier 1 first — smallest feasible model).
 
-*(2) Data acquisition* — runs `web_search` to locate the UCI SMS Spam Collection. Known benchmark → download actual data, do not synthesize.
+*(2) Data acquisition* — runs `web_search` to locate the relevant dataset. If a known benchmark is named (e.g., UCI SMS Spam, CoNLL-2003, GSM8K, ARC-Challenge), download actual benchmark data — do not synthesize. For custom tasks without public datasets, use a teacher model to synthesize seed examples.
 
-*(3) Baseline survey* — runs `web_search` to find published SOTA for SMS Spam at the target model size class (sub-1B models). Calibrates the accuracy target relative to published numbers rather than using the 0.96 default blindly. Identifies known challenges (class imbalance at 87:13 ham:spam, surface-form diversity) that inform data curation before any training begins.
+*(3) Baseline survey* — runs `web_search` to find published SOTA for the target task at the target model size class. Calibrates the accuracy target relative to published numbers rather than using the 0.96 default blindly. Identifies known challenges that inform data curation before any training begins (e.g., for SMS Spam: 87:13 class imbalance; for ARC-Challenge: format learning required for base models; for CoNLL-2003: precision vs. recall asymmetry).
 
-Writes all decisions to `data-curation.md` before any training.
+Writes all decisions — including task type classification and its downstream implications — to `data-curation.md` before any training.
 
 **Node 2: `eval_setup`**
 
@@ -117,11 +130,15 @@ Constructs the held-out evaluation set `E` before any training. Fixed throughout
 E = Epos ∪ Eneg ∪ Eboundary
 ```
 
-| Slice | Contents for SMS Spam |
-|---|---|
-| `Epos` | Genuine spam covering full surface-form range (URLs, prizes, urgency, phone numbers) |
-| `Eneg` | Legitimate messages that should NOT trigger spam, including borderline cases (e.g., "win tickets to the game tonight") |
-| `Eboundary` | Confusable pairs at the spam/ham boundary — promotional messages, marketing from known brands, appointment reminders with links |
+The three slices are always disjoint. Their concrete meaning varies by task type:
+
+| Slice | classification (e.g. SMS Spam) | NER (e.g. CoNLL-2003) | generation (e.g. ARC-Challenge) |
+|---|---|---|---|
+| `Epos` | Clear positive-class examples (genuine spam) | Entity-rich passages with gold annotations | Well-formed problems with unambiguous answers |
+| `Eneg` | Clear negative-class examples (legit messages) | Entity-free passages (hallucination test) | Adversarial / ill-posed inputs the model should decline or flag |
+| `Eboundary` | Confusable pairs at the class boundary | Near-miss spans, overlapping entity types | Multi-step or edge-case problems requiring fine-grained reasoning |
+
+For generation tasks, `Eneg` is replaced by adversarial inputs (ill-posed questions, out-of-domain prompts) and `Eboundary` contains problems that require multi-step reasoning or edge-case handling.
 
 Default stopping criterion: `f(π) ≥ 0.96` on `E`. Agent may lower this if it detects a genuine capacity plateau (remaining failures reflect model capacity limits or irreducible ambiguity, not fixable training gaps).
 
@@ -152,14 +169,17 @@ After each iteration the agent analyzes remaining failures on `E` to determine w
 
 Builds `Dcold = Dgold ∪ Dhard` at 65:35 ratio. No replay buffer in cold-start (Dparent = ∅; replay allocation redistributed to gold examples).
 
-Five quality controls on every dataset version:
-1. **2-for-1 rule** — every challenging boundary example gets a gold + hard negative pair (similar input, different correct answer)
-2. **Label balancing** — no label exceeds 3× the count of any other; UCI's 87:13 imbalance must be corrected
-3. **Context-length matching** — training example lengths match realistic SMS distribution (20–160 characters)
-4. **Entity diversification** — N/A for binary classification
-5. **CoT annotation** — N/A for classification (direct labels only)
+Five quality controls applied to every dataset version, with task-type-specific behaviour:
 
-Each label requires 3–5 distinct surface-text patterns. Target dataset size: 100–200 total examples for Phase 1 initial curriculum; grows via surgical augmentation across iterations.
+| Quality control | classification | NER | generation |
+|---|---|---|---|
+| **2-for-1 rule** | For each boundary example: one gold + one hard negative (similar input, different correct label) | For each entity boundary case: one gold span + one near-miss negative | For each problem: one gold answer + one plausible wrong answer |
+| **Label balancing** | No label exceeds 3× count of any other | No entity type exceeds 3× count of any other | N/A |
+| **Context-length matching** | Training lengths match realistic input distribution | Training lengths match realistic document lengths | Training lengths match realistic query lengths |
+| **Entity diversification** | N/A | No single entity value appears >2–3×; replace with synthetic equivalents | N/A |
+| **CoT annotation** | N/A (direct labels) | N/A (direct labels) | Teacher model generates step-by-step reasoning chains (DeepSeek-R1 for math/science; GPT-4.1 for code/QA) |
+
+Each label/entity type requires 3–5 distinct surface-text patterns. Target dataset sizes: 100–200 examples for classification/NER; 500–3,000 for generation depending on task complexity.
 
 **Node 7: `rollback_check`**
 
@@ -258,11 +278,15 @@ LoRA hyperparameter search space the agent explores:
 
 ### 3.3 Eval Harness
 
-The agent writes its own eval code per task (per paper Appendix D.2). For SMS Spam:
-- Metric: binary F1 (spam = positive class)
-- Method: exact match on predicted label string extracted from model output
-- Agent writes the extraction function; wires it to `infer_batch`
-- Outputs: overall F1, per-class F1, per-slice scores (Epos / Eneg / Eboundary)
+The agent writes its own eval code per task (per paper Appendix D.2). The harness is task-type-aware:
+
+| Task type | Metric | Extraction method |
+|---|---|---|
+| `classification` | binary F1 or accuracy | exact match on predicted label string |
+| `NER` | entity F1 | span extraction + entity-type match |
+| `generation` | LLM-as-judge score [0,1] | Claude API judges prediction against gold answer |
+
+All three types output: overall metric score, per-class/per-entity breakdown, per-slice scores (Epos / Eneg / Eboundary). The agent writes the extraction function at runtime for the specific task, wired to `infer_batch`.
 
 ---
 
@@ -270,28 +294,37 @@ The agent writes its own eval code per task (per paper Appendix D.2). For SMS Sp
 
 ### 4.1 Held-Out Eval Set Construction
 
-`E = Epos ∪ Eneg ∪ Eboundary` — built before any training, fixed throughout.
+`E = Epos ∪ Eneg ∪ Eboundary` — built before any training, fixed throughout. Always three disjoint slices. Construction varies by task type:
 
-| Slice | Contents | Source |
-|---|---|---|
-| `Epos` | Genuine spam across full surface-form range | UCI test split, stratified |
-| `Eneg` | Legitimate messages including borderline cases | UCI ham split + Claude synthesis |
-| `Eboundary` | Confusable pairs at spam/ham boundary — promotional, marketing, appointment reminders with links | Agent generates via web_search + Claude synthesis |
+**Classification (e.g. SMS Spam):**
+- `Epos`: genuine spam stratified across surface-form range — UCI test split
+- `Eneg`: clear legitimate messages, no label ambiguity — UCI ham split
+- `Eboundary`: confusable pairs at the boundary — promotional messages, marketing, appointment reminders with links
+
+**NER (e.g. CoNLL-2003):**
+- `Epos`: entity-rich passages with gold span annotations
+- `Eneg`: entity-free passages (tests hallucination suppression)
+- `Eboundary`: passages with overlapping or near-miss entity types
+
+**Generation (e.g. ARC-Challenge, GSM8K):**
+- `Epos`: well-formed problems with unambiguous correct answers
+- `Eneg`: adversarial inputs — ill-posed questions, out-of-domain prompts, jailbreak-style inputs
+- `Eboundary`: multi-step or edge-case problems requiring fine-grained reasoning
 
 ### 4.2 Curriculum Synthesis
 
-`Dcold = Dgold ∪ Dhard`, target ratio 65:35.
+`Dcold = Dgold ∪ Dhard`, target ratio 65:35. No replay buffer (Dparent = ∅ in cold-start).
 
-`Dgold` — correct labeled examples from UCI download:
-- Class-balanced (no label >3× any other; corrects UCI's 87:13 imbalance)
+`Dgold` — correct labeled examples from downloaded benchmark data:
+- Balanced across labels/entity types (no label >3× any other)
 - 3–5 distinct surface-text patterns per label
 
-`Dhard` — hard negatives generated by agent using 2-for-1 rule:
-- For each spam boundary example → generate ham counterexample with similar surface form but legitimate intent
-- For each ham boundary example → generate spam counterexample with similar structure
-- Generated via Claude API directly (classification task — no external teacher model or CoT needed)
+`Dhard` — hard negatives generated by agent using 2-for-1 rule. Method varies by task type:
+- **Classification:** generate counterexample with similar surface form but opposite label — via Claude API directly (no CoT needed)
+- **NER:** generate near-miss span with same surface form but different or absent entity type — via Claude API directly
+- **Generation:** generate plausible but incorrect answer (wrong reasoning path) — via DeepSeek-R1 for math/science, GPT-4.1 for code/QA
 
-Target size: 100–200 total examples for initial curriculum. Grows via surgical augmentation across iterations (paper's SMS Spam run used 55 total augmented examples across 3 surgical rounds to go from F1 0.9834 → 0.9967).
+Target sizes: 100–200 examples for classification/NER; 500–3,000 for generation. Grows via surgical augmentation across iterations.
 
 ### 4.3 `data-curation.md` Schema
 
@@ -315,8 +348,10 @@ Written every iteration. The agent re-reads this at the start of each round to r
 - Best config selected: {A/B}
 
 ### Eval results
-- f(π_N): {score} on E (binary F1)
-- Per-class F1: spam {x}, ham {x}
+- Task type: {classification / NER / generation}
+- Metric: {F1 / entity_F1 / judge_score}
+- f(π_N): {score} on E
+- Per-class breakdown: {label/entity: score, ...}
 - Epos: {score} | Eneg: {score} | Eboundary: {score}
 - Remaining failures: {N}
 - Failure taxonomy: {description}
@@ -513,7 +548,8 @@ Decisions where we diverge from Pioneer Agent and why:
 | Execution environment | Modal sandboxes (16GB, 24hr) | GPU cluster (H200/A100/L40) | Existing infrastructure |
 | Training SDK | Tinker SDK (proprietary) | Unsloth + HF PEFT | Open source equivalents |
 | Model families | GLiNER2 + Qwen/Llama | Android pool (12 models) | Hardware constraint requires bounded search |
-| Cold-start task | SMS Spam (GLiNER2 encoder) | SMS Spam (decoder from Android pool) | GLiNER2 not in Android pool |
+| Cold-start task | Any of 9 benchmarks | Same 9 benchmarks, same `t ∈ {classification, NER, generation}` abstraction | |
+| Phase 1 first task | SMS Spam (GLiNER2 encoder) | SMS Spam (decoder from Android pool) | GLiNER2 not in Android pool |
 | MCGS | Used for ARC-Challenge | Deferred to Phase 2+ | Phase 1 uses sequential greedy; MCGS adds complexity without benefit on simpler tasks |
 | Trace database | PostgreSQL (Supabase) | Deferred to Phase 2 | Not needed in cold-start |
 | Hardware gating | Not in paper | Added as Phase 2 constraint | Core project goal |

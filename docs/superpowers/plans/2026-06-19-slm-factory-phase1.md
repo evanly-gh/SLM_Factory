@@ -2,11 +2,21 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Build an agentic fine-tuning loop that replicates Pioneer Agent's cold-start mode, bounded to Android-deployable models, demonstrably improving F1 on SMS Spam classification over 3–4 iterations.
+> **REVISION NOTE (2026-06-19):** The system generalizes across all three task types from the start. `task_type ∈ {"classification", "NER", "generation"}` is a first-class concept throughout. Key type changes vs. original plan:
+> - `EvalSet` now has a `task_type: str` field; `build_eval_set()` requires `task_type` argument
+> - `EvalResult` uses `per_class: dict` instead of `spam_f1/ham_f1` fields
+> - `run_eval()` requires `task_type: str` argument and dispatches to `eval/scorers/{type}.py`
+> - `apply_quality_controls()` requires `task_type: str` argument
+> - `synthesize_hard_negatives()` requires `task_type: str` argument
+> - `CurationLog.write_iteration()` requires `task_type: str` argument
+> - `data/sms_spam.py` → `data/loaders/sms_spam.py`
+> - Task 2 is COMPLETE (pre-abstraction). Task 3 restructures and adds the abstraction.
 
-**Architecture:** LangGraph state machine with Claude Sonnet 4.6 orchestrates a cold-start loop: task analysis → eval setup → train (2 configs in parallel) → evaluate → iterate → curate → rollback check → escalate/terminate. All lineage is recorded in a persistent `data-curation.md` file. The agent calls `slm_helpers.py` via a `bash` tool for training and inference.
+**Goal:** Build an agentic fine-tuning loop that replicates Pioneer Agent's cold-start mode, bounded to Android-deployable models, generalizing across all three task types (classification, NER, generation) that cover all nine of the paper's benchmarks. Phase 1 proves the loop with SMS Spam; the same code runs ARC-Challenge, CoNLL-2003, or any other benchmark by changing the task description.
 
-**Tech Stack:** Python 3.11+, LangGraph, Anthropic SDK, Unsloth (LoRA training), HuggingFace Transformers + PEFT (fallback), llama-cpp-python (inference), Exa API (web search), UCI SMS Spam Collection.
+**Architecture:** LangGraph state machine with Claude Sonnet 4.6 orchestrates a cold-start loop: task analysis → eval setup → train (2 configs in parallel) → evaluate → iterate → curate → rollback check → escalate/terminate. `task_analysis` classifies `t ∈ {classification, NER, generation}` and routes eval, curation, and scoring logic accordingly. All lineage is recorded in a persistent `data-curation.md` file.
+
+**Tech Stack:** Python 3.11+, LangGraph, Anthropic SDK, Unsloth (LoRA training), HuggingFace Transformers + PEFT (fallback), llama-cpp-python (inference), Exa API (web search).
 
 ## Global Constraints
 
@@ -20,6 +30,7 @@
 - Hardware constraints logged every iteration but not enforced as hard gates until Phase 2
 - Claude Sonnet 4.6 as orchestrator LLM; same model for sub-agents
 - Sub-agent turn limit: 1,000; main agent turn limit: 1,500
+- **Task-type abstraction is mandatory** — all data/eval/curation logic must branch on `task_type ∈ {"classification", "NER", "generation"}`. No SMS-Spam-specific hardcoding outside of `data/sms_spam.py` (the dataset loader). Passing a different task description must route correctly through the same graph without code changes.
 
 ---
 
@@ -54,14 +65,21 @@ SLM_Factory/
 │   └── quantize.py               # INT4 quantization + theoretical hardware profile
 ├── data/
 │   ├── __init__.py
-│   ├── sms_spam.py               # Download + parse UCI SMS Spam Collection
-│   ├── eval_set.py               # Build E = Epos ∪ Eneg ∪ Eboundary
-│   ├── curriculum.py             # Build Dcold = Dgold ∪ Dhard, quality controls
+│   ├── loaders/
+│   │   ├── __init__.py
+│   │   └── sms_spam.py           # Download + parse UCI SMS Spam Collection
+│   ├── eval_set.py               # Build E = Epos ∪ Eneg ∪ Eboundary (task-type-aware)
+│   ├── curriculum.py             # Build Dcold = Dgold ∪ Dhard, quality controls (task-type-aware)
 │   └── curation_log.py           # data-curation.md read/write
 ├── eval/
 │   ├── __init__.py
-│   ├── harness.py                # Run infer_batch over E, compute F1, per-slice scores
-│   └── metrics.py                # binary_f1(), per_class_f1(), per_slice_scores()
+│   ├── harness.py                # Run infer_batch over E, dispatch to task-type scorer
+│   ├── metrics.py                # binary_f1(), entity_f1(), per_slice_scores()
+│   └── scorers/
+│       ├── __init__.py
+│       ├── classification.py     # exact-match label extraction + binary F1
+│       ├── ner.py                # span extraction + entity F1
+│       └── generation.py        # LLM-as-judge scorer
 ├── android_pool.py               # Android model pool definition + constraint checks
 ├── run.py                        # Entry point: build τ, run graph
 ├── config.py                     # API keys, default thresholds, cluster settings
@@ -245,201 +263,51 @@ git commit -m "feat: project scaffold, config, and Android model pool"
 
 ---
 
-### Task 2: SMS Spam data download and eval set construction
+### Task 2: SMS Spam data download and eval set construction *(COMPLETE — moved to `data/loaders/sms_spam.py`)*
 
-**Files:**
-- Create: `data/sms_spam.py`
-- Create: `data/eval_set.py`
-- Create: `tests/test_sms_spam.py`
-- Create: `tests/test_eval_set.py`
+**Status:** Implemented and reviewed. Files live at `data/sms_spam.py` and `data/eval_set.py` (pre-abstraction paths). Task 3 will move sms_spam.py to `data/loaders/sms_spam.py` and make eval_set.py task-type-aware.
 
-**Interfaces:**
-- Consumes: nothing
-- Produces:
+**Files (as implemented):**
+- `data/sms_spam.py` — SMS Spam loader (to be moved)
+- `data/eval_set.py` — eval set builder (to be made task-type-aware in Task 3)
+- `tests/test_sms_spam.py`, `tests/test_eval_set.py` — 6 tests passing
+
+**Interfaces produced:**
   - `download_sms_spam() -> tuple[list[dict], list[dict]]` — returns `(train_examples, test_examples)` where each example is `{"text": str, "label": str}` with label in `{"spam", "ham"}`
   - `build_eval_set(test_examples: list[dict], n_boundary: int = 50) -> EvalSet`
   - `EvalSet` dataclass with fields `pos: list[dict]`, `neg: list[dict]`, `boundary: list[dict]`, `all: list[dict]`
 
-- [ ] **Step 1: Write failing tests**
-
-```python
-# tests/test_sms_spam.py
-from data.sms_spam import download_sms_spam
-
-def test_download_returns_train_test():
-    train, test = download_sms_spam()
-    assert len(train) > 1000
-    assert len(test) > 100
-    assert all("text" in ex and "label" in ex for ex in train)
-    assert all(ex["label"] in {"spam", "ham"} for ex in train)
-
-def test_class_distribution():
-    train, _ = download_sms_spam()
-    spam = [e for e in train if e["label"] == "spam"]
-    ham = [e for e in train if e["label"] == "ham"]
-    assert len(ham) > len(spam)  # UCI is ~87% ham
-```
-
-```python
-# tests/test_eval_set.py
-from data.eval_set import build_eval_set, EvalSet
-
-FAKE_EXAMPLES = (
-    [{"text": f"Free prize call now {i}", "label": "spam"} for i in range(30)]
-    + [{"text": f"Hey are you coming tonight {i}", "label": "ham"} for i in range(70)]
-)
-
-def test_eval_set_has_three_slices():
-    es = build_eval_set(FAKE_EXAMPLES, n_boundary=10)
-    assert isinstance(es, EvalSet)
-    assert len(es.pos) > 0
-    assert len(es.neg) > 0
-    assert len(es.boundary) > 0
-
-def test_eval_set_all_is_union():
-    es = build_eval_set(FAKE_EXAMPLES, n_boundary=10)
-    assert len(es.all) == len(es.pos) + len(es.neg) + len(es.boundary)
-
-def test_eval_set_never_in_training_data():
-    es = build_eval_set(FAKE_EXAMPLES, n_boundary=10)
-    eval_texts = {e["text"] for e in es.all}
-    # All eval texts should come from the examples passed in
-    all_texts = {e["text"] for e in FAKE_EXAMPLES}
-    assert eval_texts.issubset(all_texts)
-```
-
-- [ ] **Step 2: Run tests to verify they fail**
-
-```bash
-pytest tests/test_sms_spam.py tests/test_eval_set.py -v
-```
-Expected: ImportError.
-
-- [ ] **Step 3: Write `data/sms_spam.py`**
-
-```python
-# data/sms_spam.py
-import os, csv, urllib.request, zipfile
-from config import DATA_DIR
-
-SMS_SPAM_URL = "https://archive.ics.uci.edu/ml/machine-learning-databases/00228/smsspamcollection.zip"
-SMS_SPAM_CACHE = os.path.join(DATA_DIR, "sms_spam.tsv")
-
-def download_sms_spam(test_fraction: float = 0.2) -> tuple[list[dict], list[dict]]:
-    """Download UCI SMS Spam Collection and return (train, test) splits."""
-    os.makedirs(DATA_DIR, exist_ok=True)
-    if not os.path.exists(SMS_SPAM_CACHE):
-        zip_path = os.path.join(DATA_DIR, "sms_spam.zip")
-        urllib.request.urlretrieve(SMS_SPAM_URL, zip_path)
-        with zipfile.ZipFile(zip_path) as z:
-            with z.open("SMSSpamCollection") as f:
-                content = f.read().decode("utf-8", errors="replace")
-        with open(SMS_SPAM_CACHE, "w", encoding="utf-8") as f:
-            f.write(content)
-
-    examples = []
-    with open(SMS_SPAM_CACHE, encoding="utf-8") as f:
-        for line in f:
-            parts = line.strip().split("\t", 1)
-            if len(parts) == 2:
-                label, text = parts
-                examples.append({"text": text, "label": label.strip()})
-
-    split_idx = int(len(examples) * (1 - test_fraction))
-    return examples[:split_idx], examples[split_idx:]
-```
-
-- [ ] **Step 4: Write `data/eval_set.py`**
-
-```python
-# data/eval_set.py
-import random
-from dataclasses import dataclass, field
-
-@dataclass
-class EvalSet:
-    pos: list[dict]       # Epos: genuine spam, full surface-form range
-    neg: list[dict]       # Eneg: legitimate messages including borderline ham
-    boundary: list[dict]  # Eboundary: confusable pairs at spam/ham boundary
-    all: list[dict] = field(init=False)
-
-    def __post_init__(self):
-        self.all = self.pos + self.neg + self.boundary
-
-def build_eval_set(
-    examples: list[dict],
-    n_pos: int = 40,
-    n_neg: int = 40,
-    n_boundary: int = 20,
-    seed: int = 42,
-) -> EvalSet:
-    """
-    Build E = Epos ∪ Eneg ∪ Eboundary from test examples.
-
-    Epos: clear spam examples (high confidence)
-    Eneg: clear ham examples (high confidence)
-    Eboundary: short promotional ham that could be confused with spam
-
-    All slices are disjoint. Total size = n_pos + n_neg + n_boundary.
-    """
-    rng = random.Random(seed)
-    spam = [e for e in examples if e["label"] == "spam"]
-    ham = [e for e in examples if e["label"] == "ham"]
-
-    # Eboundary: ham messages that contain URLs, prizes, or urgency keywords
-    boundary_keywords = {"www", "http", "free", "win", "prize", "offer",
-                         "click", "call", "urgent", "limited", "txt"}
-    boundary_candidates = [
-        e for e in ham
-        if any(kw in e["text"].lower() for kw in boundary_keywords)
-    ]
-    rng.shuffle(boundary_candidates)
-    boundary = boundary_candidates[:n_boundary]
-    boundary_texts = {e["text"] for e in boundary}
-
-    # Eneg: clear ham (not in boundary)
-    clear_ham = [e for e in ham if e["text"] not in boundary_texts]
-    rng.shuffle(clear_ham)
-    neg = clear_ham[:n_neg]
-
-    # Epos: clear spam
-    rng.shuffle(spam)
-    pos = spam[:n_pos]
-
-    return EvalSet(pos=pos, neg=neg, boundary=boundary)
-```
-
-- [ ] **Step 5: Run tests to verify they pass**
-
-```bash
-pytest tests/test_sms_spam.py tests/test_eval_set.py -v
-```
-Expected: all PASS. (Note: `test_download_returns_train_test` downloads ~500KB from UCI on first run.)
-
-- [ ] **Step 6: Commit**
-
-```bash
-git add data/sms_spam.py data/eval_set.py tests/test_sms_spam.py tests/test_eval_set.py
-git commit -m "feat: SMS Spam download and eval set construction (Epos/Eneg/Eboundary)"
-```
+*(Steps removed — Task 2 is COMPLETE. See status note above.)*
 
 ---
 
-### Task 3: Eval metrics and harness
+### Task 3: Restructure data layout + task-type-aware eval metrics and harness
+
+This task does three things: (1) moves `data/sms_spam.py` to `data/loaders/sms_spam.py` and updates imports, (2) makes `data/eval_set.py` task-type-aware, (3) builds the three task-type scorers and a dispatcher harness.
 
 **Files:**
+- Move: `data/sms_spam.py` → `data/loaders/sms_spam.py`
+- Create: `data/loaders/__init__.py`
+- Modify: `data/eval_set.py` — add `task_type` parameter to `build_eval_set`
 - Create: `eval/metrics.py`
+- Create: `eval/scorers/__init__.py`
+- Create: `eval/scorers/classification.py`
+- Create: `eval/scorers/ner.py`
+- Create: `eval/scorers/generation.py`
 - Create: `eval/harness.py`
 - Create: `tests/test_metrics.py`
 - Create: `tests/test_harness.py`
+- Modify: `tests/test_sms_spam.py` — update import path
 
 **Interfaces:**
 - Consumes: `EvalSet` from Task 2; `infer_batch()` from Task 5 (mocked in tests)
 - Produces:
-  - `binary_f1(predictions: list[str], labels: list[str], pos_label: str = "spam") -> float`
+  - `binary_f1(predictions: list[str], labels: list[str], pos_label: str) -> float`
+  - `entity_f1(predictions: list[list[dict]], labels: list[list[dict]]) -> float`
   - `per_slice_scores(eval_set: EvalSet, predictions: list[str]) -> dict[str, float]`
-  - `run_eval(eval_set: EvalSet, weights_ref: str, base_model: str) -> EvalResult`
-  - `EvalResult` dataclass: `f1: float`, `spam_f1: float`, `ham_f1: float`, `pos_score: float`, `neg_score: float`, `boundary_score: float`, `failures: list[dict]`
+  - `build_eval_set(examples: list[dict], task_type: str, ...) -> EvalSet` — `task_type` in `{"classification", "NER", "generation"}`
+  - `run_eval(eval_set: EvalSet, weights_ref: str, base_model: str, task_type: str) -> EvalResult`
+  - `EvalResult` dataclass: `f1: float`, `per_class: dict`, `pos_score: float`, `neg_score: float`, `boundary_score: float`, `failures: list[dict]`
 
 - [ ] **Step 1: Write failing tests**
 
@@ -451,18 +319,17 @@ from data.eval_set import EvalSet
 def test_binary_f1_perfect():
     preds = ["spam", "spam", "ham", "ham"]
     labels = ["spam", "spam", "ham", "ham"]
-    assert binary_f1(preds, labels) == 1.0
+    assert binary_f1(preds, labels, pos_label="spam") == 1.0
 
 def test_binary_f1_all_wrong():
     preds = ["ham", "ham", "spam", "spam"]
     labels = ["spam", "spam", "ham", "ham"]
-    assert binary_f1(preds, labels) == 0.0
+    assert binary_f1(preds, labels, pos_label="spam") == 0.0
 
 def test_binary_f1_partial():
-    preds =  ["spam", "ham", "spam", "ham"]
+    preds  = ["spam", "ham", "spam", "ham"]
     labels = ["spam", "spam", "ham", "ham"]
-    # TP=1, FP=1, FN=1 → precision=0.5, recall=0.5 → F1=0.5
-    assert abs(binary_f1(preds, labels) - 0.5) < 1e-6
+    assert abs(binary_f1(preds, labels, pos_label="spam") - 0.5) < 1e-6
 
 def test_per_slice_scores():
     es = EvalSet(
@@ -470,7 +337,7 @@ def test_per_slice_scores():
         neg=[{"text": "ham1", "label": "ham"}],
         boundary=[{"text": "promo", "label": "ham"}],
     )
-    preds = ["spam", "spam", "ham", "ham"]  # all correct
+    preds = ["spam", "spam", "ham", "ham"]
     scores = per_slice_scores(es, preds)
     assert scores["pos"] == 1.0
     assert scores["neg"] == 1.0
@@ -483,24 +350,32 @@ from unittest.mock import patch
 from eval.harness import run_eval, EvalResult
 from data.eval_set import EvalSet
 
-FAKE_EVAL_SET = EvalSet(
+FAKE_CLASSIFICATION_SET = EvalSet(
     pos=[{"text": "WIN FREE PRIZE", "label": "spam"}],
     neg=[{"text": "Hey see you soon", "label": "ham"}],
     boundary=[{"text": "Exclusive offer click here", "label": "ham"}],
 )
 
-def test_run_eval_returns_eval_result():
+def test_run_eval_classification_returns_eval_result():
     with patch("eval.harness.infer_batch", return_value=["spam", "ham", "ham"]):
-        result = run_eval(FAKE_EVAL_SET, "fake_weights_ref", "Qwen/Qwen3-0.6B")
+        result = run_eval(
+            FAKE_CLASSIFICATION_SET, "fake_ref", "Qwen/Qwen3-0.6B", task_type="classification"
+        )
     assert isinstance(result, EvalResult)
     assert 0.0 <= result.f1 <= 1.0
     assert isinstance(result.failures, list)
 
 def test_run_eval_identifies_failures():
-    # Model predicts ham for everything — spam example fails
     with patch("eval.harness.infer_batch", return_value=["ham", "ham", "ham"]):
-        result = run_eval(FAKE_EVAL_SET, "fake_weights_ref", "Qwen/Qwen3-0.6B")
+        result = run_eval(
+            FAKE_CLASSIFICATION_SET, "fake_ref", "Qwen/Qwen3-0.6B", task_type="classification"
+        )
     assert any(f["label"] == "spam" for f in result.failures)
+
+def test_run_eval_unknown_task_type_raises():
+    import pytest
+    with pytest.raises(ValueError, match="Unknown task_type"):
+        run_eval(FAKE_CLASSIFICATION_SET, "r", "m", task_type="regression")
 ```
 
 - [ ] **Step 2: Run tests to verify they fail**
@@ -510,18 +385,156 @@ pytest tests/test_metrics.py tests/test_harness.py -v
 ```
 Expected: ImportError.
 
-- [ ] **Step 3: Write `eval/metrics.py`**
+- [ ] **Step 3: Move `data/sms_spam.py` to `data/loaders/sms_spam.py`**
+
+```bash
+mkdir -p data/loaders
+mv data/sms_spam.py data/loaders/sms_spam.py
+touch data/loaders/__init__.py
+```
+
+Update `tests/test_sms_spam.py` import:
+```python
+# change: from data.sms_spam import download_sms_spam
+# to:
+from data.loaders.sms_spam import download_sms_spam
+```
+
+Run existing tests to confirm they still pass:
+```bash
+pytest tests/test_sms_spam.py tests/test_eval_set.py -v
+```
+Expected: 6 PASS.
+
+- [ ] **Step 4: Update `data/eval_set.py` to accept `task_type`**
+
+```python
+# data/eval_set.py
+import random
+from dataclasses import dataclass, field
+
+TASK_TYPES = {"classification", "NER", "generation"}
+
+@dataclass
+class EvalSet:
+    pos: list[dict]
+    neg: list[dict]
+    boundary: list[dict]
+    task_type: str
+    all: list[dict] = field(init=False)
+
+    def __post_init__(self):
+        if self.task_type not in TASK_TYPES:
+            raise ValueError(f"task_type must be one of {TASK_TYPES}, got {self.task_type!r}")
+        self.all = self.pos + self.neg + self.boundary
+
+def build_eval_set(
+    examples: list[dict],
+    task_type: str,
+    n_pos: int = 40,
+    n_neg: int = 40,
+    n_boundary: int = 20,
+    seed: int = 42,
+) -> EvalSet:
+    """
+    Build E = Epos ∪ Eneg ∪ Eboundary. All slices are disjoint.
+    task_type determines what Eneg and Eboundary represent.
+
+    classification:
+      pos = clear positive-class examples
+      neg = clear negative-class examples
+      boundary = confusable pairs at the class boundary
+
+    NER:
+      pos = entity-rich passages with gold annotations
+      neg = entity-free passages (hallucination test)
+      boundary = passages with overlapping / near-miss entity types
+
+    generation:
+      pos = well-formed problems with unambiguous answers
+      neg = adversarial / ill-posed inputs
+      boundary = multi-step or edge-case problems
+    """
+    if task_type not in TASK_TYPES:
+        raise ValueError(f"task_type must be one of {TASK_TYPES}")
+
+    rng = random.Random(seed)
+
+    if task_type == "classification":
+        pos_label = _infer_pos_label(examples)
+        neg_label = _infer_neg_label(examples, pos_label)
+        pos_examples = [e for e in examples if e["label"] == pos_label]
+        neg_examples = [e for e in examples if e["label"] == neg_label]
+
+        BOUNDARY_KEYWORDS = {"www", "http", "free", "win", "prize", "offer",
+                             "click", "call", "urgent", "limited", "txt"}
+        boundary_candidates = [
+            e for e in neg_examples
+            if any(kw in e.get("text", "").lower() for kw in BOUNDARY_KEYWORDS)
+        ]
+        if len(boundary_candidates) < n_boundary:
+            short_pos = [e for e in pos_examples if len(e.get("text", "")) < 50]
+            boundary_candidates += short_pos
+
+        rng.shuffle(boundary_candidates)
+        boundary = boundary_candidates[:n_boundary]
+        boundary_texts = {e["text"] for e in boundary}
+
+        clear_neg = [e for e in neg_examples if e["text"] not in boundary_texts]
+        rng.shuffle(clear_neg)
+        neg = clear_neg[:n_neg]
+
+        clear_pos = [e for e in pos_examples if e["text"] not in boundary_texts]
+        rng.shuffle(clear_pos)
+        pos = clear_pos[:n_pos]
+
+    else:
+        # NER and generation: simple stratified split — boundary is agent-constructed
+        # at runtime via Claude synthesis; here we just partition the examples provided
+        rng.shuffle(examples)
+        total = len(examples)
+        p = min(n_pos, total // 3)
+        n = min(n_neg, total // 3)
+        b = min(n_boundary, total - p - n)
+        pos = examples[:p]
+        neg = examples[p:p + n]
+        boundary = examples[p + n:p + n + b]
+
+    return EvalSet(pos=pos, neg=neg, boundary=boundary, task_type=task_type)
+
+def _infer_pos_label(examples: list[dict]) -> str:
+    """Return the minority label (the positive class)."""
+    from collections import Counter
+    counts = Counter(e["label"] for e in examples)
+    return min(counts, key=counts.get)
+
+def _infer_neg_label(examples: list[dict], pos_label: str) -> str:
+    labels = {e["label"] for e in examples}
+    others = labels - {pos_label}
+    return next(iter(others)) if others else pos_label
+```
+
+- [ ] **Step 5: Update `tests/test_eval_set.py`** — pass `task_type="classification"` to `build_eval_set`:
+
+```python
+# In tests/test_eval_set.py, update all build_eval_set calls:
+es = build_eval_set(FAKE_EXAMPLES, task_type="classification", n_boundary=10)
+```
+
+Run:
+```bash
+pytest tests/test_eval_set.py -v
+```
+Expected: 4 PASS.
+
+- [ ] **Step 6: Write `eval/metrics.py`**
 
 ```python
 # eval/metrics.py
 from data.eval_set import EvalSet
 
-def binary_f1(
-    predictions: list[str],
-    labels: list[str],
-    pos_label: str = "spam",
-) -> float:
-    """Compute binary F1 score for the positive class."""
+def binary_f1(predictions: list[str], labels: list[str], pos_label: str) -> float:
+    """Compute binary F1 for the positive class."""
     tp = sum(p == pos_label and l == pos_label for p, l in zip(predictions, labels))
     fp = sum(p == pos_label and l != pos_label for p, l in zip(predictions, labels))
     fn = sum(p != pos_label and l == pos_label for p, l in zip(predictions, labels))
@@ -531,11 +544,28 @@ def binary_f1(
     recall = tp / (tp + fn)
     return 2 * precision * recall / (precision + recall)
 
+def entity_f1(predictions: list[list[dict]], labels: list[list[dict]]) -> float:
+    """
+    Compute entity-level F1 for NER.
+    Each element is a list of {"text": str, "type": str} entity spans.
+    """
+    tp = fp = fn = 0
+    for pred_spans, gold_spans in zip(predictions, labels):
+        pred_set = {(s["text"], s["type"]) for s in pred_spans}
+        gold_set = {(s["text"], s["type"]) for s in gold_spans}
+        tp += len(pred_set & gold_set)
+        fp += len(pred_set - gold_set)
+        fn += len(gold_set - pred_set)
+    if tp == 0:
+        return 0.0
+    precision = tp / (tp + fp)
+    recall = tp / (tp + fn)
+    return 2 * precision * recall / (precision + recall)
+
 def per_slice_scores(eval_set: EvalSet, predictions: list[str]) -> dict[str, float]:
-    """Compute accuracy for each of the three eval set slices."""
+    """Compute accuracy per slice (pos/neg/boundary)."""
     n_pos = len(eval_set.pos)
     n_neg = len(eval_set.neg)
-    n_bnd = len(eval_set.boundary)
 
     pos_preds = predictions[:n_pos]
     neg_preds = predictions[n_pos:n_pos + n_neg]
@@ -553,93 +583,225 @@ def per_slice_scores(eval_set: EvalSet, predictions: list[str]) -> dict[str, flo
     }
 ```
 
-- [ ] **Step 4: Write `eval/harness.py`**
+- [ ] **Step 7: Write the three scorers**
+
+```python
+# eval/scorers/classification.py
+from eval.metrics import binary_f1, per_slice_scores
+from data.eval_set import EvalSet
+
+CLASSIFY_PROMPT = (
+    'Classify this message. Reply with exactly one word — the label.\n\nMessage: {text}'
+)
+
+def build_prompts(eval_set: EvalSet) -> list[str]:
+    return [CLASSIFY_PROMPT.format(text=ex["text"]) for ex in eval_set.all]
+
+def extract_predictions(raw_outputs: list[str], eval_set: EvalSet) -> list[str]:
+    """Extract label from raw model output. Falls back to majority neg label."""
+    all_labels = {e["label"] for e in eval_set.all}
+    pos_label = min(
+        {e["label"] for e in eval_set.pos} or all_labels,
+        key=lambda l: sum(1 for e in eval_set.all if e["label"] == l)
+    )
+    def extract(raw: str) -> str:
+        cleaned = raw.strip().lower()
+        for lbl in all_labels:
+            if lbl.lower() in cleaned:
+                return lbl
+        return next(iter(all_labels - {pos_label}), pos_label)
+    return [extract(r) for r in raw_outputs]
+
+def score(eval_set: EvalSet, predictions: list[str]) -> dict:
+    labels = [e["label"] for e in eval_set.all]
+    all_labels = list({e["label"] for e in eval_set.all})
+    pos_label = min(all_labels, key=lambda l: labels.count(l))
+    f1 = binary_f1(predictions, labels, pos_label=pos_label)
+    per_class = {lbl: binary_f1(predictions, labels, pos_label=lbl) for lbl in all_labels}
+    slices = per_slice_scores(eval_set, predictions)
+    failures = [
+        {**ex, "predicted": pred}
+        for ex, pred, lbl in zip(eval_set.all, predictions, labels)
+        if pred != lbl
+    ]
+    return {"f1": f1, "per_class": per_class, "slices": slices, "failures": failures}
+```
+
+```python
+# eval/scorers/ner.py
+from eval.metrics import entity_f1, per_slice_scores
+from data.eval_set import EvalSet
+import json, re
+
+NER_PROMPT = (
+    'Extract named entities from the text. '
+    'Reply with a JSON list of objects with "text" and "type" keys. '
+    'Reply with [] if there are no entities.\n\nText: {text}'
+)
+
+def build_prompts(eval_set: EvalSet) -> list[str]:
+    return [NER_PROMPT.format(text=ex.get("text", "")) for ex in eval_set.all]
+
+def extract_predictions(raw_outputs: list[str], eval_set: EvalSet) -> list[list[dict]]:
+    results = []
+    for raw in raw_outputs:
+        try:
+            match = re.search(r'\[.*?\]', raw, re.DOTALL)
+            spans = json.loads(match.group()) if match else []
+            results.append([s for s in spans if "text" in s and "type" in s])
+        except Exception:
+            results.append([])
+    return results
+
+def score(eval_set: EvalSet, predictions: list[list[dict]]) -> dict:
+    gold = [ex.get("entities", []) for ex in eval_set.all]
+    f1 = entity_f1(predictions, gold)
+    # Per-slice: convert to binary has-entity labels for slice scoring
+    pred_labels = ["entity" if p else "no_entity" for p in predictions]
+    gold_labels = ["entity" if g else "no_entity" for g in gold]
+    slices = per_slice_scores(eval_set, pred_labels)
+    failures = [
+        {**ex, "predicted": pred}
+        for ex, pred, g in zip(eval_set.all, predictions, gold)
+        if set(tuple(s.items()) for s in pred) != set(tuple(s.items()) for s in g)
+    ]
+    return {"f1": f1, "per_class": {"entity_f1": f1}, "slices": slices, "failures": failures}
+```
+
+```python
+# eval/scorers/generation.py
+from data.eval_set import EvalSet
+import anthropic, os
+
+JUDGE_PROMPT = (
+    "You are an impartial judge evaluating a model's answer.\n"
+    "Question: {question}\n"
+    "Gold answer: {gold}\n"
+    "Model answer: {predicted}\n\n"
+    "Rate correctness from 0.0 (completely wrong) to 1.0 (perfectly correct). "
+    "Reply with only a number."
+)
+
+GENERATE_PROMPT = "Answer the following question:\n\n{text}"
+
+def build_prompts(eval_set: EvalSet) -> list[str]:
+    return [GENERATE_PROMPT.format(text=ex.get("text", "")) for ex in eval_set.all]
+
+def extract_predictions(raw_outputs: list[str], eval_set: EvalSet) -> list[str]:
+    return [r.strip() for r in raw_outputs]
+
+def score(eval_set: EvalSet, predictions: list[str]) -> dict:
+    client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
+    scores = []
+    for ex, pred in zip(eval_set.all, predictions):
+        resp = client.messages.create(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=10,
+            messages=[{"role": "user", "content": JUDGE_PROMPT.format(
+                question=ex.get("text", ""),
+                gold=ex.get("answer", ex.get("label", "")),
+                predicted=pred,
+            )}],
+        )
+        try:
+            scores.append(float(resp.content[0].text.strip()))
+        except Exception:
+            scores.append(0.0)
+
+    avg_score = sum(scores) / len(scores) if scores else 0.0
+    # For per-slice: convert to pass/fail labels at threshold 0.5
+    pred_labels = ["correct" if s >= 0.5 else "wrong" for s in scores]
+    gold_labels = ["correct"] * len(eval_set.all)
+    from eval.metrics import per_slice_scores
+    slices = per_slice_scores(eval_set, pred_labels)
+    failures = [
+        {**ex, "predicted": pred, "judge_score": sc}
+        for ex, pred, sc in zip(eval_set.all, predictions, scores)
+        if sc < 0.5
+    ]
+    return {"f1": avg_score, "per_class": {"judge_score": avg_score}, "slices": slices, "failures": failures}
+```
+
+- [ ] **Step 8: Write `eval/scorers/__init__.py`**
+
+```python
+# eval/scorers/__init__.py
+```
+
+- [ ] **Step 9: Write `eval/harness.py`**
 
 ```python
 # eval/harness.py
-import re
 from dataclasses import dataclass
 from data.eval_set import EvalSet
-from eval.metrics import binary_f1, per_slice_scores
 
-# Will be replaced by real import once training/slm_helpers.py exists
 try:
     from training.slm_helpers import infer_batch
 except ImportError:
     def infer_batch(prompts, weights_ref, base_model, max_workers=20):
         raise NotImplementedError("slm_helpers not yet available")
 
-CLASSIFY_PROMPT = """Classify this SMS message as either "spam" or "ham".
-Reply with exactly one word: spam or ham.
-
-Message: {text}"""
-
-def _extract_label(raw: str) -> str:
-    """Extract 'spam' or 'ham' from model output. Default to 'ham' if unclear."""
-    cleaned = raw.strip().lower()
-    if "spam" in cleaned:
-        return "spam"
-    return "ham"
-
 @dataclass
 class EvalResult:
     f1: float
-    spam_f1: float
-    ham_f1: float
+    per_class: dict
     pos_score: float
     neg_score: float
     boundary_score: float
-    failures: list[dict]  # examples where prediction != label
+    failures: list[dict]
 
-def run_eval(eval_set: EvalSet, weights_ref: str, base_model: str) -> EvalResult:
-    """Run inference on E and compute all metrics."""
-    prompts = [
-        CLASSIFY_PROMPT.format(text=ex["text"])
-        for ex in eval_set.all
-    ]
+def run_eval(
+    eval_set: EvalSet,
+    weights_ref: str,
+    base_model: str,
+    task_type: str,
+) -> EvalResult:
+    """
+    Run inference on E and compute task-type-appropriate metrics.
+    Dispatches to eval/scorers/{task_type}.py for prompting, extraction, and scoring.
+    """
+    if task_type == "classification":
+        from eval.scorers import classification as scorer
+    elif task_type == "NER":
+        from eval.scorers import ner as scorer
+    elif task_type == "generation":
+        from eval.scorers import generation as scorer
+    else:
+        raise ValueError(f"Unknown task_type: {task_type!r}. Must be classification, NER, or generation.")
+
+    prompts = scorer.build_prompts(eval_set)
     raw_outputs = infer_batch(prompts, weights_ref, base_model, max_workers=20)
-    predictions = [_extract_label(r) for r in raw_outputs]
-    labels = [ex["label"] for ex in eval_set.all]
-
-    f1 = binary_f1(predictions, labels)
-    spam_f1 = binary_f1(predictions, labels, pos_label="spam")
-    ham_f1 = binary_f1(predictions, labels, pos_label="ham")
-    slices = per_slice_scores(eval_set, predictions)
-
-    failures = [
-        {**ex, "predicted": pred}
-        for ex, pred, label in zip(eval_set.all, predictions, labels)
-        if pred != label
-    ]
+    predictions = scorer.extract_predictions(raw_outputs, eval_set)
+    result = scorer.score(eval_set, predictions)
 
     return EvalResult(
-        f1=f1,
-        spam_f1=spam_f1,
-        ham_f1=ham_f1,
-        pos_score=slices["pos"],
-        neg_score=slices["neg"],
-        boundary_score=slices["boundary"],
-        failures=failures,
+        f1=result["f1"],
+        per_class=result["per_class"],
+        pos_score=result["slices"]["pos"],
+        neg_score=result["slices"]["neg"],
+        boundary_score=result["slices"]["boundary"],
+        failures=result["failures"],
     )
 ```
 
-- [ ] **Step 5: Run tests to verify they pass**
+- [ ] **Step 10: Run all tests**
 
 ```bash
-pytest tests/test_metrics.py tests/test_harness.py -v
+pytest tests/test_metrics.py tests/test_harness.py tests/test_eval_set.py tests/test_sms_spam.py -v
 ```
 Expected: all PASS.
 
-- [ ] **Step 6: Commit**
+- [ ] **Step 11: Commit**
 
 ```bash
-git add eval/metrics.py eval/harness.py tests/test_metrics.py tests/test_harness.py
-git commit -m "feat: eval metrics (binary F1, per-slice) and harness"
+git add data/loaders/ data/eval_set.py eval/metrics.py eval/scorers/ eval/harness.py \
+        tests/test_metrics.py tests/test_harness.py tests/test_eval_set.py tests/test_sms_spam.py
+git commit -m "feat: task-type-aware eval harness (classification/NER/generation scorers)"
 ```
 
 ---
 
-### Task 4: Curriculum synthesis and curation log
+### Task 4: Curriculum synthesis and curation log (task-type-aware)
 
 **Files:**
 - Create: `data/curriculum.py`
@@ -648,11 +810,11 @@ git commit -m "feat: eval metrics (binary F1, per-slice) and harness"
 - Create: `tests/test_curation_log.py`
 
 **Interfaces:**
-- Consumes: `EvalSet` from Task 2; `EvalResult` from Task 3
+- Consumes: `EvalSet` from Task 3 (now has `task_type` field); `EvalResult` from Task 3
 - Produces:
-  - `build_initial_curriculum(train_examples: list[dict], eval_set: EvalSet, n_total: int = 150) -> list[dict]`
-  - `synthesize_hard_negatives(examples: list[dict], n: int, anthropic_client) -> list[dict]`
-  - `apply_quality_controls(dataset: list[dict]) -> list[dict]`
+  - `build_initial_curriculum(train_examples: list[dict], eval_set: EvalSet, n_total: int = 150) -> list[dict]` — task_type-aware via `eval_set.task_type`
+  - `synthesize_hard_negatives(examples: list[dict], n: int, anthropic_client, task_type: str) -> list[dict]`
+  - `apply_quality_controls(dataset: list[dict], task_type: str) -> list[dict]`
   - `CurationLog` class with `write_iteration(...)` and `read_latest() -> str`
 
 - [ ] **Step 1: Write failing tests**
@@ -706,12 +868,15 @@ def test_quality_controls_label_balance():
 import os, tempfile
 from data.curation_log import CurationLog
 from eval.harness import EvalResult
-from android_pool import ModelSpec
 
 def _fake_eval_result():
+    # EvalResult now uses per_class dict instead of spam_f1/ham_f1
     return EvalResult(
-        f1=0.85, spam_f1=0.83, ham_f1=0.87,
-        pos_score=0.9, neg_score=0.95, boundary_score=0.7,
+        f1=0.85,
+        per_class={"spam": 0.83, "ham": 0.87},
+        pos_score=0.9,
+        neg_score=0.95,
+        boundary_score=0.7,
         failures=[{"text": "promo", "label": "ham", "predicted": "spam"}],
     )
 
@@ -722,6 +887,7 @@ def test_write_and_read_iteration():
         log = CurationLog(path)
         log.write_iteration(
             iteration=1,
+            task_type="classification",
             dataset_version="v1",
             n_gold=100, n_hard=50,
             label_dist={"spam": 50, "ham": 100},
@@ -740,6 +906,7 @@ def test_write_and_read_iteration():
         assert "Iteration 1" in content
         assert "v1" in content
         assert "0.85" in content
+        assert "classification" in content
     finally:
         os.unlink(path)
 ```
@@ -751,11 +918,12 @@ pytest tests/test_curriculum.py tests/test_curation_log.py -v
 ```
 Expected: ImportError.
 
-- [ ] **Step 3: Write `data/curriculum.py`**
+- [ ] **Step 3: Write `data/curriculum.py` (task-type-aware)**
 
 ```python
 # data/curriculum.py
 import random
+from collections import Counter
 from data.eval_set import EvalSet
 
 def build_initial_curriculum(
@@ -858,6 +1026,7 @@ class CurationLog:
     def write_iteration(
         self,
         iteration: int,
+        task_type: str,
         dataset_version: str,
         n_gold: int,
         n_hard: int,
@@ -875,15 +1044,17 @@ class CurationLog:
         hardware_notes: str = "Phase 1: theoretical",
     ) -> None:
         timestamp = datetime.now().isoformat(timespec="seconds")
+        total = n_gold + n_hard if (n_gold + n_hard) > 0 else 1
         entry = f"""
 ## Iteration {iteration} — {timestamp}
 
 ### Dataset
+- Task type: {task_type}
 - Version: {dataset_version}
 - Total examples: {n_gold + n_hard}
-- Dgold: {n_gold} ({n_gold/(n_gold+n_hard)*100:.0f}%)
-- Dhard: {n_hard} ({n_hard/(n_gold+n_hard)*100:.0f}%)
-- Label distribution: {label_dist}
+- Dgold: {n_gold} ({n_gold/total*100:.0f}%)
+- Dhard: {n_hard} ({n_hard/total*100:.0f}%)
+- Distribution: {label_dist}
 
 ### Training config (π_{iteration})
 - Config A: {config_a}
@@ -891,8 +1062,8 @@ class CurationLog:
 - Best config selected: {best_config}
 
 ### Eval results
-- f(π_{iteration}): {eval_result.f1:.4f} (binary F1)
-- spam_f1: {eval_result.spam_f1:.4f} | ham_f1: {eval_result.ham_f1:.4f}
+- f(π_{iteration}): {eval_result.f1:.4f}
+- Per class: {eval_result.per_class}
 - Epos: {eval_result.pos_score:.4f} | Eneg: {eval_result.neg_score:.4f} | Eboundary: {eval_result.boundary_score:.4f}
 - Remaining failures: {len(eval_result.failures)}
 
@@ -1278,7 +1449,7 @@ class AgentState(TypedDict):
     hardware_constraints: HardwareConstraints
 
     # Task analysis outputs
-    task_type: str                    # "classification", "ner", "generation"
+    task_type: str                    # "classification", "NER", or "generation"
     selected_model: Optional[ModelSpec]
     stop_threshold: float             # default 0.96, agent may lower
 
