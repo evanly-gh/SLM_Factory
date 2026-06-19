@@ -1,5 +1,29 @@
 # SLM Factory — Progress Log
 
+## Session 2 — 2026-06-19
+
+### Status: Implementation plan written, ready for execution
+
+### Files created / planned
+- `config.py` — API keys, cluster settings
+- `android_pool.py` — model pool + constraint filter
+- `data/loaders/sms_spam.py` — UCI download
+- `data/eval_set.py` — E = Epos ∪ Eneg ∪ Eboundary
+- `eval/metrics.py` — binary F1, per-slice scores
+- `eval/harness.py` — run_eval()
+- `data/curriculum.py` — Dcold synthesis, quality controls
+- `data/curation_log.py` — data-curation.md read/write
+- `training/slm_helpers.py` — train() / infer() / infer_batch()
+- `training/lora_trainer.py` — Unsloth LoRA loop
+- `training/quantize.py` — theoretical hardware profiles
+- `agent/state.py` — AgentState TypedDict
+- `agent/tools/` — web_search, bash, file_tools, delegate_task
+- `agent/nodes/` — all 8 state machine nodes
+- `agent/graph.py` — LangGraph assembly
+- `run.py` — entry point
+
+---
+
 ## Session 1 — 2026-06-18
 
 ### Status: Design phase (brainstorming), Section 1 approved
