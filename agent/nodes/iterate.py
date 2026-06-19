@@ -41,7 +41,11 @@ def iterate_node(state: AgentState) -> AgentState:
         state["next_action"] = "terminate"
     elif state["consecutive_no_improvement"] >= 2:
         state["next_action"] = "escalate"
+    elif policy["intervention"] == "hyperparameter":
+        # Hyperparameter tuning: hold dataset fixed, skip curation, go straight to retrain
+        state["next_action"] = "train"
     else:
+        # data_rebuild and surgical interventions need curation first
         state["next_action"] = "curate"
 
     return state

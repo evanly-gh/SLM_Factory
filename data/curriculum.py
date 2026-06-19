@@ -1,7 +1,7 @@
 # data/curriculum.py
 import random
 from collections import Counter
-from data.eval_set import EvalSet
+from data.eval_set import EvalSet, _infer_pos_label, _infer_neg_label
 
 
 def build_initial_curriculum(
@@ -150,13 +150,15 @@ def synthesize_hard_negatives(
     hard_negatives = []
 
     if task_type == "classification":
-        boundary = [e for e in examples if e.get("label") == "spam"][:n]
+        pos_label = _infer_pos_label(examples) if examples else "spam"
+        neg_label = _infer_neg_label(examples, pos_label) if examples else "ham"
+        boundary = [e for e in examples if e.get("label") == pos_label][:n]
         for ex in boundary:
             prompt = (
-                f"Generate a legitimate SMS message that looks superficially similar to "
-                f"this spam message but has a genuine, non-spam intent.\n\n"
-                f"Spam message: {ex['text']}\n\n"
-                f"Respond with only the message text, no explanation."
+                f"Generate a counterexample that looks superficially similar to "
+                f"the following {pos_label} example but has a genuine {neg_label} intent.\n\n"
+                f"{pos_label.capitalize()} example: {ex['text']}\n\n"
+                f"Respond with only the example text, no explanation."
             )
             response = anthropic_client.messages.create(
                 model="claude-sonnet-4-6",
@@ -164,7 +166,7 @@ def synthesize_hard_negatives(
                 messages=[{"role": "user", "content": prompt}],
             )
             generated_text = response.content[0].text.strip()
-            hard_negatives.append({"text": generated_text, "label": "ham"})
+            hard_negatives.append({"text": generated_text, "label": neg_label})
 
     elif task_type == "NER":
         candidates = examples[:n]

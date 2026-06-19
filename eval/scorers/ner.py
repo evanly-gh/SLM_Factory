@@ -30,7 +30,7 @@ def score(eval_set: EvalSet, predictions: list[list[dict]]) -> dict:
     # Per-slice: convert to binary has-entity labels for slice scoring
     pred_labels = ["entity" if p else "no_entity" for p in predictions]
     gold_labels = ["entity" if g else "no_entity" for g in gold]
-    slices = per_slice_scores(eval_set, pred_labels)
+    slices = per_slice_scores(eval_set, pred_labels, gold_labels=gold_labels)
     failures = [
         {**ex, "predicted": pred}
         for ex, pred, g in zip(eval_set.all, predictions, gold)

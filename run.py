@@ -24,11 +24,26 @@ def _infer_task_type(description: str) -> str:
     Matches one of: "classification", "NER", "generation".
     """
     desc_lower = description.lower()
-    if any(kw in desc_lower for kw in ("classification", "classify", "spam", "sentiment", "binary")):
+    # Check classification first (most specific keywords)
+    if any(kw in desc_lower for kw in (
+        "classification", "classify", "spam", "sentiment", "binary", "clinc",
+    )):
         return "classification"
-    if any(kw in desc_lower for kw in ("ner", "named entity", "entity extraction", "tagging")):
+    # NER keywords
+    if any(kw in desc_lower for kw in (
+        "ner", "named entity", "entity extraction", "tagging",
+        "conll", "conll-2003", "extraction",
+    )):
         return "NER"
-    if any(kw in desc_lower for kw in ("generation", "generate", "summarize", "summarization", "translation")):
+    # Generation keywords — includes common paper benchmarks
+    if any(kw in desc_lower for kw in (
+        "generation", "generate", "summarize", "summarization", "translation",
+        "arc", "reasoning", "science",
+        "gsm", "math",
+        "triviaqa", "trivia",
+        "humaneval", "code",
+        "xsum", "samsum",
+    )):
         return "generation"
     raise ValueError(
         f"Cannot infer task_type from description: {description!r}. "
