@@ -14,6 +14,8 @@ class AgentState(TypedDict):
     task_type: str                    # "classification", "NER", or "generation"
     selected_model: Optional[ModelSpec]
     stop_threshold: float             # default 0.96, agent may lower
+    task_plan: Optional[dict]         # orchestrator's autonomous plan (labels, exa_queries, ...)
+    autonomous: bool                  # if True, task_analysis derives task_type/plan via LLM
 
     # Data
     train_examples: list[dict]
@@ -31,6 +33,7 @@ class AgentState(TypedDict):
 
     # Last iteration results
     last_eval: Optional[EvalResult]
+    last_curation: Optional[dict]     # {n_gold, n_hard, label_dist} for the dataset feeding the next train
     last_intervention: str            # "data_rebuild" | "hyperparameter" | "surgical" | "rollback"
     next_action: str                  # "train" | "curate" | "rollback" | "escalate" | "terminate"
 

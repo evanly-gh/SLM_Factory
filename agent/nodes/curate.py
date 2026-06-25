@@ -39,6 +39,7 @@ def curate_node(state: AgentState) -> AgentState:
             task_type=task_type,
         )
         dataset = apply_quality_controls(gold + hard, task_type=task_type)
+        n_hard_added = len(hard)
 
     elif intervention == "surgical":
         # Load existing dataset and add 2–3 targeted examples per failure pattern
@@ -51,6 +52,7 @@ def curate_node(state: AgentState) -> AgentState:
             task_type=task_type,
         )
         dataset = apply_quality_controls(dataset + targeted, task_type=task_type)
+        n_hard_added = len(targeted)
 
     else:
         # Hyperparameter intervention — hold dataset fixed, no curation needed
@@ -64,4 +66,13 @@ def curate_node(state: AgentState) -> AgentState:
         for ex in dataset:
             f.write(json.dumps(ex) + "\n")
     state["current_dataset_path"] = path
+
+    # Record real dataset composition so evaluate_node can log it (not placeholders).
+    from collections import Counter
+    n_hard = min(n_hard_added, len(dataset))
+    state["last_curation"] = {
+        "n_gold": len(dataset) - n_hard,
+        "n_hard": n_hard,
+        "label_dist": dict(Counter(ex.get("label", "?") for ex in dataset)),
+    }
     return state
