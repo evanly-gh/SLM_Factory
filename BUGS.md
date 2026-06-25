@@ -9,10 +9,10 @@ Status legend: 🔴 open · 🟢 fixed · 🟡 suspected/unconfirmed · ⚪ desi
 | ID | Status | Area | One-line |
 |----|--------|------|----------|
 | B1 | 🟢 | eval_setup | classification path hardcoded SMS-spam for every task |
-| B2 | ⚪ | orchestration | iteration loop is deterministic Python, not an LLM per-iteration (design says LLM) |
+| B2 | 🟢 | orchestration | iteration loop is deterministic Python, not an LLM per-iteration (design says LLM) |
 | B3 | 🟢 | curation log | dataset composition logged as 0 (placeholders) |
-| B4 | 🔴 | train | checkpoint output dirs named `iter{N-1}` (off-by-one) |
-| B5 | 🔴 | rollback | docstring claims it restores weights; it only pops the score |
+| B4 | 🟢 | train | checkpoint output dirs named `iter{N-1}` (off-by-one) |
+| B5 | 🟢 | rollback | docstring claims it restores weights; it only pops the score |
 | B6 | 🟢 | eval_set/scorer | binary-only; multi-class collapsed to 2 labels |
 | B7 | 🟢 | web_acquire | Exa `search()` rejects `text=` kwarg |
 | B8 | 🟢 | eval_set | multi-class eval degenerated to `pos=1/neg=0` |
@@ -20,7 +20,7 @@ Status legend: 🔴 open · 🟢 fixed · 🟡 suspected/unconfirmed · ⚪ desi
 | B10 | 🟢 | run_autonomous | `_Tee` flush-after-close `ValueError` at exit |
 | B11 | 🟢 | lora_trainer | train prompt ≠ eval prompt (no train/serve parity) |
 | B12 | 🟢 | runner | hardware constraints hardcoded; no autonomous device research |
-| B13 | 🔴 | curriculum | Dgold:Dhard ≈ 98:2, far from the paper's 65:35 target |
+| B13 | 🟢 | curriculum | Dgold:Dhard ≈ 98:2, far from the paper's 65:35 target |
 | B14 | 🟢 | lora_trainer | `target_modules="all-linear"` string → PEFT char-iteration crash |
 | B15 | 🟢 | slm_helpers | inference used vanilla `AutoModelForCausalLM`; Unsloth's global patches break it |
 | B16 | 🟢 | run_autonomous | `_Tee` stdout missing `isatty()` → transformers loading report crashes |
@@ -44,7 +44,11 @@ Status legend: 🔴 open · 🟢 fixed · 🟡 suspected/unconfirmed · ⚪ desi
   LLM calls are the planner (once) and hard-negative synthesis (in `curate`).
 - **Impact:** behavior diverges from the paper; "if it ran longer" adds only data-gen calls,
   not orchestrator-reasoning calls.
-- **Status:** ⚪ design gap — partially addressed (added an LLM task planner + Exa acquisition).
+- **Status:** 🟢 fixed 2026-06-24 — `iterate_node` now calls the orchestrator LLM (Claude Sonnet 4.6)
+  with the full `data-curation.md` trajectory + current failures. LLM returns structured JSON with
+  `{intervention, hypothesis, hyperparameter_changes?, targeted_patterns?}`. Score-band rules remain
+  as fallback if the LLM call fails. `hypothesis` field written to `data-curation.md` via
+  `state["last_hypothesis"]` passed through to `evaluate_node`.
 
 ## B3 — curation log records dataset composition as 0
 - **Where:** `agent/nodes/evaluate.py` (call to `CurationLog.write_iteration`)
@@ -58,7 +62,8 @@ Status legend: 🔴 open · 🟢 fixed · 🟡 suspected/unconfirmed · ⚪ desi
 - **When:** 2026-06-23, first instrumented run
 - **How found:** DAG reported `iteration=4` but the weights lived in `artifacts/iter3_A/`.
 - **Impact:** cosmetic/confusing lineage; weights selection still correct.
-- **Status:** 🔴 open.
+- **Status:** 🟢 fixed 2026-06-24 — increment `state["iteration"]` BEFORE building `output_dir`, so
+  dir name matches the DAG and `data-curation.md` iteration number.
 
 ## B5 — rollback_node doesn't restore best weights
 - **Where:** `agent/nodes/rollback.py`
@@ -67,7 +72,9 @@ Status legend: 🔴 open · 🟢 fixed · 🟡 suspected/unconfirmed · ⚪ desi
   score and bumps a counter; `best_weights_ref` is untouched.
 - **Impact:** works today only because `best_weights_ref` is managed in `evaluate_node`; the
   docstring is misleading and the intent is unimplemented.
-- **Status:** 🔴 open.
+- **Status:** 🟢 fixed 2026-06-24 — marks the regressing DAG node as pruned, then scans
+  all non-pruned nodes for the best score and restores `best_weights_ref` + `best_score`
+  from that node.
 
 ## B6 — eval set + scorer were binary-only
 - **Where:** `data/eval_set.py`, `eval/scorers/classification.py`
@@ -124,7 +131,10 @@ Status legend: 🔴 open · 🟢 fixed · 🟡 suspected/unconfirmed · ⚪ desi
   *minority/positive* class, so multi-class curricula get almost none.
 - **Impact:** the curriculum doesn't follow the paper's composition; hard negatives are the lever
   the paper calls "essential."
-- **Status:** 🔴 open.
+- **Status:** 🟢 fixed 2026-06-24 — `curate_node` now explicitly targets `N_TOTAL=150` with
+  `n_gold=int(150*0.65)=97` and `n_hard=53`. `synthesize_hard_negatives` (classification) now
+  uses all labels as source material (not just the minority class), generating a boundary-crossing
+  counterexample for each candidate.
 
 ## B14 — LoRA `target_modules="all-linear"` crashes PEFT
 - **Where:** `training/lora_trainer.py` (`FastLanguageModel.get_peft_model`)

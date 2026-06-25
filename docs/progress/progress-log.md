@@ -1,5 +1,40 @@
 # SLM Factory — Progress Log
 
+## Session 3 — 2026-06-24
+
+### Status: First real GPU runs completed; now fixing remaining gaps vs. Pioneer Agent paper
+
+### What happened in Session 2 (execution)
+- All 9 plan tasks implemented and reviewed via SDD workflow
+- 32 tests passing
+- First real GPU run: Qwen3-0.6B on L40, real Unsloth train + inference → F1=0.553 (6-class task)
+- Many bugs found and fixed (B1–B18 in BUGS.md); key remaining open bugs: B2, B4, B5, B13
+
+### Session 3 goals — COMPLETED
+1. **B2** ✅ `iterate_node` is now LLM-driven. Calls Claude Sonnet 4.6 with full `data-curation.md`
+   trajectory + current failures. LLM returns `{intervention, hypothesis, ...}` JSON. Falls back to
+   score-band rules on failure. `hypothesis` flows through `state["last_hypothesis"]` into
+   `evaluate_node` → `data-curation.md`.
+2. **B5** ✅ `rollback_node` now restores `best_weights_ref` + `best_score` from the best non-pruned
+   DAG node after marking the regressing node as pruned.
+3. **B13** ✅ `curate_node` now targets `N_TOTAL=150` at 65:35 split (97 gold + 53 hard).
+   `synthesize_hard_negatives` uses all labels (not just minority class) as source material.
+4. **B4** ✅ `train_node` increments `state["iteration"]` before building `output_dir`, so dir name
+   matches DAG/data-curation.md iteration number.
+
+### Files changed
+- `agent/nodes/iterate.py` — LLM call via `_llm_iterate()`, `apply_iteration_policy()` as fallback
+- `agent/nodes/rollback.py` — restores `best_weights_ref` from DAG
+- `agent/nodes/evaluate.py` — `hypothesis=state.get("last_hypothesis", "")`
+- `agent/state.py` — added `last_hypothesis: str` and `llm_iterate_decision: Optional[dict]`
+- `data/curriculum.py` — all-label hard-negative synthesis for classification
+- `agent/nodes/curate.py` — explicit 65:35 split, surgical n scales with failures
+- `agent/nodes/train.py` — increment before output_dir build
+
+All 32 tests pass. No open bugs remain in BUGS.md.
+
+---
+
 ## Session 2 — 2026-06-19
 
 ### Status: Implementation plan written, ready for execution

@@ -35,6 +35,8 @@ class AgentState(TypedDict):
     last_eval: Optional[EvalResult]
     last_curation: Optional[dict]     # {n_gold, n_hard, label_dist} for the dataset feeding the next train
     last_intervention: str            # "data_rebuild" | "hyperparameter" | "surgical" | "rollback"
+    last_hypothesis: str              # LLM-generated causal reasoning for the next intervention
+    llm_iterate_decision: Optional[dict]  # full LLM decision JSON from iterate_node
     next_action: str                  # "train" | "curate" | "rollback" | "escalate" | "terminate"
 
     # Messages for LangGraph

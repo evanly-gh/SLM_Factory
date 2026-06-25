@@ -150,15 +150,24 @@ def synthesize_hard_negatives(
     hard_negatives = []
 
     if task_type == "classification":
-        pos_label = _infer_pos_label(examples) if examples else "spam"
-        neg_label = _infer_neg_label(examples, pos_label) if examples else "ham"
-        boundary = [e for e in examples if e.get("label") == pos_label][:n]
-        for ex in boundary:
+        # Use the full set of examples (all labels) as source material, not just
+        # the minority class. Generate a boundary-crossing counterexample for each:
+        # given an example with label X, synthesize one that superficially resembles
+        # it but belongs to a different label. This covers all failure modes, not just
+        # minority-class confusion.
+        all_labels = list({e.get("label") for e in examples if e.get("label")})
+        candidates = examples[:n]
+        for ex in candidates:
+            src_label = ex.get("label", "unknown")
+            # Pick a target label different from the source
+            target_labels = [l for l in all_labels if l != src_label]
+            target_label = target_labels[0] if target_labels else src_label
             prompt = (
                 f"Generate a counterexample that looks superficially similar to "
-                f"the following {pos_label} example but has a genuine {neg_label} intent.\n\n"
-                f"{pos_label.capitalize()} example: {ex['text']}\n\n"
-                f"Respond with only the example text, no explanation."
+                f"the following example labelled '{src_label}' but has a genuine "
+                f"'{target_label}' meaning. Be realistic and subtle.\n\n"
+                f"Source example: {ex['text']}\n\n"
+                f"Respond with only the counterexample text, no explanation."
             )
             response = anthropic_client.messages.create(
                 model="claude-sonnet-4-6",
@@ -166,7 +175,7 @@ def synthesize_hard_negatives(
                 messages=[{"role": "user", "content": prompt}],
             )
             generated_text = response.content[0].text.strip()
-            hard_negatives.append({"text": generated_text, "label": neg_label})
+            hard_negatives.append({"text": generated_text, "label": target_label})
 
     elif task_type == "NER":
         candidates = examples[:n]

@@ -29,12 +29,21 @@ def curate_node(state: AgentState) -> AgentState:
     failures = state["last_eval"].failures if state.get("last_eval") else []
 
     if intervention == "data_rebuild" or state["current_dataset_path"] is None:
-        # Build fresh curriculum from gold data + hard negatives
-        gold = build_initial_curriculum(train_examples, eval_set, n_total=150)
-        source_examples = failures[:10] if failures else train_examples[:10]
+        # Build fresh curriculum targeting 65:35 Dgold:Dhard (paper §2.3).
+        # Step 1: select gold examples (65% of target total).
+        N_TOTAL = 150
+        n_gold_target = int(N_TOTAL * 0.65)
+        n_hard_target = N_TOTAL - n_gold_target  # ~52
+
+        gold = build_initial_curriculum(train_examples, eval_set, n_total=n_gold_target)
+
+        # Step 2: synthesize hard negatives from failures first, then gold examples.
+        # Use the full range of labels (not just minority class) to cover all failure modes.
+        source_examples = (failures[:n_hard_target] if len(failures) >= n_hard_target
+                           else failures + train_examples[:n_hard_target - len(failures)])
         hard = synthesize_hard_negatives(
             source_examples,
-            n=50,
+            n=n_hard_target,
             anthropic_client=client,
             task_type=task_type,
         )
@@ -42,12 +51,14 @@ def curate_node(state: AgentState) -> AgentState:
         n_hard_added = len(hard)
 
     elif intervention == "surgical":
-        # Load existing dataset and add 2–3 targeted examples per failure pattern
+        # Load existing dataset and add targeted examples per failure pattern.
         with open(state["current_dataset_path"]) as f:
             dataset = [json.loads(line) for line in f if line.strip()]
+        # For surgical: target 2–3 new examples per failure pattern, up to 20 total.
+        n_surgical = min(max(len(failures) * 2, 10), 20)
         targeted = synthesize_hard_negatives(
-            failures[:5],
-            n=min(len(failures), 20),
+            failures[:n_surgical],
+            n=n_surgical,
             anthropic_client=client,
             task_type=task_type,
         )

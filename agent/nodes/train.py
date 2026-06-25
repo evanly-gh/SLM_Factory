@@ -24,6 +24,10 @@ def train_node(state: AgentState) -> AgentState:
         {"nr_epochs": 5, "learning_rate": 1e-4, "batch_size": 4,  "lora_rank": None, "label": "B: full_ft"},
     ]
 
+    # Increment iteration counter BEFORE building output dirs so the directory name
+    # matches the iteration number recorded in the DAG and data-curation.md.
+    state["iteration"] += 1
+
     results = {}
     for cfg in configs:
         results[cfg["label"]] = slm_train(
@@ -42,5 +46,4 @@ def train_node(state: AgentState) -> AgentState:
     # Store both weights_refs; evaluate node will select best
     state["_pending_weights_refs"] = results
     state["_pending_configs"] = {c["label"]: c for c in configs}
-    state["iteration"] += 1
     return state

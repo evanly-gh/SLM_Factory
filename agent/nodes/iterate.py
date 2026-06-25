@@ -1,10 +1,87 @@
 # agent/nodes/iterate.py
+import json
 from agent.state import AgentState
+
+
+_ITERATE_SYSTEM = """\
+You are the orchestrator of an agentic fine-tuning loop for small language models.
+Your job: read the full training trajectory in data-curation.md and the current evaluation
+failures, then decide what to do next and explain WHY.
+
+Output ONLY valid JSON — no markdown, no commentary, no trailing text:
+{
+  "intervention": "<data_rebuild | hyperparameter | surgical>",
+  "hypothesis": "<one concise sentence: causal reason the score is where it is and what you expect to change>",
+  "hyperparameter_changes": "<optional, only for hyperparameter intervention: e.g. 'increase epochs to 5, lower lr to 5e-5'>",
+  "targeted_patterns": "<optional, only for surgical intervention: describe the failure pattern to target>"
+}
+
+Score band guidance (but reason about the trajectory, do not just apply mechanical rules):
+- Score < 0.80: usually a data problem (data_rebuild)
+- 0.80–0.95: usually an optimization problem (hyperparameter)
+- >= 0.95: usually surgical hard-negative addition (surgical)
+
+If the trajectory shows stagnation (same intervention repeated with no improvement), escalate
+the intervention type (e.g. try hyperparameter if data_rebuild stagnated, try surgical if
+hyperparameter stagnated).
+"""
+
+
+def _llm_iterate(state: AgentState) -> dict:
+    """Call the orchestrator LLM with the full trajectory and return a parsed decision dict."""
+    import anthropic
+    from config import ANTHROPIC_API_KEY, ORCHESTRATOR_MODEL
+    from data.curation_log import CurationLog
+
+    trajectory = CurationLog().read_latest()
+    current_score = state["scores"][-1] if state["scores"] else 0.0
+    last_eval = state.get("last_eval")
+    failures_summary = ""
+    if last_eval and last_eval.failures:
+        sample = last_eval.failures[:10]
+        failures_summary = "\n".join(
+            f"  - predicted={f.get('predicted','?')} gold={f.get('label', f.get('entities', f.get('response', '?')))!r} text={str(f.get('text', f.get('prompt', '')))[:80]}"
+            for f in sample
+        )
+
+    user_content = f"""\
+## Current training trajectory
+
+{trajectory if trajectory else "(no iterations logged yet)"}
+
+## Current iteration summary
+- Iteration: {state['iteration']}
+- Current f(π): {current_score:.4f}
+- Best f(π) so far: {state['best_score']:.4f}
+- Consecutive rounds without improvement: {state['consecutive_no_improvement']}
+- Score history: {state['scores']}
+- Stop threshold: {state['stop_threshold']}
+
+## Sample failures (up to 10)
+{failures_summary if failures_summary else "(none yet)"}
+
+Decide the next intervention. Output JSON only.
+"""
+
+    client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
+    response = client.messages.create(
+        model=ORCHESTRATOR_MODEL,
+        max_tokens=512,
+        system=_ITERATE_SYSTEM,
+        messages=[{"role": "user", "content": user_content}],
+    )
+    raw = response.content[0].text.strip()
+    # Strip markdown code fences if present
+    if raw.startswith("```"):
+        raw = raw.split("```")[1]
+        if raw.startswith("json"):
+            raw = raw[4:]
+    return json.loads(raw.strip())
 
 
 def apply_iteration_policy(score: float) -> dict:
     """
-    Apply the shared iteration policy based on current f(π).
+    Fallback score-band rules used when the LLM call is unavailable or fails.
     Returns dict with band and intervention type.
     """
     if score < 0.80:
@@ -17,7 +94,7 @@ def apply_iteration_policy(score: float) -> dict:
         return {
             "band": "0.80-0.95",
             "intervention": "hyperparameter",
-            "description": "Score 0.80–0.95 — optimization problem. Tune hyperparameters, hold dataset fixed.",
+            "description": "Score 0.80–0.95 — optimization problem. Tune hyperparameters.",
         }
     else:
         return {
@@ -28,20 +105,50 @@ def apply_iteration_policy(score: float) -> dict:
 
 
 def iterate_node(state: AgentState) -> AgentState:
-    """Node 5: determine next intervention based on current score."""
+    """
+    Node 5: LLM-driven iteration decision.
+
+    Reads the full data-curation.md trajectory and current failures, calls the orchestrator
+    LLM (Claude Sonnet 4.6) to reason about WHY the score is where it is and propose the
+    next (D, H, S) modification with a causal hypothesis. This implements the paper's
+    EXPAND(v_parent, G, F) reasoning step.
+
+    Falls back to score-band rules if the LLM call fails.
+    """
     if not state["scores"]:
         state["next_action"] = "train"
         return state
 
     current_score = state["scores"][-1]
-    policy = apply_iteration_policy(current_score)
-    state["last_intervention"] = policy["intervention"]
+
+    # Try LLM-driven decision
+    llm_decision = None
+    hypothesis = ""
+    try:
+        llm_decision = _llm_iterate(state)
+        intervention = llm_decision.get("intervention", "")
+        hypothesis = llm_decision.get("hypothesis", "")
+        if intervention not in ("data_rebuild", "hyperparameter", "surgical"):
+            raise ValueError(f"Unknown intervention: {intervention!r}")
+    except Exception as exc:
+        # Fallback: score-band rules
+        print(f"[iterate_node] LLM call failed ({exc!r}), falling back to score-band rules")
+        fallback = apply_iteration_policy(current_score)
+        intervention = fallback["intervention"]
+        hypothesis = f"(fallback) {fallback['description']}"
+
+    state["last_intervention"] = intervention
+    state["last_hypothesis"] = hypothesis
+
+    # Store additional LLM guidance so curate/train nodes can use it
+    if llm_decision:
+        state["llm_iterate_decision"] = llm_decision
 
     if current_score >= state["stop_threshold"]:
         state["next_action"] = "terminate"
     elif state["consecutive_no_improvement"] >= 2:
         state["next_action"] = "escalate"
-    elif policy["intervention"] == "hyperparameter":
+    elif intervention == "hyperparameter":
         # Hyperparameter tuning: hold dataset fixed, skip curation, go straight to retrain
         state["next_action"] = "train"
     else:
