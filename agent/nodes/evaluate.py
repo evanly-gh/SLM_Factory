@@ -60,14 +60,15 @@ def evaluate_node(state: AgentState) -> AgentState:
     config_a = config_labels[0]["label"] if config_labels else "Config A"
     config_b = config_labels[1]["label"] if len(config_labels) > 1 else "Config B"
 
+    curation = state.get("last_curation") or {}
     log = CurationLog()
     log.write_iteration(
         iteration=state["iteration"],
         task_type=task_type,
         dataset_version=f"v{state['dataset_version']}",
-        n_gold=0,   # updated by curate node; placeholder at eval time
-        n_hard=0,
-        label_dist={},
+        n_gold=curation.get("n_gold", 0),
+        n_hard=curation.get("n_hard", 0),
+        label_dist=curation.get("label_dist", {}),
         config_a=config_a,
         config_b=config_b,
         best_config=best_label,

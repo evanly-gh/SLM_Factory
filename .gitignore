@@ -1,7 +1,7 @@
 __pycache__/
 *.pyc
 *.pyo
-.venv/
+.venv*/
 venv/
 dist/
 build/
@@ -19,3 +19,6 @@ Thumbs.db
 htmlcov/
 .coverage
 CLAUDE.md
+
+logs/
+unsloth_compiled_cache/

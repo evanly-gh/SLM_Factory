@@ -27,9 +27,14 @@ def extract_predictions(raw_outputs: list[str], eval_set: EvalSet) -> list[str]:
 def score(eval_set: EvalSet, predictions: list[str]) -> dict:
     labels = [e["label"] for e in eval_set.all]
     all_labels = list({e["label"] for e in eval_set.all})
-    pos_label = min(all_labels, key=lambda l: labels.count(l))
-    f1 = binary_f1(predictions, labels, pos_label=pos_label)
     per_class = {lbl: binary_f1(predictions, labels, pos_label=lbl) for lbl in all_labels}
+    if len(all_labels) > 2:
+        # Multi-class: macro-averaged F1 across every label.
+        f1 = sum(per_class.values()) / len(per_class) if per_class else 0.0
+    else:
+        # Binary: F1 of the (minority) positive class.
+        pos_label = min(all_labels, key=lambda l: labels.count(l))
+        f1 = binary_f1(predictions, labels, pos_label=pos_label)
     slices = per_slice_scores(eval_set, predictions)
     failures = [
         {**ex, "predicted": pred}

@@ -39,26 +39,25 @@ def train(
     return run_lora_training(dataset_path, config, output_dir=output_dir, task_type=task_type)
 
 def infer(prompt: str, weights_ref: str, base_model: str, max_new_tokens: int = 50) -> str:
-    """Load checkpoint and generate text. No deployment step required."""
-    from transformers import AutoModelForCausalLM, AutoTokenizer
+    """
+    Load a checkpoint and generate text. Loads via Unsloth (not vanilla
+    AutoModelForCausalLM): once `unsloth` is imported it globally patches the model
+    classes (e.g. Qwen3Attention.apply_qkv), so a vanilla-loaded model crashes at
+    generate. Unsloth's loader also transparently handles LoRA-adapter checkpoints.
+    """
     import torch
-
-    key = weights_ref
-    if key not in _inference_cache:
-        tokenizer = AutoTokenizer.from_pretrained(weights_ref)
-        model = AutoModelForCausalLM.from_pretrained(
-            weights_ref,
-            torch_dtype=torch.float16,
-            device_map="auto",
+    if weights_ref not in _inference_cache:
+        from unsloth import FastLanguageModel
+        model, tokenizer = FastLanguageModel.from_pretrained(
+            model_name=weights_ref, max_seq_length=512, load_in_4bit=False,
         )
-        model.eval()
-        _inference_cache[key] = (model, tokenizer)
+        FastLanguageModel.for_inference(model)   # 2x faster, sets the patched fast path
+        _inference_cache[weights_ref] = (model, tokenizer)
 
-    model, tokenizer = _inference_cache[key]
+    model, tokenizer = _inference_cache[weights_ref]
     inputs = tokenizer(prompt, return_tensors="pt").to(model.device)
     with torch.no_grad():
         outputs = model.generate(**inputs, max_new_tokens=max_new_tokens, do_sample=False)
-    # Return only the newly generated tokens
     new_tokens = outputs[0][inputs["input_ids"].shape[1]:]
     return tokenizer.decode(new_tokens, skip_special_tokens=True)
 
@@ -69,10 +68,9 @@ def infer_batch(
     max_new_tokens: int = 50,
     max_workers: int = 20,
 ) -> list[str]:
-    """Parallel inference via ThreadPoolExecutor with max_workers=20."""
-    with ThreadPoolExecutor(max_workers=max_workers) as executor:
-        futures = [
-            executor.submit(infer, p, weights_ref, base_model, max_new_tokens)
-            for p in prompts
-        ]
-        return [f.result() for f in futures]
+    """
+    Run inference over all prompts. SEQUENTIAL: Unsloth/torch keep process-global state and
+    a single GPU serializes the work anyway, so threading the model is unsafe and pointless
+    (see BUGS.md B18). `max_workers` is kept for signature compatibility and ignored.
+    """
+    return [infer(p, weights_ref, base_model, max_new_tokens) for p in prompts]

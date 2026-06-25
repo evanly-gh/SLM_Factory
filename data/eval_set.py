@@ -49,6 +49,39 @@ def build_eval_set(
 
     rng = random.Random(seed)
 
+    if task_type == "classification" and len({e["label"] for e in examples}) > 2:
+        # Multi-class: stratify all three slices across every label so the eval set
+        # covers the full label range (binary pos/neg has no meaning with >2 classes).
+        by_label: dict[str, list[dict]] = {}
+        for e in examples:
+            by_label.setdefault(e["label"], []).append(e)
+        for lbl in by_label:
+            rng.shuffle(by_label[lbl])
+        pools = {lbl: list(v) for lbl, v in by_label.items()}
+
+        avail = len(examples)
+        n_p = min(n_pos, max(1, int(avail * 0.6)))
+        n_b = min(n_boundary, max(0, int(avail * 0.2)))
+        n_n = min(n_neg, max(0, avail - n_p - n_b))
+
+        def _draw(target: int) -> list[dict]:
+            out: list[dict] = []
+            while target > 0 and any(pools.values()):
+                progressed = False
+                for lbl in list(pools.keys()):
+                    if pools[lbl] and target > 0:
+                        out.append(pools[lbl].pop())
+                        target -= 1
+                        progressed = True
+                if not progressed:
+                    break
+            return out
+
+        pos = _draw(n_p)
+        boundary = _draw(n_b)
+        neg = _draw(n_n)
+        return EvalSet(pos=pos, neg=neg, boundary=boundary, task_type=task_type)
+
     if task_type == "classification":
         pos_label = _infer_pos_label(examples)
         neg_label = _infer_neg_label(examples, pos_label)

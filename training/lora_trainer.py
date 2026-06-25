@@ -51,7 +51,10 @@ def _run_unsloth_training(
             r=config.lora_rank,
             lora_alpha=config.lora_rank * 2,
             lora_dropout=0.0,
-            target_modules="all-linear",
+            # Unsloth expects a LIST of module names, not the string "all-linear"
+            # (a string gets iterated character-by-character by PEFT).
+            target_modules=["q_proj", "k_proj", "v_proj", "o_proj",
+                            "gate_proj", "up_proj", "down_proj"],
             bias="none",
         )
 
@@ -60,12 +63,12 @@ def _run_unsloth_training(
         raw = [json.loads(line) for line in f if line.strip()]
 
     if task_type == "classification":
+        # Train/serve parity: train on the SAME prompt the eval harness uses, with the
+        # gold label as the completion (otherwise the model learns a different format
+        # than it is evaluated on).
+        from eval.scorers.classification import CLASSIFY_PROMPT
         def format_example(ex):
-            return {"text": (
-                f"Task: {task_type} classification.\n"
-                f"Input: {ex['text']}\n"
-                f"Label: {ex['label']}"
-            )}
+            return {"text": CLASSIFY_PROMPT.format(text=ex["text"]) + f" {ex['label']}"}
     elif task_type == "NER":
         def format_example(ex):
             entities_str = json.dumps(ex.get("entities", []))
@@ -95,18 +98,22 @@ def _run_unsloth_training(
         fp16=not torch.cuda.is_bf16_supported(),
         bf16=torch.cuda.is_bf16_supported(),
         logging_steps=10,
-        save_strategy="epoch",
+        # "no" avoids mid-training checkpointing, which torch.save's the trainer args and
+        # fails under Unsloth's patched SFTConfig (pickle identity mismatch). We persist the
+        # final model explicitly via save_pretrained below.
+        save_strategy="no",
         report_to="none",
     )
 
-    trainer = SFTTrainer(
-        model=model,
-        tokenizer=tokenizer,
-        train_dataset=dataset,
-        dataset_text_field="text",
-        max_seq_length=max_seq_length,
-        args=args,
-    )
+    # trl changed the SFTTrainer signature across versions (dataset_text_field /
+    # max_seq_length / tokenizer moved into SFTConfig). Try modern first, fall back.
+    try:
+        trainer = SFTTrainer(
+            model=model, tokenizer=tokenizer, train_dataset=dataset,
+            dataset_text_field="text", max_seq_length=max_seq_length, args=args,
+        )
+    except TypeError:
+        trainer = SFTTrainer(model=model, train_dataset=dataset, args=args)
     trainer.train()
 
     checkpoint_path = os.path.join(output_dir, "final_checkpoint")
