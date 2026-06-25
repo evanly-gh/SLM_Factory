@@ -16,19 +16,26 @@ def should_rollback(state: AgentState) -> bool:
 def rollback_node(state: AgentState) -> AgentState:
     """
     Node 7: revert to previous configuration if score decreased.
-    Removes the last score from history. Restores previous weights_ref.
+    Removes the last score from history.
+    Restores best_weights_ref to the best non-pruned DAG node.
     """
     if not should_rollback(state):
         return state
 
     # Remove the regressing score
     state["scores"].pop()
-    # Restore best known weights
     state["last_intervention"] = "rollback"
     state["consecutive_no_improvement"] += 1
 
-    # If we have a DAG, mark the last node as pruned
+    # Mark the last DAG node as pruned
     if state["dag"]:
         state["dag"][-1]["pruned"] = True
+
+    # Restore best_weights_ref to the most recent non-pruned DAG node
+    non_pruned = [n for n in state["dag"] if not n.get("pruned", False)]
+    if non_pruned:
+        best_node = max(non_pruned, key=lambda n: n["score"])
+        state["best_weights_ref"] = best_node["weights_ref"]
+        state["best_score"] = best_node["score"]
 
     return state

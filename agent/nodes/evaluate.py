@@ -75,7 +75,7 @@ def evaluate_node(state: AgentState) -> AgentState:
         eval_result=best_result,
         score_band=policy["band"],
         next_intervention=policy["intervention"],
-        hypothesis="",
+        hypothesis=state.get("last_hypothesis", ""),
         model_id=model_id,
         int4_size_mb=hw_profile.get("int4_size_mb") or 0,
         tier=hw_profile.get("tier") or 0,
