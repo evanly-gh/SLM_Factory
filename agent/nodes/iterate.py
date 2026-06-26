@@ -40,12 +40,19 @@ hyperparameter stagnated).
 
 
 def _llm_iterate(state: AgentState) -> dict:
-    """Call the orchestrator LLM with the full trajectory and return a parsed decision dict."""
+    """Call the orchestrator LLM with the compacted trajectory and return a parsed decision dict.
+
+    Uses the Context Manager (agent/context_manager.py) to compact older iterations
+    before sending to the LLM, preventing context bloat on long runs. The full
+    uncompacted data-curation.md stays on disk. Paper §2.1.
+    """
     import anthropic
     from config import ANTHROPIC_API_KEY, ORCHESTRATOR_MODEL
     from data.curation_log import CurationLog
+    from agent.context_manager import compact_trajectory, should_compact
 
-    trajectory = CurationLog().read_latest()
+    raw_trajectory = CurationLog().read_latest()
+    trajectory = compact_trajectory(raw_trajectory) if should_compact(raw_trajectory) else raw_trajectory
     current_score = state["scores"][-1] if state["scores"] else 0.0
     last_eval = state.get("last_eval")
     failures_summary = ""

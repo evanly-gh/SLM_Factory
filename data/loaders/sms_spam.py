@@ -30,5 +30,7 @@ def download_sms_spam(test_fraction: float = 0.2) -> tuple[list[dict], list[dict
                 label, text = parts
                 examples.append({"text": text, "label": label.strip()})
 
+    import random
+    random.Random(42).shuffle(examples)
     split_idx = int(len(examples) * (1 - test_fraction))
     return examples[:split_idx], examples[split_idx:]

@@ -91,11 +91,47 @@ def acquire_dataset(plan: dict, description: str = "", n_per_label: int = DEFAUL
     if not examples:
         raise RuntimeError("Exa acquisition returned no usable examples for this task.")
 
+    # For NER tasks, acquired documents lack entity annotations. Use Claude to
+    # extract gold entity spans from each passage. (B48 fix; paper §2.5 data acquisition)
+    if task_type == "NER":
+        examples = _annotate_ner_entities(examples, log=log)
+
     import random
     rng = random.Random(42)
     rng.shuffle(examples)
     split = int(len(examples) * (1 - test_fraction))
     train, test = examples[:split], examples[split:]
     log(f"      [acquire] total={len(examples)} train={len(train)} test={len(test)} "
-        f"labels={sorted(set(e['label'] for e in examples))}")
+        f"labels={sorted(set(e.get('label', '?') for e in examples))}")
     return train, test
+
+
+def _annotate_ner_entities(examples: list[dict], log=print) -> list[dict]:
+    """Add gold entity annotations to web-acquired NER passages via Claude."""
+    import anthropic, json as _json, re as _re
+    from config import ANTHROPIC_API_KEY
+
+    client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
+    annotated = []
+    for i, ex in enumerate(examples):
+        try:
+            response = client.messages.create(
+                model="claude-sonnet-4-6",
+                max_tokens=400,
+                messages=[{"role": "user", "content": (
+                    "Extract all named entities from this text. Return a JSON list of "
+                    "objects with \"text\" (the exact span) and \"type\" (PER, ORG, LOC, "
+                    "MISC, or other standard NER types). Return [] if no entities.\n\n"
+                    f"Text: {ex['text'][:500]}\n\n"
+                    "Reply with JSON only, no explanation."
+                )}],
+            )
+            raw = response.content[0].text.strip()
+            match = _re.search(r'\[.*\]', raw, _re.DOTALL)
+            entities = _json.loads(match.group()) if match else []
+            entities = [e for e in entities if "text" in e and "type" in e]
+        except Exception:
+            entities = []
+        annotated.append({"text": ex["text"], "entities": entities})
+    log(f"      [acquire] annotated {len(annotated)} NER passages with entities")
+    return annotated

@@ -62,28 +62,59 @@ def _run_unsloth_training(
     with open(dataset_path) as f:
         raw = [json.loads(line) for line in f if line.strip()]
 
+    # Format training examples using the model's chat template when available.
+    # This achieves train/serve parity (paper Appendix D.1) and structurally
+    # separates the prompt from the completion so loss masking works correctly.
+    has_chat_template = (
+        hasattr(tokenizer, "chat_template") and tokenizer.chat_template is not None
+    )
+
     if task_type == "classification":
-        # Train/serve parity: train on the SAME prompt the eval harness uses, with the
-        # gold label as the completion (otherwise the model learns a different format
-        # than it is evaluated on).
         from eval.scorers.classification import CLASSIFY_PROMPT
         def format_example(ex):
-            return {"text": CLASSIFY_PROMPT.format(text=ex["text"]) + f" {ex['label']}"}
+            user_msg = CLASSIFY_PROMPT.format(text=ex["text"])
+            assistant_msg = ex["label"]
+            if has_chat_template:
+                messages = [
+                    {"role": "user", "content": user_msg},
+                    {"role": "assistant", "content": assistant_msg},
+                ]
+                return {"text": tokenizer.apply_chat_template(
+                    messages, tokenize=False, add_generation_prompt=False,
+                )}
+            return {"text": f"{user_msg}\n\nAnswer: {assistant_msg}"}
     elif task_type == "NER":
         def format_example(ex):
             entities_str = json.dumps(ex.get("entities", []))
-            return {"text": (
-                f"Extract named entities from the text.\n"
-                f"Text: {ex['text']}\n"
-                f"Entities (JSON): {entities_str}"
-            )}
+            user_msg = (
+                "Extract named entities from the text. "
+                "Reply with a JSON list of objects with \"text\" and \"type\" keys.\n\n"
+                f"Text: {ex['text']}"
+            )
+            assistant_msg = entities_str
+            if has_chat_template:
+                messages = [
+                    {"role": "user", "content": user_msg},
+                    {"role": "assistant", "content": assistant_msg},
+                ]
+                return {"text": tokenizer.apply_chat_template(
+                    messages, tokenize=False, add_generation_prompt=False,
+                )}
+            return {"text": f"{user_msg}\n\nEntities: {assistant_msg}"}
     elif task_type == "generation":
         def format_example(ex):
-            prompt = ex.get("text", ex.get("prompt", ""))
-            completion = ex.get("answer", ex.get("response", ex.get("label", "")))
-            return {"text": f"{prompt}{completion}"}
+            user_msg = ex.get("text", ex.get("prompt", ""))
+            assistant_msg = ex.get("answer", ex.get("response", ex.get("label", "")))
+            if has_chat_template:
+                messages = [
+                    {"role": "user", "content": user_msg},
+                    {"role": "assistant", "content": assistant_msg},
+                ]
+                return {"text": tokenizer.apply_chat_template(
+                    messages, tokenize=False, add_generation_prompt=False,
+                )}
+            return {"text": f"{user_msg}\n\nAnswer: {assistant_msg}"}
     else:
-        # Fallback: use text field as-is
         def format_example(ex):
             return {"text": ex.get("text", "")}
 

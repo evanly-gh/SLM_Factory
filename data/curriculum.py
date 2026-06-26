@@ -70,59 +70,112 @@ def apply_quality_controls(
     task_type: str = "classification",
 ) -> list[dict]:
     """
-    Enforce quality controls appropriate for the task type.
-
-    classification:
-      - Label balancing: no label exceeds 3x the count of any other.
-        Trims the majority class to satisfy the constraint.
-      - Removes examples missing 'text' or 'label' fields.
-
-    NER:
-      - Removes examples missing 'text' or 'entities' fields.
-      - No label balancing (entity distribution is naturally varied).
-
-    generation:
-      - Removes examples missing 'prompt' or 'response' fields.
-      - No label balancing.
+    Enforce quality controls from the paper (§2.3). Five constraints:
+    1. Label balancing: no label exceeds 3x count of any other (classification)
+    2. Context-length matching: remove outliers >3x median length
+    3. Entity diversification (NER): cap any entity value at 3 occurrences
+    4. Surface-form dedup: remove near-duplicate texts (Jaccard >0.9)
     """
     if not dataset:
         return dataset
 
     if task_type == "classification":
-        # Filter malformed examples
         clean = [e for e in dataset if "text" in e and "label" in e]
 
+        # 1. Label balancing
         counts = Counter(e["label"] for e in clean)
-        if not counts:
-            return clean
+        if counts:
+            min_count = max(min(counts.values()), 1)
+            max_allowed = 3 * min_count
+            balanced = []
+            seen: Counter = Counter()
+            for ex in clean:
+                if seen[ex["label"]] < max_allowed:
+                    balanced.append(ex)
+                    seen[ex["label"]] += 1
+            clean = balanced
 
-        min_count = min(counts.values())
-        max_allowed = 3 * min_count
+        # 2. Context-length matching: remove length outliers
+        clean = _filter_length_outliers(clean)
 
-        result = []
-        seen: Counter = Counter()
-        for ex in clean:
-            lbl = ex["label"]
-            if seen[lbl] < max_allowed:
-                result.append(ex)
-                seen[lbl] += 1
-        return result
+        # 4. Surface-form dedup
+        clean = _dedup_surface_forms(clean)
+
+        return clean
 
     elif task_type == "NER":
-        # Filter examples that have both text and entities
-        return [e for e in dataset if "text" in e and "entities" in e]
+        clean = [e for e in dataset if "text" in e and "entities" in e]
+
+        # 3. Entity diversification: no entity value appears >3 times
+        entity_counts: Counter = Counter()
+        for ex in clean:
+            for ent in ex.get("entities", []):
+                entity_counts[ent.get("text", "").lower()] += 1
+        over_represented = {k for k, v in entity_counts.items() if v > 3}
+        if over_represented:
+            result = []
+            running: Counter = Counter()
+            for ex in clean:
+                ent_values = [e.get("text", "").lower() for e in ex.get("entities", [])]
+                skip = False
+                for v in ent_values:
+                    if v in over_represented and running[v] >= 3:
+                        skip = True
+                        break
+                if not skip:
+                    result.append(ex)
+                    for v in ent_values:
+                        running[v] += 1
+            clean = result
+
+        clean = _filter_length_outliers(clean)
+        return clean
 
     elif task_type == "generation":
-        # Filter examples that have both prompt and response
-        # Also accept text/label for datasets that use that convention
-        return [
+        clean = [
             e for e in dataset
             if ("prompt" in e and "response" in e) or ("text" in e and "label" in e)
         ]
+        clean = _filter_length_outliers(clean, key="prompt")
+        return clean
 
     else:
-        # Unknown task type — return as-is
         return dataset
+
+
+def _filter_length_outliers(
+    examples: list[dict], key: str = "text", max_ratio: float = 3.0,
+) -> list[dict]:
+    """Remove examples whose text length exceeds max_ratio × median. Paper §2.3 item 3."""
+    lengths = [len(e.get(key, "")) for e in examples]
+    if not lengths:
+        return examples
+    lengths.sort()
+    median = lengths[len(lengths) // 2] or 1
+    cutoff = median * max_ratio
+    return [e for e in examples if len(e.get(key, "")) <= cutoff]
+
+
+def _dedup_surface_forms(examples: list[dict], threshold: float = 0.9) -> list[dict]:
+    """Remove near-duplicate texts using word-set Jaccard similarity."""
+    result = []
+    seen_word_sets: list[set] = []
+    for ex in examples:
+        words = set(ex.get("text", "").lower().split())
+        if not words:
+            result.append(ex)
+            continue
+        is_dup = False
+        for seen in seen_word_sets[-50:]:
+            intersection = len(words & seen)
+            union = len(words | seen)
+            if union > 0 and intersection / union >= threshold:
+                is_dup = True
+                break
+        if not is_dup:
+            result.append(ex)
+            seen_word_sets.append(words)
+    return result
 
 
 def synthesize_hard_negatives(
@@ -133,22 +186,17 @@ def synthesize_hard_negatives(
     targeted_pattern: str = "",
 ) -> list[dict]:
     """
-    Generate n hard negatives using the 2-for-1 rule.
+    Generate hard negatives using the 2-for-1 rule (paper §2.3).
 
-    classification:
-      For each boundary spam example, generate a ham counterexample
-      with similar surface form but legitimate intent.
+    For each challenging case, returns BOTH the original gold example AND one
+    synthetic hard negative — a contrastive pair that teaches the model what
+    TO predict and what NOT to predict for similar surface forms.
 
-    NER:
-      For each entity-rich passage, generate a near-miss passage
-      where entities are present but in an ambiguous context.
-
-    generation:
-      For each clear example, generate an adversarial or ill-posed variant.
+    Returns up to 2*n examples (n originals + n synthetics).
 
     Uses Claude API directly (no teacher model needed for phase 1).
     """
-    hard_negatives = []
+    results = []
 
     if task_type == "classification":
         # Use the full set of examples (all labels) as source material, not just
@@ -180,44 +228,66 @@ def synthesize_hard_negatives(
                 messages=[{"role": "user", "content": prompt}],
             )
             generated_text = response.content[0].text.strip()
-            hard_negatives.append({"text": generated_text, "label": target_label})
+            results.append(ex)
+            results.append({"text": generated_text, "label": target_label})
 
     elif task_type == "NER":
         candidates = examples[:n]
         for ex in candidates:
+            original_entities = ex.get("entities", [])
+            entity_desc = ", ".join(
+                f'"{e.get("text", "")}" ({e.get("type", "")})' for e in original_entities[:5]
+            ) if original_entities else "unknown entities"
             prompt = (
                 f"Rewrite the following passage so that the named entities appear in an "
-                f"ambiguous or near-miss context (e.g., 'Apple' as fruit vs company).\n\n"
+                f"ambiguous or near-miss context (e.g., 'Apple' as fruit vs company). "
+                f"Keep the entity mentions but change their context so the correct entity "
+                f"TYPE is different from the original.\n\n"
+                f"Original entities: {entity_desc}\n"
                 f"Passage: {ex.get('text', '')}\n\n"
-                f"Respond with only the rewritten passage, no explanation."
+                f"Reply with JSON: {{\"text\": \"<rewritten passage>\", "
+                f"\"entities\": [{{\"text\": \"<span>\", \"type\": \"<WRONG_TYPE>\"}}]}}\n"
+                f"The entities list should contain the spans with INCORRECT entity types "
+                f"(the types the model should learn NOT to predict). Reply with JSON only."
             )
             response = anthropic_client.messages.create(
                 model="claude-sonnet-4-6",
-                max_tokens=300,
+                max_tokens=400,
                 messages=[{"role": "user", "content": prompt}],
             )
-            generated_text = response.content[0].text.strip()
-            hard_negatives.append({
-                "text": generated_text,
-                "entities": [],  # gold entities intentionally absent — model must not hallucinate
-            })
+            raw = response.content[0].text.strip()
+            import json as _json, re as _re
+            results.append(ex)
+            try:
+                match = _re.search(r'\{.*\}', raw, _re.DOTALL)
+                parsed = _json.loads(match.group()) if match else {}
+                results.append({
+                    "text": parsed.get("text", raw),
+                    "entities": parsed.get("entities", []),
+                })
+            except Exception:
+                results.append({"text": raw, "entities": []})
 
     elif task_type == "generation":
         candidates = examples[:n]
         for ex in candidates:
             source_text = ex.get("prompt", ex.get("text", ""))
+            gold_answer = ex.get("response", ex.get("label", ex.get("answer", "")))
             prompt = (
-                f"Generate an adversarial or ill-posed variant of the following prompt "
-                f"that could trip up a language model.\n\n"
-                f"Original: {source_text}\n\n"
-                f"Respond with only the adversarial prompt, no explanation."
+                f"Given this question and its correct answer, generate a plausible but "
+                f"INCORRECT answer that could trick a language model. The wrong answer "
+                f"should sound reasonable but contain a subtle error.\n\n"
+                f"Question: {source_text}\n"
+                f"Correct answer: {gold_answer}\n\n"
+                f"Reply with only the plausible wrong answer, no explanation."
             )
             response = anthropic_client.messages.create(
                 model="claude-sonnet-4-6",
                 max_tokens=300,
                 messages=[{"role": "user", "content": prompt}],
             )
-            generated_text = response.content[0].text.strip()
-            hard_negatives.append({"prompt": generated_text, "response": None})
+            wrong_answer = response.content[0].text.strip()
+            results.append(ex)
+            results.append({"prompt": source_text, "response": wrong_answer})
 
-    return hard_negatives
+    return results

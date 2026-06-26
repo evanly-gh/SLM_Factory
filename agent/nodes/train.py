@@ -88,6 +88,8 @@ def train_node(state: AgentState) -> AgentState:
     # matches the iteration number recorded in the DAG and data-curation.md.
     state["iteration"] += 1
 
+    task_type = state["task_type"]
+
     results = {}
     for cfg in configs:
         results[cfg["label"]] = slm_train(
@@ -101,6 +103,7 @@ def train_node(state: AgentState) -> AgentState:
                 ARTIFACTS_DIR,
                 f"iter{state['iteration']}_{cfg['label'].split(':')[0].strip()}",
             ),
+            task_type=task_type,
         )
 
     # Store both weights_refs; evaluate node will select best

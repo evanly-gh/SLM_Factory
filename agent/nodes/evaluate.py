@@ -39,10 +39,15 @@ def evaluate_node(state: AgentState) -> AgentState:
     state["scores"].append(current_score)
     state["last_eval"] = best_result
 
-    # Log to DAG
+    # Log to DAG with full π=(D,H,S) triple and parent edge (paper §2.2).
+    # Each node stores the complete pipeline config that produced the score,
+    # enabling lineage attribution: "which intervention caused this score change?"
     policy = apply_iteration_policy(current_score)
+    best_cfg = (state.get("_pending_configs") or {}).get(best_label, {})
+    parent_iteration = state["dag"][-1]["iteration"] if state["dag"] else None
     dag_node = {
         "iteration": state["iteration"],
+        "parent_iteration": parent_iteration,
         "model_id": model_id,
         "weights_ref": best_weights_ref,
         "score": current_score,
@@ -50,11 +55,23 @@ def evaluate_node(state: AgentState) -> AgentState:
         "intervention": policy["intervention"],
         "failures": len(best_result.failures),
         "pruned": False,
+        "pi": {
+            "D": {"version": state["dataset_version"], "path": state.get("current_dataset_path")},
+            "H": {
+                "lora_rank": best_cfg.get("lora_rank"),
+                "learning_rate": best_cfg.get("learning_rate"),
+                "nr_epochs": best_cfg.get("nr_epochs"),
+                "batch_size": best_cfg.get("batch_size"),
+            },
+            "S": {"task_type": task_type, "supervision": "direct"},
+        },
     }
     state["dag"].append(dag_node)
 
-    # Write data-curation.md entry
+    # Write data-curation.md entry with hardware PASS/FAIL (design doc §4.3)
     hw_profile = theoretical_hardware_profile(model_id)
+    from android_pool import check_hardware_constraints
+    hw_constraints = check_hardware_constraints(state["selected_model"], state["hardware_constraints"])
     config_descriptions = state.get("_pending_configs", {})
     config_labels = list(config_descriptions.values())
     config_a = config_labels[0]["label"] if config_labels else "Config A"
@@ -79,6 +96,7 @@ def evaluate_node(state: AgentState) -> AgentState:
         model_id=model_id,
         int4_size_mb=hw_profile.get("int4_size_mb") or 0,
         tier=hw_profile.get("tier") or 0,
+        hw_constraints=hw_constraints,
     )
 
     return state

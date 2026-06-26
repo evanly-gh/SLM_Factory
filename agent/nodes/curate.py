@@ -34,12 +34,15 @@ def curate_node(state: AgentState) -> AgentState:
 
     if intervention == "data_rebuild" or state["current_dataset_path"] is None:
         # Build fresh curriculum targeting 65:35 Dgold:Dhard (paper §2.3).
-        # Step 1: select gold examples (65% of target total).
-        N_TOTAL = 150
+        # Dataset sizing per paper §2.3: 100-200 for classification/NER, 500-3000 for generation.
+        N_TOTAL_BY_TYPE = {"classification": 150, "NER": 300, "generation": 1000}
+        N_TOTAL = N_TOTAL_BY_TYPE.get(task_type, 150)
         n_gold_target = int(N_TOTAL * 0.65)
         n_hard_target = N_TOTAL - n_gold_target  # ~52
 
-        gold = build_initial_curriculum(train_examples, eval_set, n_total=n_gold_target)
+        gold = build_initial_curriculum(
+            train_examples, eval_set, n_total=n_gold_target, gold_fraction=1.0,
+        )
 
         # Step 2: synthesize hard negatives from failures first, then gold examples.
         # Use the full range of labels (not just minority class) to cover all failure modes.

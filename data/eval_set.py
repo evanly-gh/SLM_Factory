@@ -88,15 +88,20 @@ def build_eval_set(
         pos_examples = [e for e in examples if e["label"] == pos_label]
         neg_examples = [e for e in examples if e["label"] == neg_label]
 
-        BOUNDARY_KEYWORDS = {"www", "http", "free", "win", "prize", "offer",
-                             "click", "call", "urgent", "limited", "txt"}
-        boundary_candidates = [
-            e for e in neg_examples
-            if any(kw in e.get("text", "").lower() for kw in BOUNDARY_KEYWORDS)
-        ]
-        if len(boundary_candidates) < n_boundary:
-            short_pos = [e for e in pos_examples if len(e.get("text", "")) < 50]
-            boundary_candidates += short_pos
+        # Select boundary examples: negative-class examples whose text length is
+        # closest to the positive-class mean length (length similarity is a proxy
+        # for confusability at the decision boundary). Also include short positive
+        # examples as secondary candidates. This is task-agnostic — no hardcoded
+        # keywords. (Paper §2.5 Eq. 7: E_boundary = confusable pairs.)
+        pos_lengths = [len(e.get("text", "")) for e in pos_examples]
+        mean_pos_len = sum(pos_lengths) / max(len(pos_lengths), 1)
+        scored_neg = sorted(
+            neg_examples,
+            key=lambda e: abs(len(e.get("text", "")) - mean_pos_len),
+        )
+        boundary_candidates = scored_neg[:n_boundary * 2]
+        short_pos = [e for e in pos_examples if len(e.get("text", "")) < mean_pos_len * 0.6]
+        boundary_candidates += short_pos
 
         rng.shuffle(boundary_candidates)
         boundary = boundary_candidates[:n_boundary]
