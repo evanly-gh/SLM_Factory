@@ -31,7 +31,30 @@
 - `agent/nodes/curate.py` — explicit 65:35 split, surgical n scales with failures
 - `agent/nodes/train.py` — increment before output_dir build
 
-All 32 tests pass. No open bugs remain in BUGS.md.
+All 32 tests pass.
+
+### Session 3b — 2026-06-26 (continued)
+
+**B19/B20 fixed:** `train_node` now reads `llm_iterate_decision["hyperparams"]` for LLM-driven configs;
+`curate_node` passes `targeted_patterns` to `synthesize_hard_negatives`.
+
+**Deep audit completed (paper × design docs × codebase):**
+- Two parallel Opus agents read all 43 pages of the paper, all 3 design docs, and every source file
+- Cross-referenced every paper feature, every design doc requirement, and every line of code
+- Found 18 new issues (B33–B50) not covered by previous B1–B32 entries
+
+**Key new findings:**
+- **B33 (🔴):** `train_node` never passes `task_type` → all non-classification tasks train with SMS spam prompt
+- **B34 (🔴):** `curate_node` double-applies `gold_fraction` → gold count is ~63 not ~97
+- **B35 (🔴):** Boundary keywords are SMS-spam-specific → other tasks get no boundary detection
+- **B36:** 2-for-1 rule documented but not implemented (only the synthetic half is generated)
+- **B38–B41:** Android pool / hardware logging gaps vs design doc
+- **B42–B43:** Generation training and model escalation state management bugs
+- **B48:** NER web-acquired data has no entity annotations at all
+- **B50:** No on-device eval harness exists (the core HW-in-the-loop differentiator)
+
+**Priority for next work:** B33 > B34 > B35 (three real bugs) > B29 (NER/gen hard negatives) >
+B48 (NER data pipeline) > B36 (2-for-1 rule) > B43 (escalation state).
 
 ---
 

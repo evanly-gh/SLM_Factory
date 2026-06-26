@@ -130,6 +130,7 @@ def synthesize_hard_negatives(
     n: int,
     anthropic_client,
     task_type: str = "classification",
+    targeted_pattern: str = "",
 ) -> list[dict]:
     """
     Generate n hard negatives using the 2-for-1 rule.
@@ -157,6 +158,10 @@ def synthesize_hard_negatives(
         # minority-class confusion.
         all_labels = list({e.get("label") for e in examples if e.get("label")})
         candidates = examples[:n]
+        pattern_hint = (
+            f"\nFocus on this failure pattern: {targeted_pattern}\n"
+            if targeted_pattern else ""
+        )
         for ex in candidates:
             src_label = ex.get("label", "unknown")
             # Pick a target label different from the source
@@ -165,7 +170,7 @@ def synthesize_hard_negatives(
             prompt = (
                 f"Generate a counterexample that looks superficially similar to "
                 f"the following example labelled '{src_label}' but has a genuine "
-                f"'{target_label}' meaning. Be realistic and subtle.\n\n"
+                f"'{target_label}' meaning. Be realistic and subtle.{pattern_hint}\n\n"
                 f"Source example: {ex['text']}\n\n"
                 f"Respond with only the counterexample text, no explanation."
             )

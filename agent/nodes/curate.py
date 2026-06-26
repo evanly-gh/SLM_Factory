@@ -28,6 +28,10 @@ def curate_node(state: AgentState) -> AgentState:
     train_examples = state["train_examples"]
     failures = state["last_eval"].failures if state.get("last_eval") else []
 
+    # Pull targeted_pattern from the LLM's surgical decision (if available)
+    llm_decision = state.get("llm_iterate_decision") or {}
+    targeted_pattern = llm_decision.get("targeted_patterns") or ""
+
     if intervention == "data_rebuild" or state["current_dataset_path"] is None:
         # Build fresh curriculum targeting 65:35 Dgold:Dhard (paper §2.3).
         # Step 1: select gold examples (65% of target total).
@@ -61,6 +65,7 @@ def curate_node(state: AgentState) -> AgentState:
             n=n_surgical,
             anthropic_client=client,
             task_type=task_type,
+            targeted_pattern=targeted_pattern,
         )
         dataset = apply_quality_controls(dataset + targeted, task_type=task_type)
         n_hard_added = len(targeted)
