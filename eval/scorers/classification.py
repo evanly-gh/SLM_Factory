@@ -9,19 +9,19 @@ CLASSIFY_PROMPT = (
 def build_prompts(eval_set: EvalSet) -> list[str]:
     return [CLASSIFY_PROMPT.format(text=ex["text"]) for ex in eval_set.all]
 
+_UNKNOWN_LABEL = "__EXTRACTION_FAILED__"
+
 def extract_predictions(raw_outputs: list[str], eval_set: EvalSet) -> list[str]:
-    """Extract label from raw model output. Falls back to majority neg label."""
+    """Extract label from raw model output. Uses __EXTRACTION_FAILED__ when no
+    known label is found — this counts as a failure in the score function rather
+    than silently inflating majority-class accuracy."""
     all_labels = {e["label"] for e in eval_set.all}
-    pos_label = min(
-        {e["label"] for e in eval_set.pos} or all_labels,
-        key=lambda l: sum(1 for e in eval_set.all if e["label"] == l)
-    )
     def extract(raw: str) -> str:
         cleaned = raw.strip().lower()
         for lbl in all_labels:
             if lbl.lower() in cleaned:
                 return lbl
-        return next(iter(all_labels - {pos_label}), pos_label)
+        return _UNKNOWN_LABEL
     return [extract(r) for r in raw_outputs]
 
 def score(eval_set: EvalSet, predictions: list[str]) -> dict:

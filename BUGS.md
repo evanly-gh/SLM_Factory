@@ -29,35 +29,35 @@ Status legend: 🔴 open · 🟢 fixed · 🟡 suspected/unconfirmed · ⚪ desi
 | B19 | 🟢 | iterate/train | `llm_iterate_decision["hyperparams"]` produced but never consumed by `train_node` |
 | B20 | 🟢 | curate | `targeted_patterns` from surgical decision ignored; `synthesize_hard_negatives` got no pattern hint |
 | B21 | ⚪ | delegate_task | sub-agent has no file-writing tool; zero call sites — no parallel sub-agent work |
-| B22 | ⚪ | orchestration | Context Manager not implemented; no turn compaction for long runs |
+| B22 | 🟢 | orchestration | Context Manager not implemented; no turn compaction for long runs |
 | B23 | ⚪ | tools | bash/read_file/edit_file/web_search are `@tool`-decorated but bound to no LLM and never invoked |
 | B24 | ⚪ | config | `MAX_TURNS_MAIN=1500` is dead config; only `recursion_limit` (50/200) actually caps runs |
-| B25 | ⚪ | dag | DAG is a flat node list with no edges; `π=(D,H,S)` not stored per node; lineage attribution impossible |
+| B25 | 🟢 | dag | DAG is a flat node list with no edges; `π=(D,H,S)` not stored per node; lineage attribution impossible |
 | B26 | ⚪ | curriculum | Teacher models (DeepSeek-R1/GPT-4.1) never called despite `DEEPSEEK_API_KEY`/`OPENAI_API_KEY` in `.env` |
-| B27 | ⚪ | curriculum | 3 of 5 quality controls missing: context-length matching, NER entity diversification, generation CoT annotation |
+| B27 | 🟢 | curriculum | 3 of 5 quality controls missing: context-length matching, NER entity diversification, generation CoT annotation |
 | B28 | ⚪ | quantize | `quantize.py` returns a profile dict only; no actual INT4/GGUF export |
-| B29 | 🔴 | curriculum | NER hard negatives have `entities: []` (mislabeled); generation hard negatives have `response: None` (untrainable) |
-| B30 | ⚪ | lora_trainer | No `apply_chat_template` / assistant-only loss masking; raw concatenated-text SFT (train/serve parity holds only for classification) |
-| B31 | ⚪ | curate | Dataset size hardcoded `N_TOTAL=150`; generation tasks need 500–3,000 examples |
+| B29 | 🟢 | curriculum | NER hard negatives have `entities: []` (mislabeled); generation hard negatives have `response: None` (untrainable) |
+| B30 | 🟢 | lora_trainer | No `apply_chat_template` / assistant-only loss masking; raw concatenated-text SFT (train/serve parity holds only for classification) |
+| B31 | 🟢 | curate | Dataset size hardcoded `N_TOTAL=150`; generation tasks need 500–3,000 examples |
 | B32 | ⚪ | task_analysis | Baseline/SOTA survey (design §2.4 stage 3) never actually runs via web search |
-| B33 | 🔴 | train | `train_node` never passes `task_type` to `slm_train()` → always trains with classification prompt format |
-| B34 | 🔴 | curate | Double-applied `gold_fraction`: `curate_node` passes `n_total=97` to `build_initial_curriculum` which internally applies `gold_fraction=0.65` again → selects ~63 gold, not 97 |
-| B35 | 🔴 | eval_set | `BOUNDARY_KEYWORDS` is SMS-spam-specific (`"free"`, `"win"`, `"prize"`…) — any other classification task gets no real boundary detection |
-| B36 | ⚪ | curriculum | 2-for-1 rule is documented in the docstring but NOT implemented: only the synthetic counterexample is added, the original gold example that inspired it is NOT paired alongside |
-| B37 | ⚪ | curriculum | No surface-pattern diversity enforcement: paper requires 3–5 distinct surface-text patterns per label; no code checks or enforces this |
-| B38 | ⚪ | android_pool | `filter_pool()` ignores `latency_ttft_ms` and `power_watts` from `HardwareConstraints`; design doc §6.2 says these should be logged Phase 1, gating Phase 2 |
+| B33 | 🟢 | train | `train_node` never passes `task_type` to `slm_train()` → always trains with classification prompt format |
+| B34 | 🟢 | curate | Double-applied `gold_fraction`: `curate_node` passes `n_total=97` to `build_initial_curriculum` which internally applies `gold_fraction=0.65` again → selects ~63 gold, not 97 |
+| B35 | 🟢 | eval_set | `BOUNDARY_KEYWORDS` is SMS-spam-specific (`"free"`, `"win"`, `"prize"`…) — any other classification task gets no real boundary detection |
+| B36 | 🟢 | curriculum | 2-for-1 rule is documented in the docstring but NOT implemented: only the synthetic counterexample is added, the original gold example that inspired it is NOT paired alongside |
+| B37 | 🟢 | curriculum | No surface-pattern diversity enforcement: paper requires 3–5 distinct surface-text patterns per label; no code checks or enforces this |
+| B38 | 🟢 | android_pool | `filter_pool()` ignores `latency_ttft_ms` and `power_watts` from `HardwareConstraints`; design doc §6.2 says these should be logged Phase 1, gating Phase 2 |
 | B39 | ⚪ | android_pool | Missing models from design doc pool: HRM-Text-1B (research candidate), Gemma3n-E2B (Tier 2) |
-| B40 | ⚪ | android_pool | Ministral-3B listed at 1900MB INT4 but design doc §6.4 says Tier 3 upper bound is ~1.5GB |
-| B41 | ⚪ | curation_log | `data-curation.md` schema missing fields from design doc §4.3: per-slice failure taxonomy text, hardware PASS/FAIL lines (S vs S_max, M vs M_max, L vs L_max, P vs P_max), escalation availability |
-| B42 | ⚪ | lora_trainer | Generation `format_example` concatenates prompt+response without separator; model cannot learn where prompt ends and answer begins |
-| B43 | ⚪ | escalate | `escalate_node` does not reset `iteration`, `scores`, `dag`, or `dataset_version` — new model inherits old model's training history, confusing the iterate node's trajectory analysis |
-| B44 | ⚪ | sms_spam | Train/test split is NOT shuffled — first 80% of file is train, last 20% is test — introduces ordering bias |
+| B40 | 🟢 | android_pool | Tier 3 removed entirely — research shows ≤2B params is the practical Android limit |
+| B41 | 🟢 | curation_log | `data-curation.md` schema missing fields from design doc §4.3: per-slice failure taxonomy text, hardware PASS/FAIL lines |
+| B42 | 🟢 | lora_trainer | Generation `format_example` concatenates prompt+response without separator; model cannot learn where prompt ends and answer begins |
+| B43 | 🟢 | escalate | `escalate_node` does not reset `iteration`, `scores`, `dag`, or `dataset_version` — new model inherits old model's training history |
+| B44 | 🟢 | sms_spam | Train/test split is NOT shuffled — first 80% of file is train, last 20% is test — introduces ordering bias |
 | B45 | ⚪ | scorer/generation | Generation scorer reports average LLM-judge score as `"f1"` field — semantically misleading; also requires 1 API call per eval example with no batching |
-| B46 | ⚪ | scorer/classification | `extract_predictions` falls back to majority (non-positive) label for garbled output — inflates majority-class accuracy instead of flagging extraction failure |
-| B47 | ⚪ | slm_helpers | `_inference_cache` dict never clears — on long runs with many checkpoints, all models stay in VRAM/RAM and will OOM |
-| B48 | ⚪ | web_acquire | NER data acquired via Exa lacks entity annotations — documents are labeled with topic names but have no span-level gold `entities` field; handoff to curate is undocumented |
+| B46 | 🟢 | scorer/classification | `extract_predictions` falls back to majority (non-positive) label for garbled output — inflates majority-class accuracy |
+| B47 | 🟢 | slm_helpers | `_inference_cache` dict never clears — on long runs with many checkpoints, all models stay in VRAM/RAM and will OOM |
+| B48 | 🟢 | web_acquire | NER data acquired via Exa lacks entity annotations — documents now annotated via Claude after acquisition |
 | B49 | ⚪ | state | `messages: list[Any]` initialized as `[]` but never populated; no LangGraph message-passing occurs between nodes |
-| B50 | ⚪ | hardware | No on-device eval harness: design doc §6.3/§6.5 calls for measuring latency, power, and memory on a reference chip (Phase 2 via Qualcomm AI Hub / Battery Historian); no code skeleton exists |
+| B50 | ⚪ | hardware | No on-device eval harness: design doc §6.3/§6.5 calls for measuring latency, power, and memory on a reference chip (Phase 2) |
 
 ---
 

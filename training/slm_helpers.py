@@ -9,8 +9,11 @@ import json
 from concurrent.futures import ThreadPoolExecutor
 from training.lora_trainer import TrainingConfig, run_lora_training
 
-# Lazy-loaded inference model cache: weights_ref -> (model, tokenizer)
+# Lazy-loaded inference model cache: weights_ref -> (model, tokenizer).
+# Limited to _MAX_CACHED models to avoid OOM on long runs (B47).
 _inference_cache: dict = {}
+_cache_order: list = []
+_MAX_CACHED = 3
 
 def train(
     dataset_path: str,
@@ -48,11 +51,18 @@ def infer(prompt: str, weights_ref: str, base_model: str, max_new_tokens: int = 
     import torch
     if weights_ref not in _inference_cache:
         from unsloth import FastLanguageModel
+        # Evict oldest cached model if at capacity
+        while len(_inference_cache) >= _MAX_CACHED and _cache_order:
+            evict_key = _cache_order.pop(0)
+            old = _inference_cache.pop(evict_key, None)
+            if old:
+                del old
         model, tokenizer = FastLanguageModel.from_pretrained(
             model_name=weights_ref, max_seq_length=512, load_in_4bit=False,
         )
-        FastLanguageModel.for_inference(model)   # 2x faster, sets the patched fast path
+        FastLanguageModel.for_inference(model)
         _inference_cache[weights_ref] = (model, tokenizer)
+        _cache_order.append(weights_ref)
 
     model, tokenizer = _inference_cache[weights_ref]
     inputs = tokenizer(prompt, return_tensors="pt").to(model.device)
