@@ -12,9 +12,21 @@ Output ONLY valid JSON — no markdown, no commentary, no trailing text:
 {
   "intervention": "<data_rebuild | hyperparameter | surgical>",
   "hypothesis": "<one concise sentence: causal reason the score is where it is and what you expect to change>",
-  "hyperparameter_changes": "<optional, only for hyperparameter intervention: e.g. 'increase epochs to 5, lower lr to 5e-5'>",
-  "targeted_patterns": "<optional, only for surgical intervention: describe the failure pattern to target>"
+  "hyperparams": {
+    "lora_rank": <integer from [4,8,16,32,64] or null for full fine-tune>,
+    "learning_rate": <float, e.g. 2e-4>,
+    "nr_epochs": <integer>,
+    "batch_size": <integer, e.g. 4 or 8>
+  },
+  "targeted_patterns": "<only for surgical intervention: describe the specific failure pattern to synthesize examples for>"
 }
+
+Rules:
+- "hyperparams" is REQUIRED when intervention is "hyperparameter". Omit or set null for other interventions.
+- "targeted_patterns" is REQUIRED when intervention is "surgical". Omit or set null for other interventions.
+- lora_rank must be one of [4, 8, 16, 32, 64] or null (null = full fine-tune, slower but higher capacity).
+- Do not produce a hyperparameter config identical to the previous iteration's best — the whole
+  point is to explore a different region of the search space.
 
 Score band guidance (but reason about the trajectory, do not just apply mechanical rules):
 - Score < 0.80: usually a data problem (data_rebuild)
