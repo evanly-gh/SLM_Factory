@@ -218,6 +218,7 @@ initial_state = {
     "last_hypothesis": "",
     "llm_iterate_decision": None,
     "next_action": "train",
+    "model_baselines": [],
     "quantize_enabled": False,
     "hw_gating_enabled": False,
     "mode": "cold_start",
@@ -237,60 +238,6 @@ if force_model:
     log(f"  model override: {force_model}")
 
 # --------------------------------------------------------------------------
-# Node logging helper
-# --------------------------------------------------------------------------
-def _log_node_update(node_name: str, state: dict):
-    """Print a one-line structured summary for each completed node."""
-    cost_str = f"  running cost ${LEDGER.total_cost:.4f}"
-
-    if node_name == "task_analysis":
-        m = state.get("selected_model")
-        if m:
-            log(f"  ✓ task_analysis  type={state.get('task_type')}  "
-                f"model={m.model_id} ({m.int4_size_mb}MB)  "
-                f"threshold={state.get('stop_threshold'):.3f}{cost_str}")
-
-    elif node_name == "eval_setup":
-        es = state.get("eval_set")
-        if es:
-            log(f"  ✓ eval_setup  train={len(state.get('train_examples', []))}  "
-                f"eval pos={len(es.pos)}/neg={len(es.neg)}/boundary={len(es.boundary)}"
-                f"{cost_str}")
-
-    elif node_name == "curate":
-        log(f"  ✓ curate  v{state.get('dataset_version')}  "
-            f"{os.path.basename(state.get('current_dataset_path') or '')}"
-            f"{cost_str}")
-
-    elif node_name == "train":
-        log(f"  ✓ train  iteration={state.get('iteration')}{cost_str}")
-
-    elif node_name == "evaluate":
-        ev = state.get("last_eval")
-        if ev:
-            log(f"  ✓ evaluate  F1={ev.f1:.4f}  best={state.get('best_score', 0):.4f}  "
-                f"failures={len(ev.failures)}  "
-                f"scores={[f'{x:.3f}' for x in state.get('scores', [])]}"
-                f"{cost_str}")
-
-    elif node_name == "iterate":
-        log(f"  ✓ iterate  next={state.get('next_action')}  "
-            f"intervention={state.get('last_intervention')}"
-            f"{cost_str}")
-
-    elif node_name == "rollback":
-        log(f"  ✓ rollback  restored best={state.get('best_score', 0):.4f}{cost_str}")
-
-    elif node_name == "escalate":
-        m = state.get("selected_model")
-        action = state.get("next_action")
-        if action == "terminate":
-            log(f"  ✓ escalate  no further models available — terminating{cost_str}")
-        elif m:
-            log(f"  ✓ escalate  → {m.model_id}{cost_str}")
-
-
-# --------------------------------------------------------------------------
 # Run
 # --------------------------------------------------------------------------
 from agent.graph import build_graph
@@ -300,6 +247,17 @@ t_start = time.time()
 
 try:
     graph = build_graph(mode="cold_start")
+
+    # Export the static graph structure as Mermaid
+    try:
+        mermaid_text = graph.get_graph().draw_mermaid()
+        mermaid_path = os.path.join(RUN_DIR, "graph.mermaid")
+        with open(mermaid_path, "w") as f:
+            f.write(mermaid_text)
+        log(f"  Graph structure saved: {mermaid_path}")
+    except Exception as e:
+        log(f"  Could not export Mermaid graph: {e}")
+
     for delta in graph.stream(
         initial_state,
         stream_mode="updates",
@@ -307,7 +265,6 @@ try:
     ):
         node_name = list(delta.keys())[0]
         last_state = list(delta.values())[0]
-        _log_node_update(node_name, last_state)
 except KeyboardInterrupt:
     log("\n  interrupted by user")
 except Exception as exc:
@@ -342,6 +299,47 @@ if last_state.get("task_plan"):
         json.dump(last_state["task_plan"], f, indent=2)
 
 # --------------------------------------------------------------------------
+# DAG summary (what was tried and how well it worked)
+# --------------------------------------------------------------------------
+dag = last_state.get("dag", [])
+dag_lines = ["# DAG Summary — Training Attempts", ""]
+dag_lines.append(f"{'Iter':>4}  {'Model':<30}  {'Score':>7}  {'Pruned':>6}  {'Config':<25}  {'Intervention'}")
+dag_lines.append("-" * 100)
+for node in dag:
+    pruned_str = "✗" if node.get("pruned") else ""
+    dag_lines.append(
+        f"{node.get('iteration', '?'):>4}  "
+        f"{node.get('model_id', '?'):<30}  "
+        f"{node.get('score', 0):.4f}  "
+        f"{pruned_str:>6}  "
+        f"{node.get('best_config', '?'):<25}  "
+        f"{node.get('intervention', '?')}"
+    )
+dag_lines.append("")
+dag_text = "\n".join(dag_lines)
+with open(os.path.join(RUN_DIR, "dag_summary.txt"), "w") as f:
+    f.write(dag_text)
+
+# --------------------------------------------------------------------------
+# Baseline vs fine-tuned summary
+# --------------------------------------------------------------------------
+baselines = last_state.get("model_baselines", [])
+# Update the final model's best_finetuned_f1 with the current best score
+if baselines:
+    final_model_id = last_state.get("selected_model")
+    if final_model_id:
+        final_id = final_model_id.model_id
+        for entry in baselines:
+            if entry["model_id"] == final_id:
+                entry["best_finetuned_f1"] = max(
+                    entry.get("best_finetuned_f1", 0.0),
+                    last_state.get("best_score", 0.0),
+                )
+
+with open(os.path.join(RUN_DIR, "baselines.json"), "w") as f:
+    json.dump(baselines, f, indent=2)
+
+# --------------------------------------------------------------------------
 # Summary
 # --------------------------------------------------------------------------
 m = last_state.get("selected_model")
@@ -350,20 +348,43 @@ threshold = last_state.get("stop_threshold", config.DEFAULT_STOP_THRESHOLD)
 converged = best >= threshold
 
 log("")
-log(f"=== done in {elapsed:.1f}s ===")
-log(f"task_type : {last_state.get('task_type')}")
-log(f"model     : {m.model_id if m else None}")
-log(f"iterations: {last_state.get('iteration', 0)}")
-log(f"best F1   : {best:.4f}  (threshold {threshold:.4f})  "
+log(f"{'='*70}")
+log(f"  RUN COMPLETE — {elapsed:.1f}s")
+log(f"{'='*70}")
+log(f"  task_type : {last_state.get('task_type')}")
+log(f"  model     : {m.model_id if m else None}")
+log(f"  iterations: {last_state.get('iteration', 0)}")
+log(f"  best F1   : {best:.4f}  (threshold {threshold:.4f})  "
     f"{'✓ converged' if converged else '✗ budget exhausted'}")
-log(f"trajectory: {[f'{x:.3f}' for x in last_state.get('scores', [])]}")
+log(f"  trajectory: {[f'{x:.3f}' for x in last_state.get('scores', [])]}")
+
+# Baseline improvement table
+if baselines:
+    log("")
+    log(f"  Model Improvement Report:")
+    log(f"  {'Model':<35} {'Baseline':>9} {'Best FT':>9} {'Δ':>9}")
+    log(f"  {'-'*65}")
+    for entry in baselines:
+        bl = entry.get("baseline_f1", 0.0)
+        ft = entry.get("best_finetuned_f1", 0.0)
+        delta = ft - bl
+        log(f"  {entry['model_id']:<35} {bl:>8.4f}  {ft:>8.4f}  {delta:>+8.4f}")
+
+# DAG summary
+if dag:
+    log("")
+    log(f"  DAG Traversal:")
+    for line in dag_lines[2:]:  # skip header and blank
+        log(f"  {line}")
+
+log("")
 log(
-    f"cost      : Claude {cost['anthropic_calls']} calls "
+    f"  cost: Claude {cost['anthropic_calls']} calls "
     f"({cost['input_tokens']}→{cost['output_tokens']} tok) ${cost['anthropic_cost_usd']:.4f}  |  "
     f"Exa {cost['exa_calls']} searches ${cost['exa_cost_usd']:.4f}  |  "
     f"total ${cost['total_cost_usd']:.4f}"
 )
-log(f"logs      : {RUN_DIR}")
+log(f"  logs: {RUN_DIR}")
 
 sys.stdout = sys.__stdout__
 _LOGF.close()

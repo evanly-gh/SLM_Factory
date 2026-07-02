@@ -40,6 +40,9 @@ class AgentState(TypedDict):
     llm_iterate_decision: Optional[dict]  # full LLM decision JSON from iterate_node
     next_action: str                  # "train" | "curate" | "rollback" | "escalate" | "terminate"
 
+    # Baseline tracking: one entry per model tried, records zero-shot vs best fine-tuned
+    model_baselines: list[dict]       # [{model_id, baseline_f1, best_finetuned_f1}, ...]
+
     # Phase 2 flags
     quantize_enabled: bool                # True runs INT4 quantization after eval
     hw_gating_enabled: bool               # True makes latency/power hard gates
