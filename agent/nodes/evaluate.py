@@ -6,27 +6,58 @@ from training.quantize import theoretical_hardware_profile
 from agent.nodes.iterate import apply_iteration_policy
 
 
+def _log(model_id: str, msg: str):
+    print(f"[evaluate][{model_id}] {msg}")
+
+
 def evaluate_node(state: AgentState) -> AgentState:
     """
-    Node 4: score each trained config against E, select best, log to DAG and data-curation.md.
-    task_type flows from state throughout — no hardcoding.
+    Node 5: score trained config against E, log to DAG and data-curation.md.
+
+    On the first evaluation for a new model (iteration == 1), also runs the
+    base model without any adapter to record the zero-shot baseline. This
+    baseline is stored in state["model_baselines"] and printed at run end.
     """
     task_type = state["task_type"]
     model_id = state["selected_model"].model_id
     eval_set = state["eval_set"]
+    if eval_set is None:
+        raise RuntimeError("evaluate_node called before eval_setup_node built the eval set")
     pending = state.get("_pending_weights_refs", {})
 
-    # Score all configs; task_type required by run_eval dispatcher
+    # --- Baseline measurement (first eval for this model) ---
+    if state["iteration"] == 1:
+        _log(model_id, "Measuring zero-shot baseline (base model, no adapter)...")
+        try:
+            baseline_result = run_eval(eval_set, model_id, model_id, task_type=task_type)
+            baseline_f1 = baseline_result.f1
+        except Exception as e:
+            _log(model_id, f"Baseline measurement failed ({e}); recording 0.0")
+            baseline_f1 = 0.0
+
+        _log(model_id, f"Baseline F1 = {baseline_f1:.4f}")
+        baselines = state.get("model_baselines") or []
+        baselines.append({
+            "model_id": model_id,
+            "baseline_f1": baseline_f1,
+            "best_finetuned_f1": 0.0,
+        })
+        state["model_baselines"] = baselines
+
+    # --- Score all trained configs ---
     scored = {}
     for label, weights_ref in pending.items():
+        _log(model_id, f"Evaluating config '{label}' (weights: {weights_ref})")
         result = run_eval(eval_set, weights_ref, model_id, task_type=task_type)
         scored[label] = (weights_ref, result)
+        _log(model_id, f"  → F1={result.f1:.4f}  failures={len(result.failures)}")
 
-    # Select best by F1
     best_label = max(scored, key=lambda k: scored[k][1].f1)
     best_weights_ref, best_result = scored[best_label]
-
     current_score = best_result.f1
+
+    prev_best = state["best_score"]
+    delta = current_score - prev_best
 
     # Update state
     if current_score > state["best_score"]:
@@ -39,9 +70,18 @@ def evaluate_node(state: AgentState) -> AgentState:
     state["scores"].append(current_score)
     state["last_eval"] = best_result
 
-    # Log to DAG with full π=(D,H,S) triple and parent edge (paper §2.2).
-    # Each node stores the complete pipeline config that produced the score,
-    # enabling lineage attribution: "which intervention caused this score change?"
+    _log(model_id,
+         f"Score: {current_score:.4f}  (Δ={delta:+.4f} from best {prev_best:.4f})  "
+         f"failures={len(best_result.failures)}  "
+         f"trajectory={[f'{s:.3f}' for s in state['scores']]}")
+
+    # Update the model_baselines entry with the best fine-tuned score so far
+    baselines = state.get("model_baselines") or []
+    for entry in baselines:
+        if entry["model_id"] == model_id:
+            entry["best_finetuned_f1"] = max(entry.get("best_finetuned_f1", 0.0), state["best_score"])
+
+    # Log to DAG with full π=(D,H,S) triple and parent edge
     policy = apply_iteration_policy(current_score)
     best_cfg = (state.get("_pending_configs") or {}).get(best_label, {})
     parent_iteration = state["dag"][-1]["iteration"] if state["dag"] else None
@@ -68,14 +108,14 @@ def evaluate_node(state: AgentState) -> AgentState:
     }
     state["dag"].append(dag_node)
 
-    # Write data-curation.md entry with hardware PASS/FAIL (design doc §4.3)
+    # Write data-curation.md entry with hardware PASS/FAIL
     hw_profile = theoretical_hardware_profile(model_id)
     from config.android_pool import check_hardware_constraints
     hw_constraints = check_hardware_constraints(state["selected_model"], state["hardware_constraints"])
     config_descriptions = state.get("_pending_configs", {})
     config_labels = list(config_descriptions.values())
-    config_a = config_labels[0]["label"] if config_labels else "Config A"
-    config_b = config_labels[1]["label"] if len(config_labels) > 1 else "Config B"
+    config_a = config_labels[0]["label"] if config_labels else "N/A"
+    config_b = config_labels[1]["label"] if len(config_labels) > 1 else "N/A"
 
     curation = state.get("last_curation") or {}
     log = CurationLog()

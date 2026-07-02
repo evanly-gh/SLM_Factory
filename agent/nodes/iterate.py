@@ -107,9 +107,10 @@ def _llm_iterate(state: AgentState) -> dict:
     from langchain_anthropic import ChatAnthropic
     from langchain_core.messages import SystemMessage, HumanMessage, ToolMessage
     from config.config import ANTHROPIC_API_KEY, ORCHESTRATOR_MODEL
-    from data.curation_log import CurationLog
     from agent.context_manager import compact_trajectory, should_compact
     from agent.tools import COLD_START_TOOLS
+    import agent.nodes.evaluate as _eval_mod
+    CurationLog = _eval_mod.CurationLog
 
     # Build tool-bound LLM
     llm = ChatAnthropic(
@@ -216,9 +217,13 @@ def apply_iteration_policy(score: float) -> dict:
         }
 
 
+def _log(model_id: str, msg: str):
+    print(f"[iterate][{model_id}] {msg}")
+
+
 def iterate_node(state: AgentState) -> AgentState:
     """
-    Node 5: LLM-driven iteration decision with tool access.
+    Node 7: LLM-driven iteration decision with tool access.
 
     The orchestrator LLM can use bash/read_file/edit_file/web_search to inspect
     the training data, eval results, or curation log before making its decision.
@@ -226,26 +231,55 @@ def iterate_node(state: AgentState) -> AgentState:
 
     Falls back to score-band rules if the LLM call fails.
     """
+    selected = state.get("selected_model")
+    model_id = selected.model_id if selected is not None else "?"
+
     if not state["scores"]:
+        _log(model_id, "No scores yet — routing to train")
         state["next_action"] = "train"
         return state
 
     current_score = state["scores"][-1]
+    policy = apply_iteration_policy(current_score)
+
+    _log(model_id, f"Current score: {current_score:.4f}  "
+         f"band={policy['band']}  threshold={state['stop_threshold']:.3f}")
+
+    # Check stagnation before LLM call
+    stagnant = _is_stagnant(state["scores"])
+    if stagnant:
+        window = state["scores"][-STAGNATION_WINDOW:]
+        delta = max(window) - min(window)
+        _log(model_id, f"  Stagnation detected: window={[f'{s:.4f}' for s in window]}  "
+             f"delta={delta:.4f} < {STAGNATION_MIN_DELTA}")
 
     # Try LLM-driven decision with tool access
     llm_decision = None
     hypothesis = ""
     try:
+        _log(model_id, "  Calling orchestrator LLM for intervention decision...")
         llm_decision = _llm_iterate(state)
         intervention = llm_decision.get("intervention", "")
         hypothesis = llm_decision.get("hypothesis", "")
         if intervention not in ("data_rebuild", "hyperparameter", "surgical"):
             raise ValueError(f"Unknown intervention: {intervention!r}")
+
+        _log(model_id, f"  LLM decision: intervention={intervention}")
+        _log(model_id, f"  Hypothesis: {hypothesis}")
+        if intervention == "hyperparameter" and llm_decision.get("hyperparams"):
+            hp = llm_decision["hyperparams"]
+            _log(model_id, f"  Hyperparams: lora_rank={hp.get('lora_rank')}  "
+                 f"lr={hp.get('learning_rate')}  epochs={hp.get('nr_epochs')}  "
+                 f"batch={hp.get('batch_size')}")
+        if intervention == "surgical" and llm_decision.get("targeted_patterns"):
+            _log(model_id, f"  Targeted patterns: {llm_decision['targeted_patterns']}")
+
     except Exception as exc:
-        print(f"[iterate_node] LLM call failed ({exc!r}), falling back to score-band rules")
+        _log(model_id, f"  LLM call failed ({exc!r}), falling back to score-band rules")
         fallback = apply_iteration_policy(current_score)
         intervention = fallback["intervention"]
         hypothesis = f"(fallback) {fallback['description']}"
+        _log(model_id, f"  Fallback: intervention={intervention}")
 
     state["last_intervention"] = intervention
     state["last_hypothesis"] = hypothesis
@@ -253,8 +287,6 @@ def iterate_node(state: AgentState) -> AgentState:
     if llm_decision:
         state["llm_iterate_decision"] = llm_decision
 
-        # Apply threshold adjustment if the LLM identified out-of-distribution failures.
-        # The new threshold can never go below initial_stop_threshold (the floor set at plan time).
         adj = llm_decision.get("threshold_adjustment") or {}
         new_threshold = adj.get("new_threshold")
         if new_threshold is not None:
@@ -262,20 +294,23 @@ def iterate_node(state: AgentState) -> AgentState:
             clamped = max(float(new_threshold), floor)
             if clamped < state["stop_threshold"]:
                 reason = adj.get("reason", "")
-                print(
-                    f"[iterate_node] Lowering stop_threshold "
-                    f"{state['stop_threshold']:.3f} → {clamped:.3f} "
-                    f"(floor={floor:.3f}). Reason: {reason}"
-                )
+                _log(model_id,
+                     f"  Lowering stop_threshold "
+                     f"{state['stop_threshold']:.3f} → {clamped:.3f} "
+                     f"(floor={floor:.3f}). Reason: {reason}")
                 state["stop_threshold"] = clamped
 
     if current_score >= state["stop_threshold"]:
         state["next_action"] = "terminate"
-    elif _is_stagnant(state["scores"]):
+        _log(model_id, f"  → TERMINATE (score {current_score:.4f} >= threshold {state['stop_threshold']:.3f})")
+    elif stagnant:
         state["next_action"] = "escalate"
+        _log(model_id, f"  → ESCALATE (stagnation overrides LLM decision)")
     elif intervention == "hyperparameter":
         state["next_action"] = "train"
+        _log(model_id, f"  → TRAIN (hyperparameter intervention, dataset held fixed)")
     else:
         state["next_action"] = "curate"
+        _log(model_id, f"  → CURATE ({intervention})")
 
     return state

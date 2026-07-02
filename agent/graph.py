@@ -54,14 +54,14 @@ def build_graph(mode: str = "cold_start") -> CompiledStateGraph:
     graph.add_node("rollback", rollback_node)
     graph.add_node("escalate", escalate_node)
 
-    if mode == "cold start":
+    if mode == "cold_start":
         graph.add_node("task_analysis", task_analysis_node)
         graph.add_node("eval_setup", eval_setup_node)
 
         graph.set_entry_point("task_analysis")
         graph.add_edge("task_analysis", "eval_setup")
         graph.add_edge("eval_setup", "curate")
-    else: # production mode
+    else:
         from agent.nodes.production.trace_ingest import trace_ingest_node
         from agent.nodes.production.taxonomy import taxonomy_construct_node
         from agent.nodes.production.live_confirm import live_confirm_node
