@@ -8,5 +8,8 @@ datasets>=3.0.0
 torch>=2.4.0
 llama-cpp-python>=0.3.0
 exa-py>=1.0.0
+openai>=1.40.0
 pytest>=8.0.0
 python-dotenv>=1.0.0
+kaggle==1.6.17
+pandas>=2.0.0

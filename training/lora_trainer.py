@@ -104,7 +104,9 @@ def _run_unsloth_training(
     elif task_type == "generation":
         def format_example(ex):
             user_msg = ex.get("text", ex.get("prompt", ""))
-            assistant_msg = ex.get("answer", ex.get("response", ex.get("label", "")))
+            raw_answer = ex.get("answer", ex.get("response", ex.get("label", "")))
+            cot = ex.get("cot_reasoning", "")
+            assistant_msg = f"<reasoning>\n{cot}\n</reasoning>\n\n{raw_answer}" if cot else raw_answer
             if has_chat_template:
                 messages = [
                     {"role": "user", "content": user_msg},

@@ -46,7 +46,7 @@ def acquire_dataset(plan: dict, description: str = "", n_per_label: int = DEFAUL
     Returns (train_examples, test_examples) as lists of {"text", "label"} dicts
     (classification) or {"text"} dicts (NER/generation).
     """
-    from config import EXA_API_KEY
+    from config.config import EXA_API_KEY
     from exa_py import Exa
 
     exa = Exa(api_key=EXA_API_KEY)
@@ -109,14 +109,14 @@ def acquire_dataset(plan: dict, description: str = "", n_per_label: int = DEFAUL
 def _annotate_ner_entities(examples: list[dict], log=print) -> list[dict]:
     """Add gold entity annotations to web-acquired NER passages via Claude."""
     import anthropic, json as _json, re as _re
-    from config import ANTHROPIC_API_KEY
+    from config.config import ANTHROPIC_API_KEY, ORCHESTRATOR_MODEL
 
     client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
     annotated = []
     for i, ex in enumerate(examples):
         try:
             response = client.messages.create(
-                model="claude-sonnet-4-6",
+                model=ORCHESTRATOR_MODEL,
                 max_tokens=400,
                 messages=[{"role": "user", "content": (
                     "Extract all named entities from this text. Return a JSON list of "

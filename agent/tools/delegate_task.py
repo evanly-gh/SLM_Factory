@@ -14,7 +14,7 @@ def delegate_task(task_description: str, output_file: str) -> str:
     Main agent reads output_file — never gets raw sub-agent context.
     Returns the contents of output_file when complete.
     """
-    from config import ORCHESTRATOR_MODEL, MAX_TURNS_SUBAGENT, ANTHROPIC_API_KEY
+    from config.config import ORCHESTRATOR_MODEL, MAX_TURNS_SUBAGENT, ANTHROPIC_API_KEY
 
     client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
     system = (

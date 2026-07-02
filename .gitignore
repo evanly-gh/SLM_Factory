@@ -22,3 +22,5 @@ CLAUDE.md
 
 logs/
 unsloth_compiled_cache/
+data/devices.csv
+data/_kaggle_tmp/
