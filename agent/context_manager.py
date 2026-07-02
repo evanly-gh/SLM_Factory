@@ -6,6 +6,16 @@ The paper's Context Manager "monitors the conversation state and selectively com
 older turns while preserving key decisions, evaluation results, and dataset lineage."
 The internal mechanism is proprietary and not disclosed.
 
+Approach: Structured compaction of data-curation.md. Last 3 iterations kept in full detail;
+ older iterations compressed to one-line summaries preserving iteration number, score, 
+ intervention, and hypothesis.
+Integration: iterate_node._llm_iterate() calls compact_trajectory() before sending the 
+trajectory to the LLM, preventing context bloat. The full uncompacted file stays on disk.
+Token budget: Auto-compacts when trajectory exceeds ~8000 tokens (~32K chars).
+Key principle from research: "Context rot — the measurable degradation in model 
+performance as context grows — begins well before the token limit." Proactive compaction 
+at <50% of capacity outperforms waiting for limits.
+
 Our implementation uses structured compaction of the data-curation.md log:
 - The last N_RECENT iterations are kept in full detail
 - Older iterations are compressed to a one-line summary each

@@ -2,7 +2,7 @@
 from typing import TypedDict, Optional, Any
 from data.eval_set import EvalSet
 from eval.harness import EvalResult
-from android_pool import ModelSpec, HardwareConstraints
+from config.android_pool import ModelSpec, HardwareConstraints
 
 class AgentState(TypedDict):
     # Task specification
@@ -13,7 +13,8 @@ class AgentState(TypedDict):
     # Task analysis outputs
     task_type: str                    # "classification", "NER", or "generation"
     selected_model: Optional[ModelSpec]
-    stop_threshold: float             # default 0.96, agent may lower
+    stop_threshold: float             # calibrated target; iterate_node may lower mid-run
+    initial_stop_threshold: float     # set once at plan time; stop_threshold can never go below this
     task_plan: Optional[dict]         # orchestrator's autonomous plan (labels, exa_queries, ...)
     autonomous: bool                  # if True, task_analysis derives task_type/plan via LLM
 
@@ -38,6 +39,19 @@ class AgentState(TypedDict):
     last_hypothesis: str              # LLM-generated causal reasoning for the next intervention
     llm_iterate_decision: Optional[dict]  # full LLM decision JSON from iterate_node
     next_action: str                  # "train" | "curate" | "rollback" | "escalate" | "terminate"
+
+    # Phase 2 flags
+    quantize_enabled: bool                # True runs INT4 quantization after eval
+    hw_gating_enabled: bool               # True makes latency/power hard gates
+
+    # Production mode (paper §2.6)
+    mode: str                             # "cold_start" | "production"
+    deployed_model_ref: Optional[str]     # M0 — the deployed model being improved
+    traces: Optional[list[dict]]          # T — judged inference traces
+    failure_taxonomy: Optional[dict]      # {category: [trace_ids]}
+    regression_set: Optional[list[dict]]  # R — examples M0 gets right
+    replay_buffer: Optional[list[dict]]   # D_replay ⊂ D_parent (10-20%)
+    turn_budget: int                      # 1500 cold-start, 500 production
 
     # Messages for LangGraph
     messages: list[Any]

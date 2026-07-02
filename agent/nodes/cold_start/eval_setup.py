@@ -1,4 +1,4 @@
-# agent/nodes/eval_setup.py
+# agent/nodes/cold_start/eval_setup.py
 import os
 import json
 from agent.state import AgentState
@@ -33,7 +33,17 @@ def eval_setup_node(state: AgentState) -> AgentState:
         )
 
     state["train_examples"] = train_examples
-    eval_set = build_eval_set(test_examples, task_type=task_type)
+
+    # Forward planner flags so the eval set carries multi_label/schema/multilingual
+    # context for downstream scorer dispatch.
+    plan = state.get("task_plan") or {}
+    eval_set = build_eval_set(
+        test_examples,
+        task_type=task_type,
+        multi_label=plan.get("multi_label", False),
+        schema=plan.get("schema", None),
+        multilingual=plan.get("multilingual", False),
+    )
     state["eval_set"] = eval_set
 
     # Persist the held-out eval set as a durable artifact (it is otherwise only in state).

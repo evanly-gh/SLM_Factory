@@ -1,4 +1,4 @@
-# agent/hardware_research.py
+# agent/nodes/cold_start/hardware_research.py
 """
 Autonomous hardware research.
 
@@ -14,7 +14,6 @@ import re
 
 from android_pool import HardwareConstraints
 
-RESEARCH_MODEL = "claude-sonnet-4-6"
 # Reference chips for which the Android pool has tok/s benchmarks; the agent maps the
 # real device chipset to the nearest of these.
 REFERENCE_CHIPS = ["snapdragon_660", "snapdragon_778g", "snapdragon_8gen3"]
@@ -82,10 +81,11 @@ def research_device(description: str, anthropic_client=None, log=print):
         from config import ANTHROPIC_API_KEY
         anthropic_client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
 
+    from config import ORCHESTRATOR_MODEL
     snippets = _exa_snippets(description, log)
     try:
         resp = anthropic_client.messages.create(
-            model=RESEARCH_MODEL, max_tokens=700,
+            model=ORCHESTRATOR_MODEL, max_tokens=700,
             messages=[{"role": "user", "content": _PROMPT.format(
                 chips=REFERENCE_CHIPS, description=description, snippets=snippets)}],
         )

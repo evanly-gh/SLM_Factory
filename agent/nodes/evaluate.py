@@ -70,7 +70,7 @@ def evaluate_node(state: AgentState) -> AgentState:
 
     # Write data-curation.md entry with hardware PASS/FAIL (design doc §4.3)
     hw_profile = theoretical_hardware_profile(model_id)
-    from android_pool import check_hardware_constraints
+    from config.android_pool import check_hardware_constraints
     hw_constraints = check_hardware_constraints(state["selected_model"], state["hardware_constraints"])
     config_descriptions = state.get("_pending_configs", {})
     config_labels = list(config_descriptions.values())

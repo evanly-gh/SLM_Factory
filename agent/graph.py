@@ -1,9 +1,19 @@
 # agent/graph.py
+"""
+LangGraph state machine for the SLM Factory fine-tuning loop.
+
+Paper §2.1: 'Pioneer Agent is built on a LangGraph state machine orchestrated by
+Claude Sonnet 4.6.'
+
+Supports two modes (paper §2.5, §2.6):
+  - cold_start: task_analysis → eval_setup → curate → train → evaluate → iterate loop
+  - production: trace_ingest → taxonomy → live_confirm → parent_awareness → curate → train loop
+"""
 from langgraph.graph import StateGraph, END
 from langgraph.graph.state import CompiledStateGraph
 from agent.state import AgentState
-from agent.nodes.task_analysis import task_analysis_node
-from agent.nodes.eval_setup import eval_setup_node
+from agent.nodes.cold_start.task_analysis import task_analysis_node
+from agent.nodes.cold_start.eval_setup import eval_setup_node
 from agent.nodes.train import train_node
 from agent.nodes.evaluate import evaluate_node
 from agent.nodes.iterate import iterate_node
@@ -13,14 +23,12 @@ from agent.nodes.escalate import escalate_node
 
 
 def _route_after_evaluate(state: AgentState) -> str:
-    """Route after evaluation: rollback if score decreased, else iterate."""
     if should_rollback(state):
         return "rollback"
     return "iterate"
 
 
 def _route_after_iterate(state: AgentState) -> str:
-    """Route based on next_action set by iterate_node."""
     return state.get("next_action", "curate")
 
 
@@ -28,12 +36,17 @@ def _route_after_escalate(state: AgentState) -> str:
     return state.get("next_action", "terminate")
 
 
-def build_graph() -> CompiledStateGraph:
+def build_graph(mode: str = "cold_start") -> CompiledStateGraph:
+    """Build the LangGraph state machine.
+
+    Args:
+        mode: "cold_start" (paper §2.5) or "production" (paper §2.6).
+              Cold-start starts from a task description; production starts from
+              judged inference traces of a deployed model.
+    """
     graph = StateGraph(AgentState)
 
-    # Add all nodes
-    graph.add_node("task_analysis", task_analysis_node)
-    graph.add_node("eval_setup", eval_setup_node)
+    # Common nodes (both modes share the training loop)
     graph.add_node("train", train_node)
     graph.add_node("evaluate", evaluate_node)
     graph.add_node("iterate", iterate_node)
@@ -41,40 +54,57 @@ def build_graph() -> CompiledStateGraph:
     graph.add_node("rollback", rollback_node)
     graph.add_node("escalate", escalate_node)
 
-    # Linear entry path
-    graph.set_entry_point("task_analysis")
-    graph.add_edge("task_analysis", "eval_setup")
-    graph.add_edge("eval_setup", "curate")   # build initial dataset before first train
+    if mode == "cold start":
+        graph.add_node("task_analysis", task_analysis_node)
+        graph.add_node("eval_setup", eval_setup_node)
+
+        graph.set_entry_point("task_analysis")
+        graph.add_edge("task_analysis", "eval_setup")
+        graph.add_edge("eval_setup", "curate")
+    else: # production mode
+        from agent.nodes.production.trace_ingest import trace_ingest_node
+        from agent.nodes.production.taxonomy import taxonomy_construct_node
+        from agent.nodes.production.live_confirm import live_confirm_node
+        from agent.nodes.production.parent_awareness import parent_awareness_node
+
+        graph.add_node("trace_ingest", trace_ingest_node)
+        graph.add_node("taxonomy_construct", taxonomy_construct_node)
+        graph.add_node("live_confirm", live_confirm_node)
+        graph.add_node("parent_awareness", parent_awareness_node)
+
+        graph.set_entry_point("trace_ingest")
+        graph.add_edge("trace_ingest", "taxonomy_construct")
+        graph.add_edge("taxonomy_construct", "live_confirm")
+        graph.add_edge("live_confirm", "parent_awareness")
+        graph.add_edge("parent_awareness", "curate")
+
+    # Shared loop edges (both modes)
     graph.add_edge("curate", "train")
     graph.add_edge("train", "evaluate")
 
-    # Conditional routing after evaluate
     graph.add_conditional_edges(
         "evaluate",
         _route_after_evaluate,
         {"rollback": "rollback", "iterate": "iterate"},
     )
 
-    # After rollback: re-evaluate iteration decision
-    graph.add_edge("rollback", "iterate")
+    graph.add_edge("rollback", "train")
 
-    # Conditional routing after iterate
     graph.add_conditional_edges(
         "iterate",
         _route_after_iterate,
         {
-            "train": "train",         # hyperparameter change, same data
-            "curate": "curate",       # rebuild or augment data
+            "train": "train",
+            "curate": "curate",
             "escalate": "escalate",
             "terminate": END,
         },
     )
 
-    # After escalate: train with new model or terminate
     graph.add_conditional_edges(
         "escalate",
         _route_after_escalate,
-        {"train": "train", "terminate": END},
+        {"train": "train", "curate": "curate", "terminate": END},
     )
 
     return graph.compile()

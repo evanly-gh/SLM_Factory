@@ -1,0 +1,583 @@
+# android_pool.py
+#
+# MODEL POOL DESIGN — RESEARCH BASIS (see PAPER.md §17 for full writeup)
+#
+# Tier structure rationale:
+#   Capability scales as a power law (not step-functions) in the 0.5–3B range per Kaplan
+#   et al. and BNSL literature. However, benchmark data (GSM8K) shows three natural
+#   capability bands with meaningful gaps that justify 4 tiers:
+#
+#     Tier 0  sub-0.6B   GSM8K ≈30-42%   MMLU ≈45-52%   RAM: <1.2GB peak
+#     Tier 1  0.6–1B     GSM8K ≈59-63%   MMLU ≈52-56%   RAM: 1.0–1.8GB peak
+#     Tier 2  1–2B       GSM8K ≈70-77%   MMLU ≈60-65%   RAM: 1.5–2.5GB peak
+#     Tier 3  2–3B+      GSM8K ≈77-82%   MMLU ≈65-70%   RAM: 2.5–4.5GB peak
+#
+#   The 3GB total RAM budget (user requirement) means: INT4 file + KV cache + Android OS
+#   (~1.5GB baseline) must fit. Practical INT4 file ceiling: ~1.8–2.0GB for Tier 3.
+#   Formula: total_RAM ≈ int4_file_mb + 1000–1500MB (OS+app+KV cache at 2K ctx).
+#
+# Quantization notes:
+#   All sizes below are Q4_K_M GGUF (4.5 bpw effective), the community-recommended
+#   default. Q4_K_M is ~4.7x lower perplexity degradation than Q4_0 at only 8.6% more
+#   storage (llama.cpp official benchmarks). Q4_0 is obsolete. Q5_K_M is recommended
+#   when storage is not the constraint.
+#
+#   Sub-1B models suffer more from INT4 quantization than 3B models (IJCAI-25:
+#   >10% perplexity increase for sub-1B decoders vs. ~5-10% for 3B). AWQ and QAT
+#   both help, especially at 4-bit and below. For Tier 0 models specifically,
+#   prefer QAT-quantized variants (Unsloth Dynamic 2.0 or Google's QAT checkpoints)
+#   over standard PTQ when available.
+#
+# Android framework compatibility:
+#   llama.cpp (GGUF): all models below — broadest format support, CPU+Vulkan backends
+#   ExecuTorch: Llama 3.2 1B/3B, Qwen3 all sizes, Phi-4-mini, Gemma 3 — best for
+#               production Android apps (SpinQuant INT4, KleidiAI acceleration)
+#   MNN-LLM:    Qwen3/3.5, Llama 3.2, DeepSeek R1 distills, Gemma — fastest CPU
+#               prefill (8.6x vs llama.cpp); strongest for Qwen family
+#   LiteRT-LM:  Gemma family (official Google path), Llama, Phi-4, Qwen
+#
+# Chipset decode throughput reference (4-bit INT4, CPU-bound):
+#   Snapdragon 660:   ~6-8  tok/s (1B),  ~2-3  tok/s (3B)
+#   Snapdragon 778G:  ~12-15 tok/s (1B), ~4-6  tok/s (3B)
+#   Snapdragon 8 Gen3:~20-30 tok/s (1B), ~8-12 tok/s (3B), ~12.85 tok/s (7B QNN NPU)
+#   Source: arXiv 2410.03613; Qualcomm AI Hub model cards; Grokipedia community benchmarks
+#
+# Benchmark sources:
+#   Qwen3 scores: arXiv 2505.09388 (Qwen3 Technical Report, Table 8)
+#   Qwen2.5 scores: arXiv 2412.15115 (Qwen2.5 Technical Report, Table 5)
+#   Gemma 3 scores: arXiv 2503.19786 (Gemma 3 Technical Report)
+#   Llama 3.2 scores: Meta model card / arXiv 2407.21783
+#   SmolLM2 scores: HuggingFaceTB model card / Distil Labs benchmark
+#   MiniCPM4 scores: arXiv 2506.07900 (MiniCPM4 Technical Report)
+#   DeepSeek-R1-Distill: arXiv 2501.12948 (DeepSeek-R1 paper, Table 4)
+#   Phi-4-mini: Microsoft Phi-4-mini-instruct model card / localaimaster.com
+#   INT4 sizes: HuggingFace GGUF repos (hugging-quants, bartowski, unsloth)
+
+from dataclasses import dataclass, field
+
+
+# Throughput scaling factors for estimating decode speed on unlisted chipsets.
+# These are rough per-generation multipliers (CPU-bound, Q4_K_M, 1B model).
+# Used by check_hardware_constraints when target_chip is not in tok_s_by_chip.
+#
+# Derivation (arXiv 2410.03613 + Qualcomm AI Hub):
+#   Each Snapdragon generation ≈ +50% prefill, +110% decode vs. prior gen.
+#   Dimensity 9300 ≈ SD 8 Gen 3 on CPU.  8 Elite ≈ 1.4× Gen 3 on NPU path.
+CHIP_SCALE_FACTORS: dict[str, float] = {
+    # Format: chip_name → relative decode throughput vs. snapdragon_778g (= 1.0)
+    "snapdragon_660":    0.55,   # 2017, Cortex-A73, no dotprod — very slow
+    "snapdragon_730":    0.70,
+    "snapdragon_750g":   0.85,
+    "snapdragon_778g":   1.00,   # reference baseline
+    "snapdragon_870":    1.10,
+    "snapdragon_888":    1.30,
+    "snapdragon_8gen1":  1.50,
+    "snapdragon_8gen2":  1.80,
+    "snapdragon_8gen3":  2.20,   # ~20-25 tok/s on 1B Q4_K_M (CPU)
+    "snapdragon_8elite": 3.00,   # ~30-35 tok/s on 1B (CPU+NPU mixed)
+    "dimensity_9300":    2.10,   # all-big-core; similar to 8 Gen 3 on CPU
+    "dimensity_9400":    2.50,
+    "exynos_2400":       1.80,
+    "exynos_2500":       2.30,
+    "tensor_g3":         1.60,   # Pixel 8 Pro; Mali GPU is slower for LLM
+    "tensor_g4":         1.80,
+}
+
+
+@dataclass
+class ModelSpec:
+    model_id: str          # HuggingFace model ID
+    int4_size_mb: int      # Q4_K_M GGUF file size in MB (measured from HF repos)
+    tier: int              # 0 = micro (<0.6B), 1 = small (0.6-1B), 2 = mid (1-2B), 3 = large (2-3B+)
+    # Estimated decode throughput on three well-documented reference chips (tok/s, CPU-bound Q4_K_M).
+    # For any other chip, check_hardware_constraints uses CHIP_SCALE_FACTORS to interpolate.
+    tok_s_snapdragon_660: float   # 2017 entry-level baseline
+    tok_s_snapdragon_778g: float  # 2021 mid-range baseline (most common eval chip)
+    tok_s_snapdragon_8gen3: float # 2023 flagship baseline
+    peak_memory_mb: int    # estimated peak RAM during inference (file + KV cache + runtime)
+    # Benchmark scores for tier-selection logic (base model unless noted)
+    gsm8k: float           # GSM8K 5-shot CoT accuracy (0–1 scale)
+    mmlu: float            # MMLU 5-shot accuracy (0–1 scale)
+    notes: str = ""
+
+    def tok_s_for_chip(self, chip: str) -> float:
+        """Return estimated decode tok/s for any chip, not just the three hardcoded ones."""
+        direct = {
+            "snapdragon_660": self.tok_s_snapdragon_660,
+            "snapdragon_778g": self.tok_s_snapdragon_778g,
+            "snapdragon_8gen3": self.tok_s_snapdragon_8gen3,
+        }
+        if chip in direct:
+            return direct[chip]
+        # Interpolate via scale factors anchored to the 778G baseline
+        if chip in CHIP_SCALE_FACTORS:
+            factor = CHIP_SCALE_FACTORS[chip] / CHIP_SCALE_FACTORS["snapdragon_778g"]
+            return self.tok_s_snapdragon_778g * factor
+        # Unknown chip — return 778G as a conservative fallback
+        return self.tok_s_snapdragon_778g
+
+
+@dataclass
+class HardwareConstraints:
+    storage_mb: int
+    memory_mb: int
+    # TTFT (time-to-first-token) and decode throughput are separate concerns:
+    #   latency_ttft_ms — how long until the first token appears (prompt processing time).
+    #                     Dominated by model size and prefill speed.
+    #   min_tok_s       — sustained decode throughput floor (hardware_metrics.md §6.5):
+    #                     ≥ 6 tok/s — average English reading speed (~250 wpm ≈ 6 tok/s).
+    #                     Below this, streaming output visibly lags behind reading pace.
+    #                     Above it, users cannot perceptually distinguish 10 from 40 tok/s.
+    #                     This threshold is CONSTANT regardless of model or task —
+    #                     it's a UX floor, not a model property.
+    latency_ttft_ms: int
+    power_watts: float = 6.0
+    target_chip: str = "snapdragon_778g"
+    # Sustained decode throughput floor (hardware_metrics.md §6.5).
+    # Hard gate ≥ 20 tok/s; target ≥ 30 tok/s for interactive use.
+    # Defaults to 0 (disabled) so existing callers are unaffected.
+    # Set to 20.0 when the use case requires interactive streaming responses.
+    # Set to 0 for batch/async workflows where latency doesn't matter.
+    min_tok_s: float = 0.0
+
+
+# ---------------------------------------------------------------------------
+# TIER 0 — Micro (sub-0.6B, ≤300MB INT4)
+# Use for: binary classification, simple NER, keyword extraction, routing
+# Avoid for: multi-step reasoning, math, code, open-ended generation
+# Quantization risk: HIGH — these models lose the most from INT4; prefer QAT
+#   variants. MiniCPM4-0.5B uses BitCPM4 (QAT-aware), Qwen2.5-0.5B is PTQ.
+# ---------------------------------------------------------------------------
+#
+# TIER 1 — Small (0.6–1B, ~400–600MB INT4)
+# GSM8K: 59–63%. The capability gap from Tier 0→1 is the LARGEST relative jump
+# in the pool (e.g., GSM8K: 41.6% → 59.6%). Good for classification, NER, simple
+# generation. Qwen3-0.6B is the strongest Tier 1 by benchmark; Gemma 3 1B IT
+# benefits from Google's QAT and stronger instruction tuning.
+# ---------------------------------------------------------------------------
+#
+# TIER 2 — Mid (1–2B, ~700MB–1.3GB INT4)
+# GSM8K: 70–77%. Most capable tier that runs on all 6GB+ Android devices.
+# SmolLM2-1.7B leads on IFEval (56.7%) — best for instruction-following tasks.
+# Qwen3-1.7B leads on math/reasoning. DeepSeek-R1-Distill-1.5B is specialized
+# for math/reasoning only (MATH-500: 83.9%) but weak on general tasks.
+# ---------------------------------------------------------------------------
+#
+# TIER 3 — Large (2–3B+, ~1.5–2.1GB INT4)
+# GSM8K: 77–82%. Requires 8GB+ RAM phone for comfortable inference. Llama 3.2-3B
+# is the ExecuTorch reference model (fastest on-device path via KleidiAI).
+# Phi-4-mini (3.8B) punches above class on reasoning; Q4_K_M is 2.49GB,
+# fitting the 3GB RAM budget on 8GB devices only (not 6GB).
+# ---------------------------------------------------------------------------
+
+ANDROID_POOL: list[ModelSpec] = [
+    # ── Tier 0: Micro (sub-0.6B) ──────────────────────────────────────────
+    # Qwen2.5-0.5B: Strong math for its size (MATH: 19.5%, beats Gemma2-2.6B).
+    # Source: arXiv 2412.15115 Table 5.
+    ModelSpec(
+        model_id="Qwen/Qwen2.5-0.5B-Instruct",
+        int4_size_mb=295,
+        tier=0,
+        tok_s_snapdragon_660=15.0,
+        tok_s_snapdragon_778g=24.0,
+        tok_s_snapdragon_8gen3=65.0,
+        peak_memory_mb=460,
+        gsm8k=0.416,   # GSM8K 4-shot, from Qwen2.5 tech report Table 5
+        mmlu=0.475,    # MMLU 5-shot, from Qwen2.5 tech report Table 5
+        notes="Strongest sub-0.6B for math; MATH score 19.5% beats Gemma2-2.6B (18.3%)",
+    ),
+    # MiniCPM4-0.5B: Uses BitCPM4 QAT quantization for better INT4 quality.
+    # Benchmarks claim to exceed Qwen3-0.6B; specialized sparse attention for
+    # long context. Source: arXiv 2506.07900.
+    ModelSpec(
+        model_id="openbmb/MiniCPM4-0.5B",
+        int4_size_mb=310,
+        tier=0,
+        tok_s_snapdragon_660=14.0,
+        tok_s_snapdragon_778g=22.0,
+        tok_s_snapdragon_8gen3=60.0,
+        peak_memory_mb=480,
+        gsm8k=0.55,   # extrapolated; paper shows it exceeds Qwen3-0.6B on most evals
+        mmlu=0.53,
+        notes="QAT-quantized (BitCPM4); best sub-0.6B for long-context tasks; use MNN for best speed",
+    ),
+
+    # ── Tier 1: Small (0.6–1B) ────────────────────────────────────────────
+    # Qwen3-0.6B: Best-in-class Tier 1 with published benchmarks. GSM8K 59.6%, MMLU 52.8%.
+    # Instruct adds thinking-mode (MATH-500: 77.6% with thinking).
+    # Source: arXiv 2505.09388 Table 8.
+    ModelSpec(
+        model_id="Qwen/Qwen3-0.6B",
+        int4_size_mb=397,
+        tier=1,
+        tok_s_snapdragon_660=10.0,
+        tok_s_snapdragon_778g=16.0,
+        tok_s_snapdragon_8gen3=45.0,
+        peak_memory_mb=580,
+        gsm8k=0.596,   # GSM8K 4-shot CoT, from Qwen3 tech report Table 8
+        mmlu=0.528,    # MMLU 5-shot, from Qwen3 tech report Table 8
+        notes="Best Tier 1 overall; hybrid thinking/non-thinking mode; Qwen3-1.7B perf matches Qwen2.5-3B",
+    ),
+    # Qwen3.5-0.8B (March 2026): Gated DeltaNet hybrid architecture, natively multimodal,
+    # 262K context, Apache 2.0. No classic MMLU/GSM8K benchmarks published — uses newer
+    # MMLU-ProX/MAXIFE/WMT24++ suite. ~54% relative capability vs 397B flagship.
+    # CAUTION: documented 67%→33% code generation collapse when few-shot examples are added.
+    # Thinking mode OFF by default. Good for multilingual/multimodal tasks at this size.
+    # Cannot confirm it beats Qwen3-0.6B on reasoning without classic benchmark scores.
+    # INT4 size estimated ~500MB; source: huggingface.co/Qwen/Qwen3.5-0.8B
+    ModelSpec(
+        model_id="Qwen/Qwen3.5-0.8B",
+        int4_size_mb=500,
+        tier=1,
+        tok_s_snapdragon_660=9.0,
+        tok_s_snapdragon_778g=15.0,
+        tok_s_snapdragon_8gen3=42.0,
+        peak_memory_mb=670,
+        gsm8k=0.610,   # estimated; no official score published (uses newer benchmarks)
+        mmlu=0.540,    # estimated; no official score published
+        notes="NEW (Mar 2026): Gated DeltaNet hybrid, multimodal, 262K ctx; no GSM8K/MMLU published; avoid few-shot code generation; use for multilingual/vision tasks",
+    ),
+    # Llama 3.2-1B: ExecuTorch reference model (SpinQuant + KleidiAI).
+    # >350 tok/s prefill on Samsung S24+. Best for latency-critical apps.
+    # Source: Meta model card; PyTorch ExecuTorch blog.
+    ModelSpec(
+        model_id="meta-llama/Llama-3.2-1B-Instruct",
+        int4_size_mb=658,
+        tier=1,
+        tok_s_snapdragon_660=8.0,
+        tok_s_snapdragon_778g=14.0,
+        tok_s_snapdragon_8gen3=40.0,
+        peak_memory_mb=900,
+        gsm8k=0.535,   # IFEval 53.5%, GSM8K approximate from Meta model card
+        mmlu=0.490,    # MMLU approximate
+        notes="ExecuTorch reference model; best TTFT via KleidiAI SpinQuant; most tunable 1B (largest fine-tuning gains)",
+    ),
+    # MiniCPM5-1B: Best-in-class 1B as of May 2026. MATH-500 91.6%, HumanEval+ 78.7%,
+    # IFEval 80.4%, τ²-Bench (agentic) 79.5%. Average 42.57 vs 26.77 for Qwen3-0.6B.
+    # Q4_K_M GGUF = 688MB confirmed (openbmb/MiniCPM5-1B-GGUF on HuggingFace).
+    # llama.cpp supported (OpenBMB docs confirm).
+    # Source: openbmb/MiniCPM5-1B model card; deepwiki.com benchmarks.
+    ModelSpec(
+        model_id="openbmb/MiniCPM5-1B",
+        int4_size_mb=688,
+        tier=1,
+        tok_s_snapdragon_660=8.0,
+        tok_s_snapdragon_778g=14.0,
+        tok_s_snapdragon_8gen3=38.0,
+        peak_memory_mb=920,
+        gsm8k=0.850,   # proxy from MATH-500 91.6%; GSM8K not separately published
+        mmlu=0.620,    # estimated from benchmark suite aggregate 42.57/100
+        notes="Best 1B model (May 2026): MATH-500 91.6%, HumanEval+ 78.7%, IFEval 80.4%; 131K context; hybrid thinking mode",
+    ),
+    # Gemma 3 1B IT: Google QAT checkpoint; GSM8K 62.8%, benefits from
+    # superior instruction tuning. LiteRT/MediaPipe native support.
+    # Source: arXiv 2503.19786; Google Gemma 3 1B IT model card.
+    ModelSpec(
+        model_id="google/gemma-3-1b-it",
+        int4_size_mb=806,
+        tier=1,
+        tok_s_snapdragon_660=7.0,
+        tok_s_snapdragon_778g=12.0,
+        tok_s_snapdragon_8gen3=32.0,
+        peak_memory_mb=1050,
+        gsm8k=0.628,   # GSM8K 5-shot, Gemma 3 tech report
+        mmlu=0.480,    # MMLU 5-shot, approximate from Gemma 3 tech report
+        notes="Google QAT INT4; best for LiteRT/MediaPipe deployment; official on-device path for Gemma; multimodal (image+text)",
+    ),
+
+    # ── Tier 2: Mid (1–2B) ────────────────────────────────────────────────
+    # Qwen2.5-1.5B: Proven instruct model. GSM8K 73.2%, MMLU ~58.4% (instruct).
+    # Recommended for Tier 2 NER and classification where Qwen3-1.7B is overkill.
+    # Source: Qwen2.5 instruct model card; arXiv 2412.15115.
+    ModelSpec(
+        model_id="Qwen/Qwen2.5-1.5B-Instruct",
+        int4_size_mb=938,
+        tier=2,
+        tok_s_snapdragon_660=5.5,
+        tok_s_snapdragon_778g=9.5,
+        tok_s_snapdragon_8gen3=27.0,
+        peak_memory_mb=1250,
+        gsm8k=0.732,   # GSM8K from Qwen2.5-1.5B-Instruct model card
+        mmlu=0.584,    # MMLU instruct model card
+        notes="Solid general-purpose Tier 2; good balance of math and instruction following; strong NER/classification",
+    ),
+    # DeepSeek-R1-Distill-Qwen-1.5B: Specialized reasoning only.
+    # MATH-500: 83.9%, AIME 2024: 28.9%. Distilled from DeepSeek-R1 671B.
+    # NOT recommended for classification/NER/general tasks — use Qwen models instead.
+    # Source: arXiv 2501.12948 Table 4.
+    ModelSpec(
+        model_id="deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B",
+        int4_size_mb=958,
+        tier=2,
+        tok_s_snapdragon_660=4.5,
+        tok_s_snapdragon_778g=8.0,
+        tok_s_snapdragon_8gen3=22.0,
+        peak_memory_mb=1270,
+        gsm8k=0.870,   # proxy from MATH-500 83.9%; official GSM8K not reported for 1.5B distill
+        mmlu=0.580,    # approximate; MMLU not officially reported for 1.5B distill
+        notes="SPECIALIZED REASONING ONLY: MATH-500 83.9%, AIME 28.9%. Do not use for classification/NER. R1 distillation requires longer generation.",
+    ),
+    # Qwen3-1.7B: Best Tier 2 for math/reasoning. GSM8K 75.4%, MMLU 62.6%.
+    # Qwen3-1.7B-Base matches Qwen2.5-3B-Base per official technical report.
+    # Source: arXiv 2505.09388 Table 8.
+    ModelSpec(
+        model_id="Qwen/Qwen3-1.7B",
+        int4_size_mb=1050,
+        tier=2,
+        tok_s_snapdragon_660=5.0,
+        tok_s_snapdragon_778g=9.0,
+        tok_s_snapdragon_8gen3=25.0,
+        peak_memory_mb=1380,
+        gsm8k=0.754,   # GSM8K 4-shot CoT, from Qwen3 tech report Table 8
+        mmlu=0.626,    # MMLU 5-shot, from Qwen3 tech report Table 8
+        notes="Matches Qwen2.5-3B on benchmarks; best Tier 2 for math/code/multilingual; MNN gives 8.6x faster prefill",
+    ),
+    # SmolLM2-1.7B: Best Tier 2 for instruction following (IFEval 56.7%,
+    # beats Llama 3.2-1B and Qwen2.5-1.5B). Strong for classification tasks.
+    # Source: HuggingFaceTB model card; Distil Labs benchmark.
+    ModelSpec(
+        model_id="HuggingFaceTB/SmolLM2-1.7B-Instruct",
+        int4_size_mb=1060,
+        tier=2,
+        tok_s_snapdragon_660=4.5,
+        tok_s_snapdragon_778g=8.0,
+        tok_s_snapdragon_8gen3=22.0,
+        peak_memory_mb=1350,
+        gsm8k=0.488,   # GSM8K 5-shot from HuggingFaceTB model card / Distil Labs
+        mmlu=0.520,    # MMLU approximate from Distil Labs benchmark
+        notes="Best Tier 2 for IFEval/instruction-following (56.7%); strong for classification; compact training corpus",
+    ),
+    # Gemma 3n E2B IT: MatFormer (Matryoshka) architecture, natively multimodal.
+    # Beats Gemma3-1B on 9/9 shared benchmarks: HumanEval 66.5% vs 41.5%,
+    # MMLU 60.1% vs ~48%. 5B total params / 2.3B effective via PLE caching.
+    # Source: llm-stats.com/models/compare/gemma-3-1b-it-vs-gemma-3n-e2b-it; Google.
+    # WARNING: Proprietary license (not Apache 2.0) — check before commercial use.
+    ModelSpec(
+        model_id="google/gemma-3n-e2b-it",
+        int4_size_mb=1300,
+        tier=2,
+        tok_s_snapdragon_660=4.0,
+        tok_s_snapdragon_778g=7.0,
+        tok_s_snapdragon_8gen3=22.0,
+        peak_memory_mb=2200,
+        gsm8k=0.700,   # estimated; GSM8K not directly published for E2B (E4B ~83%)
+        mmlu=0.601,    # MMLU 60.1% from llm-stats comparison
+        notes="MatFormer arch; natively multimodal (text+image+video+audio); beats Gemma3-1B on all benchmarks; HumanEval 66.5%; 50-80 tok/s on NPU; ⚠️ proprietary license",
+    ),
+    # Qwen3.5-2B (March 2026): Gated DeltaNet hybrid architecture, multimodal, 262K ctx.
+    # Same family as Qwen3.5-0.8B but at 2B params. Unsloth Dynamic 2.0 GGUF confirmed
+    # working with llama.cpp, Ollama. No classic GSM8K/MMLU published (uses newer suite).
+    # Source: unsloth/Qwen3.5-2B-GGUF on HuggingFace; unsloth.ai/docs/models/qwen3.5.
+    ModelSpec(
+        model_id="unsloth/Qwen3.5-2B-GGUF",
+        int4_size_mb=1350,   # estimated Q4_K_M; exact size at huggingface.co/unsloth/Qwen3.5-2B-GGUF
+        tier=2,
+        tok_s_snapdragon_660=4.0,
+        tok_s_snapdragon_778g=7.5,
+        tok_s_snapdragon_8gen3=20.0,
+        peak_memory_mb=1800,
+        gsm8k=0.720,   # estimated; no official score — uses MMLU-ProX/MAXIFE/WMT24++ suite
+        mmlu=0.610,    # estimated
+        notes="NEW (Mar 2026): Gated DeltaNet hybrid, multimodal (text+image+video), 262K ctx, 201 langs; Unsloth GGUF confirmed for llama.cpp; no GSM8K/MMLU published; thinking OFF by default",
+    ),
+
+    # ── Tier 3: Large (2–3B+) — requires 8GB+ RAM phone ──────────────────
+    # Llama 3.2-3B: ExecuTorch reference model for 3B class. Q4_K_M = ~2.02GB.
+    # Decode: ~10 tok/s on SD 8 Gen 3 (CPU). GSM8K 77.7%, ARC-C 78.6%.
+    # Q3_K_M alternative (~1.5GB) fits tighter storage budgets at quality cost.
+    # Source: Meta model card; hugging-quants HF repo (2.02GB confirmed).
+    ModelSpec(
+        model_id="meta-llama/Llama-3.2-3B-Instruct",
+        int4_size_mb=2020,
+        tier=3,
+        tok_s_snapdragon_660=2.5,
+        tok_s_snapdragon_778g=5.0,
+        tok_s_snapdragon_8gen3=12.0,
+        peak_memory_mb=3400,
+        gsm8k=0.777,   # GSM8K from Meta model card / arXiv
+        mmlu=0.630,    # MMLU approximate from community benchmarks
+        notes="ExecuTorch 3B reference; Q4_K_M 2.02GB confirmed; needs 8GB+ RAM; Q3_K_M ~1.5GB fits tighter budgets at quality cost",
+    ),
+    # Ministral-3B: MMLU ~65% (beats Llama-3.2-3B's 63.4%), 256K context window
+    # (unique in the pool — others max at 128K). Native function calling and JSON.
+    # Q4_K_M estimated ~1.9GB (3B params × 0.63 GB/B). 6GB RAM phones feasible.
+    # Source: mistralai/Ministral-3-3B-Instruct-2512-GGUF on HuggingFace; codersera.com.
+    ModelSpec(
+        model_id="mistralai/Ministral-3B-Instruct",
+        int4_size_mb=1900,
+        tier=3,
+        tok_s_snapdragon_660=2.8,
+        tok_s_snapdragon_778g=5.5,
+        tok_s_snapdragon_8gen3=13.0,
+        peak_memory_mb=3200,
+        gsm8k=0.760,   # estimated; benchmark suite confirms strong math reasoning
+        mmlu=0.650,    # ~65% reported (beats Llama-3.2-3B 63.4%) from codersera.com
+        notes="256K context (largest in pool); native function calling + JSON; MMLU ~65% beats Llama-3.2-3B; edge-optimized architecture; ~225 tok/s on desktop GPU",
+    ),
+    # Qwen3-4B (MoE-equivalent performance at 4B dense): Qwen3-4B matches
+    # Qwen2.5-72B-Instruct per official tech report. INT4 ~2.4GB.
+    # ONLY include for very high-end devices (12GB RAM phones).
+    # NOTE: This pushes past the 3GB RAM budget on 8GB phones — annotated
+    # as a stretch tier for devices with 12GB+ RAM.
+    ModelSpec(
+        model_id="Qwen/Qwen3-4B",
+        int4_size_mb=2390,
+        tier=3,
+        tok_s_snapdragon_660=1.5,
+        tok_s_snapdragon_778g=3.0,
+        tok_s_snapdragon_8gen3=8.0,
+        peak_memory_mb=4200,
+        gsm8k=0.870,   # GSM8K approximate; Qwen3-4B matches Qwen2.5-72B per tech report
+        mmlu=0.730,    # MMLU approximate from Qwen3 tech report
+        notes="High-end only (12GB+ RAM): matches Qwen2.5-72B on many benchmarks per Qwen3 tech report; Q4_K_M ~2.4GB",
+    ),
+    # Phi-4-mini (3.8B): Best reasoning-per-GB in the pool. Q4_K_M = 2.49GB.
+    # Fits 8GB RAM phones only (peak ~4.1GB with OS). Microsoft's recommended
+    # on-device model. ONNX + LiteRT deployment paths available.
+    # Source: localaimaster.com; unsloth/Phi-4-mini-instruct-GGUF HF repo.
+    ModelSpec(
+        model_id="microsoft/Phi-4-mini-instruct",
+        int4_size_mb=2490,
+        tier=3,
+        tok_s_snapdragon_660=1.0,
+        tok_s_snapdragon_778g=2.5,
+        tok_s_snapdragon_8gen3=7.0,
+        peak_memory_mb=4100,
+        gsm8k=0.880,   # GSM8K from Phi-4-mini model card / localaimaster.com
+        mmlu=0.720,    # MMLU from Phi-4-mini model card
+        notes="Best reasoning-per-GB; 8GB+ RAM phone only (Q4_K_M 2.49GB); ONNX GenAI + LiteRT paths available",
+    ),
+]
+
+
+def filter_pool(constraints: HardwareConstraints) -> list[ModelSpec]:
+    """Return models that satisfy all hard constraints, sorted by tier then size.
+
+    Filters on:
+      - storage_mb: INT4 file must fit
+      - memory_mb: peak RAM must fit
+      - min_tok_s: sustained decode throughput floor (UX gate, hardware_metrics.md §6.5)
+                   Set constraints.min_tok_s=0 to disable (batch/async workflows).
+    """
+    feasible = [
+        m for m in ANDROID_POOL
+        if m.int4_size_mb <= constraints.storage_mb
+        and m.peak_memory_mb <= constraints.memory_mb
+        and (constraints.min_tok_s <= 0 or m.tok_s_for_chip(constraints.target_chip) >= constraints.min_tok_s)
+    ]
+    return sorted(feasible, key=lambda m: (m.tier, m.int4_size_mb))
+
+
+def filter_pool_by_task(
+    constraints: HardwareConstraints,
+    task_type: str | None = None,
+) -> list[ModelSpec]:
+    """
+    Return feasible models, optionally pre-sorted for a specific task type.
+
+    task_type values:
+      "math"           — prefer Qwen3, DeepSeek-R1-Distill (high GSM8K)
+      "classification" — prefer SmolLM2, Qwen (high IFEval)
+      "ner"            — prefer Qwen (structured output strength)
+      "code"           — prefer Qwen (Qwen2.5-Coder lineage), Phi-4-mini
+      "multilingual"   — prefer Qwen family (CJK training advantage)
+      "reasoning"      — prefer Phi-4-mini, DeepSeek-R1-Distill, Qwen3
+      None             — default sort by tier then size
+    """
+    feasible = filter_pool(constraints)
+
+    if task_type == "math" or task_type == "reasoning":
+        # Sort by GSM8K score within tier, then by tier
+        return sorted(feasible, key=lambda m: (m.tier, -m.gsm8k))
+    if task_type == "classification":
+        # SmolLM2 leads on IFEval; otherwise sort by MMLU
+        def classification_key(m: ModelSpec):
+            smol_bonus = -0.05 if "SmolLM" in m.model_id else 0.0
+            return (m.tier, smol_bonus - m.mmlu)
+        return sorted(feasible, key=classification_key)
+    if task_type in ("ner", "multilingual", "code"):
+        # Qwen family preferred; sort by GSM8K as proxy for structured generation
+        def qwen_first_key(m: ModelSpec):
+            qwen_bonus = -0.03 if "Qwen" in m.model_id else 0.0
+            return (m.tier, qwen_bonus - m.gsm8k)
+        return sorted(feasible, key=qwen_first_key)
+
+    return feasible
+
+
+def all_constraints_pass(hw_check: dict) -> bool:
+    """Return True if all four hardware constraints pass."""
+    return all(hw_check[k]["pass"] for k in ("storage", "memory", "latency", "power"))
+
+
+def check_hardware_constraints(
+    model: ModelSpec,
+    constraints: HardwareConstraints,
+    measured: dict | None = None,
+) -> dict:
+    """
+    Check all four hardware constraints and return per-constraint PASS/FAIL status.
+
+    Phase 1: latency and power use theoretical estimates and are logged but not gating.
+    Phase 2: all four become hard gates. When `measured` is provided (a HardwareEvalResult
+    dict), use measured values instead of theoretical estimates. (Design doc §6.2, §6.5)
+    """
+    chip = constraints.target_chip
+    tok_s = model.tok_s_for_chip(chip)
+    # TTFT estimate: time for the model to produce the first token (prefill-dominated).
+    # Approximated as 1/tok_s * 1000 ms — rough, but order-of-magnitude correct for
+    # short prompts on CPU-bound inference. Measured values override this.
+    estimated_ttft_ms = (1.0 / max(tok_s, 0.1)) * 1000
+
+    # Sustained throughput check: constant UX floor from hardware_metrics.md §6.5.
+    # 6 tok/s = average English reading speed. Below this streaming visibly lags.
+    # min_tok_s = 0 disables the check (e.g. for batch/async workflows).
+    throughput_pass = (constraints.min_tok_s <= 0) or (tok_s >= constraints.min_tok_s)
+
+    result = {
+        "storage": {
+            "value_mb": model.int4_size_mb,
+            "limit_mb": constraints.storage_mb,
+            "pass": model.int4_size_mb <= constraints.storage_mb,
+        },
+        "memory": {
+            "value_mb": model.peak_memory_mb,
+            "limit_mb": constraints.memory_mb,
+            "pass": model.peak_memory_mb <= constraints.memory_mb,
+        },
+        "latency": {
+            # TTFT sub-check: prompt processing latency
+            "estimated_ttft_ms": round(estimated_ttft_ms),
+            "limit_ms": constraints.latency_ttft_ms,
+            "ttft_pass": estimated_ttft_ms <= constraints.latency_ttft_ms,
+            # Throughput sub-check: sustained decode speed (UX floor, hardware_metrics.md §6.5)
+            "tok_s": tok_s,
+            "min_tok_s": constraints.min_tok_s,
+            "throughput_pass": throughput_pass,
+            "chip": chip,
+            # latency gate passes only if both sub-checks pass
+            "pass": estimated_ttft_ms <= constraints.latency_ttft_ms and throughput_pass,
+        },
+        "power": {
+            "note": "Phase 1: proxy from model size, not measured" if not measured else "measured",
+            "value_watts": measured.get("avg_watts", 0) if measured else 0,
+            "limit_watts": constraints.power_watts,
+            "pass": (measured["avg_watts"] <= constraints.power_watts) if measured and measured.get("avg_watts") else True,
+        },
+    }
+
+    if measured and measured.get("ttft_ms"):
+        measured_tok_s = measured.get("tok_per_s", 0)
+        measured_throughput_pass = (constraints.min_tok_s <= 0) or (measured_tok_s >= constraints.min_tok_s)
+        result["latency"] = {
+            "measured_ttft_ms": measured["ttft_ms"],
+            "measured_tok_s": measured_tok_s,
+            "limit_ms": constraints.latency_ttft_ms,
+            "min_tok_s": constraints.min_tok_s,
+            "ttft_pass": measured["ttft_ms"] <= constraints.latency_ttft_ms,
+            "throughput_pass": measured_throughput_pass,
+            "chip": measured.get("device", chip),
+            "pass": measured["ttft_ms"] <= constraints.latency_ttft_ms and measured_throughput_pass,
+        }
+
+    return result

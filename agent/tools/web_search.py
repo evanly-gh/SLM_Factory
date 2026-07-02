@@ -8,7 +8,7 @@ _exa_client = None
 def _get_exa():
     global _exa_client
     if _exa_client is None:
-        from config import EXA_API_KEY
+        from config.config import EXA_API_KEY
         _exa_client = Exa(api_key=EXA_API_KEY)
     return _exa_client
 

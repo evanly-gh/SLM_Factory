@@ -6,6 +6,8 @@ from data.curriculum import (
     build_initial_curriculum,
     synthesize_hard_negatives,
     apply_quality_controls,
+    get_teacher_client,
+    annotate_cot,
 )
 
 ARTIFACTS_DIR = "artifacts"
@@ -18,7 +20,7 @@ def curate_node(state: AgentState) -> AgentState:
     task_type flows from state — no hardcoding.
     """
     import anthropic
-    from config import ANTHROPIC_API_KEY
+    from config.config import ANTHROPIC_API_KEY
 
     client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
 
@@ -34,8 +36,19 @@ def curate_node(state: AgentState) -> AgentState:
 
     if intervention == "data_rebuild" or state["current_dataset_path"] is None:
         # Build fresh curriculum targeting 65:35 Dgold:Dhard (paper §2.3).
-        # Dataset sizing per paper §2.3: 100-200 for classification/NER, 500-3000 for generation.
-        N_TOTAL_BY_TYPE = {"classification": 150, "NER": 300, "generation": 1000}
+        # Dataset sizing by task type — drives how many examples are needed for the model
+        # to learn the decision surface. Structured tasks need more examples because the
+        # output schema adds complexity; math/code need the most for step-by-step reasoning.
+        N_TOTAL_BY_TYPE = {
+            "classification":             150,   # binary/multi-class: simple decision surface
+            "multi_label_classification": 300,   # label co-occurrence patterns need more coverage
+            "NER":                        300,   # entity diversity requirement (quality control §4)
+            "structured_extraction":      400,   # schema field coverage + negative schema examples
+            "math_reasoning":            1000,   # step-by-step CoT chains; quality over quantity
+            "code_generation":           1000,   # function diversity + execution harness coverage
+            "multilingual":               400,   # language pair coverage adds dimensionality
+            "generation":                1000,   # open-ended; needs diverse inputs
+        }
         N_TOTAL = N_TOTAL_BY_TYPE.get(task_type, 150)
         n_gold_target = int(N_TOTAL * 0.65)
         n_hard_target = N_TOTAL - n_gold_target  # ~52
@@ -54,6 +67,16 @@ def curate_node(state: AgentState) -> AgentState:
             anthropic_client=client,
             task_type=task_type,
         )
+        # CoT annotation: mandatory for math_reasoning and code_generation (step-by-step
+        # supervision is the primary training signal). Applied to generation as well.
+        # classification, multi_label_classification, NER, structured_extraction use
+        # direct labels — CoT would add noise, not signal.
+        if task_type in ("math_reasoning", "code_generation", "generation"):
+            plan = state.get("task_plan") or {}
+            benchmark = plan.get("benchmark", plan.get("task_name", ""))
+            teacher_client, teacher_model, client_type = get_teacher_client(task_type, benchmark)
+            gold = annotate_cot(gold, teacher_client, teacher_model, client_type)
+
         dataset = apply_quality_controls(gold + hard, task_type=task_type)
         n_hard_added = len(hard)
 
@@ -76,6 +99,12 @@ def curate_node(state: AgentState) -> AgentState:
     else:
         # Hyperparameter intervention — hold dataset fixed, no curation needed
         return state
+
+    # Mix replay buffer for production mode (paper §2.6, Eq. 15, 17)
+    replay = state.get("replay_buffer") or []
+    if state.get("mode") == "production" and replay:
+        dataset = dataset + replay
+        print(f"[curate] Mixed {len(replay)} replay examples into dataset (total: {len(dataset)})")
 
     # Save updated dataset to disk
     state["dataset_version"] += 1
