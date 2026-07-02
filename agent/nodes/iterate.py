@@ -32,7 +32,7 @@ output your final decision as JSON (no tool call). The JSON format:
   "intervention": "<data_rebuild | hyperparameter | surgical>",
   "hypothesis": "<one concise sentence: causal reason the score is where it is>",
   "hyperparams": {
-    "lora_rank": <integer from [4,8,16,32,64] or null for full fine-tune>,
+    "lora_rank": <integer from [4,8,16,32,64]>,
     "learning_rate": <float, e.g. 2e-4>,
     "nr_epochs": <integer>,
     "batch_size": <integer, e.g. 4 or 8>
@@ -47,7 +47,7 @@ output your final decision as JSON (no tool call). The JSON format:
 Rules:
 - "hyperparams" is REQUIRED when intervention is "hyperparameter"
 - "targeted_patterns" is REQUIRED when intervention is "surgical"
-- lora_rank must be one of [4, 8, 16, 32, 64] or null
+- lora_rank must be one of [4, 8, 16, 32, 64]
 - Do not repeat a hyperparameter config identical to the previous iteration's best
 
 Score band guidance (reason about the trajectory, not just mechanical rules):

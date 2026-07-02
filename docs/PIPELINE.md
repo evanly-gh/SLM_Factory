@@ -4,25 +4,25 @@ How the LangGraph state machine is wired, what each node does, and what decision
 
 ---
 
-Three conditional edges control the entire loop:
+Three conditional edges and one hard edge control the loop:
 
 - **`evaluate → rollback | iterate`** — decided by `should_rollback(state)`, a pure function, no LLM
 - **`rollback → train`** — hard edge; rolls back to the best checkpoint then re-trains without an LLM intervention round
 - **`iterate → train | curate | escalate | terminate`** — decided by `state["next_action"]`, set by the LLM inside `iterate_node`
-- **`escalate → train | terminate`** — decided by `state["next_action"]`; on successful escalation always `"train"` (no re-curation)
+- **`escalate → train | curate | terminate`** — decided by `state["next_action"]`; current code only ever produces `"train"` or `"terminate"`, but the graph edge map also accepts `"curate"` (latent path, not triggered by any current escalate logic)
 
 ---
 
 ## Pre-Graph Step: `hardware_research`
 
-Runs in `run.py` **before the LangGraph graph is invoked**. Implemented in [agent/nodes/cold_start/hardware_research.py](agent/nodes/cold_start/hardware_research.py).
+Runs in `run.py` **before the LangGraph graph is invoked**. Implemented in [agent/nodes/cold_start/hardware_research.py](../agent/nodes/cold_start/hardware_research.py).
 
-- Parses the natural-language task description to extract device mentions (e.g. "Moto G Stylus 5G 2023 with 6 GB of RAM").
-- Issues a Claude Sonnet call to produce a structured `HardwareConstraints` object (`memory_mb`, `storage_mb`, `cpu_cores`, `has_gpu`).
-- Falls back to conservative defaults if no device is mentioned.
+- Passes the full natural-language task description to an Exa web search (`_exa_snippets`) and then to a Claude Sonnet call that returns a structured JSON object with device specs.
+- Constructs a `HardwareConstraints` object with fields: `storage_mb`, `memory_mb`, `latency_ttft_ms`, `power_watts`, `target_chip`, `min_tok_s`.
+- Falls back to conservative defaults (`3000 MB RAM`, `1500 MB storage`, `snapdragon_778g`) if the API call or JSON parsing fails.
 - Result is written to `{RUN_DIR}/device_research.json` and passed into `state["hardware_constraints"]` for the entire graph run.
 
-**Writes to state (initial_state):** `hardware_constraints`  
+**Writes to state (initial_state):** `hardware_constraints`
 **Decision made:** what the hardware budget is for model selection and hardware-gate checks
 
 ---
@@ -33,13 +33,13 @@ Runs in `run.py` **before the LangGraph graph is invoked**. Implemented in [agen
 
 Entry point for cold-start. Reads `state["description"]` and `state["autonomous"]`.
 
-- If autonomous mode (or no valid `task_type` provided), calls `plan_task()` — a Claude Sonnet call that returns `task_type`, `labels`, `multi_label`, `schema`, `multilingual`, `exa_queries`, `benchmark`, `stop_threshold`, and `rationale` as JSON.
+- If autonomous mode (or no valid `task_type` provided), calls `plan_task()` — a Claude Sonnet call that returns `task_type`, `task_name`, `labels`, `multi_label`, `schema`, `multilingual`, `exa_queries`, `benchmark`, `stop_threshold`, and `rationale` as JSON.
 - Valid task types: `classification`, `NER`, `math_reasoning`, `code_generation`, `generation`. Variants (multi-label classification, schema-constrained extraction, multilingual tasks) are expressed as flags on the plan dict, not separate types.
-- Filters `ANDROID_POOL` by hardware constraints, preference-sorted by task type via `filter_pool_by_task` (math_reasoning prefers DeepSeek-R1-Distill/Qwen3/Phi-4; code_generation prefers Qwen/Phi-4; classification prefers SmolLM2/high-MMLU).
-- Picks the smallest feasible model after preference sorting as `selected_model`, unless `SLM_FORCE_MODEL` env var overrides it.
+- Filters `ANDROID_POOL` by hardware constraints, preference-sorted by task type via `filter_pool_by_task`. The sort key varies by type: `math` sorts by `(tier, -gsm8k)`, `classification` sorts by `(tier, smol_bonus - mmlu)`, `code`/`ner` prefer Qwen, and `generation` (no pool key) sorts by `(tier, int4_size_mb)`.
+- Picks the first model in the preference-sorted feasible list as `selected_model`. For `math_reasoning`, further front-loads DeepSeek-R1, Qwen3, and Phi-4 models. `SLM_FORCE_MODEL` env var overrides the selection.
 - Sets `state["stop_threshold"]` from the planner's output (calibrated relative to model-size SOTA, not a fixed 0.96) and records `state["initial_stop_threshold"]` as the immutable floor.
 
-**Writes to state:** `task_type`, `task_plan`, `selected_model`, `stop_threshold`, `initial_stop_threshold`  
+**Writes to state:** `task_type`, `task_plan`, `selected_model`, `stop_threshold`, `initial_stop_threshold`
 **Decision made:** which model to start from, what the accuracy target is, which task flags apply
 
 ---
@@ -48,25 +48,25 @@ Entry point for cold-start. Reads `state["description"]` and `state["autonomous"
 
 Runs once. The eval set is fixed from this point forward and never modified again.
 
-- If a task plan exists (autonomous mode), calls `acquire_dataset()` which uses Exa web search to pull real examples for each label.
-- Otherwise falls back to the hardcoded SMS Spam loader.
+- If `state["task_plan"]` exists (i.e. autonomous mode produced a plan), calls `acquire_dataset()` which uses Exa web search to pull real examples for each label.
+- If no plan exists and `task_type == "classification"`, falls back to the hardcoded SMS Spam loader. For any other task type without a plan, raises `NotImplementedError`.
 - Calls `build_eval_set()` which partitions test examples into `E = E_pos ∪ E_neg ∪ E_boundary`.
 - Persists the eval set to `artifacts/eval_set.json` on disk.
 
-**Writes to state:** `train_examples`, `eval_set`  
+**Writes to state:** `train_examples`, `eval_set`
 **Decision made:** none — deterministic data loading
 
 ---
 
 ### Node 3: `curate`
 
-Builds or augments the training dataset. Behavior branches on `state["last_intervention"]`:
+Builds or augments the training dataset. Behavior branches on `state["last_intervention"]` (defaults to `"data_rebuild"` if unset):
 
-| `last_intervention` | What happens |
+| Condition | What happens |
 |---|---|
-| `"data_rebuild"` or first run | Full rebuild from scratch (see dataset sizing below) |
+| `"data_rebuild"` or `current_dataset_path is None` | Full rebuild from scratch (see dataset sizing below) |
 | `"surgical"` | Load existing dataset from disk, append targeted examples per failure pattern |
-| `"hyperparameter"` | **Returns immediately** — dataset held fixed, no curation |
+| Anything else (including `"hyperparameter"`) | **Returns immediately** — dataset held fixed, no curation |
 
 **Dataset sizing by task type (data_rebuild path):**
 
@@ -89,38 +89,39 @@ In production mode, mixes the `replay_buffer` into the dataset at this step.
 
 Saves the dataset to `artifacts/dataset_v{N}.jsonl` and increments `dataset_version`.
 
-**Writes to state:** `current_dataset_path`, `dataset_version`, `last_curation`  
+**Writes to state:** `current_dataset_path`, `dataset_version`, `last_curation`
 **Decision made:** none — executes the intervention type the LLM decided in the prior `iterate` call
 
 ---
 
 ### Node 4: `train`
 
-Trains two configurations sequentially (sequential rather than parallel because Unsloth/Accelerate share process-global state on a single GPU).
+Trains a single LoRA configuration. Always produces a LoRA adapter (no full fine-tuning) for on-device adapter-manager deployment.
 
 Config selection logic:
-- If `iterate_node` set `last_intervention = "hyperparameter"` and provided a `hyperparams` dict, Config A uses those exact values and Config B explores the complementary axis (LoRA↔FFT, or higher rank / lower LR).
-- Otherwise, defaults to Config A (LoRA r=8, 3 epochs, lr=2e-4) and Config B (FFT, 5 epochs, lr=1e-4).
+- If `iterate_node` set `last_intervention = "hyperparameter"` and provided a `hyperparams` dict, uses those values (clamped to valid LoRA ranks). If the LLM requested FFT (`lora_rank: null`), it is overridden to LoRA r=8.
+- Otherwise, defaults to LoRA r=8, 3 epochs, lr=2e-4.
 
-Always trains from the base model — never loads a prior adapter. Stores both `weights_ref` results in `state["_pending_weights_refs"]` keyed by config label.
+Always trains from the base model — never loads a prior adapter. Stores the `weights_ref` in `state["_pending_weights_refs"]`.
 
-**Writes to state:** `_pending_weights_refs`, `_pending_configs`, increments `iteration`  
+**Writes to state:** `_pending_weights_refs`, `_pending_configs`, increments `iteration`
 **Decision made:** none — executes what curate set up
 
 ---
 
 ### Node 5: `evaluate`
 
-Scores both configs against the fixed eval set and picks the best.
+Scores the trained config against the fixed eval set.
 
-- Calls `run_eval()` for each `weights_ref` — dispatches to the task-appropriate scorer: accuracy/F1 for `classification`, entity span-F1 for `NER`, final-answer exact match for `math_reasoning`, execution pass@1 for `code_generation`, LLM-as-judge for `generation`.
-- Picks the config with higher F1 as the winner.
+- Calls `run_eval()` for the `weights_ref` — dispatches to three scorer modules by task type:
+  - `eval.scorers.classification` — accuracy/F1 for `classification`
+  - `eval.scorers.ner` — entity span-F1 for `NER`
+  - `eval.scorers.generation` — handles `math_reasoning` (final-answer exact match), `code_generation` (execution pass@1), and `generation` (LLM-as-judge) by inspecting `task_type` internally
 - Updates `best_score`, `best_weights_ref`, `consecutive_no_improvement`.
 - Appends a node to the linear DAG (`state["dag"]`) with the full `π = (D, H, S)` triple.
-- If MCGS is enabled, expands the MCGS graph with the new node.
 - Writes the iteration record to `data-curation.md` via `CurationLog`, including score band, hardware PASS/FAIL, config labels, and the hypothesis from the prior iterate call.
 
-The routing decision is made here via `should_rollback(state)`:
+The routing decision is made via `should_rollback(state)` (defined in `rollback.py`):
 - `scores[-1] < scores[-2]` → routes to `rollback`
 - Otherwise → routes to `iterate`
 
@@ -135,12 +136,12 @@ Only reached if the latest score was worse than the previous.
 - Pops the last score from `state["scores"]`.
 - Sets `last_intervention = "rollback"`.
 - Marks the last DAG node as `pruned = True`.
-- Restores `best_weights_ref` to the highest-scoring non-pruned DAG node.
+- Restores `best_weights_ref` and `best_score` to the highest-scoring non-pruned DAG node.
 - Increments `consecutive_no_improvement`.
 
 After rollback the graph always proceeds directly to `train` — **not** `iterate`. The best checkpoint is restored and the model re-trains on the existing dataset without an LLM intervention round. This avoids the LLM being asked to reason about a regression before it can observe whether the rollback alone recovers performance.
 
-**Writes to state:** `scores`, `dag`, `best_weights_ref`, `best_score`, `last_intervention`  
+**Writes to state:** `scores`, `dag`, `best_weights_ref`, `best_score`, `last_intervention`, `consecutive_no_improvement`
 **Decision made:** none — all logic is rule-based
 
 ---
@@ -179,7 +180,7 @@ intervention == "data_rebuild"           → "curate"
 intervention == "surgical"               → "curate"
 ```
 
-**Writes to state:** `last_intervention`, `last_hypothesis`, `llm_iterate_decision`, `next_action`, optionally `stop_threshold`  
+**Writes to state:** `last_intervention`, `last_hypothesis`, `llm_iterate_decision`, `next_action`, optionally `stop_threshold`
 **Decision made:** primary decision node — determines everything that happens next
 
 ---
@@ -188,7 +189,7 @@ intervention == "surgical"               → "curate"
 
 Reached when `_is_stagnant(scores)` fires inside `iterate`.
 
-- Finds the current model in the feasible pool and looks up `current_idx + 1`.
+- Calls `filter_pool(hardware_constraints)` to get the hardware-feasible subset, then finds the current model's index within that filtered list and looks up `current_idx + 1`.
 - If there is no next model (already at the ceiling of the feasible pool), sets `next_action = "terminate"`.
 - Checks hardware constraints for the next model; if it does not fit, terminates.
 - Otherwise promotes `selected_model` to the next tier and resets score history and DAG.
@@ -242,12 +243,12 @@ task_analysis → eval_setup → curate → train → evaluate
 ## Key Invariants
 
 1. **Eval set never changes.** Fixed after `eval_setup`, never touched again. The same `E` measures every iteration.
-2. **Always trains from the base model.** `train_node` never loads a prior adapter. Each run is fully determined by the current dataset.
+2. **Always trains from the base model.** `train_node` never loads a prior adapter. Each run is fully determined by the current dataset. Always LoRA — no full fine-tuning — for adapter-manager deployment.
 3. **Rollback bypasses iterate.** `should_rollback` fires before `iterate` is called. On regression, the graph goes `evaluate → rollback → train` — the LLM never sees a regressed score and is not asked to reason about it before the rollback re-train completes.
 4. **Escalation preserves the dataset.** When promoting to the next model tier, `current_dataset_path` is carried forward. Only weights and score history are reset. The new model trains immediately on the existing curated data (`escalate → train`, no `curate` round).
 5. **Escalation resets all score history.** The new model starts from zero — stale DAG nodes from the prior model do not pollute the rollback gate.
 6. **Hyperparameter interventions skip curate entirely.** `iterate → train` directly; the dataset is held fixed to isolate the optimization effect.
-7. **Curate is a no-op for hyperparameter interventions.** Even if routing passes through curate, it returns immediately when `last_intervention == "hyperparameter"`.
+7. **Curate early-returns for any intervention that isn't `data_rebuild` or `surgical`.** The `else` branch catches `"hyperparameter"`, `"rollback"`, and any other value — returning state unchanged with no disk writes.
 8. **Escalation trigger is delta-based, not count-based.** `escalate` fires when the total improvement across the last 3 evaluations is < 0.02 — slow but real progress does not trigger it, only genuine plateaus.
 9. **`stop_threshold` can be lowered at runtime, never raised.** `iterate_node` may lower it when the LLM identifies OOD failures, but it is clamped to `initial_stop_threshold` as a hard floor.
 
