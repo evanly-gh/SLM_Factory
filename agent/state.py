@@ -1,5 +1,5 @@
 # agent/state.py
-from typing import TypedDict, Optional, Any
+from typing import TypedDict, Optional
 from data.eval_set import EvalSet
 from eval.harness import EvalResult
 from config.android_pool import ModelSpec, HardwareConstraints
@@ -55,9 +55,6 @@ class AgentState(TypedDict):
     regression_set: Optional[list[dict]]  # R — examples M0 gets right
     replay_buffer: Optional[list[dict]]   # D_replay ⊂ D_parent (10-20%)
     turn_budget: int                      # 1500 cold-start, 500 production
-
-    # Messages for LangGraph
-    messages: list[Any]
 
     # Internal: carry training results between train_node and evaluate_node
     _pending_weights_refs: Optional[dict]  # label -> weights_ref

@@ -172,20 +172,6 @@ class HardwareConstraints:
 
 ANDROID_POOL: list[ModelSpec] = [
     # ── Tier 0: Micro (sub-0.6B) ──────────────────────────────────────────
-    # Qwen2.5-0.5B: Strong math for its size (MATH: 19.5%, beats Gemma2-2.6B).
-    # Source: arXiv 2412.15115 Table 5.
-    ModelSpec(
-        model_id="Qwen/Qwen2.5-0.5B-Instruct",
-        int4_size_mb=295,
-        tier=0,
-        tok_s_snapdragon_660=15.0,
-        tok_s_snapdragon_778g=24.0,
-        tok_s_snapdragon_8gen3=65.0,
-        peak_memory_mb=460,
-        gsm8k=0.416,   # GSM8K 4-shot, from Qwen2.5 tech report Table 5
-        mmlu=0.475,    # MMLU 5-shot, from Qwen2.5 tech report Table 5
-        notes="Strongest sub-0.6B for math; MATH score 19.5% beats Gemma2-2.6B (18.3%)",
-    ),
     # MiniCPM4-0.5B: Uses BitCPM4 QAT quantization for better INT4 quality.
     # Benchmarks claim to exceed Qwen3-0.6B; specialized sparse attention for
     # long context. Source: arXiv 2506.07900.
@@ -203,27 +189,9 @@ ANDROID_POOL: list[ModelSpec] = [
     ),
 
     # ── Tier 1: Small (0.6–1B) ────────────────────────────────────────────
-    # Qwen3-0.6B: Best-in-class Tier 1 with published benchmarks. GSM8K 59.6%, MMLU 52.8%.
-    # Instruct adds thinking-mode (MATH-500: 77.6% with thinking).
-    # Source: arXiv 2505.09388 Table 8.
-    ModelSpec(
-        model_id="Qwen/Qwen3-0.6B",
-        int4_size_mb=397,
-        tier=1,
-        tok_s_snapdragon_660=10.0,
-        tok_s_snapdragon_778g=16.0,
-        tok_s_snapdragon_8gen3=45.0,
-        peak_memory_mb=580,
-        gsm8k=0.596,   # GSM8K 4-shot CoT, from Qwen3 tech report Table 8
-        mmlu=0.528,    # MMLU 5-shot, from Qwen3 tech report Table 8
-        notes="Best Tier 1 overall; hybrid thinking/non-thinking mode; Qwen3-1.7B perf matches Qwen2.5-3B",
-    ),
     # Qwen3.5-0.8B (March 2026): Gated DeltaNet hybrid architecture, natively multimodal,
-    # 262K context, Apache 2.0. No classic MMLU/GSM8K benchmarks published — uses newer
-    # MMLU-ProX/MAXIFE/WMT24++ suite. ~54% relative capability vs 397B flagship.
+    # 262K context, Apache 2.0. Intelligence Index +2.5 pts over Qwen3-0.6B.
     # CAUTION: documented 67%→33% code generation collapse when few-shot examples are added.
-    # Thinking mode OFF by default. Good for multilingual/multimodal tasks at this size.
-    # Cannot confirm it beats Qwen3-0.6B on reasoning without classic benchmark scores.
     # INT4 size estimated ~500MB; source: huggingface.co/Qwen/Qwen3.5-0.8B
     ModelSpec(
         model_id="Qwen/Qwen3.5-0.8B",
@@ -233,9 +201,9 @@ ANDROID_POOL: list[ModelSpec] = [
         tok_s_snapdragon_778g=15.0,
         tok_s_snapdragon_8gen3=42.0,
         peak_memory_mb=670,
-        gsm8k=0.610,   # estimated; no official score published (uses newer benchmarks)
-        mmlu=0.540,    # estimated; no official score published
-        notes="NEW (Mar 2026): Gated DeltaNet hybrid, multimodal, 262K ctx; no GSM8K/MMLU published; avoid few-shot code generation; use for multilingual/vision tasks",
+        gsm8k=0.610,   # estimated from Intelligence Index comparison vs Qwen3-0.6B
+        mmlu=0.540,    # estimated
+        notes="Gated DeltaNet hybrid, multimodal, 262K ctx, 201 langs; avoid few-shot code generation; replaces Qwen3-0.6B",
     ),
     # Llama 3.2-1B: ExecuTorch reference model (SpinQuant + KleidiAI).
     # >350 tok/s prefill on Samsung S24+. Best for latency-critical apps.
@@ -286,21 +254,6 @@ ANDROID_POOL: list[ModelSpec] = [
     ),
 
     # ── Tier 2: Mid (1–2B) ────────────────────────────────────────────────
-    # Qwen2.5-1.5B: Proven instruct model. GSM8K 73.2%, MMLU ~58.4% (instruct).
-    # Recommended for Tier 2 NER and classification where Qwen3-1.7B is overkill.
-    # Source: Qwen2.5 instruct model card; arXiv 2412.15115.
-    ModelSpec(
-        model_id="Qwen/Qwen2.5-1.5B-Instruct",
-        int4_size_mb=938,
-        tier=2,
-        tok_s_snapdragon_660=5.5,
-        tok_s_snapdragon_778g=9.5,
-        tok_s_snapdragon_8gen3=27.0,
-        peak_memory_mb=1250,
-        gsm8k=0.732,   # GSM8K from Qwen2.5-1.5B-Instruct model card
-        mmlu=0.584,    # MMLU instruct model card
-        notes="Solid general-purpose Tier 2; good balance of math and instruction following; strong NER/classification",
-    ),
     # DeepSeek-R1-Distill-Qwen-1.5B: Specialized reasoning only.
     # MATH-500: 83.9%, AIME 2024: 28.9%. Distilled from DeepSeek-R1 671B.
     # NOT recommended for classification/NER/general tasks — use Qwen models instead.
@@ -316,21 +269,6 @@ ANDROID_POOL: list[ModelSpec] = [
         gsm8k=0.870,   # proxy from MATH-500 83.9%; official GSM8K not reported for 1.5B distill
         mmlu=0.580,    # approximate; MMLU not officially reported for 1.5B distill
         notes="SPECIALIZED REASONING ONLY: MATH-500 83.9%, AIME 28.9%. Do not use for classification/NER. R1 distillation requires longer generation.",
-    ),
-    # Qwen3-1.7B: Best Tier 2 for math/reasoning. GSM8K 75.4%, MMLU 62.6%.
-    # Qwen3-1.7B-Base matches Qwen2.5-3B-Base per official technical report.
-    # Source: arXiv 2505.09388 Table 8.
-    ModelSpec(
-        model_id="Qwen/Qwen3-1.7B",
-        int4_size_mb=1050,
-        tier=2,
-        tok_s_snapdragon_660=5.0,
-        tok_s_snapdragon_778g=9.0,
-        tok_s_snapdragon_8gen3=25.0,
-        peak_memory_mb=1380,
-        gsm8k=0.754,   # GSM8K 4-shot CoT, from Qwen3 tech report Table 8
-        mmlu=0.626,    # MMLU 5-shot, from Qwen3 tech report Table 8
-        notes="Matches Qwen2.5-3B on benchmarks; best Tier 2 for math/code/multilingual; MNN gives 8.6x faster prefill",
     ),
     # SmolLM2-1.7B: Best Tier 2 for instruction following (IFEval 56.7%,
     # beats Llama 3.2-1B and Qwen2.5-1.5B). Strong for classification tasks.
@@ -413,23 +351,6 @@ ANDROID_POOL: list[ModelSpec] = [
         gsm8k=0.760,   # estimated; benchmark suite confirms strong math reasoning
         mmlu=0.650,    # ~65% reported (beats Llama-3.2-3B 63.4%) from codersera.com
         notes="256K context (largest in pool); native function calling + JSON; MMLU ~65% beats Llama-3.2-3B; edge-optimized architecture; ~225 tok/s on desktop GPU",
-    ),
-    # Qwen3-4B (MoE-equivalent performance at 4B dense): Qwen3-4B matches
-    # Qwen2.5-72B-Instruct per official tech report. INT4 ~2.4GB.
-    # ONLY include for very high-end devices (12GB RAM phones).
-    # NOTE: This pushes past the 3GB RAM budget on 8GB phones — annotated
-    # as a stretch tier for devices with 12GB+ RAM.
-    ModelSpec(
-        model_id="Qwen/Qwen3-4B",
-        int4_size_mb=2390,
-        tier=3,
-        tok_s_snapdragon_660=1.5,
-        tok_s_snapdragon_778g=3.0,
-        tok_s_snapdragon_8gen3=8.0,
-        peak_memory_mb=4200,
-        gsm8k=0.870,   # GSM8K approximate; Qwen3-4B matches Qwen2.5-72B per tech report
-        mmlu=0.730,    # MMLU approximate from Qwen3 tech report
-        notes="High-end only (12GB+ RAM): matches Qwen2.5-72B on many benchmarks per Qwen3 tech report; Q4_K_M ~2.4GB",
     ),
     # Phi-4-mini (3.8B): Best reasoning-per-GB in the pool. Q4_K_M = 2.49GB.
     # Fits 8GB RAM phones only (peak ~4.1GB with OS). Microsoft's recommended
