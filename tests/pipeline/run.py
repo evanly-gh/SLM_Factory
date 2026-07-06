@@ -228,7 +228,6 @@ initial_state = {
     "regression_set": None,
     "replay_buffer": None,
     "turn_budget": config.MAX_TURNS_MAIN,
-    "messages": [],
     "_pending_weights_refs": None,
     "_pending_configs": None,
 }

@@ -64,32 +64,27 @@ Capability scales as a **power law** (not step-functions) in perplexity/loss acr
 
 ### The two step-functions
 
-**Step 1: Tier 0 → Tier 1 (sub-0.6B → 0.6B+)**
+**Step 1: Tier 0 → Tier 1 (sub-0.6B → 0.8B+)**
 
 The largest capability jump in the pool:
-- Qwen2.5-0.5B GSM8K: **41.6%**
-- Qwen3-0.6B GSM8K: **59.6%** (+18 pp)
+- MiniCPM4-0.5B GSM8K: **~55%**
+- Qwen3.5-0.8B GSM8K: **~61%** (estimated, +6 pp)
+- MiniCPM5-1B GSM8K: **~85%** (proxy from MATH-500 91.6%, +30 pp)
 
 At sub-0.6B, models cannot reliably execute multi-step reasoning chains. Passing individual classification labels or named entity spans is feasible; generating coherent multi-sentence reasoning is not. This is the binary threshold between "routing/extraction" and "generation."
 
-Scaling exponents are steeper at small sizes (~0.23 at sub-20M params, decaying to ~0.10 near 3B per arXiv 2603.07365). Every parameter doubling yields larger relative gains at small scale, which is why the 0.5B→0.6B jump is the most cost-effective in the pool.
-
-**Step 2: Tier 1 → Tier 2 (1B → 1.5–1.7B)**
+**Step 2: Tier 1 → Tier 2 (1B → 1.5–2B)**
 
 A second meaningful jump:
 - Llama 3.2-1B GSM8K: **~44%**
-- Qwen3-1.7B GSM8K: **75.4%** (+31 pp)
-- MMLU: ~49% → ~63% (+14 pp)
+- Qwen3.5-2B Intelligence Index: **16** (+3 pts over Qwen3-1.7B's 13)
+- DeepSeek-R1-Distill-1.5B MATH-500: **83.9%**
 
-The 1.7B tier reliably executes reasoning chains, follows complex instructions, and generates coherent longer outputs. This is where the model transitions from "works on simple tasks" to "works on most SLM Factory target tasks."
+The 1.5–2B tier reliably executes reasoning chains, follows complex instructions, and generates coherent longer outputs. This is where the model transitions from "works on simple tasks" to "works on most SLM Factory target tasks."
 
-**Step 3: Tier 2 → Tier 3 (1.7B → 3B)**
+**Step 3: Tier 2 → Tier 3 (2B → 3B)**
 
-A real but smaller gap:
-- Qwen3-1.7B GSM8K: **75.4%**
-- Llama 3.2-3B GSM8K: **77.7%** (+2.3 pp)
-
-The 3B tier is only marginally better than 1.7B for most tasks. It matters only for hard math and complex code, and it costs 8GB+ RAM vs 6GB. Qwen3-1.7B effectively matches Qwen2.5-3B per the official Qwen3 technical report — the tier boundary here is driven by RAM requirements more than capability.
+A real but smaller gap. The 3B tier matters only for hard math and complex code, and it costs 8GB+ RAM vs 6GB. The tier boundary here is driven by RAM requirements more than capability.
 
 ### Tier boundaries and RAM budget
 
@@ -101,10 +96,10 @@ total_RAM ≈ int4_file_mb + 1000–1500 MB (Android OS + app + KV cache at 2K c
 
 | Tier | INT4 file range | Peak RAM range | Minimum phone RAM |
 |---|---|---|---|
-| 0 (Micro) | 295–310 MB | 460–480 MB | 4 GB (any Android) |
-| 1 (Small) | 397–806 MB | 580–1,050 MB | 4 GB (any Android) |
-| 2 (Mid) | 938–1,190 MB | 1,250–1,430 MB | 6 GB |
-| 3 (Large) | 2,020–2,490 MB | 3,400–4,200 MB | 8 GB (some need 12 GB) |
+| 0 (Micro) | 310 MB | 480 MB | 4 GB (any Android) |
+| 1 (Small) | 500–806 MB | 670–1,050 MB | 4 GB (any Android) |
+| 2 (Mid) | 958–1,350 MB | 1,270–2,200 MB | 6 GB |
+| 3 (Large) | 1,900–2,490 MB | 3,200–4,100 MB | 8 GB |
 
 ---
 
@@ -113,14 +108,6 @@ total_RAM ≈ int4_file_mb + 1000–1500 MB (Android OS + app + KV cache at 2K c
 ### Tier 0 — Micro (sub-0.6B)
 
 **Use for:** Binary classification, keyword extraction, simple NER, routing decisions. Do not use for multi-step generation.
-
----
-
-#### `Qwen/Qwen2.5-0.5B-Instruct`
-- **INT4 size:** ~295 MB | **Peak RAM:** ~460 MB
-- **Benchmarks:** GSM8K 41.6%, MMLU 47.5% (Qwen2.5 Technical Report, Table 5, arXiv 2412.15115)
-- **Why included:** Strongest sub-0.5B model with published benchmarks. MATH score 19.5% beats Gemma2-2.6B (18.3%) at 5× fewer parameters — demonstrates the data-quality advantage of Qwen's math training.
-- **Limitations:** Standard PTQ (not QAT), so quantization degradation is higher than MiniCPM4.
 
 ---
 
@@ -135,33 +122,22 @@ total_RAM ≈ int4_file_mb + 1000–1500 MB (Android OS + app + KV cache at 2K c
 
 ### Tier 1 — Small (0.6–1B)
 
-**Use for:** Simple instruction following, summarization, NER, basic generation. GSM8K 53–63%.
-
----
-
-#### `Qwen/Qwen3-0.6B`
-- **INT4 size:** 397 MB | **Peak RAM:** ~580 MB
-- **Benchmarks:** GSM8K 59.6%, MMLU 52.8% (Qwen3 Technical Report, Table 8, arXiv 2505.09388)
-- **Why included:** Best Tier 1 model with fully published benchmarks. Hybrid thinking/non-thinking mode provides MATH-500 77.6% with thinking enabled — competitive with models twice its size.
-- **Special notes:**
-  - Hybrid thinking mode (like DeepSeek-R1 approach) — enables chain-of-thought reasoning at 0.6B
-  - MNN-LLM gives 8.6x faster prefill than llama.cpp for this model
-  - Qwen3-1.7B-Base matches Qwen2.5-3B-Base — the whole Qwen3 family punches above weight class
-- **Limitations:** Text-only. 32K context.
+**Use for:** Simple instruction following, summarization, NER, basic generation.
 
 ---
 
 #### `Qwen/Qwen3.5-0.8B`
 - **INT4 size:** ~500 MB (estimated) | **Peak RAM:** ~670 MB
-- **Benchmarks:** GSM8K and MMLU not officially published — uses newer MMLU-ProX/MAXIFE/WMT24++ suite. ~54% relative capability score vs 397B flagship.
-- **Why included:** New (March 2026) Gated DeltaNet hybrid architecture with native multimodal support (text + images + video) and 262K context window. These capabilities are not available in any other Tier 1 model.
+- **Benchmarks:** Intelligence Index 9.0 (+2.5 pts over Qwen3-0.6B). Classic GSM8K/MMLU not published — uses newer MMLU-ProX/MAXIFE/WMT24++ suite. Estimated GSM8K ~61%, MMLU ~54%.
+- **Why included:** Gated DeltaNet hybrid architecture (March 2026) with native multimodal support (text + images + video) and 262K context. Supersedes Qwen3-0.6B with better architecture, multimodal capability, and +2.5 Intelligence Index points at only 0.2B more parameters.
+- **Runtime:** llama.cpp/GGUF (universal), MNN-LLM (fastest prefill for Qwen family)
 - **Special notes:**
   - **Natively multimodal** — only sub-1B model in the pool that handles images and video
   - **201 languages** — strongest multilingual coverage at this size
-  - **262K context** — far larger than any other Tier 1 model (Qwen3-0.6B has 32K)
+  - **262K context** — far larger than any other Tier 1 model
   - **⚠️ Code generation fragility**: documented 67% → 33% pass@1 collapse when few-shot examples are added (SaladCloud benchmarks). Do not use for code tasks with examples.
   - Thinking mode is OFF by default.
-- **Limitations:** No apples-to-apples comparison with other pool models on GSM8K/MMLU. Cannot confirm it beats Qwen3-0.6B on reasoning.
+- **Limitations:** Estimated benchmarks — no apples-to-apples GSM8K/MMLU comparison with other pool models.
 
 ---
 
@@ -169,12 +145,13 @@ total_RAM ≈ int4_file_mb + 1000–1500 MB (Android OS + app + KV cache at 2K c
 - **INT4 size:** 658 MB | **Peak RAM:** ~900 MB
 - **Benchmarks:** GSM8K ~53.5%, MMLU ~49%, IFEval 53.5% (Meta model card)
 - **Why included:** ExecuTorch reference model with SpinQuant + KleidiAI. This achieves **50.2 tok/s decode on SD8 Gen3** (OnePlus 12) — the fastest confirmed 1B decode throughput in the pool. Also has the **largest fine-tuning gains from training** of any 1B model (Distil Labs benchmark), which matters for SLM Factory's core use case.
+- **Runtime:** ExecuTorch/PTE (best: SpinQuant + KleidiAI, 10× prefill vs llama.cpp), llama.cpp/GGUF (universal). **No runtime LoRA loading via ExecuTorch** — adapters must be merged before PTE export.
 - **Special notes:**
   - ExecuTorch + SpinQuant + KleidiAI: 50.2 tok/s decode, >350 tok/s prefill on Samsung S24+
   - Most tunable 1B model — largest relative gains from fine-tuning (confirmed by Distil Labs 12-SLM benchmark)
   - Distilled from Llama 3.1-8B and 70B — better aligned than independently trained models
   - 128K context
-- **Limitations:** Text-only. Weaker raw benchmarks than Qwen3-0.6B. Best used when ExecuTorch deployment or fine-tuning ROI is the priority.
+- **Limitations:** Text-only. Weaker raw benchmarks than Qwen3.5-0.8B. ExecuTorch path requires merging adapters (no adapter-manager pattern). Best used when ExecuTorch deployment or fine-tuning ROI is the priority.
 
 ---
 
@@ -182,6 +159,7 @@ total_RAM ≈ int4_file_mb + 1000–1500 MB (Android OS + app + KV cache at 2K c
 - **INT4 size:** 688 MB (confirmed, openbmb/MiniCPM5-1B-GGUF on HuggingFace) | **Peak RAM:** ~920 MB
 - **Benchmarks:** MATH-500 **91.6%**, HumanEval+ 78.7%, IFEval **80.4%**, τ²-Bench (agentic) 79.5%, AIME 2025 40.4%, LiveCodeBench v6 33.5%. OpenBMB aggregate score: **42.57** vs Qwen3-0.6B's 26.77 and LFM2.5-1.2B's 35.61.
 - **Why included:** Comprehensively beats every other 1B model in the pool on math, code, and agentic tasks. IFEval 80.4% also beats SmolLM2-1.7B (56.7%), making it best-in-class on instruction following at the 1B tier. llama.cpp deployment is officially documented by OpenBMB.
+- **Runtime:** llama.cpp/GGUF (official GGUF at openbmb/MiniCPM5-1B-GGUF), MNN-LLM (fastest prefill)
 - **Special notes:**
   - 131K context window
   - Hybrid thinking mode (similar to DeepSeek-R1 approach)
@@ -195,31 +173,20 @@ total_RAM ≈ int4_file_mb + 1000–1500 MB (Android OS + app + KV cache at 2K c
 - **INT4 size:** 806 MB | **Peak RAM:** ~1,050 MB
 - **Benchmarks:** GSM8K 62.8%, MMLU ~48% (Gemma 3 Technical Report, arXiv 2503.19786)
 - **Why included:** Google's official QAT checkpoint — quantization-aware trained by Google, not post-training quantized. This directly reduces INT4 degradation. It is also the native LiteRT/MediaPipe deployment target: any Android app using Google's on-device AI SDK needs this model specifically.
+- **Runtime:** LiteRT/MediaPipe (best: Google's official on-device AI SDK), llama.cpp/GGUF (via QAT GGUF). **No runtime LoRA loading via LiteRT** — adapters must be merged before TFLite conversion.
 - **Special notes:**
   - Google provides the QAT GGUF at `google_gemma-3-1b-it-qat-GGUF` — higher quality than standard PTQ Q4_K_M
   - Official LiteRT-LM and MediaPipe deployment path (the only Tier 1 model on Google's official on-device stack)
   - IFEval 80.2% — strongest instruction following of any Tier 1 model
   - **Natively multimodal** — supports image+text input (despite the 1B size)
   - 32K context
-- **Limitations:** MMLU ~48% is lower than Qwen3-0.6B (52.8%) despite having more parameters — Gemma's training prioritizes instruction following and safety over raw benchmark scores.
+- **Limitations:** MMLU ~48% is lower than Qwen3.5-0.8B (~54%) despite having more parameters — Gemma's training prioritizes instruction following and safety over raw benchmark scores. LiteRT path does not support runtime adapter loading.
 
 ---
 
 ### Tier 2 — Mid (1–2B)
 
-**Use for:** Most SLM Factory target tasks. Multi-step reasoning, NER, code generation, complex instruction following. GSM8K 70–77%. Fits all 6GB+ Android phones.
-
----
-
-#### `Qwen/Qwen2.5-1.5B-Instruct`
-- **INT4 size:** 938 MB | **Peak RAM:** ~1,250 MB
-- **Benchmarks:** GSM8K 73.2%, MMLU 58.4%, HumanEval 61.6% (instruct model card, arXiv 2412.15115)
-- **Why included:** Lighter than Qwen3-1.7B while still strong. Best Tier 2 choice when RAM is tighter (saves ~130 MB vs Qwen3-1.7B). Strong NER and classification. HumanEval 61.6% is the highest code score of any Tier 2 model.
-- **Special notes:**
-  - Best Tier 2 code generation (HumanEval 61.6%)
-  - Proven, stable model with extensive community fine-tuning history
-  - Smaller and lighter than Qwen3-1.7B — better for 6GB phones with tight headroom
-- **Limitations:** Text-only. Superseded on reasoning by Qwen3-1.7B.
+**Use for:** Most SLM Factory target tasks. Multi-step reasoning, NER, code generation, complex instruction following. Fits all 6GB+ Android phones.
 
 ---
 
@@ -227,6 +194,7 @@ total_RAM ≈ int4_file_mb + 1000–1500 MB (Android OS + app + KV cache at 2K c
 - **INT4 size:** 958 MB | **Peak RAM:** ~1,270 MB
 - **Benchmarks:** MATH-500 **83.9%**, AIME 2024 28.9%, LiveCodeBench 16.9% (DeepSeek-R1 paper, Table 4, arXiv 2501.12948)
 - **Why included:** Uniquely strong on formal mathematical reasoning at this size — MATH-500 83.9% at 1.5B is extraordinary. Only model in the pool specifically suited for competition-math style tasks.
+- **Runtime:** llama.cpp/GGUF (universal)
 - **Special notes:**
   - Distilled from DeepSeek-R1 671B via SFT on 800K reasoning traces
   - **⚠️ SPECIALIZED REASONING ONLY** — do not use for classification, NER, or general chat. SFT distillation causes catastrophic forgetting of general skills (NLI accuracy: 81% → 16.5% in controlled experiments, arXiv 2507.00432)
@@ -239,28 +207,16 @@ total_RAM ≈ int4_file_mb + 1000–1500 MB (Android OS + app + KV cache at 2K c
 
 #### `unsloth/Qwen3.5-2B-GGUF`
 - **INT4 size:** ~1,350 MB (Q4_K_M estimated; verify at [huggingface.co/unsloth/Qwen3.5-2B-GGUF](https://huggingface.co/unsloth/Qwen3.5-2B-GGUF)) | **Peak RAM:** ~1,800 MB
-- **Benchmarks:** GSM8K and MMLU not officially published — uses newer MMLU-ProX/MAXIFE/WMT24++ suite.
-- **Why included:** Same Gated DeltaNet hybrid architecture as Qwen3.5-0.8B but at 2B parameters. Brings multimodal capability (text + images + video) and a **262K context window** to Tier 2 — 8× larger than Qwen3-1.7B's 32K. Unsloth's Dynamic 2.0 GGUF is confirmed working with llama.cpp, Ollama, and compatible tools. Thinking mode disabled by default; enable with `--chat-template-kwargs '{"enable_thinking":true}'`.
+- **Benchmarks:** Intelligence Index 16.0 (+3 pts over Qwen3-1.7B). Classic GSM8K/MMLU not published — uses newer MMLU-ProX/MAXIFE/WMT24++ suite. Estimated GSM8K ~72%, MMLU ~61%.
+- **Why included:** Same Gated DeltaNet hybrid architecture as Qwen3.5-0.8B but at 2B parameters. Supersedes Qwen3-1.7B with better architecture (+3 Intelligence Index points) plus multimodal capability and 262K context. Unsloth's Dynamic 2.0 GGUF is confirmed working with llama.cpp, Ollama, and compatible tools.
+- **Runtime:** llama.cpp/GGUF (Unsloth Dynamic 2.0 GGUF confirmed), MNN-LLM (fastest prefill for Qwen family)
 - **Special notes:**
   - **Natively multimodal** — text, image, video input
   - **262K context window** — largest in Tier 2; suited for long-document tasks
   - **201 languages** — best multilingual coverage in Tier 2
   - Unsloth Dynamic 2.0 quantization upcasts important layers to 8/16-bit for better quality than standard Q4_K_M
-- **Limitations:** No classic GSM8K/MMLU scores available. Cannot directly compare with Qwen3-1.7B on standard benchmarks. Estimated scores are inferred from the architecture and benchmark suite aggregate.
-
----
-
-#### `Qwen/Qwen3-1.7B`
-- **INT4 size:** 1,050 MB | **Peak RAM:** ~1,380 MB
-- **Benchmarks:** GSM8K 75.4%, MMLU 62.6% (Qwen3 Technical Report, Table 8, arXiv 2505.09388)
-- **Why included:** Best overall Tier 2 model. Qwen3-1.7B-Base matches Qwen2.5-3B-Base on most benchmarks — a 43% parameter efficiency improvement. Hybrid thinking mode enables MATH-500 93.4% with thinking. Best Tier 2 for math, reasoning, code, and multilingual tasks.
-- **Special notes:**
-  - Matches Qwen2.5-3B on benchmarks — the most significant overperformer in the pool
-  - Hybrid thinking/non-thinking mode
-  - Strong multilingual (CJK training advantage) and code capabilities
-  - MNN-LLM: 8.6x faster CPU prefill than llama.cpp
-  - 32K context (128K with extended config)
-- **Limitations:** Text-only.
+  - Thinking mode disabled by default; enable with `--chat-template-kwargs '{"enable_thinking":true}'`
+- **Limitations:** No classic GSM8K/MMLU scores available. Estimated scores inferred from Intelligence Index comparison.
 
 ---
 
@@ -268,20 +224,22 @@ total_RAM ≈ int4_file_mb + 1000–1500 MB (Android OS + app + KV cache at 2K c
 - **INT4 size:** ~1,300 MB | **Peak RAM:** ~2,200 MB
 - **Benchmarks:** MMLU 60.1%, HumanEval 66.5%, MBPP 56.6%, Global-MMLU-Lite 59.0%. Beats Gemma3-1B on **9 out of 9** shared benchmarks.
 - **Why included:** Substantially stronger than Gemma3-1B-IT despite similar branding — HumanEval 66.5% vs 41.5%, MMLU 60.1% vs ~48%. The MatFormer (Matryoshka Transformer) architecture enables 5B total parameters with only 2.3B active via Per-Layer Embedding caching, giving it near-3B capability at 2B memory cost. Only model in the pool that handles text, images, video, and audio natively.
+- **Runtime:** LiteRT/MediaPipe (best: Google's NPU-accelerated path, 50-80 tok/s), llama.cpp/GGUF (universal). **No runtime LoRA loading via LiteRT.**
 - **Special notes:**
   - **MatFormer architecture** — nested model design means E4B contains a fully functional E2B sub-model; allows dynamic size selection at runtime
   - **Natively multimodal** — text, image, video, audio input
   - 50–80 tok/s on NPU (Qualcomm/MediaTek partnerships confirmed)
   - Official LiteRT + MediaPipe + Android Studio deployment path
   - **⚠️ Proprietary license** — not Apache 2.0. Check licensing terms before commercial use.
-- **Limitations:** GSM8K not directly published for E2B (E4B ~83%). Larger RAM footprint (2.2 GB peak) than other Tier 2 models — effectively sits at the top of Tier 2 / bottom of Tier 3.
+- **Limitations:** GSM8K not directly published for E2B (E4B ~83%). Larger RAM footprint (2.2 GB peak) than other Tier 2 models — effectively sits at the top of Tier 2 / bottom of Tier 3. LiteRT path does not support runtime adapter loading.
 
 ---
 
 #### `HuggingFaceTB/SmolLM2-1.7B-Instruct`
 - **INT4 size:** 1,060 MB | **Peak RAM:** ~1,350 MB
 - **Benchmarks:** GSM8K 48.8%, MMLU ~52%, IFEval **56.7%** (SmolLM2 paper, arXiv 2502.02737)
-- **Why included:** Best Tier 2 model for instruction following. IFEval 56.7% beats both Llama 3.2-1B (53.5%) and Qwen2.5-1.5B (47.4%). Strong for classification tasks. Trained on 11T tokens with a multi-stage data curriculum emphasizing language quality over math/code.
+- **Why included:** Best Tier 2 model for instruction following. IFEval 56.7% beats Llama 3.2-1B (53.5%). Strong for classification tasks. Trained on 11T tokens with a multi-stage data curriculum emphasizing language quality over math/code.
+- **Runtime:** llama.cpp/GGUF (universal)
 - **Special notes:**
   - Leads the pool on IFEval — best for structured instruction-following tasks
   - ARC average 60.5% — strong commonsense reasoning
@@ -302,6 +260,7 @@ total_RAM ≈ int4_file_mb + 1000–1500 MB (Android OS + app + KV cache at 2K c
 - **INT4 size:** 2,020 MB Q4_K_M (confirmed, hugging-quants HF repo) | **Peak RAM:** ~3,400 MB
 - **Benchmarks:** GSM8K 77.7%, MMLU 63.4%, ARC-C 78.6%, IFEval 77.4% (Meta model card)
 - **Why included:** ExecuTorch reference model for the 3B class. Best deployment path for production Android apps targeting flagship devices. IFEval 77.4% is the highest in the pool — best instruction-following at 3B+.
+- **Runtime:** ExecuTorch/PTE (best: SpinQuant + KleidiAI), llama.cpp/GGUF (universal). **No runtime LoRA loading via ExecuTorch** — adapters must be merged before PTE export.
 - **Special notes:**
   - ExecuTorch + SpinQuant + KleidiAI: best decode latency of any 3B model on Android
   - Distilled from Llama 3.1-8B and 70B
@@ -316,37 +275,23 @@ total_RAM ≈ int4_file_mb + 1000–1500 MB (Android OS + app + KV cache at 2K c
 - **INT4 size:** ~1,900 MB (estimated Q4_K_M) | **Peak RAM:** ~3,200 MB
 - **Benchmarks:** MMLU ~65% (beats Llama-3.2-3B's 63.4%), strong chain-of-thought math reasoning (codersera.com / Azure model card)
 - **Why included:** Unique differentiator — **256K context window**, the largest in the pool by 2× (others max at 128K). MMLU 65% edges out Llama-3.2-3B. Native function calling and structured JSON output built-in.
+- **Runtime:** llama.cpp/GGUF (official GGUF at mistralai/Ministral-3-3B-Instruct-2512-GGUF)
 - **Special notes:**
   - **256K context** — uniquely suited for long-document classification, RAG, and multi-turn agentic tasks
   - Native function calling + JSON output — no prompt engineering required
   - Edge-optimized architecture (Grouped-Query Attention)
-  - Official GGUF from `mistralai/Ministral-3-3B-Instruct-2512-GGUF` on HuggingFace
 - **Limitations:** Text-only. GSM8K not specifically published. Slightly lower IFEval than Llama-3.2-3B.
 - **Device requirement:** 8GB+ RAM phone.
-
----
-
-#### `Qwen/Qwen3-4B`
-- **INT4 size:** 2,390 MB | **Peak RAM:** ~4,200 MB
-- **Benchmarks:** GSM8K ~87%, MMLU ~73% (Qwen3 Technical Report; matches Qwen2.5-72B on many benchmarks)
-- **Why included:** Matches Qwen2.5-72B-Instruct on multiple benchmarks — the highest capability-per-parameter ratio in the pool. Officially supported on Qualcomm AI Hub with W4A16 QNN export.
-- **Special notes:**
-  - Hybrid thinking/non-thinking mode (thinking is on by default at 4B)
-  - Matches 72B-class model performance on many tasks
-  - Officially on Qualcomm AI Hub (W4A16 Hexagon NPU path available)
-  - MoE-equivalent effective capacity from dense architecture
-  - 32K context (128K extended)
-- **Device requirement:** 12GB+ RAM phones only (4.2 GB peak with OS).
 
 ---
 
 #### `microsoft/Phi-4-mini-instruct`
 - **INT4 size:** 2,490 MB (confirmed, unsloth HF repo) | **Peak RAM:** ~4,100 MB
 - **Benchmarks:** GSM8K 88.6%, MMLU 67.3%, HumanEval 74.4%, ARC-C 83.7% (Microsoft Phi-4-mini model card)
-- **Why included:** Best reasoning-per-GB in the pool. HumanEval 74.4% — highest code generation score. ARC-C 83.7% — highest commonsense score. Microsoft's official recommendation for on-device reasoning. ONNX GenAI + LiteRT deployment paths available alongside GGUF.
+- **Why included:** Best reasoning-per-GB in the pool. HumanEval 74.4% — highest code generation score. ARC-C 83.7% — highest commonsense score. Microsoft's official recommendation for on-device reasoning.
+- **Runtime:** ONNX Runtime/ONNX GenAI (best: Microsoft's recommended path), llama.cpp/GGUF (universal), LiteRT (available). **ONNX Runtime has experimental LoRA support** but not as mature as llama.cpp's.
 - **Special notes:**
   - Best HumanEval in the pool (74.4%)
-  - ONNX + LiteRT paths available (in addition to GGUF/llama.cpp)
   - 200K vocabulary (vs ~32K for most models) — better tokenization for code and multilingual text
   - **⚠️ Benchmark harness caveat**: Qwen3's LiveCodeBench harness has known bugs inflating coding scores; independently verify Phi-4-mini code benchmarks against EvalPlus if coding is the use case
 - **Device requirement:** 8GB+ RAM phones only (4.1 GB peak with OS). Not suitable for 6GB phones.
@@ -370,10 +315,10 @@ Important: **always retrain from base** (not from a prior fine-tuned checkpoint)
 
 For SLM Factory, the question is not just "which model is strongest?" but "which model gains the most from fine-tuning?" From the Distil Labs 12-model benchmark:
 
-- **Most tunable**: Llama-3.2-1B and Qwen3-0.6B — largest absolute gains from SFT
-- **Best post-fine-tuning**: Qwen3-1.7B — best ceiling after training
+- **Most tunable**: Llama-3.2-1B — largest absolute gains from SFT
+- **Best post-fine-tuning ceiling**: Qwen3.5-2B (architecture advantage from Gated DeltaNet)
 
-The implication: start with Llama-3.2-1B or Qwen3-0.6B for tasks that are easy (large training data, clear signal), start with Qwen3-1.7B when the task is hard (small data, noisy signal, complex reasoning).
+The implication: start with Llama-3.2-1B for tasks with large training data and clear signal, start with Qwen3.5-2B when the task is hard (small data, noisy signal, complex reasoning).
 
 ### The DeepSeek-R1-Distill-1.5B caveat for SLM Factory
 
@@ -397,14 +342,18 @@ Set `min_tok_s=20.0` when the deployment requires interactive streaming. Leave i
 
 | Model | Reason excluded |
 |---|---|
+| Qwen2.5-0.5B | Superseded by MiniCPM4-0.5B (QAT, better INT4 quality, long context) |
+| Qwen3-0.6B | Superseded by Qwen3.5-0.8B (Gated DeltaNet, +2.5 Intelligence Index pts, multimodal, 262K ctx) |
+| Qwen2.5-1.5B | Superseded by Qwen3.5-2B (better architecture, multimodal, 262K ctx) |
+| Qwen3-1.7B | Superseded by Qwen3.5-2B (+3 Intelligence Index pts, multimodal, 262K ctx) |
+| Qwen3-4B | Superseded by Phi-4-mini (better benchmarks, better deployment paths, similar size) |
 | Phi-3.5-mini (3.8B) | 2.39 GB INT4 — exceeds practical ceiling for 8GB phones; Phi-4-mini is a better 3.8B |
 | Gemma 4 E2B/E4B | Gemma3n-E2B is already in the pool; Gemma 4 E4B (4–5 GB) too large |
 | Mistral 7B | 4.4 GB INT4 — well over budget |
 | OLMo 2 | No sub-3B model released |
-| OpenELM family | "Fell short on MMLU, with a score only slightly better than random chance" — not competitive with Qwen/SmolLM peers |
+| OpenELM family | "Fell short on MMLU, with a score only slightly better than random chance" — not competitive |
 | TinyLlama 1.1B | Superseded by MiniCPM5-1B, SmolLM2-1.7B, and Llama-3.2-1B on all benchmarks |
-| MiniCPM3-4B | 4.0B active params — Qwen2.5-3B beats it on every benchmark per Qwen2.5 Technical Report Table 9 |
-| Qwen3.5-2B (original) | Previously excluded due to no GGUF support — now in pool via unsloth/Qwen3.5-2B-GGUF |
+| MiniCPM3-4B | 4.0B active params — superseded by Phi-4-mini |
 | HRM-Text-1B | Research candidate; no llama.cpp or standard runtime support |
 | Llama-3.2-3B (Q3_K_M) | Not a separate model — a quantization configuration; noted in Llama-3.2-3B entry instead |
 
