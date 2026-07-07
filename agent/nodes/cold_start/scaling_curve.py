@@ -36,9 +36,10 @@ def _pick_candidates(models: list[ModelSpec]) -> list[ModelSpec]:
     result = []
     for idx in (0, mid, len(models) - 1):
         m = models[idx]
-        if m.model_id not in seen:
+        key = (m.model_id, m.quant)
+        if key not in seen:
             result.append(m)
-            seen.add(m.model_id)
+            seen.add(key)
     return result
 
 
@@ -82,6 +83,15 @@ def scaling_curve_node(state: AgentState) -> AgentState:
     feasible = state.get("feasible_models", [])
     if not feasible:
         raise RuntimeError("scaling_curve_node: feasible_models is empty.")
+
+    forced = os.environ.get("SLM_FORCE_MODEL")
+    if forced:
+        match = next((m for m in feasible if m.model_id == forced), None)
+        if match is None:
+            raise RuntimeError(f"SLM_FORCE_MODEL={forced!r} is not in the feasible pool.")
+        state["selected_model"] = match
+        logger.info("[scaling_curve] SLM_FORCE_MODEL=%s pinned — skipping curve fit", forced)
+        return state
 
     stop_threshold = state.get("stop_threshold", 0.96)
     candidates = _pick_candidates(feasible)
