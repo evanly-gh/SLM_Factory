@@ -97,6 +97,9 @@ def task_analysis_node(state: AgentState) -> AgentState:
             others = [m for m in feasible if m not in preferred]
             feasible = preferred + others
 
+    # Restore size-descending order for scaling_curve_node which relies on
+    # feasible[0] = largest and feasible[-1] = smallest.
+    feasible = sorted(feasible, key=lambda m: m.int4_size_mb, reverse=True)
     state["feasible_models"] = feasible
 
     if not state.get("stop_threshold"):

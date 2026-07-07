@@ -15,7 +15,10 @@ def escalate_node(state: AgentState) -> AgentState:
     Clears score history and DAG; carries the dataset forward.
     """
     current_model = state["selected_model"]
-    current_id = current_model.model_id if current_model else "?"
+    if current_model is None:
+        state["next_action"] = "terminate"
+        return state
+    current_id = current_model.model_id
 
     # Log stagnation context
     scores = state.get("scores", [])
@@ -38,8 +41,11 @@ def escalate_node(state: AgentState) -> AgentState:
     _log(current_id, f"  Feasible pool ({len(feasible)} models): "
          f"{[m.model_id for m in feasible]}")
 
+    current_model_id: str = current_model.model_id
+    current_quant: str | None = current_model.quant
     current_idx = next(
-        (i for i, m in enumerate(feasible) if m.model_id == current_model.model_id),
+        (i for i, m in enumerate(feasible)
+         if m.model_id == current_model_id and m.quant == current_quant),
         None,
     )
 

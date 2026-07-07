@@ -26,9 +26,9 @@ Runs in `run.py` **before the LangGraph graph is invoked**. Implemented in [agen
 **Writes to state (initial_state):** `hardware_constraints`
 **Decision made:** what the hardware budget is for model selection and hardware-gate checks
 
-**Note on `hardware_filter` (Stages 1+2):** `run_hardware_filter` (implemented in `agent/hardware_eval/hardware_filter.py`) runs **inside `task_analysis_node`**, not as a separate pre-graph step. It applies Stage 1 (memory/storage/latency inequality checks) and Stage 2 (on-device benchmark stub, largest→smallest ordering) against `ANDROID_POOL` to produce the `feasible_models` list. This list is written to state by `task_analysis_node` and consumed by `scaling_curve_node`.
+**Note on `hardware_filter` (Stages 1+2):** `run_hardware_filter` (implemented in `agent/nodes/cold_start/hardware_filter.py`) runs **inside `task_analysis_node`**, not as a separate pre-graph step. It applies Stage 1 (memory/storage/latency inequality checks) and Stage 2 (on-device benchmark stub, largest→smallest ordering) against `ANDROID_POOL` to produce the `feasible_models` list. This list is written to state by `task_analysis_node` and consumed by `scaling_curve_node`.
 
-**Model pool — `ANDROID_POOL`:** The pool now contains **36 entries** — 12 base models each expanded to three quantization siblings (`bf16`, `Q4_K_M`, `Q8_0`). Siblings are tiered by `peak_memory_mb` so the hardware filter and scaling curve always operate on a RAM-sorted list. The `ModelSpec` dataclass includes a `quant` field (`"bf16"`, `"Q4_K_M"`, or `"Q8_0"`) alongside the existing fields.
+**Model pool — `ANDROID_POOL`:** The pool now contains **36 entries** — 12 base models each expanded to three quantization siblings (`bf16`, `Q4_K_M`, `Q8_0`). Siblings are tiered by `peak_memory_mb` so the hardware filter and scaling curve always operate on a RAM-sorted list. The `ModelSpec` dataclass includes a `quant` field (`None`, `"Q4_K_M"`, or `"Q8_0"`) alongside the existing fields.
 
 ---
 
