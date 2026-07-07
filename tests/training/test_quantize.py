@@ -42,3 +42,18 @@ def test_failed_quantization_raises_runtime_error(mock_qc):
     mock_qc.return_value = _mock_result(success=False, gguf_path=None, error="llama-quantize not found")
     with pytest.raises(RuntimeError, match="Quantization failed"):
         quantize_from_model_spec("/checkpoint", "/out", "Q4_K_M")
+
+
+@patch("training.quantize.quantize_checkpoint")
+def test_f16_fallback_raises_runtime_error(mock_qc):
+    mock_qc.return_value = QuantizationResult(
+        gguf_path="/out/model-f16.gguf",
+        original_size_mb=1000.0,
+        quantized_size_mb=2000.0,
+        compression_ratio=0.5,
+        method="f16",
+        success=True,
+        error="llama-quantize not found; produced f16 GGUF only",
+    )
+    with pytest.raises(RuntimeError, match="Quantization failed"):
+        quantize_from_model_spec("/checkpoint", "/out", "Q4_K_M")

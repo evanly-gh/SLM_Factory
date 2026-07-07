@@ -172,10 +172,10 @@ def quantize_from_model_spec(checkpoint_path: str, output_dir: str, quant: str) 
         )
     method = _QUANT_METHOD_MAP[quant]
     result = quantize_checkpoint(checkpoint_path, output_dir, method)
-    if not result.success or result.gguf_path is None:
+    if not result.success or result.gguf_path is None or result.method != method:
         raise RuntimeError(
             f"Quantization failed for {checkpoint_path!r} → {quant} ({method}): "
-            f"{result.error or 'unknown error'}. "
+            f"{result.error or f'produced {result.method!r} instead of {method!r}'}. "
             f"Ensure llama.cpp tools (llama-quantize, convert_hf_to_gguf) are installed."
         )
     return result.gguf_path

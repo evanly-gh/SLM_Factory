@@ -87,7 +87,7 @@ def test_evaluate_node_quantizes_and_uses_gguf_path_when_quant_set(
     mock_merge.assert_called_once()
     assert mock_merge.call_args[0][0] == "/ckpt"
     merge_call_args = mock_merge.call_args[0]
-    assert "artifacts/merged/test_Model-1B/main" in merge_call_args[1].replace("\\", "/")
+    assert "artifacts/merged/test_Model-1B/main/iter2" in merge_call_args[1].replace("\\", "/")
     # quantize was called with correct quant string
     mock_quantize.assert_called_once()
     assert mock_quantize.call_args[0][2] == "Q4_K_M"

@@ -52,16 +52,17 @@ def evaluate_node(state: AgentState) -> AgentState:
     for label, weights_ref in pending.items():
         _log(model_id, f"Evaluating config '{label}' (weights: {weights_ref})")
         quant = state["selected_model"].quant
+        iteration = state["iteration"]
         gguf_path = None
         if quant is not None:
             model_id_safe = model_id.replace("/", "_")
             merged_path = merge_for_quantization(
                 weights_ref,
-                os.path.join("artifacts", "merged", model_id_safe, label),
+                os.path.join("artifacts", "merged", model_id_safe, label, f"iter{iteration}"),
             )
             gguf_path = quantize_from_model_spec(
                 merged_path,
-                os.path.join("artifacts", "gguf", model_id_safe, label),
+                os.path.join("artifacts", "gguf", model_id_safe, label, f"iter{iteration}"),
                 quant,
             )
         result = run_eval(eval_set, weights_ref, model_id, task_type=task_type, quant=quant, gguf_path=gguf_path)
