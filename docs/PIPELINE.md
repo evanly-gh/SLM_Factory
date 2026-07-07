@@ -17,8 +17,9 @@ Three conditional edges and one hard edge control the loop:
 
 Runs in `run.py` **before the LangGraph graph is invoked**. Implemented in [agent/nodes/cold_start/hardware_research.py](../agent/nodes/cold_start/hardware_research.py).
 
-- Passes the full natural-language task description to an Exa web search (`_exa_snippets`) and then to a Claude Sonnet call that returns a structured JSON object with device specs.
+- Three-stage pipeline: (1) local DB lookup against `data/devices.csv`; (2) Exa web search fallback if no match; (3) Claude Sonnet call that returns a structured JSON object with device specs.
 - Constructs a `HardwareConstraints` object with fields: `storage_mb`, `memory_mb`, `latency_ttft_ms`, `power_watts`, `target_chip`, `min_tok_s`.
+- `target_chip` is resolved to the closest anchor in `CHIP_SCALE_FACTORS` (14 chips covering Snapdragon, Dimensity, Exynos, and Tensor families); falls back to `snapdragon_778g` if unrecognized.
 - Falls back to conservative defaults (`3000 MB RAM`, `1500 MB storage`, `snapdragon_778g`) if the API call or JSON parsing fails.
 - Result is written to `{RUN_DIR}/device_research.json` and passed into `state["hardware_constraints"]` for the entire graph run.
 
