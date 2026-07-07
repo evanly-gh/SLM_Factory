@@ -13,6 +13,7 @@ from config.android_pool import (
     filter_pool,
     check_hardware_constraints,
     all_constraints_pass,
+    ANDROID_POOL,
 )
 from hardware_eval.on_device_eval import run_on_device_eval
 
@@ -31,7 +32,7 @@ def run_hardware_filter(constraints: HardwareConstraints) -> list[ModelSpec]:
     # ── Stage 1 ──────────────────────────────────────────────────────────────
     stage1 = filter_pool(constraints)
     logger.info("[hardware_filter] Stage 1: %d/%d models passed inequality checks",
-                len(stage1), len(stage1))
+                len(stage1), len(ANDROID_POOL))
 
     if not stage1:
         logger.warning("[hardware_filter] Stage 1 eliminated all models.")
