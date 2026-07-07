@@ -63,7 +63,7 @@ def _probe_model(
         if not dataset_path:
             logger.warning("[scaling_curve] No dataset path in state; skipping probe for %s", model.model_id)
             return 0.0
-        weights_ref = run_lora_training(dataset_path, config, output_dir=model_dir, task_type=state["task_type"])
+        weights_ref = run_lora_training(dataset_path, config, output_dir=model_dir, task_type=state["task_type"]).weights_ref
         result = run_eval(state["eval_set"], weights_ref, model.model_id, state["task_type"])
         logger.info("[scaling_curve] Probe %s → f1=%.4f", model.model_id, result.f1)
         return result.f1
