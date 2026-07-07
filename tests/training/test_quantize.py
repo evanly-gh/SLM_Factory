@@ -1,6 +1,6 @@
 # tests/training/test_quantize.py
 import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 from training.quantize import quantize_from_model_spec, QuantizationResult
 
 
