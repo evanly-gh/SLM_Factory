@@ -77,7 +77,7 @@ def test_selects_smallest_above_threshold(mock_probe):
     # Fit: f1 = a*log(size)+b. Smallest above 0.80 threshold should be medium (predicted ~0.85)
     assert result["selected_model"] is not None
     # medium or large should be selected (small is predicted below 0.80)
-    assert result["selected_model"].model_id != "small"
+    assert result["selected_model"].model_id == "medium"
 
 
 @patch("agent.nodes.cold_start.scaling_curve._probe_model")
