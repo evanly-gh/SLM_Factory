@@ -18,9 +18,9 @@ import json
 import os
 import re
 
-from config.android_pool import HardwareConstraints
+from config.android_pool import CHIP_SCALE_FACTORS, HardwareConstraints
 
-REFERENCE_CHIPS = ["snapdragon_660", "snapdragon_778g", "snapdragon_8gen3"]
+REFERENCE_CHIPS = list(CHIP_SCALE_FACTORS.keys())
 
 _DEVICES_CSV = os.path.join(os.path.dirname(__file__), "..", "..", "..", "data", "devices.csv")
 
@@ -178,7 +178,7 @@ def research_device(description: str, anthropic_client=None, log=print):
                 "spec_source": "defaults"}
 
     ref = info.get("reference_chip")
-    if ref not in REFERENCE_CHIPS:
+    if ref not in CHIP_SCALE_FACTORS:
         ref = "snapdragon_778g"
     hw = HardwareConstraints(
         storage_mb=int(info.get("storage_budget_mb", 1500)),
