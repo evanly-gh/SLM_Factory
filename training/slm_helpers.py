@@ -111,6 +111,7 @@ def infer_batch_gguf(
     try:
         import llama_cpp
     except (ImportError, TypeError):
+        # TypeError: Python 3.14+ raises TypeError when sys.modules[key]=None (used in tests)
         raise ImportError(
             "llama-cpp-python is required for GGUF inference. "
             "Install with: pip install llama-cpp-python"
