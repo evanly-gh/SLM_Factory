@@ -1,8 +1,11 @@
 # agent/nodes/evaluate.py
+import os
 from agent.state import AgentState
 from eval.harness import run_eval
 from data.curation_log import CurationLog
 from training.quantize import theoretical_hardware_profile
+from training.lora_trainer import merge_for_quantization
+from training.quantize import quantize_from_model_spec
 from agent.nodes.iterate import apply_iteration_policy
 
 
@@ -48,7 +51,20 @@ def evaluate_node(state: AgentState) -> AgentState:
     scored = {}
     for label, weights_ref in pending.items():
         _log(model_id, f"Evaluating config '{label}' (weights: {weights_ref})")
-        result = run_eval(eval_set, weights_ref, model_id, task_type=task_type)
+        quant = state["selected_model"].quant
+        gguf_path = None
+        if quant is not None:
+            model_id_safe = model_id.replace("/", "_")
+            merged_path = merge_for_quantization(
+                weights_ref,
+                os.path.join("artifacts", "merged", model_id_safe, label),
+            )
+            gguf_path = quantize_from_model_spec(
+                merged_path,
+                os.path.join("artifacts", "gguf", model_id_safe, label),
+                quant,
+            )
+        result = run_eval(eval_set, weights_ref, model_id, task_type=task_type, quant=quant, gguf_path=gguf_path)
         scored[label] = (weights_ref, result)
         _log(model_id, f"  → F1={result.f1:.4f}  failures={len(result.failures)}")
 

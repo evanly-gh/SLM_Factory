@@ -82,7 +82,7 @@ def train_node(state: AgentState) -> AgentState:
     _log(model_id, f"  Dataset: {os.path.basename(dataset_path)}")
     _log(model_id, f"  Training from base model (no prior adapter)")
 
-    weights_ref = slm_train(
+    training_output = slm_train(
         dataset_path=dataset_path,
         base_model=model_id,
         nr_epochs=cfg["nr_epochs"],
@@ -93,8 +93,9 @@ def train_node(state: AgentState) -> AgentState:
         task_type=task_type,
     )
 
-    _log(model_id, f"  Checkpoint: {weights_ref}")
+    _log(model_id, f"  Checkpoint: {training_output.weights_ref}")
 
-    state["_pending_weights_refs"] = {cfg["label"]: weights_ref}
+    state["_pending_weights_refs"] = {cfg["label"]: training_output.weights_ref}
+    state["_pending_training_outputs"] = {cfg["label"]: training_output}
     state["_pending_configs"] = {cfg["label"]: cfg}
     return state

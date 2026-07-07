@@ -59,4 +59,5 @@ class AgentState(TypedDict):
 
     # Internal: carry training results between train_node and evaluate_node
     _pending_weights_refs: Optional[dict]  # label -> weights_ref
+    _pending_training_outputs: Optional[dict]  # label -> TrainingOutput
     _pending_configs: Optional[dict]       # label -> config dict
