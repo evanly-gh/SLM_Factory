@@ -29,7 +29,7 @@ def test_run_eval_uses_infer_batch_when_no_gguf(mock_infer):
     }
     with patch.dict(sys.modules, {"eval.scorers.classification": scorer_mock}):
         result = run_eval(_make_eval_set(), "/weights", "model-id", "classification")
-    mock_infer.assert_called_once()
+    mock_infer.assert_called_once_with(["p1", "p2"], "/weights", "model-id", max_workers=20)
     assert result.f1 == 0.9
 
 
