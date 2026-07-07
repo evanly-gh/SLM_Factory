@@ -26,6 +26,10 @@ Runs in `run.py` **before the LangGraph graph is invoked**. Implemented in [agen
 **Writes to state (initial_state):** `hardware_constraints`
 **Decision made:** what the hardware budget is for model selection and hardware-gate checks
 
+**Note on `hardware_filter` (Stages 1+2):** `run_hardware_filter` (implemented in `agent/hardware_eval/hardware_filter.py`) runs **inside `task_analysis_node`**, not as a separate pre-graph step. It applies Stage 1 (memory/storage/latency inequality checks) and Stage 2 (on-device benchmark stub, largest→smallest ordering) against `ANDROID_POOL` to produce the `feasible_models` list. This list is written to state by `task_analysis_node` and consumed by `scaling_curve_node`.
+
+**Model pool — `ANDROID_POOL`:** The pool now contains **36 entries** — 12 base models each expanded to three quantization siblings (`bf16`, `Q4_K_M`, `Q8_0`). Siblings are tiered by `peak_memory_mb` so the hardware filter and scaling curve always operate on a RAM-sorted list. The `ModelSpec` dataclass includes a `quant` field (`"bf16"`, `"Q4_K_M"`, or `"Q8_0"`) alongside the existing fields.
+
 ---
 
 ## Node-by-Node
@@ -36,12 +40,35 @@ Entry point for cold-start. Reads `state["description"]` and `state["autonomous"
 
 - If autonomous mode (or no valid `task_type` provided), calls `plan_task()` — a Claude Sonnet call that returns `task_type`, `task_name`, `labels`, `multi_label`, `schema`, `multilingual`, `exa_queries`, `benchmark`, `stop_threshold`, and `rationale` as JSON.
 - Valid task types: `classification`, `NER`, `math_reasoning`, `code_generation`, `generation`. Variants (multi-label classification, schema-constrained extraction, multilingual tasks) are expressed as flags on the plan dict, not separate types.
-- Filters `ANDROID_POOL` by hardware constraints, preference-sorted by task type via `filter_pool_by_task`. The sort key varies by type: `math` sorts by `(tier, -gsm8k)`, `classification` sorts by `(tier, smol_bonus - mmlu)`, `code`/`ner` prefer Qwen, and `generation` (no pool key) sorts by `(tier, int4_size_mb)`.
-- Picks the first model in the preference-sorted feasible list as `selected_model`. For `math_reasoning`, further front-loads DeepSeek-R1, Qwen3, and Phi-4 models. `SLM_FORCE_MODEL` env var overrides the selection.
+- Calls `run_hardware_filter(hardware_constraints, ANDROID_POOL)` internally (Stages 1+2) to produce `feasible_models` — the hardware-feasible subset of the pool, sorted largest→smallest by `peak_memory_mb`. This list is written to `state["feasible_models"]`. **`task_analysis_node` does NOT set `selected_model`**; model selection is deferred to `scaling_curve_node`.
 - Sets `state["stop_threshold"]` from the planner's output (calibrated relative to model-size SOTA, not a fixed 0.96) and records `state["initial_stop_threshold"]` as the immutable floor.
 
-**Writes to state:** `task_type`, `task_plan`, `selected_model`, `stop_threshold`, `initial_stop_threshold`
-**Decision made:** which model to start from, what the accuracy target is, which task flags apply
+**Writes to state:** `task_type`, `task_plan`, `feasible_models`, `stop_threshold`, `initial_stop_threshold`
+**Decision made:** what the accuracy target is, which task flags apply, which models are hardware-feasible
+
+---
+
+### Node 1b: `scaling_curve` (new)
+
+**Purpose:** Select the smallest model from `feasible_models` that is predicted to meet the accuracy goal, using a lightweight probe-and-fit approach. Avoids committing to an over-sized model when a smaller one would suffice.
+
+**Input state fields:** `feasible_models`, `stop_threshold`, `eval_set`, `current_dataset_path`, `task_type`
+
+**Output state fields:** `selected_model`
+
+**Algorithm:**
+1. Pick 3 candidates (largest, middle, smallest) from `feasible_models`.
+2. For each candidate: run a 1-epoch LoRA probe fine-tune on `current_dataset_path`, eval on `eval_set`, record `(log(int4_size_mb), f1)`.
+3. Fit `f1 = a * log(size) + b` via least-squares.
+4. Walk models smallest→largest; select the first whose predicted f1 ≥ `stop_threshold`. If none meet the threshold, select the largest.
+5. Write the winner to `state["selected_model"]`.
+
+**Position in graph:** `eval_setup → scaling_curve → curate`
+
+**Known limitation — first cold-start run:** On the very first cold-start run, `current_dataset_path` is `None` (it is set by `curate_node`, which runs after `scaling_curve`). When this field is `None`, probing is skipped and `scaling_curve_node` degrades gracefully by selecting the smallest feasible model directly. The caller may pre-populate `current_dataset_path` in the initial state with a seed dataset to enable full probing from the first run.
+
+**Writes to state:** `selected_model`
+**Decision made:** which model to fine-tune, based on predicted accuracy-vs-size trade-off
 
 ---
 
@@ -216,7 +243,7 @@ next_action = "terminate"  → END
 [hardware_research]  (pre-graph, run.py)
         │
         ▼
-task_analysis → eval_setup → curate → train → evaluate
+task_analysis → eval_setup → scaling_curve → curate → train → evaluate
                                                   │
                       ┌── score regressed? ───────┤
                       ↓ yes                        ↓ no
@@ -262,7 +289,8 @@ Key fields that flow through every node:
 | Field | Type | Set by | Used by |
 |---|---|---|---|
 | `task_type` | str | `task_analysis` | all nodes |
-| `selected_model` | `ModelSpec` | `task_analysis`, `escalate` | `train`, `evaluate`, `escalate` |
+| `feasible_models` | `list[ModelSpec]` | `task_analysis` | `scaling_curve` |
+| `selected_model` | `ModelSpec` | `scaling_curve`, `escalate` | `train`, `evaluate`, `escalate` |
 | `hardware_constraints` | `HardwareConstraints` | `hardware_research` (pre-graph) | `task_analysis`, `escalate` |
 | `stop_threshold` | float | `task_analysis`, `iterate` | `iterate` |
 | `initial_stop_threshold` | float | `task_analysis` | `iterate` (floor for threshold adjustments) |
