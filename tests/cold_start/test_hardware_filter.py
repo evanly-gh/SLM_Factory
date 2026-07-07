@@ -1,5 +1,4 @@
 import pytest
-from unittest.mock import patch
 from config.android_pool import HardwareConstraints, ANDROID_POOL
 from agent.nodes.cold_start.hardware_filter import run_hardware_filter
 
