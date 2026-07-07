@@ -99,6 +99,7 @@ class ModelSpec:
     gsm8k: float           # GSM8K 5-shot CoT accuracy (0–1 scale)
     mmlu: float            # MMLU 5-shot accuracy (0–1 scale)
     notes: str = ""
+    quant: str | None = None   # None = base (BF16/FP16). "Q4_K_M" or "Q8_0" = GGUF variant.
 
     def tok_s_for_chip(self, chip: str) -> float:
         """Return estimated decode tok/s for any chip, not just the three hardcoded ones."""
@@ -169,6 +170,45 @@ class HardwareConstraints:
 # Phi-4-mini (3.8B) punches above class on reasoning; Q4_K_M is 2.49GB,
 # fitting the 3GB RAM budget on 8GB devices only (not 6GB).
 # ---------------------------------------------------------------------------
+
+def _q4_sibling(base: ModelSpec) -> ModelSpec:
+    """Q4_K_M GGUF variant. Sizes already Q4_K_M in base; peak RAM = file + 400 MB overhead."""
+    peak = base.int4_size_mb + 400
+    tier = 0 if peak < 1200 else 1 if peak < 1800 else 2 if peak < 3000 else 3
+    return ModelSpec(
+        model_id=base.model_id,
+        int4_size_mb=base.int4_size_mb,
+        tier=tier,
+        tok_s_snapdragon_660=base.tok_s_snapdragon_660,
+        tok_s_snapdragon_778g=base.tok_s_snapdragon_778g,
+        tok_s_snapdragon_8gen3=base.tok_s_snapdragon_8gen3,
+        peak_memory_mb=peak,
+        gsm8k=base.gsm8k,
+        mmlu=base.mmlu,
+        notes=base.notes,
+        quant="Q4_K_M",
+    )
+
+
+def _q8_sibling(base: ModelSpec) -> ModelSpec:
+    """Q8_0 GGUF variant. ~1.9× larger file, ~35% slower tok/s, higher quality ceiling."""
+    q8_size = int(base.int4_size_mb * 1.9)
+    peak = q8_size + 400
+    tier = 0 if peak < 1200 else 1 if peak < 1800 else 2 if peak < 3000 else 3
+    return ModelSpec(
+        model_id=base.model_id,
+        int4_size_mb=q8_size,
+        tier=tier,
+        tok_s_snapdragon_660=round(base.tok_s_snapdragon_660 * 0.65, 1),
+        tok_s_snapdragon_778g=round(base.tok_s_snapdragon_778g * 0.65, 1),
+        tok_s_snapdragon_8gen3=round(base.tok_s_snapdragon_8gen3 * 0.65, 1),
+        peak_memory_mb=peak,
+        gsm8k=base.gsm8k,
+        mmlu=base.mmlu,
+        notes=base.notes,
+        quant="Q8_0",
+    )
+
 
 ANDROID_POOL: list[ModelSpec] = [
     # ── Tier 0: Micro (sub-0.6B) ──────────────────────────────────────────
@@ -369,6 +409,14 @@ ANDROID_POOL: list[ModelSpec] = [
         notes="Best reasoning-per-GB; 8GB+ RAM phone only (Q4_K_M 2.49GB); ONNX GenAI + LiteRT paths available",
     ),
 ]
+
+# Expand pool with Q4_K_M and Q8_0 quantized siblings for every base model.
+# Re-tiered by peak_memory_mb so quantized variants compete with appropriately-sized peers.
+_BASE_MODELS = [m for m in ANDROID_POOL]  # snapshot before mutation
+ANDROID_POOL = sorted(
+    _BASE_MODELS + [_q4_sibling(m) for m in _BASE_MODELS] + [_q8_sibling(m) for m in _BASE_MODELS],
+    key=lambda m: (m.tier, m.int4_size_mb),
+)
 
 
 def filter_pool(constraints: HardwareConstraints) -> list[ModelSpec]:
