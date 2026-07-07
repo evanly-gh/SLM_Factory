@@ -6,7 +6,7 @@ Paper §2.1: 'Pioneer Agent is built on a LangGraph state machine orchestrated b
 Claude Sonnet 4.6.'
 
 Supports two modes (paper §2.5, §2.6):
-  - cold_start: task_analysis → eval_setup → curate → train → evaluate → iterate loop
+  - cold_start: task_analysis → eval_setup → scaling_curve → curate → train → evaluate → iterate loop
   - production: trace_ingest → taxonomy → live_confirm → parent_awareness → curate → train loop
 """
 from langgraph.graph import StateGraph, END
@@ -14,6 +14,7 @@ from langgraph.graph.state import CompiledStateGraph
 from agent.state import AgentState
 from agent.nodes.cold_start.task_analysis import task_analysis_node
 from agent.nodes.cold_start.eval_setup import eval_setup_node
+from agent.nodes.cold_start.scaling_curve import scaling_curve_node
 from agent.nodes.train import train_node
 from agent.nodes.evaluate import evaluate_node
 from agent.nodes.iterate import iterate_node
@@ -57,10 +58,12 @@ def build_graph(mode: str = "cold_start") -> CompiledStateGraph:
     if mode == "cold_start":
         graph.add_node("task_analysis", task_analysis_node)
         graph.add_node("eval_setup", eval_setup_node)
+        graph.add_node("scaling_curve", scaling_curve_node)
 
         graph.set_entry_point("task_analysis")
         graph.add_edge("task_analysis", "eval_setup")
-        graph.add_edge("eval_setup", "curate")
+        graph.add_edge("eval_setup", "scaling_curve")
+        graph.add_edge("scaling_curve", "curate")
     else:
         from agent.nodes.production.trace_ingest import trace_ingest_node
         from agent.nodes.production.taxonomy import taxonomy_construct_node
