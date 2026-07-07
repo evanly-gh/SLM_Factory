@@ -142,3 +142,40 @@ def quantize_checkpoint(
         compression_ratio=original_size / max(q4_size, 0.1),
         method=method, success=True,
     )
+
+
+_QUANT_METHOD_MAP: dict[str, str] = {
+    "Q4_K_M": "q4_k_m",
+    "Q8_0": "q8_0",
+}
+
+
+def quantize_from_model_spec(checkpoint_path: str, output_dir: str, quant: str) -> str:
+    """
+    Quantize a merged HF checkpoint to GGUF using the quant string from ModelSpec.
+
+    Args:
+        checkpoint_path: Path to a merged full-precision HF checkpoint directory.
+        output_dir: Directory to write the GGUF file into.
+        quant: ModelSpec.quant value — "Q4_K_M" or "Q8_0".
+
+    Returns:
+        Absolute path to the produced GGUF file.
+
+    Raises:
+        ValueError: if quant is not a recognized value.
+        RuntimeError: if llama.cpp tools are not installed or quantization fails.
+    """
+    if quant not in _QUANT_METHOD_MAP:
+        raise ValueError(
+            f"Unknown quant {quant!r}. Valid values: {list(_QUANT_METHOD_MAP)}"
+        )
+    method = _QUANT_METHOD_MAP[quant]
+    result = quantize_checkpoint(checkpoint_path, output_dir, method)
+    if not result.success or result.gguf_path is None:
+        raise RuntimeError(
+            f"Quantization failed for {checkpoint_path!r} → {quant} ({method}): "
+            f"{result.error or 'unknown error'}. "
+            f"Ensure llama.cpp tools (llama-quantize, convert_hf_to_gguf) are installed."
+        )
+    return result.gguf_path
