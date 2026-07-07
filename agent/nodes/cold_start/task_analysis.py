@@ -1,6 +1,7 @@
 # agent/nodes/cold_start/task_analysis.py
 from agent.state import AgentState
-from config.android_pool import filter_pool, filter_pool_by_task
+from config.android_pool import ANDROID_POOL
+from agent.nodes.cold_start.hardware_filter import run_hardware_filter
 
 # Canonical task types. Each type differs in at least two of:
 #   model selection, supervision format, eval metric, curation strategy.
@@ -35,19 +36,17 @@ _TASK_TYPE_TO_POOL_KEY: dict[str, str | None] = {
 
 def task_analysis_node(state: AgentState) -> AgentState:
     """
-    Node 1: classify the task, select starting model, survey baselines.
+    Node 1: classify the task, filter hardware pool, set stop threshold.
 
-    In autonomous mode (state["autonomous"] is True, or task_type is missing/invalid),
-    the orchestrator LLM derives task_type + a data-acquisition plan from the natural-language
-    description. Otherwise task_type must be provided by the caller. All decisions are made
-    before any data is touched.
+    Does NOT select the final model — that is done by scaling_curve_node (Node 1b)
+    after fine-tuning 3 candidates. Stores the hardware-filtered feasible set in
+    state["feasible_models"] for scaling_curve_node to consume.
     """
     task_type = state.get("task_type", "")
     need_plan = state.get("autonomous") or task_type not in _VALID_TASK_TYPES
 
     if need_plan and state.get("task_plan") is None:
         from agent.task_planner import plan_task
-        from config.android_pool import ANDROID_POOL
         plan = plan_task(state["description"], model_pool=ANDROID_POOL)
         state["task_plan"] = plan
         task_type = plan["task_type"]
@@ -66,13 +65,30 @@ def task_analysis_node(state: AgentState) -> AgentState:
             "Set task_type in the initial AgentState, or enable autonomous mode."
         )
 
-    # Filter Android pool by hardware constraints, preference-sorted for this task type.
-    pool_key = _TASK_TYPE_TO_POOL_KEY.get(task_type)
-    feasible = filter_pool_by_task(state["hardware_constraints"], task_type=pool_key)
+    # Stage 1 + 2: hardware filter (inequality + on-device stub)
+    feasible = run_hardware_filter(state["hardware_constraints"])
     if not feasible:
         raise RuntimeError("No models in Android pool satisfy hardware constraints.")
 
-    # math_reasoning: further front-load specialized reasoning models.
+    # Apply task-preference sort on top of hardware-filtered set.
+    # filter_pool_by_task re-filters from the full ANDROID_POOL; we replicate
+    # its sort logic here directly to avoid re-filtering what we already have.
+    pool_key = _TASK_TYPE_TO_POOL_KEY.get(task_type)
+    if pool_key == "math" or pool_key == "reasoning":
+        feasible = sorted(feasible, key=lambda m: (m.tier, -m.gsm8k))
+    elif pool_key == "classification":
+        def _cls_key(m):
+            smol_bonus = -0.05 if "SmolLM" in m.model_id else 0.0
+            return (m.tier, smol_bonus - m.mmlu)
+        feasible = sorted(feasible, key=_cls_key)
+    elif pool_key in ("ner", "multilingual", "code"):
+        def _qwen_key(m):
+            qwen_bonus = -0.03 if "Qwen" in m.model_id else 0.0
+            return (m.tier, qwen_bonus - m.gsm8k)
+        feasible = sorted(feasible, key=_qwen_key)
+    # else: already sorted largest→smallest from hardware_filter
+
+    # math_reasoning: front-load specialized reasoning models
     if task_type == "math_reasoning":
         preferred = [m for m in feasible if any(
             k in m.model_id for k in ("DeepSeek-R1", "Qwen3", "Phi-4")
@@ -81,19 +97,11 @@ def task_analysis_node(state: AgentState) -> AgentState:
             others = [m for m in feasible if m not in preferred]
             feasible = preferred + others
 
-    # Start with the smallest feasible model after preference sorting.
-    # SLM_FORCE_MODEL pins to a specific model (e.g. for trainer backend compatibility).
-    import os
-    forced = os.environ.get("SLM_FORCE_MODEL")
-    if forced:
-        match = next((m for m in feasible if m.model_id == forced), None)
-        if match is None:
-            raise RuntimeError(f"SLM_FORCE_MODEL={forced!r} is not in the feasible pool.")
-        state["selected_model"] = match
-    else:
-        state["selected_model"] = feasible[0]
+    state["feasible_models"] = feasible
 
     if not state.get("stop_threshold"):
         state["stop_threshold"] = 0.96
 
+    # selected_model is intentionally NOT set here.
+    # scaling_curve_node sets it after probing candidates.
     return state

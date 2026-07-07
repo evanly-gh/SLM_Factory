@@ -13,6 +13,7 @@ class AgentState(TypedDict):
     # Task analysis outputs
     task_type: str                    # "classification", "NER", or "generation"
     selected_model: Optional[ModelSpec]
+    feasible_models: list[ModelSpec]       # models that passed hardware_filter (Stages 1+2), largest→smallest
     stop_threshold: float             # calibrated target; iterate_node may lower mid-run
     initial_stop_threshold: float     # set once at plan time; stop_threshold can never go below this
     task_plan: Optional[dict]         # orchestrator's autonomous plan (labels, exa_queries, ...)
