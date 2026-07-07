@@ -1,6 +1,9 @@
 # training/lora_trainer.py
+import collections
 import os, json
 from dataclasses import dataclass
+
+TrainingOutput = collections.namedtuple("TrainingOutput", ["weights_ref", "gguf_path"])
 
 VALID_LORA_RANKS = {4, 8, 16, 32, 64}
 
@@ -154,19 +157,39 @@ def _run_unsloth_training(
     tokenizer.save_pretrained(checkpoint_path)
     return checkpoint_path
 
+def merge_for_quantization(checkpoint_path: str, output_dir: str) -> str:
+    """
+    Merge LoRA adapters into the base model weights and save as a full HF checkpoint.
+    Required before GGUF quantization — GGUF cannot be produced from adapter-only checkpoints.
+    Returns path to the merged HF checkpoint directory.
+    """
+    from unsloth import FastLanguageModel
+    merged_dir = os.path.join(output_dir, "merged")
+    os.makedirs(merged_dir, exist_ok=True)
+    model, tokenizer = FastLanguageModel.from_pretrained(
+        model_name=checkpoint_path,
+        max_seq_length=512,
+        load_in_4bit=False,
+    )
+    model.save_pretrained_merged(merged_dir, tokenizer, save_method="merged_16bit")
+    return merged_dir
+
+
 def run_lora_training(
     dataset_path: str,
     config: TrainingConfig,
     output_dir: str = "artifacts",
     task_type: str | None = None,
-) -> str:
+) -> TrainingOutput:
     """
     Train model with LoRA (or full fine-tune if lora_rank is None).
-    Returns weights_ref — a path string usable by infer() and infer_batch().
+    Returns TrainingOutput(weights_ref, gguf_path=None).
+    weights_ref is a path string usable by infer() and infer_batch().
+    gguf_path is always None here — set by the quantize step in evaluate_node.
     Always trains from the base model, never from a prior checkpoint.
     task_type defaults to config.task_type if not provided.
     """
     os.makedirs(output_dir, exist_ok=True)
     effective_task_type = task_type if task_type is not None else config.task_type
     checkpoint_path = _run_unsloth_training(dataset_path, config, output_dir, task_type=effective_task_type)
-    return checkpoint_path
+    return TrainingOutput(weights_ref=checkpoint_path, gguf_path=None)
