@@ -1,8 +1,8 @@
 # eval/harness.py
 from dataclasses import dataclass
 from data.eval_set import EvalSet
+from training.slm_helpers import infer_batch, infer_batch_gguf
 
-from training.slm_helpers import infer_batch
 
 @dataclass
 class EvalResult:
@@ -13,15 +13,24 @@ class EvalResult:
     boundary_score: float
     failures: list[dict]
 
+
 def run_eval(
     eval_set: EvalSet,
     weights_ref: str,
     base_model: str,
     task_type: str,
+    quant: str | None = None,
+    gguf_path: str | None = None,
 ) -> EvalResult:
     """
     Run inference on E and compute task-type-appropriate metrics.
-    Dispatches to eval/scorers/{task_type}.py for prompting, extraction, and scoring.
+
+    When gguf_path is provided (quantized model path), inference uses
+    llama-cpp-python (infer_batch_gguf) to get honest on-device accuracy.
+    When gguf_path is None (base/BF16 model), uses Unsloth (infer_batch).
+
+    Dispatches to eval/scorers/{task_type}.py for prompting, extraction, scoring.
+    Scorers are inference-backend agnostic — they receive list[str] predictions.
     """
     # Dispatch to the appropriate scorer module.
     # classification family: argmax label prediction (binary, multi-class).
@@ -42,7 +51,12 @@ def run_eval(
         )
 
     prompts = scorer.build_prompts(eval_set)
-    raw_outputs = infer_batch(prompts, weights_ref, base_model, max_workers=20)
+
+    if gguf_path is not None:
+        raw_outputs = infer_batch_gguf(prompts, gguf_path, max_new_tokens=50)
+    else:
+        raw_outputs = infer_batch(prompts, weights_ref, base_model, max_workers=20)
+
     predictions = scorer.extract_predictions(raw_outputs, eval_set)
     result = scorer.score(eval_set, predictions)
 
