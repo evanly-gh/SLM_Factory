@@ -1,4 +1,6 @@
+import json
 import math
+import os
 from unittest.mock import patch, MagicMock
 import numpy as np
 import pytest
@@ -104,3 +106,37 @@ def test_empty_feasible_raises():
     state = _make_state([])
     with pytest.raises(RuntimeError, match="feasible_models is empty"):
         scaling_curve_node(state)
+
+
+def test_probe_uses_eval_set_when_no_dataset(tmp_path):
+    """When current_dataset_path is None, probe should use eval_set examples."""
+    from agent.nodes.cold_start.scaling_curve import _probe_model
+
+    model = ModelSpec(
+        model_id="test/Model", int4_size_mb=500, tier=1,
+        tok_s_snapdragon_660=8.0, tok_s_snapdragon_778g=14.0, tok_s_snapdragon_8gen3=38.0,
+        peak_memory_mb=900, gsm8k=0.6, mmlu=0.5, quant=None,
+    )
+    eval_set = MagicMock()
+    eval_set.pos = [{"text": "hello", "label": "ham"}]
+    eval_set.neg = [{"text": "win prize", "label": "spam"}]
+    eval_set.boundary = []
+    eval_set.task_type = "classification"
+
+    state = {
+        "task_type": "classification",
+        "eval_set": eval_set,
+        "current_dataset_path": None,   # <- the bug trigger
+        "hardware_constraints": MagicMock(),
+    }
+
+    with patch("agent.nodes.cold_start.scaling_curve.run_lora_training") as mock_train, \
+         patch("agent.nodes.cold_start.scaling_curve.run_eval") as mock_eval:
+        from training.lora_trainer import TrainingOutput
+        mock_train.return_value = TrainingOutput(weights_ref="/ckpt", gguf_path=None)
+        mock_eval.return_value = MagicMock(f1=0.75)
+        result = _probe_model(model, state, str(tmp_path))
+
+    # Training was called (not skipped with 0.0)
+    mock_train.assert_called_once()
+    assert result == 0.75
