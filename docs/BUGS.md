@@ -60,6 +60,7 @@ Status legend: 🔴 open · 🟢 fixed · 🟡 suspected/unconfirmed · ⚪ desi
 | B50 | ⚪ | hardware | No on-device eval harness: design doc §6.3/§6.5 calls for measuring latency, power, and memory on a reference chip (Phase 2) |
 | B51 | 🟢 | orchestration | `MAX_TURNS_MAIN`/`turn_budget` never enforced; runs bounded only by recursion_limit |
 | B52 | 🟢 | iterate | termination on score>=threshold never re-checked hardware constraints |
+| B53 | 🟢 | android_pool | tiers based on peak_memory_mb (RAM), not parameter count; siblings got different tiers than base |
 
 ---
 
@@ -583,6 +584,17 @@ Status legend: 🔴 open · 🟢 fixed · 🟡 suspected/unconfirmed · ⚪ desi
   loop (B23) where message history matters.
 - **Status:** ⚪ design gap — remove the field to reduce confusion, or wire it into the iterate_node's
   LLM call to accumulate a conversation transcript.
+
+## B53 — tiering by RAM, not params; siblings mis-tiered
+- **Where:** `config/android_pool.py` (`_q4_sibling`, `_q8_sibling`, 12 base ModelSpec entries)
+- **When:** 2026-07-08, pipeline hardening review
+- **How found:** tier should reflect model capability (parameter count) not hardware footprint;
+  siblings were re-tiered by peak_memory_mb, so a Llama-3.2-1B Q4 was tier 0 while its base was
+  tier 1 — escalation stepping by tier would skip the sibling.
+- **Impact:** tier-based escalation (Task 4) would mis-order the escalation path; capability-tier
+  concept was confused with hardware-budget concept.
+- **Status:** 🟢 fixed 2026-07-08 — tier computed from params_b = int4_size_mb * 2 / 1000 for
+  base models; siblings inherit base.tier without recomputing.
 
 ## B52 — accuracy-goal termination ignored hardware constraints
 - **Where:** `agent/nodes/iterate.py`
