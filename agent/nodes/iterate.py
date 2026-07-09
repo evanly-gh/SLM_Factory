@@ -333,16 +333,18 @@ def iterate_node(state: AgentState) -> AgentState:
         # Downward probe: before accepting termination, check if a lower-tier model
         # already cleared the threshold in an earlier DAG entry. If so, switch to it
         # (minimum-resource terminal model).
-        from config.android_pool import filter_pool as _filter_pool
         threshold = state["stop_threshold"]
         _current_model = state.get("selected_model")
         if _current_model is not None:
-            _feasible = _filter_pool(state["hardware_constraints"])
             _current_tier = _current_model.tier
-            for _dag_node in state.get("dag", []):
-                if _dag_node.get("pruned"):
-                    continue
-                if _dag_node.get("score", 0.0) >= threshold:
+            _probe_candidates = [
+                n for n in state.get("dag", [])
+                if not n.get("pruned") and n.get("score", 0.0) >= threshold
+            ]
+            if _probe_candidates:
+                from config.android_pool import filter_pool as _filter_pool
+                _feasible = _filter_pool(state["hardware_constraints"])
+                for _dag_node in _probe_candidates:
                     _node_model_id = _dag_node.get("model_id")
                     _smaller = next(
                         (m for m in _feasible
