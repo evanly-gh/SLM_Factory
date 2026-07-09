@@ -50,12 +50,14 @@ def run_eval(
             f"Must be one of: classification, NER, math_reasoning, code_generation, generation."
         )
 
+    _GENERATION_TASKS = {"math_reasoning", "code_generation", "generation"}
+    max_new_tokens = 256 if task_type in _GENERATION_TASKS else 50
     prompts = scorer.build_prompts(eval_set)
 
     if gguf_path is not None:
-        raw_outputs = infer_batch_gguf(prompts, gguf_path, max_new_tokens=50)
+        raw_outputs = infer_batch_gguf(prompts, gguf_path, max_new_tokens=max_new_tokens)
     else:
-        raw_outputs = infer_batch(prompts, weights_ref, base_model, max_workers=20)
+        raw_outputs = infer_batch(prompts, weights_ref, base_model, max_workers=20, max_new_tokens=max_new_tokens)
 
     predictions = scorer.extract_predictions(raw_outputs, eval_set)
     result = scorer.score(eval_set, predictions)
