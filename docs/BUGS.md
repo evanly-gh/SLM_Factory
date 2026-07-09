@@ -59,6 +59,7 @@ Status legend: 🔴 open · 🟢 fixed · 🟡 suspected/unconfirmed · ⚪ desi
 | B49 | ⚪ | state | `messages: list[Any]` initialized as `[]` but never populated; no LangGraph message-passing occurs between nodes |
 | B50 | ⚪ | hardware | No on-device eval harness: design doc §6.3/§6.5 calls for measuring latency, power, and memory on a reference chip (Phase 2) |
 | B51 | 🟢 | orchestration | `MAX_TURNS_MAIN`/`turn_budget` never enforced; runs bounded only by recursion_limit |
+| B52 | 🟢 | iterate | termination on score>=threshold never re-checked hardware constraints |
 
 ---
 
@@ -582,6 +583,15 @@ Status legend: 🔴 open · 🟢 fixed · 🟡 suspected/unconfirmed · ⚪ desi
   loop (B23) where message history matters.
 - **Status:** ⚪ design gap — remove the field to reduce confusion, or wire it into the iterate_node's
   LLM call to accumulate a conversation transcript.
+
+## B52 — accuracy-goal termination ignored hardware constraints
+- **Where:** `agent/nodes/iterate.py`
+- **When:** 2026-07-08, pipeline hardening review
+- **How found:** `iterate_node` terminated the instant score>=threshold, no hardware re-check.
+- **Impact:** accuracy always won over hardware at termination.
+- **Status:** 🟢 fixed 2026-07-08 — when `hw_gating_enabled`, a hardware-failing model is not
+  accepted as terminal; the loop continues (escalate on stagnation / else iterate). Gating off
+  (Phase 1 default) is unchanged.
 
 ## B51 — turn budget never enforced
 - **Where:** `config.py`, `agent/graph.py`, `agent/nodes/iterate.py`
