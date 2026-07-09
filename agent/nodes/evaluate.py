@@ -7,8 +7,6 @@ from training.quantize import theoretical_hardware_profile
 from training.lora_trainer import merge_for_quantization
 from training.quantize import quantize_from_model_spec
 from agent.nodes.iterate import apply_iteration_policy
-from config.android_pool import filter_pool
-
 
 def _log(model_id: str, msg: str):
     print(f"[evaluate][{model_id}] {msg}")
@@ -156,32 +154,5 @@ def evaluate_node(state: AgentState) -> AgentState:
         tier=hw_profile.get("tier") or 0,
         hw_constraints=hw_constraints,
     )
-
-    # Downward probe: if the loop is about to terminate with success, check if a
-    # lower-tier model already met stop_threshold in an earlier iteration.
-    # If so, switch to the smallest model that cleared the bar (use minimum resources).
-    current_selected = state.get("selected_model")
-    if current_score >= state.get("stop_threshold", 0.96) and current_selected is not None:
-        threshold = state.get("stop_threshold", 0.96)
-        feasible = filter_pool(state["hardware_constraints"])
-        current_tier = current_selected.tier
-        for dag_node in state.get("dag", []):
-            if dag_node.get("pruned"):
-                continue
-            if dag_node.get("score", 0.0) >= threshold:
-                node_model_id = dag_node.get("model_id")
-                # Find a lower-tier feasible model with this model_id
-                smaller = next(
-                    (m for m in feasible
-                     if m.model_id == node_model_id and m.tier < current_tier),
-                    None,
-                )
-                if smaller is not None:
-                    _log(current_selected.model_id,
-                         f"  Downward probe: {smaller.model_id} (tier {smaller.tier}) "
-                         f"already cleared threshold {threshold:.3f} in iteration "
-                         f"{dag_node['iteration']} — switching to smaller model")
-                    state["selected_model"] = smaller
-                    break
 
     return state
