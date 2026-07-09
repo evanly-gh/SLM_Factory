@@ -61,6 +61,7 @@ Status legend: 🔴 open · 🟢 fixed · 🟡 suspected/unconfirmed · ⚪ desi
 | B51 | 🟢 | orchestration | `MAX_TURNS_MAIN`/`turn_budget` never enforced; runs bounded only by recursion_limit |
 | B52 | 🟢 | iterate | termination on score>=threshold never re-checked hardware constraints |
 | B53 | 🟢 | android_pool | tiers based on peak_memory_mb (RAM), not parameter count; siblings got different tiers than base |
+| B54 | 🟢 | escalate | escalation stepped by pool index, not by tier; LLM never involved in model selection |
 
 ---
 
@@ -629,3 +630,16 @@ Status legend: 🔴 open · 🟢 fixed · 🟡 suspected/unconfirmed · ⚪ desi
 - **Status:** ⚪ design gap — Phase 2 scope. Recommended approach: define a `HardwareEvalResult`
   dataclass and a `measure_on_device(weights_ref, model_id, chip) -> HardwareEvalResult` interface
   now; implement via Qualcomm AI Hub API or ADB shell profiling in Phase 2.
+
+## B54 — escalation stepped by index not tier; no LLM model selection
+- **Where:** `agent/nodes/escalate.py`
+- **When:** 2026-07-08, pipeline hardening review
+- **How found:** escalate_node took `feasible[current_idx + 1]` (next entry in ascending size
+  sort) — with 36 pool entries, the "next" model was often a quant sibling of the same model,
+  not a genuinely larger architecture. The orchestrator LLM was never consulted on which model
+  in the next tier to try.
+- **Impact:** escalation didn't reliably advance capability; LLM task knowledge was unused.
+- **Status:** 🟢 fixed 2026-07-08 — escalation finds all feasible models in `current_tier + 1`,
+  calls `_llm_choose_model` to select among them for the task, falls back to largest on LLM failure.
+  Also added downward probe in evaluate_node: if a lower-tier model already cleared the threshold
+  in the DAG, switch to it at termination (minimum-resource terminal model).
