@@ -65,6 +65,7 @@ Status legend: 🔴 open · 🟢 fixed · 🟡 suspected/unconfirmed · ⚪ desi
 | B55 | 🟢 | scaling_curve | _probe_model returned 0.0 always; current_dataset_path is None before first curate |
 | B56 | 🟢 | task_analysis | task-preference sort immediately overwritten by size-descending sort — dead code |
 | B57 | 🟢 | task_planner | _param_range_label formula underestimated param count by 8×; misled stop_threshold calibration |
+| B58 | 🟢 | lora_trainer | math_reasoning and code_generation fell to else branch with no answer — model trained on empty targets |
 
 ---
 
@@ -676,3 +677,12 @@ Status legend: 🔴 open · 🟢 fixed · 🟡 suspected/unconfirmed · ⚪ desi
   it was actually "0.6B–5.0B", degrading stop_threshold calibration for larger models.
 - **Status:** 🟢 fixed 2026-07-08 — formula changed to params_b = int4_size_mb * 2 / 1000;
   also filters to base models (quant=None) to avoid double-counting siblings.
+
+## B58 — math/code training format produced empty completions
+- **Where:** `training/lora_trainer.py` (`_run_unsloth_training`, format_example dispatch)
+- **When:** 2026-07-08, pipeline hardening review
+- **How found:** `math_reasoning` and `code_generation` hit the `else` branch returning only
+  `{"text": ex.get("text", "")}` with no answer. SFT loss was computed over a blank completion.
+- **Impact:** math and code models trained on this data learned nothing task-relevant.
+- **Status:** 🟢 fixed 2026-07-08 — both task types now route through the `generation` branch,
+  which handles prompt/answer/response/cot_reasoning keys correctly.
