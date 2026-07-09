@@ -8,8 +8,9 @@ Three conditional edges and one hard edge control the loop:
 
 - **`evaluate → rollback | iterate`** — decided by `should_rollback(state)`, a pure function, no LLM
 - **`rollback → train`** — hard edge; rolls back to the best checkpoint then re-trains without an LLM intervention round
-- **`iterate → train | curate | escalate | terminate`** — decided by `state["next_action"]`, set by the LLM inside `iterate_node`
-- **`escalate → train | curate | terminate`** — decided by `state["next_action"]`; current code only ever produces `"train"` or `"terminate"`, but the graph edge map also accepts `"curate"` (latent path, not triggered by any current escalate logic)
+- **`iterate → train | curate | escalate | downward_probe | terminate`** — decided by `state["next_action"]`, set by the LLM inside `iterate_node`
+- **`escalate → curate | terminate`** — decided by `state["next_action"]`; escalate now routes to `curate` (new model gets a fresh curate round), not directly to `train`
+- **`downward_probe → END`** — hard edge; downward_probe always terminates
 
 ---
 
@@ -28,7 +29,7 @@ Runs in `run.py` **before the LangGraph graph is invoked**. Implemented in [agen
 
 **Note on `hardware_filter` (Stages 1+2):** `run_hardware_filter` (implemented in `agent/nodes/cold_start/hardware_filter.py`) runs **inside `task_analysis_node`**, not as a separate pre-graph step. It applies Stage 1 (memory/storage/latency inequality checks) and Stage 2 (on-device benchmark stub, largest→smallest ordering) against `ANDROID_POOL` to produce the `feasible_models` list. This list is written to state by `task_analysis_node` and consumed by `scaling_curve_node`.
 
-**Model pool — `ANDROID_POOL`:** The pool now contains **36 entries** — 12 base models each expanded to three quantization siblings (`bf16`, `Q4_K_M`, `Q8_0`). Siblings are tiered by `peak_memory_mb` so the hardware filter and scaling curve always operate on a RAM-sorted list. The `ModelSpec` dataclass includes a `quant` field (`None`, `"Q4_K_M"`, or `"Q8_0"`) alongside the existing fields.
+**Model pool — `ANDROID_POOL`:** The pool now contains **36 entries** — 12 base models each expanded to three quantization siblings (`bf16`, `Q4_K_M`, `Q8_0`). Siblings inherit the base model's param-count tier (not recomputed from the sibling's larger file size). `ANDROID_POOL` is sorted by `(tier, int4_size_mb)`. The `ModelSpec` dataclass includes a `quant` field (`None`, `"Q4_K_M"`, or `"Q8_0"`) alongside the existing fields.
 
 ---
 
@@ -40,7 +41,7 @@ Entry point for cold-start. Reads `state["description"]` and `state["autonomous"
 
 - If autonomous mode (or no valid `task_type` provided), calls `plan_task()` — a Claude Sonnet call that returns `task_type`, `task_name`, `labels`, `multi_label`, `schema`, `multilingual`, `exa_queries`, `benchmark`, `stop_threshold`, and `rationale` as JSON.
 - Valid task types: `classification`, `NER`, `math_reasoning`, `code_generation`, `generation`. Variants (multi-label classification, schema-constrained extraction, multilingual tasks) are expressed as flags on the plan dict, not separate types.
-- Calls `run_hardware_filter(hardware_constraints, ANDROID_POOL)` internally (Stages 1+2) to produce `feasible_models` — the hardware-feasible subset of the pool, sorted largest→smallest by `peak_memory_mb`. This list is written to `state["feasible_models"]`. **`task_analysis_node` does NOT set `selected_model`**; model selection is deferred to `scaling_curve_node`.
+- Calls `run_hardware_filter(hardware_constraints, ANDROID_POOL)` internally (Stages 1+2) to produce `feasible_models` — the hardware-feasible subset of the pool, sorted largest→smallest by `int4_size_mb` descending. This list is written to `state["feasible_models"]`. **`task_analysis_node` does NOT set `selected_model`**; model selection is deferred to `scaling_curve_node`.
 - Sets `state["stop_threshold"]` from the planner's output (calibrated relative to model-size SOTA, not a fixed 0.96) and records `state["initial_stop_threshold"]` as the immutable floor.
 
 **Writes to state:** `task_type`, `task_plan`, `feasible_models`, `stop_threshold`, `initial_stop_threshold`
@@ -198,14 +199,18 @@ STAGNATION_MIN_DELTA = 0.02  # minimum cumulative improvement over that window t
 
 If `max(scores[-3:]) - min(scores[-3:]) < 0.02`, the model is stagnant and `next_action = "escalate"` regardless of what intervention the LLM chose.
 
-Routing logic after the LLM decision:
+Routing logic (evaluated in this order):
 
 ```
-current_score >= stop_threshold          → "terminate"
-_is_stagnant(scores)                     → "escalate"   (delta-based, window=3, min_delta=0.02)
-intervention == "hyperparameter"         → "train"       (skip curate, same dataset)
-intervention == "data_rebuild"           → "curate"
-intervention == "surgical"               → "curate"
+no scores yet                              → "train"       (first iteration, nothing to reason about)
+iteration*2 >= turn_budget                → "terminate"   (turn budget exhausted; ~2 turns per iteration)
+current_score >= stop_threshold:
+  hw_gating_enabled AND hw fails          → continue (escalate if stagnant, else train or curate)
+  not downward_probe_done AND tier > 0    → "downward_probe"  (try smaller model once before accepting)
+  else                                    → "terminate"
+_is_stagnant(scores)                       → "escalate"   (delta-based, window=3, min_delta=0.02)
+intervention == "hyperparameter"           → "train"       (skip curate, same dataset)
+else (data_rebuild or surgical)            → "curate"
 ```
 
 **Writes to state:** `last_intervention`, `last_hypothesis`, `llm_iterate_decision`, `next_action`, optionally `stop_threshold`
@@ -217,23 +222,42 @@ intervention == "surgical"               → "curate"
 
 Reached when `_is_stagnant(scores)` fires inside `iterate`.
 
-- Calls `filter_pool(hardware_constraints)` to get the hardware-feasible subset, then finds the current model's index within that filtered list and looks up `current_idx + 1`.
-- If there is no next model (already at the ceiling of the feasible pool), sets `next_action = "terminate"`.
-- Checks hardware constraints for the next model; if it does not fit, terminates.
-- Otherwise promotes `selected_model` to the next tier and resets score history and DAG.
+- Calls `filter_pool(hardware_constraints)` to get the hardware-feasible subset, then collects **all** models in `tier == current_tier + 1`.
+- If `current_tier + 1 > 3` or no candidates exist in the next tier, sets `next_action = "terminate"`.
+- Calls `_llm_choose_model` (Claude Sonnet) on the full set of next-tier candidates to pick the best fit for the task; falls back to the largest candidate (highest `int4_size_mb`) on failure.
+- Checks hardware constraints for the chosen model; if it does not fit, terminates.
+- Otherwise promotes `selected_model` to the chosen next-tier model and resets score history and DAG.
+- Also resets `downward_probe_done = False` so the downward probe is available for the new model.
 - The curated dataset path is **preserved** — `current_dataset_path` carries over to the new model. The curated data is still valid; only the weights and score trajectory are stale.
-- Sets `next_action = "train"` — the new model goes straight to training on the existing dataset, with no LLM intervention or re-curation round.
+- Sets `next_action = "curate"` — the new model gets a fresh curation round before training.
 
 The state reset is intentional: the old model's scores would corrupt the rollback gate for the new model.
 
 Routing after escalate:
 
 ```
-next_action = "train"      → re-train immediately on the carried-over dataset
+next_action = "curate"     → curate → train (new model gets a fresh curate round)
 next_action = "terminate"  → END
 ```
 
-**Writes to state:** `selected_model`, `scores`, `dag`, `iteration`, `best_score`, `best_weights_ref`, `last_eval`, `last_hypothesis`, `llm_iterate_decision`, `consecutive_no_improvement`, `next_action`
+**Writes to state:** `selected_model`, `scores`, `dag`, `iteration`, `best_score`, `best_weights_ref`, `last_eval`, `last_hypothesis`, `llm_iterate_decision`, `consecutive_no_improvement`, `downward_probe_done`, `next_action`
+
+---
+
+### Node 9: `downward_probe`
+
+Reached from `iterate` when `current_score >= stop_threshold`, `downward_probe_done` is False, and `current_model.tier > 0`. The intent is to confirm that a model one tier smaller cannot also clear the threshold before accepting the current model as the final result. Always terminates (hard edge to END, no loop).
+
+- Sets `downward_probe_done = True` and `next_action = "terminate"` immediately (unconditional termination regardless of probe outcome).
+- Collects all hardware-feasible models in `tier == current_tier - 1`. If none exist, returns without probing.
+- Reuses `escalate._llm_choose_model` (Claude Sonnet) to pick the best candidate from the lower tier; falls back to the largest (by `int4_size_mb`).
+- Trains the chosen model on `current_dataset_path` using a fixed LoRA config (rank=8, lr=2e-4, 3 epochs, batch=8) via `run_lora_training`, then evaluates with `run_eval`. Uses the honest quantized-eval path (merge → GGUF → `run_eval(..., gguf_path=...)`) when `model.quant` is set.
+- If `result.f1 >= stop_threshold`: adopts the smaller model — updates `selected_model`, `best_weights_ref`, `best_score`, and `last_eval`.
+- If the smaller model does not clear the threshold, keeps the current model unchanged.
+- On any training/eval exception, logs a warning and keeps the current model.
+
+**Writes to state:** `downward_probe_done`, `next_action`, and conditionally `selected_model`, `best_weights_ref`, `best_score`, `last_eval`
+**Decision made:** whether to adopt a smaller model as the terminal model
 
 ---
 
@@ -252,18 +276,24 @@ task_analysis → eval_setup → scaling_curve → curate → train → evaluate
                     checkpoint)               about trajectory)
                                                   │
                    ┌──────────────────────────────┤
-                   ↓             ↓                ↓                 ↓
-              terminate      escalate           curate            train
-             (score ≥        (stagnated:       (data_rebuild     (hyperparameter
-              threshold       window delta      or surgical)      intervention)
-              or budget)      < 0.02)               │                 │
-                                  │             → train          → evaluate
-                                  ▼                │                 │
-                         promote model         evaluate          ← (loop)
-                         carry dataset
-                         reset scores
-                              │
-                         → train (no re-curate)
+                   ↓         ↓         ↓           ↓              ↓
+              terminate  downward   escalate     curate          train
+             (score ≥    probe      (stagnated:  (data_rebuild   (hyperparameter
+              threshold  (score ≥   window delta  or surgical)    intervention)
+              or budget;  thresh;   < 0.02)           │                │
+              already    tier > 0;                → train          → evaluate
+              probed)    not done)                    │                │
+                              │               evaluate          ← (loop)
+                              ▼                    │
+                    train+eval tier-1         ← (loop)
+                    model; adopt if
+                    clears threshold
+                         → END
+                              │             promote tier
+                              │             LLM picks model
+                              │             carry dataset
+                              │             reset scores
+                              │             → curate → train
 ```
 
 ---
@@ -273,7 +303,7 @@ task_analysis → eval_setup → scaling_curve → curate → train → evaluate
 1. **Eval set never changes.** Fixed after `eval_setup`, never touched again. The same `E` measures every iteration.
 2. **Always trains from the base model.** `train_node` never loads a prior adapter. Each run is fully determined by the current dataset. Always LoRA — no full fine-tuning — for adapter-manager deployment.
 3. **Rollback bypasses iterate.** `should_rollback` fires before `iterate` is called. On regression, the graph goes `evaluate → rollback → train` — the LLM never sees a regressed score and is not asked to reason about it before the rollback re-train completes.
-4. **Escalation preserves the dataset.** When promoting to the next model tier, `current_dataset_path` is carried forward. Only weights and score history are reset. The new model trains immediately on the existing curated data (`escalate → train`, no `curate` round).
+4. **Escalation preserves the dataset.** When promoting to the next model tier, `current_dataset_path` is carried forward. Only weights and score history are reset. The new model goes through a fresh curation round on the carried-over dataset (`escalate → curate → train`).
 5. **Escalation resets all score history.** The new model starts from zero — stale DAG nodes from the prior model do not pollute the rollback gate.
 6. **Hyperparameter interventions skip curate entirely.** `iterate → train` directly; the dataset is held fixed to isolate the optimization effect.
 7. **Curate early-returns for any intervention that isn't `data_rebuild` or `surgical`.** The `else` branch catches `"hyperparameter"`, `"rollback"`, and any other value — returning state unchanged with no disk writes.
@@ -309,5 +339,6 @@ Key fields that flow through every node:
 | `last_hypothesis` | str | `iterate` | `evaluate` (logging) |
 | `llm_iterate_decision` | dict | `iterate` | `train`, `curate` |
 | `next_action` | str | `iterate`, `escalate` | graph routing |
+| `downward_probe_done` | bool | `downward_probe` (set True), `escalate` (reset False) | `iterate` (gates downward probe) |
 | `dag` | list[dict] | `evaluate`, `rollback` | `evaluate`, `escalate` |
 | `iteration` | int | `train`, `escalate` | `evaluate`, `escalate` |
