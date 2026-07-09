@@ -212,7 +212,7 @@ def _q8_sibling(base: ModelSpec) -> ModelSpec:
 
 
 ANDROID_POOL: list[ModelSpec] = [
-    # ── Tier 0: Micro (sub-0.6B) ──────────────────────────────────────────
+    # ── Tier 0: Micro  (~0.5B params, int4_size < ~375MB) ─────────────────
     # MiniCPM4-0.5B: Uses BitCPM4 QAT quantization for better INT4 quality.
     # Benchmarks claim to exceed Qwen3-0.6B; specialized sparse attention for
     # long context. Source: arXiv 2506.07900.
@@ -229,7 +229,7 @@ ANDROID_POOL: list[ModelSpec] = [
         notes="QAT-quantized (BitCPM4); best sub-0.6B for long-context tasks; use MNN for best speed",
     ),
 
-    # ── Tier 1: Small (0.6–1B) ────────────────────────────────────────────
+    # ── Tier 1: Small  (~0.75–1.5B params, int4_size ~375–750MB) ──────────
     # Qwen3.5-0.8B (March 2026): Gated DeltaNet hybrid architecture, natively multimodal,
     # 262K context, Apache 2.0. Intelligence Index +2.5 pts over Qwen3-0.6B.
     # CAUTION: documented 67%→33% code generation collapse when few-shot examples are added.
@@ -294,7 +294,7 @@ ANDROID_POOL: list[ModelSpec] = [
         notes="Google QAT INT4; best for LiteRT/MediaPipe deployment; official on-device path for Gemma; multimodal (image+text)",
     ),
 
-    # ── Tier 2: Mid (1–2B) ────────────────────────────────────────────────
+    # ── Tier 2: Mid    (~1.5–2.5B params, int4_size ~750–1250MB) ──────────
     # DeepSeek-R1-Distill-Qwen-1.5B: Specialized reasoning only.
     # MATH-500: 83.9%, AIME 2024: 28.9%. Distilled from DeepSeek-R1 671B.
     # NOT recommended for classification/NER/general tasks — use Qwen models instead.
@@ -360,7 +360,7 @@ ANDROID_POOL: list[ModelSpec] = [
         notes="NEW (Mar 2026): Gated DeltaNet hybrid, multimodal (text+image+video), 262K ctx, 201 langs; Unsloth GGUF confirmed for llama.cpp; no GSM8K/MMLU published; thinking OFF by default",
     ),
 
-    # ── Tier 3: Large (2–3B+) — requires 8GB+ RAM phone ──────────────────
+    # ── Tier 3: Large  (~2.5B+ params, int4_size > ~1250MB) ───────────────
     # Llama 3.2-3B: ExecuTorch reference model for 3B class. Q4_K_M = ~2.02GB.
     # Decode: ~10 tok/s on SD 8 Gen 3 (CPU). GSM8K 77.7%, ARC-C 78.6%.
     # Q3_K_M alternative (~1.5GB) fits tighter storage budgets at quality cost.
