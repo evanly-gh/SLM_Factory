@@ -28,5 +28,5 @@ def web_search(query: str, num_results: int = 5) -> str:
     )
     formatted = []
     for r in results.results:
-        formatted.append(f"**{r.title}**\n{r.url}\n{r.text[:500]}\n")
+        formatted.append(f"**{r.title}**\n{r.url}\n{(r.text or '')[:500]}\n")
     return "\n---\n".join(formatted) if formatted else "No results found."

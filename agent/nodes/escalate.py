@@ -9,7 +9,7 @@ Falls back to the largest feasible model in the next tier if the LLM call fails.
 """
 import logging
 from agent.state import AgentState
-from config.android_pool import filter_pool, check_hardware_constraints, all_constraints_pass, ModelSpec
+from config.android_pool import filter_pool, ModelSpec
 
 logger = logging.getLogger(__name__)
 
@@ -110,11 +110,11 @@ def escalate_node(state: AgentState) -> AgentState:
             )
 
     # Collect ALL feasible models in the next tier
-    next_tier = current_tier + 1
-    if next_tier > 3:
+    if current_tier >= 3:
         _log(current_id, "  Already at tier 3 (max) — TERMINATING")
         state["next_action"] = "terminate"
         return state
+    next_tier = current_tier + 1
 
     feasible = filter_pool(state["hardware_constraints"])
     next_tier_candidates = [m for m in feasible if m.tier == next_tier]
@@ -136,17 +136,6 @@ def escalate_node(state: AgentState) -> AgentState:
         current_best_score=state["best_score"],
     )
 
-    # Hardware check
-    hw_check = check_hardware_constraints(chosen, state["hardware_constraints"])
-    hw_ok = all_constraints_pass(hw_check) if state.get("hw_gating_enabled") else (
-        chosen.int4_size_mb <= state["hardware_constraints"].storage_mb
-        and chosen.peak_memory_mb <= state["hardware_constraints"].memory_mb
-    )
-    if not hw_ok:
-        _log(current_id, f"  Chosen model {chosen.model_id} fails hardware — TERMINATING")
-        state["next_action"] = "terminate"
-        return state
-
     _log(current_id,
          f"  PROMOTING: tier {current_tier} → tier {next_tier} | {current_id} → {chosen.model_id} (quant={chosen.quant})")
     _log(current_id, f"  Dataset carried forward: {state.get('current_dataset_path')}")
@@ -155,9 +144,15 @@ def escalate_node(state: AgentState) -> AgentState:
     state["scores"] = []
     state["dag"] = []
     state["iteration"] = 0
+    state["dataset_version"] = 0
+    state["lifetime_best_score"] = max(
+        state.get("lifetime_best_score") or 0.0, state["best_score"]
+    )
     state["best_score"] = 0.0
     state["best_weights_ref"] = None
     state["last_eval"] = None
+    state["last_curation"] = None
+    state["last_intervention"] = "data_rebuild"
     state["last_hypothesis"] = ""
     state["llm_iterate_decision"] = None
     state["consecutive_no_improvement"] = 0

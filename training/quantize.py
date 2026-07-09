@@ -87,17 +87,24 @@ def quantize_checkpoint(
     q4_gguf = os.path.join(output_dir, f"model-{method}.gguf")
 
     # Step 1: Convert HF → GGUF
-    convert_script = shutil.which("convert_hf_to_gguf") or shutil.which("convert-hf-to-gguf.py")
+    convert_script = (
+        shutil.which("convert_hf_to_gguf")
+        or shutil.which("convert_hf_to_gguf.py")
+        or shutil.which("convert-hf-to-gguf.py")
+    )
     if not convert_script:
-        # Try python module path
-        convert_script = "python -m llama_cpp.convert_hf_to_gguf"
+        return QuantizationResult(
+            gguf_path=None, original_size_mb=original_size, quantized_size_mb=0,
+            compression_ratio=0, method=method, success=False,
+            error="convert_hf_to_gguf not found. Clone llama.cpp and add it to PATH.",
+        )
 
     try:
         subprocess.run(
-            f"{convert_script} {checkpoint_path} --outfile {f16_gguf} --outtype f16",
-            shell=True, check=True, capture_output=True, text=True, timeout=600,
+            [convert_script, checkpoint_path, "--outfile", f16_gguf, "--outtype", "f16"],
+            shell=False, check=True, capture_output=True, text=True, timeout=600,
         )
-    except (subprocess.CalledProcessError, FileNotFoundError, subprocess.TimeoutExpired) as e:
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as e:
         return QuantizationResult(
             gguf_path=None, original_size_mb=original_size, quantized_size_mb=0,
             compression_ratio=0, method=method, success=False,

@@ -200,6 +200,7 @@ initial_state = {
     "autonomous": True,
     "task_plan": None,
     "selected_model": None,
+    "feasible_models": [],
     "stop_threshold": config.DEFAULT_STOP_THRESHOLD,
     "initial_stop_threshold": config.DEFAULT_STOP_THRESHOLD,
     "train_examples": [],
@@ -208,6 +209,7 @@ initial_state = {
     "dataset_version": 0,
     "best_weights_ref": None,
     "best_score": 0.0,
+    "lifetime_best_score": 0.0,
     "iteration": 0,
     "scores": [],
     "dag": [],
@@ -215,7 +217,7 @@ initial_state = {
     "downward_probe_done": False,
     "last_eval": None,
     "last_curation": None,
-    "last_intervention": "",
+    "last_intervention": "data_rebuild",
     "last_hypothesis": "",
     "llm_iterate_decision": None,
     "next_action": "train",
@@ -230,6 +232,7 @@ initial_state = {
     "replay_buffer": None,
     "turn_budget": config.MAX_TURNS_MAIN,
     "_pending_weights_refs": None,
+    "_pending_training_outputs": None,
     "_pending_configs": None,
 }
 

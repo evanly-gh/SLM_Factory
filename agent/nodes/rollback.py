@@ -36,7 +36,6 @@ def rollback_node(state: AgentState) -> AgentState:
     # Remove the regressing score
     state["scores"].pop()
     state["last_intervention"] = "rollback"
-    state["consecutive_no_improvement"] += 1
 
     # Mark the last DAG node as pruned
     if state["dag"]:
@@ -57,6 +56,10 @@ def rollback_node(state: AgentState) -> AgentState:
              f"weights={best_node['weights_ref']}")
     else:
         _log(model_id, "  WARNING: all DAG nodes pruned, no checkpoint to restore")
+        raise RuntimeError(
+            f"[rollback][{model_id}] Inconsistent state: all DAG nodes pruned but rollback "
+            f"was triggered. scores={state['scores']} — cannot restore a valid checkpoint."
+        )
 
     _log(model_id, f"  Proceeding to re-train on existing dataset")
 

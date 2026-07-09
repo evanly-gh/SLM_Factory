@@ -23,7 +23,7 @@ _GENERATION_FAMILY = {"math_reasoning", "code_generation", "generation"}
 
 
 def _canonical_split_type(task_type: str) -> str:
-    """Map a task type to its eval-split family (classification | NER | generation)."""
+    """Map a task type to its eval-split family: 'classification', 'NER', or 'generation'."""
     if task_type in _CLASSIFICATION_FAMILY:
         return "classification"
     if task_type in _NER_FAMILY:
@@ -147,19 +147,20 @@ def build_eval_set(
 
         rng.shuffle(boundary_candidates)
         boundary = boundary_candidates[:n_boundary]
-        boundary_texts = {e["text"] for e in boundary}
+        boundary_texts = {e.get("text", "") for e in boundary}
 
-        clear_neg = [e for e in neg_examples if e["text"] not in boundary_texts]
+        clear_neg = [e for e in neg_examples if e.get("text", "") not in boundary_texts]
         rng.shuffle(clear_neg)
         neg = clear_neg[:n_neg]
 
-        clear_pos = [e for e in pos_examples if e["text"] not in boundary_texts]
+        clear_pos = [e for e in pos_examples if e.get("text", "") not in boundary_texts]
         rng.shuffle(clear_pos)
         pos = clear_pos[:n_pos]
 
     else:
         # NER and generation families: simple stratified split — boundary examples
         # are agent-constructed at runtime; here we just partition what we have.
+        examples = list(examples)
         rng.shuffle(examples)
         total = len(examples)
         p = min(n_pos, total // 3)

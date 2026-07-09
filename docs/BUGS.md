@@ -71,6 +71,43 @@ Status legend: 🔴 open · 🟢 fixed · 🟡 suspected/unconfirmed · ⚪ desi
 | B61 | 🟢 | metrics | entity_f1 used set (dedup), undercounting TP/FN for repeated entity mentions |
 | B62 | 🟢 | curriculum | math/code hard negatives stored wrong answers as SFT targets, training model to produce errors |
 | B63 | 🟢 | downward_probe | original downward probe was dead code (scanned reset DAG for cross-tier entries that never exist); replaced with active train+eval probe node |
+| B64 | 🟢 | evaluate | `_pending_weights_refs` None → `AttributeError: 'NoneType'.items()` when train_node hasn't populated it |
+| B65 | 🟢 | evaluate | `max(scored, …)` crashes with `ValueError: max() arg is empty sequence` when scored dict is empty |
+| B66 | 🟢 | evaluate | `config_labels = list(config_descriptions.values())` extracts config dicts not keys → `KeyError['label']` |
+| B67 | 🟢 | scorer/generation | invalid model ID `claude-haiku-4-5-20251001` crashes every generation scorer call |
+| B68 | 🟢 | scorer/generation | math_reasoning and code_generation always use LLM-as-judge instead of exact-match / pass@1 |
+| B69 | 🟢 | scorer/generation | neg-slice gold labels all `"correct"` regardless of whether example has a reference answer |
+| B70 | 🟢 | scorer/ner | regex `r'\[.*?\]'` truncates JSON array on first `]` inside entity text |
+| B71 | 🟢 | scorer/ner | failures computed with set comparison (dedup), inconsistent with Counter-based entity_f1 |
+| B72 | 🟢 | metrics | `acc_from_lists` divides by `len(preds)` not `min(len(preds), len(golds))` → under-reports accuracy |
+| B73 | 🟢 | metrics | `per_slice_scores` boundary slice is open-ended; overlong predictions inflate boundary score |
+| B74 | 🟢 | iterate | turn-budget formula `iteration * 2` fires one iteration early; should be `(iteration+1) * 2` |
+| B75 | 🟢 | iterate | `initial_stop_threshold` floor uses `or` instead of `is None` — falsy 0.0 bypasses floor |
+| B76 | 🟢 | iterate | `intervention` variable uninitialized at function scope; `LLM fail` branch could reference unbound var |
+| B77 | 🟢 | escalate | `dataset_version`, `last_intervention`, `last_curation` not reset on escalation |
+| B78 | 🟢 | evaluate | DAG `intervention` field uses `apply_iteration_policy` fallback even when LLM already decided |
+| B79 | 🟢 | runner | `lifetime_best_score` missing from initial state dict in `tests/pipeline/run.py` |
+| B80 | 🟢 | runner | `last_intervention` initialized to `""` instead of `"data_rebuild"` → first curate no-ops |
+| B81 | 🟢 | lora_trainer | dataset JSONL opened without `encoding="utf-8"` → `cp1252` mojibake on Windows |
+| B82 | 🟢 | lora_trainer | `ex['label']` hard-subscript in classification format — KeyError on missing label field |
+| B83 | 🟢 | lora_trainer | `fp16/bf16` computed with two separate `is_bf16_supported()` calls; CPU-only env crashes |
+| B84 | 🟢 | slm_helpers | cache eviction calls `del old` but never `torch.cuda.empty_cache()` — GPU OOM persists |
+| B85 | 🟢 | task_analysis | `initial_stop_threshold` guard uses `not state.get(…)` — threshold 0.0 would be overwritten |
+| B86 | 🟢 | downward_probe | `filter_pool` returns triplicated entries; LLM prompt misleading, fallback always picks Q8_0 |
+| B87 | 🟢 | downward_probe | quant selection silently resolves to unquantized base variant when LLM picks by model_id only |
+| B88 | 🟢 | downward_probe | artifact paths use relative `'artifacts'` root — wrong dir if CWD differs |
+| B89 | 🟢 | bash_tool | `_HELPERS_INJECT` built at import time with frozen CWD; PYTHONPATH wrong on any other CWD |
+| B90 | 🟢 | bash_tool | `export` keyword invalid on Windows cmd.exe; PYTHONPATH injection fails every bash() call |
+| B91 | 🟢 | delegate_task | `response.content[0].text` crashes when first block is ThinkingBlock or ToolUseBlock |
+| B92 | 🟢 | query_traces | `int(query.split(':')[1])` unguarded — ValueError on non-integer suffix |
+| B93 | 🟢 | web_search | `r.text[:500]` TypeError when Exa returns `r.text=None` for unscrapable results |
+| B94 | 🟢 | android_pool | `_q4_sibling.peak_memory_mb` = `int4_size_mb + 400` can understate base model's true peak → OOM |
+| B95 | 🟢 | android_pool | power gate `if measured.get('avg_watts')` falsy-checks 0.0, always passing when sensor returns 0 |
+| B96 | 🟢 | curate | surgical path calls `synthesize_hard_negatives([], …)` when `failures` is empty — silent no-op wasting an iteration |
+| B97 | 🟢 | curate | `eval_set is None` in production `data_rebuild` raises uninformative `AttributeError` instead of descriptive RuntimeError |
+| B98 | ⚪ | live_confirm | M0 re-inference not implemented; taxonomy label filter (itself broken) used instead |
+| B99 | 🟢 | live_confirm | cluster membership checked via `cluster in str(t)` substring match — produces false positives on trace content |
+| B100 | 🟢 | eval_set | `boundary_texts = {e["text"] …}` hard-subscript → KeyError when example lacks "text" key |
 
 ---
 
@@ -743,3 +780,250 @@ Status legend: 🔴 open · 🟢 fixed · 🟡 suspected/unconfirmed · ⚪ desi
   quantized-eval path when quant is set, and adopts it if it clears the threshold. iterate routes
   iterate→downward_probe→END once per terminal model (guarded by state["downward_probe_done"],
   reset on escalation).
+
+
+## B64 -- evaluate_node: None pending_weights_refs causes AttributeError
+- **Where:** `agent/nodes/evaluate.py` line 28
+- **When:** 2026-07-09, full-repo audit
+- **How found:** `state.get('_pending_weights_refs', {})` returns stored None; .items() crashes.
+- **Impact:** CRITICAL -- evaluate_node crashes when _pending_weights_refs is None.
+- **Status:** Already fixed -- `state.get('_pending_weights_refs') or {}`.
+
+## B65 -- evaluate_node: max() on empty sequence crashes
+- **Where:** `agent/nodes/evaluate.py` line 72
+- **When:** 2026-07-09, full-repo audit
+- **How found:** no guard before max(scored, ...) when scored dict is empty.
+- **Impact:** CRITICAL -- crashes graph with ValueError if no configs were evaluated.
+- **Status:** Already fixed -- RuntimeError guard added before max() call.
+
+## B66 -- evaluate_node: config_labels extracts config dicts not label keys
+- **Where:** `agent/nodes/evaluate.py` line 131
+- **When:** 2026-07-09, full-repo audit
+- **How found:** `list(config_descriptions.values())` gives dict values; [0]['label'] then KeyErrors.
+- **Impact:** HIGH -- curation log write crashes, suppressing all config logging.
+- **Status:** Already fixed -- changed to `list(config_descriptions.keys())`.
+
+## B67 -- generation scorer: invalid Anthropic model ID
+- **Where:** `eval/scorers/generation.py`
+- **When:** 2026-07-09, full-repo audit
+- **How found:** `claude-haiku-4-5-20251001` does not exist.
+- **Impact:** CRITICAL -- every generation eval call fails; scorer non-functional.
+- **Status:** Already fixed -- changed to `claude-haiku-4-5`.
+
+## B68 -- generation scorer: math/code always uses LLM-as-judge
+- **Where:** `eval/scorers/generation.py`
+- **When:** 2026-07-09, full-repo audit
+- **How found:** score() had no task_type branching; LLM judge applied unconditionally.
+- **Impact:** HIGH -- math and code tasks scored incorrectly.
+- **Status:** Already fixed -- exact-match for math_reasoning, pass@1 for code_generation.
+
+## B69 -- generation scorer: neg-slice gold labels always correct
+- **Where:** `eval/scorers/generation.py`
+- **When:** 2026-07-09, full-repo audit
+- **How found:** gold_labels_for_slice was ["correct"] * len(scores) for all examples.
+- **Impact:** HIGH -- adversarial robustness measurement broken.
+- **Status:** Already fixed -- gold conditional on whether example has a reference answer.
+
+## B70 -- NER scorer: non-greedy regex truncates JSON on embedded ]
+- **Where:** `eval/scorers/ner.py`
+- **When:** 2026-07-09, full-repo audit
+- **How found:** `r'\[.*?\]'` stops at first ] inside entity text.
+- **Impact:** HIGH -- NER returns [] for entities whose text contains ].
+- **Status:** Already fixed -- greedy `r'\[.*\]'` with re.DOTALL; tries json.loads first.
+
+## B71 -- NER scorer: failures uses set dedup inconsistent with entity_f1
+- **Where:** `eval/scorers/ner.py`
+- **When:** 2026-07-09, full-repo audit
+- **How found:** set comparison deduplicates repeated mentions; entity_f1 uses Counter.
+- **Impact:** HIGH -- failure detection inconsistent with metric.
+- **Status:** Already fixed -- Counter comparison.
+
+## B72 -- metrics: acc_from_lists wrong denominator
+- **Where:** `eval/metrics.py`
+- **When:** 2026-07-09, full-repo audit
+- **How found:** divides by len(preds) not min(len(preds), len(golds)).
+- **Impact:** HIGH -- silently wrong accuracy on mismatched-length inputs.
+- **Status:** Already fixed -- `/ min(len(preds), len(golds))`.
+
+## B73 -- metrics: boundary slice open-ended
+- **Where:** `eval/metrics.py` per_slice_scores
+- **When:** 2026-07-09, full-repo audit
+- **How found:** bnd_preds has no upper bound; excess predictions inflate boundary.
+- **Impact:** MEDIUM -- boundary accuracy distorted.
+- **Status:** 2026-07-09 fixed -- added explicit upper bound n_pos + n_neg + n_bnd.
+
+## B74 -- iterate: turn-budget check fires one iteration early
+- **Where:** `agent/nodes/iterate.py`
+- **When:** 2026-07-09, full-repo audit
+- **How found:** turns_used = state['iteration'] * 2 uses past cost not upcoming.
+- **Impact:** MEDIUM -- terminates one iteration early with small budgets.
+- **Status:** 2026-07-09 fixed -- changed to (state['iteration'] + 1) * 2.
+
+## B75 -- iterate: initial_stop_threshold floor uses falsy or check
+- **Where:** `agent/nodes/iterate.py`
+- **When:** 2026-07-09, full-repo audit
+- **How found:** `or` operator treats 0.0 as absent, bypassing floor enforcement.
+- **Impact:** MEDIUM -- threshold can go below floor if floor is 0.0.
+- **Status:** 2026-07-09 fixed -- changed to `state['initial_stop_threshold']`.
+
+## B76 -- iterate: intervention variable uninitialized at function scope
+- **Where:** `agent/nodes/iterate.py`
+- **When:** 2026-07-09, full-repo audit
+- **How found:** only assigned inside try or except; structurally latent UnboundLocalError.
+- **Impact:** MEDIUM -- latent risk if except clause is modified.
+- **Status:** 2026-07-09 fixed -- initialized to policy["intervention"] before try block.
+
+## B77 -- escalate: dataset_version, last_intervention, last_curation not reset
+- **Where:** `agent/nodes/escalate.py`
+- **When:** 2026-07-09, full-repo audit
+- **How found:** escalate reset iteration/scores/dag but not dataset_version/last_intervention/last_curation.
+- **Impact:** MEDIUM -- new model gets wrong dataset versioning and stale first-curate strategy.
+- **Status:** 2026-07-09 fixed -- added dataset_version=0, last_intervention="data_rebuild", last_curation=None.
+
+## B78 -- evaluate: DAG intervention field ignores LLM decision
+- **Where:** `agent/nodes/evaluate.py`
+- **When:** 2026-07-09, full-repo audit
+- **How found:** apply_iteration_policy always used for DAG even when LLM had already decided.
+- **Impact:** MEDIUM -- DAG and curation log record wrong intervention type.
+- **Status:** 2026-07-09 fixed -- DAG intervention reads state.get('last_intervention') first.
+
+## B79 -- runner: lifetime_best_score missing from initial state
+- **Where:** `tests/pipeline/run.py`
+- **When:** 2026-07-09, full-repo audit
+- **How found:** lifetime_best_score in AgentState TypedDict but absent from initial_state dict.
+- **Impact:** HIGH -- KeyError on first escalation call.
+- **Status:** 2026-07-09 fixed -- added "lifetime_best_score": 0.0.
+
+## B80 -- runner: last_intervention initialized to "" causes first curate to no-op
+- **Where:** `tests/pipeline/run.py`
+- **When:** 2026-07-09, full-repo audit
+- **How found:** curate_node falls through to else branch on empty string, skipping dataset build.
+- **Impact:** HIGH -- first train crashes with None dataset_path.
+- **Status:** 2026-07-09 fixed -- changed initial value to "data_rebuild".
+
+## B81 -- lora_trainer: JSONL opened without encoding=utf-8
+- **Where:** `training/lora_trainer.py`
+- **When:** 2026-07-09, full-repo audit
+- **How found:** Windows default cp1252 mojibake on non-ASCII training data.
+- **Impact:** MEDIUM -- any dataset with non-ASCII characters fails on Windows.
+- **Status:** 2026-07-09 fixed -- added encoding="utf-8".
+
+## B82 -- lora_trainer: classification format hard-subscripts ex['label']
+- **Where:** `training/lora_trainer.py`
+- **When:** 2026-07-09, full-repo audit
+- **How found:** KeyError if any example lacks label field; inconsistent with other branches.
+- **Impact:** MEDIUM -- malformed training example crashes entire training run.
+- **Status:** 2026-07-09 fixed -- changed to ex.get("label", "") and ex.get("text", "").
+
+## B83 -- lora_trainer: CPU-only env crashes on fp16/bf16 setup
+- **Where:** `training/lora_trainer.py`
+- **When:** 2026-07-09, full-repo audit
+- **How found:** fp16=True on CPU-only; PyTorch does not support CPU fp16 training.
+- **Impact:** MEDIUM -- training crashes in CI/test environments without GPU.
+- **Status:** 2026-07-09 fixed -- gated on torch.cuda.is_available() first.
+
+## B84 -- slm_helpers: cache eviction missing torch.cuda.empty_cache()
+- **Where:** `training/slm_helpers.py`
+- **When:** 2026-07-09, full-repo audit
+- **How found:** del old releases Python ref but CUDA holds GPU memory until explicit flush.
+- **Impact:** MEDIUM -- GPU OOM persists despite LRU cache (B47 fix incomplete).
+- **Status:** 2026-07-09 fixed -- unpacks model/tokenizer explicitly and calls torch.cuda.empty_cache().
+
+## B85 -- task_analysis: initial_stop_threshold guard uses falsy not check
+- **Where:** `agent/nodes/cold_start/task_analysis.py`
+- **When:** 2026-07-09, full-repo audit
+- **How found:** `if not state.get("initial_stop_threshold")` overwrites legitimate 0.0 threshold.
+- **Impact:** MEDIUM -- floor enforcement broken if planner returns 0.0.
+- **Status:** 2026-07-09 fixed -- changed to `is None` check.
+
+## B86-B87 -- downward_probe: triplicated LLM prompt and quant selection lost
+- **Where:** `agent/nodes/downward_probe.py`
+- **When:** 2026-07-09, full-repo audit
+- **How found:** filter_pool returns 3 entries per base model; LLM match resolves to first (unquantized base).
+- **Impact:** CRITICAL -- probe always trains unquantized model regardless of quant level.
+- **Status:** Already fixed in B63 implementation -- deduplicated with quant-preference logic.
+
+## B88 -- downward_probe: artifact paths use relative root
+- **Where:** `agent/nodes/downward_probe.py`
+- **When:** 2026-07-09, full-repo audit
+- **How found:** os.path.join('artifacts', ...) relative to CWD at call time.
+- **Impact:** HIGH -- artifacts written to wrong directory when CWD differs.
+- **Status:** Already fixed in B63 implementation -- uses PROJECT_ROOT = Path(__file__).parents[2].
+
+## B89-B90 -- bash_tool: PYTHONPATH injection broken on Windows
+- **Where:** `agent/tools/bash_tool.py`
+- **When:** 2026-07-09, full-repo audit
+- **How found:** export keyword invalid in cmd.exe; CWD frozen at import time.
+- **Impact:** CRITICAL -- every bash() call fails on Windows.
+- **Status:** Already fixed -- env dict approach; computed at call time.
+
+## B91 -- delegate_task: response.content[0].text crashes on non-TextBlock
+- **Where:** `agent/tools/delegate_task.py`
+- **When:** 2026-07-09, full-repo audit
+- **How found:** ThinkingBlock/ToolUseBlock have no .text attribute.
+- **Impact:** HIGH -- sub-agent responses with thinking blocks crash.
+- **Status:** Already fixed -- uses next((b.text for b in response.content if b.type == 'text'), '').
+
+## B92 -- query_traces: sample:N crashes on non-integer suffix
+- **Where:** `agent/tools/query_traces.py`
+- **When:** 2026-07-09, full-repo audit
+- **How found:** int(query.split(':')[1]) unguarded.
+- **Impact:** HIGH -- malformed query crashes agent turn.
+- **Status:** Already fixed -- try/except returning error string.
+
+## B93 -- web_search: r.text[:500] TypeError when Exa returns None text
+- **Where:** `agent/tools/web_search.py`
+- **When:** 2026-07-09, full-repo audit
+- **How found:** Exa returns text=None for unscrapable results.
+- **Impact:** HIGH -- web_search crashes mid-loop dropping subsequent results.
+- **Status:** Already fixed -- (r.text or '')[:500].
+
+## B94 -- android_pool: _q4_sibling understates peak_memory_mb
+- **Where:** `config/android_pool.py`
+- **When:** 2026-07-09, full-repo audit
+- **How found:** peak = int4_size_mb + 400 can be less than base model actual peak.
+- **Impact:** HIGH -- device OOM when Q4 sibling passes filter that base correctly fails.
+- **Status:** Already fixed -- max(base.peak_memory_mb, base.int4_size_mb + 400).
+
+## B95 -- android_pool: power gate passes when avg_watts == 0.0
+- **Where:** `config/android_pool.py` check_hardware_constraints
+- **When:** 2026-07-09, full-repo audit
+- **How found:** falsy check treats 0.0 as absent; broken sensor always passes power gate.
+- **Impact:** HIGH -- broken sensor makes all models pass power gate.
+- **Status:** Already fixed -- is not None check.
+
+## B96 -- curate: surgical path wastes iteration when failures is empty
+- **Where:** `agent/nodes/curate.py`
+- **When:** 2026-07-09, full-repo audit
+- **How found:** synthesize_hard_negatives called with empty source; returns empty; dataset unchanged.
+- **Impact:** HIGH -- silent no-op wastes entire iteration.
+- **Status:** Already fixed -- early return with log message when failures is empty.
+
+## B97 -- curate: production data_rebuild raises uninformative AttributeError
+- **Where:** `agent/nodes/curate.py`
+- **When:** 2026-07-09, full-repo audit
+- **How found:** eval_set is None in production mode; AttributeError on eval_set.task_type.
+- **Impact:** HIGH -- confusing crash points to curriculum internals not actual cause.
+- **Status:** Already fixed -- explicit RuntimeError guard with descriptive message.
+
+## B98 -- live_confirm: M0 re-inference not implemented (design gap)
+- **Where:** `agent/nodes/production/live_confirm.py`
+- **When:** 2026-07-09, full-repo audit
+- **How found:** paper sec 2.6 requires re-running M0 on failures; original code only filtered by taxonomy label.
+- **Impact:** Design gap -- failures not verified as systematic vs sampling artifact.
+- **Status:** Already fixed -- implemented actual M0 re-inference via slm_helpers.infer.
+
+## B99 -- live_confirm: cluster membership checked via substring match
+- **Where:** `agent/nodes/production/live_confirm.py`
+- **When:** 2026-07-09, full-repo audit
+- **How found:** cluster in str(t) matches any trace whose content contains cluster name.
+- **Impact:** HIGH -- filter semantically vacuous.
+- **Status:** Already fixed -- taxonomy_construct_node tags traces with cluster key; filter uses t.get('cluster').
+
+## B100 -- eval_set: hard-subscript e["text"] KeyError on missing field
+- **Where:** `data/eval_set.py`
+- **When:** 2026-07-09, full-repo audit
+- **How found:** boundary_texts = {e["text"] for e in boundary} raises KeyError.
+- **Impact:** HIGH -- eval set construction crashes for tasks without text field.
+- **Status:** Already fixed -- changed to e.get("text", "") throughout.
+

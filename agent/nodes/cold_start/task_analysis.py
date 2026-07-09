@@ -46,7 +46,7 @@ def task_analysis_node(state: AgentState) -> AgentState:
             state["stop_threshold"] = threshold
             # Record the initial threshold as the immutable floor (can never go below this).
             # iterate_node may lower it further at runtime, but never below initial_stop_threshold.
-            if not state.get("initial_stop_threshold"):
+            if state.get("initial_stop_threshold") is None:
                 state["initial_stop_threshold"] = threshold
 
     if task_type not in _VALID_TASK_TYPES:

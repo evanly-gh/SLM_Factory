@@ -7,10 +7,10 @@
 #   et al. and BNSL literature. However, benchmark data (GSM8K) shows three natural
 #   capability bands with meaningful gaps that justify 4 tiers:
 #
-#     Tier 0  sub-0.6B   GSM8K ≈30-42%   MMLU ≈45-52%   RAM: <1.2GB peak
-#     Tier 1  0.6–1B     GSM8K ≈59-63%   MMLU ≈52-56%   RAM: 1.0–1.8GB peak
-#     Tier 2  1–2B       GSM8K ≈70-77%   MMLU ≈60-65%   RAM: 1.5–2.5GB peak
-#     Tier 3  2–3B+      GSM8K ≈77-82%   MMLU ≈65-70%   RAM: 2.5–4.5GB peak
+#     Tier 0  <0.75B     GSM8K ≈30-42%   MMLU ≈45-52%   RAM: <1.2GB peak
+#     Tier 1  0.75–1.5B  GSM8K ≈59-63%   MMLU ≈52-56%   RAM: 1.0–1.8GB peak
+#     Tier 2  1.5–2.5B   GSM8K ≈70-77%   MMLU ≈60-65%   RAM: 1.5–2.5GB peak
+#     Tier 3  ≥2.5B      GSM8K ≈77-82%   MMLU ≈65-70%   RAM: 2.5–4.5GB peak
 #
 #   The 3GB total RAM budget (user requirement) means: INT4 file + KV cache + Android OS
 #   (~1.5GB baseline) must fit. Practical INT4 file ceiling: ~1.8–2.0GB for Tier 3.
@@ -177,7 +177,7 @@ class HardwareConstraints:
 
 def _q4_sibling(base: ModelSpec) -> ModelSpec:
     """Q4_K_M GGUF variant. Inherits tier from base (param-count-based)."""
-    peak = base.int4_size_mb + 400
+    peak = max(base.peak_memory_mb, base.int4_size_mb + 400)
     return ModelSpec(
         model_id=base.model_id,
         int4_size_mb=base.int4_size_mb,
@@ -279,8 +279,12 @@ ANDROID_POOL: list[ModelSpec] = [
         mmlu=0.620,    # estimated from benchmark suite aggregate 42.57/100
         notes="Best 1B model (May 2026): MATH-500 91.6%, HumanEval+ 78.7%, IFEval 80.4%; 131K context; hybrid thinking mode",
     ),
+
+    # ── Tier 2: Mid    (~1.5–2.5B params, int4_size ~750–1250MB) ──────────
     # Gemma 3 1B IT: Google QAT checkpoint; GSM8K 62.8%, benefits from
     # superior instruction tuning. LiteRT/MediaPipe native support.
+    # int4_size_mb=806 → params_b≈1.61B → Tier 2 by the tier formula.
+    # Despite the "1B" in the name, actual param count places it in Tier 2.
     # Source: arXiv 2503.19786; Google Gemma 3 1B IT model card.
     ModelSpec(
         model_id="google/gemma-3-1b-it",
@@ -294,8 +298,6 @@ ANDROID_POOL: list[ModelSpec] = [
         mmlu=0.480,    # MMLU 5-shot, approximate from Gemma 3 tech report
         notes="Google QAT INT4; best for LiteRT/MediaPipe deployment; official on-device path for Gemma; multimodal (image+text)",
     ),
-
-    # ── Tier 2: Mid    (~1.5–2.5B params, int4_size ~750–1250MB) ──────────
     # DeepSeek-R1-Distill-Qwen-1.5B: Specialized reasoning only.
     # MATH-500: 83.9%, AIME 2024: 28.9%. Distilled from DeepSeek-R1 671B.
     # NOT recommended for classification/NER/general tasks — use Qwen models instead.
@@ -327,6 +329,12 @@ ANDROID_POOL: list[ModelSpec] = [
         mmlu=0.520,    # MMLU approximate from Distil Labs benchmark
         notes="Best Tier 2 for IFEval/instruction-following (56.7%); strong for classification; compact training corpus",
     ),
+
+    # ── Tier 3: Large  (~2.5B+ params, int4_size > ~1250MB) — compact entries ─
+    # (The main Tier 3 block follows the Tier 2 section; these two models land
+    #  in Tier 3 by the param-count formula despite their int4 sizes being near
+    #  the Tier 2 ceiling: gemma-3n-e2b-it uses PLE caching (2.3B effective),
+    #  Qwen3.5-2B has 2B actual params → both ≥1.5B effective → tier=3 per formula.)
     # Gemma 3n E2B IT: MatFormer (Matryoshka) architecture, natively multimodal.
     # Beats Gemma3-1B on 9/9 shared benchmarks: HumanEval 66.5% vs 41.5%,
     # MMLU 60.1% vs ~48%. 5B total params / 2.3B effective via PLE caching.
@@ -533,7 +541,7 @@ def check_hardware_constraints(
             "note": "Phase 1: proxy from model size, not measured" if not measured else "measured",
             "value_watts": measured.get("avg_watts", 0) if measured else 0,
             "limit_watts": constraints.power_watts,
-            "pass": (measured["avg_watts"] <= constraints.power_watts) if measured and measured.get("avg_watts") else True,
+            "pass": (measured["avg_watts"] <= constraints.power_watts) if measured and measured.get("avg_watts") is not None else True,
         },
     }
 

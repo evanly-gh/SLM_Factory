@@ -9,7 +9,7 @@ Three conditional edges and one hard edge control the loop:
 - **`evaluate → rollback | iterate`** — decided by `should_rollback(state)`, a pure function, no LLM
 - **`rollback → train`** — hard edge; rolls back to the best checkpoint then re-trains without an LLM intervention round
 - **`iterate → train | curate | escalate | downward_probe | terminate`** — decided by `state["next_action"]`, set by the LLM inside `iterate_node`
-- **`escalate → curate | terminate`** — decided by `state["next_action"]`; escalate now routes to `curate` (new model gets a fresh curate round), not directly to `train`
+- **`escalate → train | curate | terminate`** — decided by `state["next_action"]`; `escalate_node` always writes `"curate"` or `"terminate"`, so the `"train"` branch is registered but unreachable under current code (kept for forward-compatibility)
 - **`downward_probe → END`** — hard edge; downward_probe always terminates
 
 ---
@@ -66,7 +66,7 @@ Entry point for cold-start. Reads `state["description"]` and `state["autonomous"
 
 **Position in graph:** `eval_setup → scaling_curve → curate`
 
-**Known limitation — first cold-start run:** On the very first cold-start run, `current_dataset_path` is `None` (it is set by `curate_node`, which runs after `scaling_curve`). When this field is `None`, probing is skipped and `scaling_curve_node` degrades gracefully by selecting the smallest feasible model directly. The caller may pre-populate `current_dataset_path` in the initial state with a seed dataset to enable full probing from the first run.
+**Known limitation — first cold-start run:** On the very first cold-start run, `current_dataset_path` is `None` (it is set by `curate_node`, which runs after `scaling_curve`). When this field is `None`, `_probe_model` builds a temporary seed dataset from the `eval_set` examples (`pos + neg + boundary`) and still runs the 1-epoch probe, producing a real ranking signal. Probing is only truly skipped (probe returns 0.0, causing `scaling_curve_node` to fall back to selecting the smallest feasible model) when **both** `current_dataset_path` and `eval_set` are unavailable — an unlikely condition in normal operation. The caller may pre-populate `current_dataset_path` in the initial state with a seed dataset to bypass the eval-set seed path from the first run.
 
 **Writes to state:** `selected_model`
 **Decision made:** which model to fine-tune, based on predicted accuracy-vs-size trade-off
@@ -238,9 +238,10 @@ Routing after escalate:
 ```
 next_action = "curate"     → curate → train (new model gets a fresh curate round)
 next_action = "terminate"  → END
+next_action = "train"      → train  (registered edge; not currently set by escalate_node)
 ```
 
-**Writes to state:** `selected_model`, `scores`, `dag`, `iteration`, `best_score`, `best_weights_ref`, `last_eval`, `last_hypothesis`, `llm_iterate_decision`, `consecutive_no_improvement`, `downward_probe_done`, `next_action`
+**Writes to state:** `selected_model`, `scores`, `dag`, `iteration`, `dataset_version`, `best_score`, `best_weights_ref`, `last_eval`, `last_curation`, `last_intervention`, `last_hypothesis`, `llm_iterate_decision`, `consecutive_no_improvement`, `downward_probe_done`, `next_action`
 
 ---
 
@@ -330,6 +331,9 @@ Key fields that flow through every node:
 | `dataset_version` | int | `curate` | `evaluate` (logging) |
 | `_pending_weights_refs` | dict | `train` | `evaluate` |
 | `_pending_configs` | dict | `train` | `evaluate` |
+| `_pending_training_outputs` | dict | `train` | *(reserved; not currently consumed by any node)* |
+| `model_baselines` | list[dict] | `evaluate` (appended on iter==1), `escalate` (best_finetuned_f1 update) | run summary, `escalate` |
+| `quantize_enabled` | bool | `run.py` (init False) | *(not currently read by any node; quantization is gated on `selected_model.quant` instead)* |
 | `scores` | list[float] | `evaluate`, `rollback` | `iterate`, `rollback` |
 | `best_score` | float | `evaluate`, `rollback` | `iterate`, `escalate` |
 | `best_weights_ref` | str | `evaluate`, `rollback` | `escalate` |

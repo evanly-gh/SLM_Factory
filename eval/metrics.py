@@ -60,19 +60,20 @@ def per_slice_scores(
     n_pos = len(eval_set.pos)
     n_neg = len(eval_set.neg)
 
+    n_bnd = len(eval_set.boundary)
     pos_preds = predictions[:n_pos]
     neg_preds = predictions[n_pos:n_pos + n_neg]
-    bnd_preds = predictions[n_pos + n_neg:]
+    bnd_preds = predictions[n_pos + n_neg:n_pos + n_neg + n_bnd]
 
     if gold_labels is not None:
         pos_gold = gold_labels[:n_pos]
         neg_gold = gold_labels[n_pos:n_pos + n_neg]
-        bnd_gold = gold_labels[n_pos + n_neg:]
+        bnd_gold = gold_labels[n_pos + n_neg:n_pos + n_neg + n_bnd]
 
         def acc_from_lists(preds, golds):
             if not preds:
                 return 0.0
-            return sum(p == g for p, g in zip(preds, golds)) / len(preds)
+            return sum(p == g for p, g in zip(preds, golds)) / min(len(preds), len(golds))
 
         return {
             "pos": acc_from_lists(pos_preds, pos_gold),
@@ -83,7 +84,7 @@ def per_slice_scores(
         def acc(preds, examples):
             if not examples:
                 return 0.0
-            return sum(p == e.get("label", "") for p, e in zip(preds, examples)) / len(examples)
+            return sum(p == e.get("label", "") for p, e in zip(preds, examples)) / min(len(preds), len(examples))
 
         return {
             "pos": acc(pos_preds, eval_set.pos),

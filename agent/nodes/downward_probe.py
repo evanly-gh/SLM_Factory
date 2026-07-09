@@ -8,6 +8,7 @@ clears stop_threshold, adopt it (minimum-resource terminal model). Always termin
 """
 import logging
 import os
+from pathlib import Path
 from agent.state import AgentState
 from config.android_pool import filter_pool
 from training.lora_trainer import TrainingConfig, run_lora_training, merge_for_quantization
@@ -16,6 +17,8 @@ from eval.harness import run_eval
 from agent.nodes.escalate import _llm_choose_model
 
 logger = logging.getLogger(__name__)
+
+PROJECT_ROOT = Path(__file__).parents[2]
 
 _PROBE_LORA_RANK = 8
 _PROBE_LR = 2e-4
@@ -40,18 +43,18 @@ def _train_and_eval(model, state, dataset_path: str):
     )
     weights_ref = run_lora_training(
         dataset_path, config,
-        output_dir=os.path.join("artifacts", "downward_probe", current_safe, model_id_safe),
+        output_dir=os.path.join(PROJECT_ROOT, "artifacts", "downward_probe", current_safe, model_id_safe),
         task_type=task_type,
     ).weights_ref
     gguf_path = None
     if model.quant is not None:
         merged_path = merge_for_quantization(
             weights_ref,
-            os.path.join("artifacts", "merged", model_id_safe, f"downward_probe_from_{current_safe}"),
+            os.path.join(PROJECT_ROOT, "artifacts", "merged", model_id_safe, f"downward_probe_from_{current_safe}"),
         )
         gguf_path = quantize_from_model_spec(
             merged_path,
-            os.path.join("artifacts", "gguf", model_id_safe, f"downward_probe_from_{current_safe}"),
+            os.path.join(PROJECT_ROOT, "artifacts", "gguf", model_id_safe, f"downward_probe_from_{current_safe}"),
             model.quant,
         )
     result = run_eval(
@@ -81,7 +84,14 @@ def downward_probe_node(state: AgentState) -> AgentState:
         return state
 
     feasible = filter_pool(state["hardware_constraints"])
-    lower = [m for m in feasible if m.tier == current.tier - 1]
+    # Deduplicate to one entry per base model_id (fixes Bug 2: triplicated LLM prompt /
+    # misleading Q8_0 fallback). Prefer the quant level that matches the current model so
+    # the LLM chooses the same quantisation tier as the model we are replacing (fixes
+    # Bug 1: quant selection silently resolving to the unquantized base variant).
+    _lower_candidates = [m for m in feasible if m.tier == current.tier - 1]
+    _preferred = {m.model_id: m for m in _lower_candidates if m.quant == current.quant}
+    _fallback = {m.model_id: m for m in _lower_candidates if m.model_id not in _preferred}
+    lower = list({**_fallback, **_preferred}.values())
     if not lower:
         logger.info("[downward_probe][%s] No feasible models in tier %d — skipping",
                     model_id, current.tier - 1)

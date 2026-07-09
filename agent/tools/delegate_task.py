@@ -38,4 +38,4 @@ def delegate_task(task_description: str, output_file: str) -> str:
         with open(output_file, encoding="utf-8") as f:
             return f.read()
     except FileNotFoundError:
-        return response.content[0].text
+        return next((b.text for b in response.content if b.type == 'text'), '')

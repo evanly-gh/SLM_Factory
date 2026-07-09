@@ -26,20 +26,32 @@ def _build_config(state: AgentState) -> tuple[dict, str]:
     if not hyperparams:
         return dict(_DEFAULT_CONFIG), "default config (no LLM hyperparameter decision)"
 
-    lora_rank = hyperparams.get("lora_rank")
-    if lora_rank is None:
+    lora_rank_raw = hyperparams.get("lora_rank")
+    if lora_rank_raw is None:
         lora_rank = 8
         rank_note = "LLM requested FFT → overridden to LoRA r=8 (on-device adapter deployment)"
-    elif lora_rank not in _VALID_LORA_RANKS:
-        original = lora_rank
-        lora_rank = min(_VALID_LORA_RANKS, key=lambda r: abs(r - lora_rank))
-        rank_note = f"LLM requested r={original} → clamped to valid r={lora_rank}"
     else:
-        rank_note = f"LLM chose r={lora_rank}"
+        try:
+            lora_rank = int(lora_rank_raw)
+        except (TypeError, ValueError):
+            lora_rank = 8
+            rank_note = f"LLM returned non-numeric lora_rank={lora_rank_raw!r} → defaulting to r=8"
+        else:
+            if lora_rank not in _VALID_LORA_RANKS:
+                original = lora_rank
+                lora_rank = min(_VALID_LORA_RANKS, key=lambda r: abs(r - lora_rank))
+                rank_note = f"LLM requested r={original} → clamped to valid r={lora_rank}"
+            else:
+                rank_note = f"LLM chose r={lora_rank}"
 
-    lr = float(hyperparams.get("learning_rate", 2e-4))
-    epochs = max(1, int(hyperparams.get("nr_epochs", 3)))
-    batch = int(hyperparams.get("batch_size", 8))
+    lr_raw = hyperparams.get("learning_rate")
+    lr = min(float(lr_raw) if lr_raw is not None else 2e-4, 0.9999)
+
+    nr_epochs_raw = hyperparams.get("nr_epochs")
+    epochs = max(1, int(nr_epochs_raw) if nr_epochs_raw is not None else 3)
+
+    batch_size_raw = hyperparams.get("batch_size")
+    batch = max(1, int(batch_size_raw) if batch_size_raw is not None else 8)
 
     config = {
         "nr_epochs": epochs,
