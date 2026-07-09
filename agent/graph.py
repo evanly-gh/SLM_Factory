@@ -12,6 +12,7 @@ Supports two modes (paper §2.5, §2.6):
 from langgraph.graph import StateGraph, END
 from langgraph.graph.state import CompiledStateGraph
 from agent.state import AgentState
+from config.config import MAX_TURNS_MAIN
 from agent.nodes.cold_start.task_analysis import task_analysis_node
 from agent.nodes.cold_start.eval_setup import eval_setup_node
 from agent.nodes.cold_start.scaling_curve import scaling_curve_node
@@ -110,4 +111,4 @@ def build_graph(mode: str = "cold_start") -> CompiledStateGraph:
         {"train": "train", "curate": "curate", "terminate": END},
     )
 
-    return graph.compile()
+    return graph.compile().with_config(recursion_limit=MAX_TURNS_MAIN)
