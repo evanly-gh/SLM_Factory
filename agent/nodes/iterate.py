@@ -239,6 +239,14 @@ def iterate_node(state: AgentState) -> AgentState:
         state["next_action"] = "train"
         return state
 
+    # Turn-budget guard (B51): ~2 productive turns per iteration (curate + train).
+    turn_budget = state.get("turn_budget", 0)
+    turns_used = state["iteration"] * 2
+    if turn_budget and turns_used >= turn_budget:
+        _log(model_id, f"  Turn budget exhausted: {turns_used} >= {turn_budget} — TERMINATING")
+        state["next_action"] = "terminate"
+        return state
+
     current_score = state["scores"][-1]
     policy = apply_iteration_policy(current_score)
 
