@@ -10,12 +10,11 @@ def _make_config(task_type):
     )
 
 
-def test_math_examples_include_answer(tmp_path):
-    import json
-
-    ds_path = tmp_path / "ds.jsonl"
-    ds_path.write_text(json.dumps({"prompt": "1+1=?", "answer": "2"}) + "\n")
-
+def _run_training_and_capture(ds_path, task_type):
+    """
+    Run _run_unsloth_training with heavy mocking and capture the list of dicts
+    passed to Dataset.from_list.  Returns the captured list.
+    """
     trained_texts = []
 
     mock_flm = MagicMock()
@@ -28,9 +27,9 @@ def test_math_examples_include_answer(tmp_path):
     mock_ds = MagicMock()
     mock_ds.from_list.side_effect = lambda exs: (trained_texts.extend(exs), MagicMock())[1]
 
-    # lora_trainer uses lazy imports inside _run_unsloth_training; patch via sys.modules
     unsloth_mock = MagicMock()
     unsloth_mock.FastLanguageModel = mock_flm
+
     with patch.dict(sys.modules, {
         "unsloth": unsloth_mock,
         "transformers": MagicMock(),
@@ -39,24 +38,47 @@ def test_math_examples_include_answer(tmp_path):
         "datasets": MagicMock(Dataset=mock_ds),
         "eval.scorers.classification": MagicMock(CLASSIFY_PROMPT="Classify: {text}"),
     }):
+        # Re-import so that patched sys.modules are picked up fresh.
+        if "training.lora_trainer" in sys.modules:
+            del sys.modules["training.lora_trainer"]
         from training.lora_trainer import _run_unsloth_training
-        try:
-            _run_unsloth_training(str(ds_path), _make_config("math_reasoning"), str(tmp_path))
-        except Exception:
-            pass
-
-    if trained_texts:
-        assert any("2" in str(t) for t in trained_texts), (
-            "math_reasoning training text should contain the answer '2'"
+        _run_unsloth_training(
+            str(ds_path),
+            _make_config(task_type),
+            str(ds_path.parent),
+            task_type=task_type,
         )
 
+    return trained_texts
 
-def test_code_task_uses_generation_branch():
-    """Verify code_generation is NOT routed to the else/no-answer branch."""
-    # We inspect which branch is taken by checking _run_unsloth_training's format_example logic.
-    # The simplest: check that the format_example for code_generation returns an answer.
-    task_type = "code_generation"
-    # It should reach the generation branch (NOT the else branch)
-    assert task_type in ("math_reasoning", "code_generation", "generation"), (
-        "code_generation must be in the generation task group"
+
+def test_math_examples_include_answer(tmp_path):
+    """math_reasoning training text must contain the answer."""
+    import json
+
+    ds_path = tmp_path / "ds.jsonl"
+    ds_path.write_text(json.dumps({"prompt": "1+1=?", "answer": "2"}) + "\n")
+
+    trained_texts = _run_training_and_capture(ds_path, "math_reasoning")
+
+    assert trained_texts, "Dataset.from_list was never called — format routing broken"
+    assert any("2" in str(t) for t in trained_texts), (
+        f"math_reasoning training text should contain the answer '2'; got: {trained_texts}"
+    )
+
+
+def test_code_task_uses_generation_branch(tmp_path):
+    """code_generation training text must contain the answer (not just the prompt)."""
+    import json
+
+    ds_path = tmp_path / "ds.jsonl"
+    ds_path.write_text(
+        json.dumps({"prompt": "def add(a,b):", "answer": "return a+b"}) + "\n"
+    )
+
+    trained_texts = _run_training_and_capture(ds_path, "code_generation")
+
+    assert trained_texts, "Dataset.from_list was never called — format routing broken"
+    assert any("return a+b" in str(t) for t in trained_texts), (
+        f"code_generation training text should contain the answer 'return a+b'; got: {trained_texts}"
     )
