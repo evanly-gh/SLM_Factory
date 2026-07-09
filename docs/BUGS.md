@@ -64,6 +64,7 @@ Status legend: 🔴 open · 🟢 fixed · 🟡 suspected/unconfirmed · ⚪ desi
 | B54 | 🟢 | escalate | escalation stepped by pool index, not by tier; LLM never involved in model selection |
 | B55 | 🟢 | scaling_curve | _probe_model returned 0.0 always; current_dataset_path is None before first curate |
 | B56 | 🟢 | task_analysis | task-preference sort immediately overwritten by size-descending sort — dead code |
+| B57 | 🟢 | task_planner | _param_range_label formula underestimated param count by 8×; misled stop_threshold calibration |
 
 ---
 
@@ -666,3 +667,12 @@ Status legend: 🔴 open · 🟢 fixed · 🟡 suspected/unconfirmed · ⚪ desi
   calls `_llm_choose_model` to select among them for the task, falls back to largest on LLM failure.
   Also added downward probe in evaluate_node: if a lower-tier model already cleared the threshold
   in the DAG, switch to it at termination (minimum-resource terminal model).
+
+## B57 — _param_range_label underestimated param count by 8×
+- **Where:** `agent/task_planner.py` (`_param_range_label`)
+- **When:** 2026-07-08, pipeline hardening review
+- **How found:** formula `int4_size_mb / 1024 / 4` gave 0.244B for a 1000MB model; correct is
+  int4_size_mb * 2 / 1000 ≈ 1.32B. The LLM planner was told the pool was "0.1B–0.6B" when
+  it was actually "0.6B–5.0B", degrading stop_threshold calibration for larger models.
+- **Status:** 🟢 fixed 2026-07-08 — formula changed to params_b = int4_size_mb * 2 / 1000;
+  also filters to base models (quant=None) to avoid double-counting siblings.

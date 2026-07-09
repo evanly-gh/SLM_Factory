@@ -127,8 +127,9 @@ def _param_range_label(model_pool) -> str:
         return "0.5B–2B"
     try:
         sizes_b = sorted(
-            m.int4_size_mb / 1024 / 4  # rough param count from INT4 MB: MB * 8bits / 4bits / 1e9 * 1e3
+            m.int4_size_mb * 2 / 1000  # params_b: Q4_K_M ~0.5 bytes/param → MB × 2 / 1000 ≈ billions
             for m in model_pool
+            if m.quant is None  # use base models only to avoid double-counting siblings
         )
         lo = f"{sizes_b[0]:.1f}B" if sizes_b[0] >= 0.1 else f"{sizes_b[0]*1000:.0f}M"
         hi = f"{sizes_b[-1]:.1f}B" if sizes_b[-1] >= 0.1 else f"{sizes_b[-1]*1000:.0f}M"
