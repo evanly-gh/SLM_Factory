@@ -135,9 +135,10 @@ class HardwareConstraints:
     power_watts: float = 6.0
     target_chip: str = "snapdragon_778g"
     # Sustained decode throughput floor (hardware_metrics.md §6.5).
-    # Hard gate ≥ 20 tok/s; target ≥ 30 tok/s for interactive use.
+    # ≥ 6 tok/s — average English reading speed (~250 wpm ≈ 6 tok/s).
+    # Below this, streaming output visibly lags behind reading pace.
     # Defaults to 0 (disabled) so existing callers are unaffected.
-    # Set to 20.0 when the use case requires interactive streaming responses.
+    # Set to 6.0 when the use case requires interactive streaming responses.
     # Set to 0 for batch/async workflows where latency doesn't matter.
     min_tok_s: float = 0.0
 
