@@ -46,30 +46,79 @@ def train(
     return run_lora_training(dataset_path, config, output_dir=output_dir, task_type=task_type)
 
 
+def _is_adapter_only_checkpoint(path: str) -> bool:
+    """
+    Return True if *path* looks like a LoRA adapter-only directory (i.e. it
+    contains adapter_config.json but no full model weights such as
+    config.json + pytorch_model*.bin / model*.safetensors).
+    """
+    if not os.path.isdir(path):
+        return False
+    has_adapter_cfg = os.path.isfile(os.path.join(path, "adapter_config.json"))
+    has_full_weights = any(
+        os.path.isfile(os.path.join(path, f))
+        for f in os.listdir(path)
+        if f.endswith(".bin") or f.endswith(".safetensors")
+    ) if os.path.isdir(path) else False
+    return has_adapter_cfg and not has_full_weights
+
+
 def infer(prompt: str, weights_ref: str, base_model: str, max_new_tokens: int = 50) -> str:
     """
     Load a checkpoint and generate text. Loads via Unsloth (not vanilla
     AutoModelForCausalLM): once `unsloth` is imported it globally patches the model
     classes (e.g. Qwen3Attention.apply_qkv), so a vanilla-loaded model crashes at
     generate. Unsloth's loader also transparently handles LoRA-adapter checkpoints.
+
+    For adapter-only checkpoints (directory has adapter_config.json but no full
+    weights), `base_model` must be provided so Unsloth can load the base weights
+    before merging the adapter.  When `weights_ref` is an adapter-only path and
+    `base_model` differs from `weights_ref`, the loader is called with
+    `model_name=base_model` followed by `load_adapter`; otherwise `weights_ref`
+    is used directly (full merged checkpoint).
     """
     import torch
-    if weights_ref not in _inference_cache:
+    # Use (weights_ref, base_model) as the cache key so that the same adapter
+    # path loaded on top of different base models never collides in the cache.
+    cache_key = (weights_ref, base_model)
+    if cache_key not in _inference_cache:
         from unsloth import FastLanguageModel
+        adapter_only = _is_adapter_only_checkpoint(weights_ref)
+        if adapter_only and (not base_model or base_model == weights_ref):
+            raise ValueError(
+                f"weights_ref '{weights_ref}' appears to be an adapter-only checkpoint "
+                f"(contains adapter_config.json but no full model weights). "
+                f"Provide a valid `base_model` path so the base weights can be loaded "
+                f"before the adapter is applied."
+            )
         # Evict oldest cached model if at capacity
         while len(_inference_cache) >= _MAX_CACHED and _cache_order:
             evict_key = _cache_order.pop(0)
             old = _inference_cache.pop(evict_key, None)
             if old:
-                del old
-        model, tokenizer = FastLanguageModel.from_pretrained(
-            model_name=weights_ref, max_seq_length=512, load_in_4bit=False,
-        )
+                model_evict, tok_evict = old
+                del model_evict, tok_evict, old
+                try:
+                    import torch
+                    torch.cuda.empty_cache()
+                except Exception:
+                    pass
+        if adapter_only:
+            # Load the base model first, then apply the adapter on top.
+            model, tokenizer = FastLanguageModel.from_pretrained(
+                model_name=base_model, max_seq_length=512, load_in_4bit=False,
+            )
+            model.load_adapter(weights_ref)
+        else:
+            # Full merged checkpoint: weights_ref contains everything needed.
+            model, tokenizer = FastLanguageModel.from_pretrained(
+                model_name=weights_ref, max_seq_length=512, load_in_4bit=False,
+            )
         FastLanguageModel.for_inference(model)
-        _inference_cache[weights_ref] = (model, tokenizer)
-        _cache_order.append(weights_ref)
+        _inference_cache[cache_key] = (model, tokenizer)
+        _cache_order.append(cache_key)
 
-    model, tokenizer = _inference_cache[weights_ref]
+    model, tokenizer = _inference_cache[cache_key]
     inputs = tokenizer(prompt, return_tensors="pt").to(model.device)
     with torch.no_grad():
         outputs = model.generate(**inputs, max_new_tokens=max_new_tokens, do_sample=False)

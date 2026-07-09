@@ -4,9 +4,6 @@ import sys
 import os
 from langchain_core.tools import tool
 
-# Inject slm_helpers into the bash environment path
-_HELPERS_INJECT = f"export PYTHONPATH={os.path.abspath('.')}:$PYTHONPATH"
-
 @tool
 def bash(command: str) -> str:
     """
@@ -14,13 +11,19 @@ def bash(command: str) -> str:
     Use for: running train(), infer_batch(), dataset operations, eval scripts.
     Returns stdout + stderr combined.
     """
-    full_command = f"{_HELPERS_INJECT} && {command}"
+    # Build PYTHONPATH at call time (not import time) so CWD is correct for
+    # every invocation regardless of where the module was first imported from.
+    env = {
+        **os.environ,
+        "PYTHONPATH": f"{os.path.abspath('.')}:{os.environ.get('PYTHONPATH', '')}",
+    }
     result = subprocess.run(
-        full_command,
+        command,
         shell=True,
         capture_output=True,
         text=True,
         timeout=3600,  # 1 hour max for training runs
+        env=env,
     )
     output = result.stdout
     if result.stderr:

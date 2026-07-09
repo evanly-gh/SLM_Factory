@@ -70,6 +70,12 @@ def curate_node(state: AgentState) -> AgentState:
     targeted_pattern = llm_decision.get("targeted_patterns") or ""
 
     if intervention == "data_rebuild" or state["current_dataset_path"] is None:
+        if eval_set is None:
+            raise RuntimeError(
+                "curate_node: eval_set is None in production mode — "
+                "production data_rebuild is not supported; curate_node must not be called "
+                "with intervention=data_rebuild before eval_set is populated."
+            )
         N_TOTAL_BY_TYPE = {
             "classification":             150,
             "multi_label_classification": 300,
@@ -116,6 +122,10 @@ def curate_node(state: AgentState) -> AgentState:
         n_hard_added = len(hard)
 
     elif intervention == "surgical":
+        if not failures:
+            _log(model_id, "SURGICAL: no failures to target — holding dataset")
+            return state
+
         with open(state["current_dataset_path"]) as f:
             dataset = [json.loads(line) for line in f if line.strip()]
         n_surgical = min(max(len(failures) * 2, 10), 20)

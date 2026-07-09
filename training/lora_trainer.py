@@ -62,7 +62,7 @@ def _run_unsloth_training(
         )
 
     # Load dataset
-    with open(dataset_path) as f:
+    with open(dataset_path, encoding="utf-8") as f:
         raw = [json.loads(line) for line in f if line.strip()]
 
     # Format training examples using the model's chat template when available.
@@ -75,8 +75,8 @@ def _run_unsloth_training(
     if task_type == "classification":
         from eval.scorers.classification import CLASSIFY_PROMPT
         def format_example(ex):
-            user_msg = CLASSIFY_PROMPT.format(text=ex["text"])
-            assistant_msg = ex["label"]
+            user_msg = CLASSIFY_PROMPT.format(text=ex.get("text", ""))
+            assistant_msg = ex.get("label", "")
             if has_chat_template:
                 messages = [
                     {"role": "user", "content": user_msg},
@@ -126,13 +126,14 @@ def _run_unsloth_training(
     from datasets import Dataset
     dataset = Dataset.from_list([format_example(e) for e in raw])
 
+    _bf16 = torch.cuda.is_available() and torch.cuda.is_bf16_supported()
     args = TrainingArguments(
         output_dir=output_dir,
         num_train_epochs=config.nr_epochs,
         per_device_train_batch_size=config.batch_size,
         learning_rate=config.learning_rate,
-        fp16=not torch.cuda.is_bf16_supported(),
-        bf16=torch.cuda.is_bf16_supported(),
+        fp16=not _bf16 and torch.cuda.is_available(),
+        bf16=_bf16,
         logging_steps=10,
         # "no" avoids mid-training checkpointing, which torch.save's the trainer args and
         # fails under Unsloth's patched SFTConfig (pickle identity mismatch). We persist the
@@ -148,8 +149,13 @@ def _run_unsloth_training(
             model=model, tokenizer=tokenizer, train_dataset=dataset,
             dataset_text_field="text", max_seq_length=max_seq_length, args=args,
         )
-    except TypeError:
-        trainer = SFTTrainer(model=model, train_dataset=dataset, args=args)
+    except TypeError as e:
+        if "max_seq_length" not in str(e):
+            raise
+        trainer = SFTTrainer(
+            model=model, tokenizer=tokenizer, train_dataset=dataset,
+            dataset_text_field="text", args=args,
+        )
     trainer.train()
 
     checkpoint_path = os.path.join(output_dir, "final_checkpoint")

@@ -1,6 +1,7 @@
 # eval/scorers/ner.py
 from eval.metrics import entity_f1, per_slice_scores
 from data.eval_set import EvalSet
+from collections import Counter
 import json
 import re
 
@@ -17,8 +18,11 @@ def extract_predictions(raw_outputs: list[str], eval_set: EvalSet) -> list[list[
     results = []
     for raw in raw_outputs:
         try:
-            match = re.search(r'\[.*?\]', raw, re.DOTALL)
-            spans = json.loads(match.group()) if match else []
+            try:
+                spans = json.loads(raw.strip())
+            except Exception:
+                match = re.search(r'\[.*\]', raw, re.DOTALL)
+                spans = json.loads(match.group()) if match else []
             results.append([s for s in spans if "text" in s and "type" in s])
         except Exception:
             results.append([])
@@ -34,6 +38,6 @@ def score(eval_set: EvalSet, predictions: list[list[dict]]) -> dict:
     failures = [
         {**ex, "predicted": pred}
         for ex, pred, g in zip(eval_set.all, predictions, gold)
-        if set(tuple(s.items()) for s in pred) != set(tuple(s.items()) for s in g)
+        if Counter((s['text'], s['type']) for s in pred) != Counter((s['text'], s['type']) for s in g)
     ]
     return {"f1": f1, "per_class": {"entity_f1": f1}, "slices": slices, "failures": failures}

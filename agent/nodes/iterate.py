@@ -110,8 +110,7 @@ def _llm_iterate(state: AgentState) -> dict:
     from config.config import ANTHROPIC_API_KEY, ORCHESTRATOR_MODEL
     from agent.context_manager import compact_trajectory, should_compact
     from agent.tools import COLD_START_TOOLS
-    import agent.nodes.evaluate as _eval_mod
-    CurationLog = _eval_mod.CurationLog
+    from data.curation_log import CurationLog
 
     # Build tool-bound LLM
     llm = ChatAnthropic(
@@ -162,6 +161,7 @@ Decide the next intervention. Use tools if needed, then output JSON.
 
     messages = [SystemMessage(content=_ITERATE_SYSTEM), HumanMessage(content=user_content)]
 
+    response = None
     for _ in range(MAX_TOOL_ROUNDS):
         response = llm.invoke(messages)
         messages.append(response)
@@ -188,8 +188,21 @@ Decide the next intervention. Use tools if needed, then output JSON.
                 result = f"[unknown tool] {tc['name']}"
             messages.append(ToolMessage(content=str(result), tool_call_id=tc["id"]))
 
-    # Exhausted tool rounds — try to parse the last response
+    # Exhausted tool rounds — only attempt to parse if the last response has no tool calls
+    if response is None:
+        raise RuntimeError(
+            "LLM exhausted tool rounds without producing a final JSON decision"
+        )
+    if response.tool_calls:
+        raise RuntimeError(
+            "LLM exhausted tool rounds without producing a final JSON decision"
+        )
     raw = response.content if isinstance(response.content, str) else str(response.content)
+    raw = raw.strip()
+    if raw.startswith("```"):
+        raw = raw.split("```")[1]
+        if raw.startswith("json"):
+            raw = raw[4:]
     return json.loads(raw.strip())
 
 
@@ -242,7 +255,7 @@ def iterate_node(state: AgentState) -> AgentState:
 
     # Turn-budget guard (B51): ~2 productive turns per iteration (curate + train).
     turn_budget = state.get("turn_budget", 0)
-    turns_used = state["iteration"] * 2
+    turns_used = (state["iteration"] + 1) * 2  # cost of the upcoming train+eval cycle
     if turn_budget and turns_used >= turn_budget:
         _log(model_id, f"  Turn budget exhausted: {turns_used} >= {turn_budget} — TERMINATING")
         state["next_action"] = "terminate"
@@ -265,6 +278,7 @@ def iterate_node(state: AgentState) -> AgentState:
     # Try LLM-driven decision with tool access
     llm_decision = None
     hypothesis = ""
+    intervention = policy["intervention"]  # initialized to fallback; overwritten by LLM if successful
     try:
         _log(model_id, "  Calling orchestrator LLM for intervention decision...")
         llm_decision = _llm_iterate(state)
@@ -299,7 +313,7 @@ def iterate_node(state: AgentState) -> AgentState:
         adj = llm_decision.get("threshold_adjustment") or {}
         new_threshold = adj.get("new_threshold")
         if new_threshold is not None:
-            floor = state.get("initial_stop_threshold") or state["stop_threshold"]
+            floor = state["initial_stop_threshold"]
             clamped = max(float(new_threshold), floor)
             if clamped < state["stop_threshold"]:
                 reason = adj.get("reason", "")

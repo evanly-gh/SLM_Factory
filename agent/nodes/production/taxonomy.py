@@ -27,12 +27,16 @@ def taxonomy_construct_node(state: AgentState) -> AgentState:
         return state
 
     sample = failures[:50]
-    sample_text = json.dumps(sample[:20], indent=2, default=str)
+    sample_text = json.dumps(
+        [{"idx": i, **t} for i, t in enumerate(sample[:20])],
+        indent=2,
+        default=str,
+    )
 
     client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
     response = client.messages.create(
         model=ORCHESTRATOR_MODEL,
-        max_tokens=1024,
+        max_tokens=2048,
         system=(
             "You are analyzing failure patterns in a deployed model's inference logs. "
             "Cluster the failures into categories. For each category, determine:\n"
@@ -40,14 +44,18 @@ def taxonomy_construct_node(state: AgentState) -> AgentState:
             "2. Count of failures in this category\n"
             "3. Root cause description\n"
             "4. Fixability: 'fixable' (can be addressed by training) or 'external' "
-            "(prompt design, schema mismatch, ambiguous input)\n\n"
+            "(prompt design, schema mismatch, ambiguous input)\n"
+            "5. The list of 'idx' values (from the input) that belong to this cluster\n\n"
             "Output JSON: {\"clusters\": [{\"name\": ..., \"count\": ..., "
-            "\"root_cause\": ..., \"fixable\": true/false}], \"summary\": \"...\"}"
+            "\"root_cause\": ..., \"fixable\": true/false, \"trace_indices\": [...]}], "
+            "\"summary\": \"...\"}"
         ),
         messages=[{"role": "user", "content": (
             f"Total failures: {len(failures)}\n\n"
-            f"Sample failures (first {len(sample)}):\n{sample_text}\n\n"
-            f"Classify these into failure categories."
+            f"Sample failures (first {len(sample[:20])}, each has an 'idx' field):\n{sample_text}\n\n"
+            f"Classify these into failure categories and assign each trace to exactly one cluster "
+            f"via its 'idx'. Every idx 0-{len(sample[:20]) - 1} must appear in exactly one cluster's "
+            f"trace_indices list."
         )}],
     )
 
@@ -58,6 +66,16 @@ def taxonomy_construct_node(state: AgentState) -> AgentState:
         taxonomy = json.loads(match.group()) if match else {"clusters": [], "summary": raw}
     except Exception:
         taxonomy = {"clusters": [], "summary": raw}
+
+    # Build a mapping from sample index to cluster name, then tag each trace.
+    # Traces beyond the sample window (index >= 20) are left untagged (cluster=None).
+    idx_to_cluster: dict[int, str] = {}
+    for cluster in taxonomy.get("clusters", []):
+        for idx in cluster.get("trace_indices", []):
+            idx_to_cluster[idx] = cluster["name"]
+
+    for i, t in enumerate(failures):
+        t["cluster"] = idx_to_cluster.get(i)  # None for out-of-sample traces
 
     state["failure_taxonomy"] = taxonomy
     fixable_count = sum(c.get("count", 0) for c in taxonomy.get("clusters", []) if c.get("fixable"))

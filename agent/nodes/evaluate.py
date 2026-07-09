@@ -25,7 +25,7 @@ def evaluate_node(state: AgentState) -> AgentState:
     eval_set = state["eval_set"]
     if eval_set is None:
         raise RuntimeError("evaluate_node called before eval_setup_node built the eval set")
-    pending = state.get("_pending_weights_refs", {})
+    pending = state.get("_pending_weights_refs") or {}
 
     # --- Baseline measurement (first eval for this model) ---
     if state["iteration"] == 1:
@@ -39,11 +39,12 @@ def evaluate_node(state: AgentState) -> AgentState:
 
         _log(model_id, f"Baseline F1 = {baseline_f1:.4f}")
         baselines = state.get("model_baselines") or []
-        baselines.append({
-            "model_id": model_id,
-            "baseline_f1": baseline_f1,
-            "best_finetuned_f1": 0.0,
-        })
+        if not any(e["model_id"] == model_id for e in baselines):
+            baselines.append({
+                "model_id": model_id,
+                "baseline_f1": baseline_f1,
+                "best_finetuned_f1": 0.0,
+            })
         state["model_baselines"] = baselines
 
     # --- Score all trained configs ---
@@ -68,6 +69,8 @@ def evaluate_node(state: AgentState) -> AgentState:
         scored[label] = (weights_ref, result)
         _log(model_id, f"  → F1={result.f1:.4f}  failures={len(result.failures)}")
 
+    if not scored:
+        raise RuntimeError("evaluate_node: no configs were scored — train_node did not populate _pending_weights_refs")
     best_label = max(scored, key=lambda k: scored[k][1].f1)
     best_weights_ref, best_result = scored[best_label]
     current_score = best_result.f1
@@ -99,6 +102,8 @@ def evaluate_node(state: AgentState) -> AgentState:
 
     # Log to DAG with full π=(D,H,S) triple and parent edge
     policy = apply_iteration_policy(current_score)
+    # Prefer the LLM-driven intervention stored by iterate_node over the fallback score-band rule.
+    dag_intervention = state.get("last_intervention") or policy["intervention"]
     best_cfg = (state.get("_pending_configs") or {}).get(best_label, {})
     parent_iteration = state["dag"][-1]["iteration"] if state["dag"] else None
     dag_node = {
@@ -108,7 +113,7 @@ def evaluate_node(state: AgentState) -> AgentState:
         "weights_ref": best_weights_ref,
         "score": current_score,
         "best_config": best_label,
-        "intervention": policy["intervention"],
+        "intervention": dag_intervention,
         "failures": len(best_result.failures),
         "pruned": False,
         "pi": {
@@ -129,9 +134,9 @@ def evaluate_node(state: AgentState) -> AgentState:
     from config.android_pool import check_hardware_constraints
     hw_constraints = check_hardware_constraints(state["selected_model"], state["hardware_constraints"])
     config_descriptions = state.get("_pending_configs", {})
-    config_labels = list(config_descriptions.values())
-    config_a = config_labels[0]["label"] if config_labels else "N/A"
-    config_b = config_labels[1]["label"] if len(config_labels) > 1 else "N/A"
+    config_labels = list(config_descriptions.keys())
+    config_a = config_labels[0] if config_labels else "N/A"
+    config_b = config_labels[1] if len(config_labels) > 1 else "N/A"
 
     curation = state.get("last_curation") or {}
     log = CurationLog()

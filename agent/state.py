@@ -11,7 +11,7 @@ class AgentState(TypedDict):
     hardware_constraints: HardwareConstraints
 
     # Task analysis outputs
-    task_type: str                    # "classification", "NER", or "generation"
+    task_type: str                    # "classification" | "NER" | "math_reasoning" | "code_generation" | "generation"
     selected_model: Optional[ModelSpec]
     feasible_models: list[ModelSpec]       # models that passed hardware_filter (Stages 1+2), largest→smallest
     stop_threshold: float             # calibrated target; iterate_node may lower mid-run
@@ -28,6 +28,7 @@ class AgentState(TypedDict):
     # Search state
     best_weights_ref: Optional[str]
     best_score: float
+    lifetime_best_score: float          # max best_score ever seen across all tiers/models in this run
     iteration: int
     scores: list[float]               # f(π) per iteration
     dag: list[dict]                   # lineage DAG nodes

@@ -34,11 +34,11 @@ def query_traces(query: str, traces_path: str = "traces.jsonl") -> str:
     query = query.strip().lower()
 
     if query == "failures":
-        results = [t for t in traces if t.get("verdict") == "fail"]
+        results = [t for t in traces if t.get("verdict", "").lower() == "fail"]
         return json.dumps(results[:50], indent=2, default=str)
 
     elif query == "passing":
-        results = [t for t in traces if t.get("verdict") == "pass"]
+        results = [t for t in traces if t.get("verdict", "").lower() == "pass"]
         return json.dumps(results[:50], indent=2, default=str)
 
     elif query == "count":
@@ -48,7 +48,10 @@ def query_traces(query: str, traces_path: str = "traces.jsonl") -> str:
 
     elif query.startswith("sample:"):
         import random
-        n = int(query.split(":")[1])
+        try:
+            n = int(query.split(":")[1])
+        except ValueError:
+            return "[ERROR] sample:N requires an integer N"
         sample = random.sample(traces, min(n, len(traces)))
         return json.dumps(sample, indent=2, default=str)
 
