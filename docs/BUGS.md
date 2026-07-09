@@ -67,6 +67,7 @@ Status legend: 🔴 open · 🟢 fixed · 🟡 suspected/unconfirmed · ⚪ desi
 | B57 | 🟢 | task_planner | _param_range_label formula underestimated param count by 8×; misled stop_threshold calibration |
 | B58 | 🟢 | lora_trainer | math_reasoning and code_generation fell to else branch with no answer — model trained on empty targets |
 | B59 | 🟢 | harness | max_new_tokens=50 hardcoded; truncates math derivations and code completions |
+| B60 | 🟢 | scorer/classification | substring label match produced wrong label when one label is a substring of another |
 
 ---
 
@@ -695,3 +696,12 @@ Status legend: 🔴 open · 🟢 fixed · 🟡 suspected/unconfirmed · ⚪ desi
   answer was truncated, degrading eval scores in a non-representative way.
 - **Status:** 🟢 fixed 2026-07-08 — classification/NER use 50 tokens; math_reasoning,
   code_generation, generation use 256 tokens.
+
+## B60 — classification label extraction used substring match, breaking on sub-label names
+- **Where:** `eval/scorers/classification.py` (`extract_predictions`)
+- **When:** 2026-07-08, pipeline hardening review
+- **How found:** "positive" is a substring of "very_positive"; the extractor non-deterministically
+  returned whichever label iterated first from a set, not the more-specific one.
+- **Impact:** multi-class F1 artificially degraded for tasks with overlapping label names.
+- **Status:** 🟢 fixed 2026-07-08 — word-boundary re.search (longest label first) takes priority
+  over substring; substring is a fallback only.

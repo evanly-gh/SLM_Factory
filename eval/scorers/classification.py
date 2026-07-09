@@ -1,4 +1,5 @@
 # eval/scorers/classification.py
+import re
 from eval.metrics import binary_f1, per_slice_scores
 from data.eval_set import EvalSet
 
@@ -12,16 +13,25 @@ def build_prompts(eval_set: EvalSet) -> list[str]:
 _UNKNOWN_LABEL = "__EXTRACTION_FAILED__"
 
 def extract_predictions(raw_outputs: list[str], eval_set: EvalSet) -> list[str]:
-    """Extract label from raw model output. Uses __EXTRACTION_FAILED__ when no
-    known label is found — this counts as a failure in the score function rather
-    than silently inflating majority-class accuracy."""
+    """Extract label from raw model output.
+
+    Priority: (1) exact word-boundary match, (2) substring match, (3) __EXTRACTION_FAILED__.
+    Word-boundary matching prevents "positive" from matching "very_positive".
+    """
     all_labels = {e["label"] for e in eval_set.all}
+
     def extract(raw: str) -> str:
         cleaned = raw.strip().lower()
-        for lbl in all_labels:
+        # Pass 1: word-boundary match (most precise)
+        for lbl in sorted(all_labels, key=len, reverse=True):  # longest label first
+            if re.search(r'\b' + re.escape(lbl.lower()) + r'\b', cleaned):
+                return lbl
+        # Pass 2: substring match (fallback for labels without word boundaries)
+        for lbl in sorted(all_labels, key=len, reverse=True):
             if lbl.lower() in cleaned:
                 return lbl
         return _UNKNOWN_LABEL
+
     return [extract(r) for r in raw_outputs]
 
 def score(eval_set: EvalSet, predictions: list[str]) -> dict:
