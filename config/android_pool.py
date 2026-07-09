@@ -88,7 +88,7 @@ CHIP_SCALE_FACTORS: dict[str, float] = {
 class ModelSpec:
     model_id: str          # HuggingFace model ID
     int4_size_mb: int      # Q4_K_M GGUF file size in MB (measured from HF repos)
-    tier: int              # 0 = micro (<0.6B), 1 = small (0.6-1B), 2 = mid (1-2B), 3 = large (2-3B+)
+    tier: int              # 0 = micro (<0.75B params), 1 = small (0.75-1.5B), 2 = mid (1.5-2.5B), 3 = large (>=2.5B)
     # Estimated decode throughput on three well-documented reference chips (tok/s, CPU-bound Q4_K_M).
     # For any other chip, check_hardware_constraints uses CHIP_SCALE_FACTORS to interpolate.
     tok_s_snapdragon_660: float   # 2017 entry-level baseline
@@ -143,42 +143,44 @@ class HardwareConstraints:
 
 
 # ---------------------------------------------------------------------------
-# TIER 0 — Micro (sub-0.6B, ≤300MB INT4)
+# TIER 0 — Micro  (~0.5B params, int4_size < ~375MB)
 # Use for: binary classification, simple NER, keyword extraction, routing
 # Avoid for: multi-step reasoning, math, code, open-ended generation
 # Quantization risk: HIGH — these models lose the most from INT4; prefer QAT
 #   variants. MiniCPM4-0.5B uses BitCPM4 (QAT-aware), Qwen2.5-0.5B is PTQ.
 # ---------------------------------------------------------------------------
 #
-# TIER 1 — Small (0.6–1B, ~400–600MB INT4)
+# TIER 1 — Small  (~0.75–1.5B params, int4_size ~375–750MB)
 # GSM8K: 59–63%. The capability gap from Tier 0→1 is the LARGEST relative jump
 # in the pool (e.g., GSM8K: 41.6% → 59.6%). Good for classification, NER, simple
-# generation. Qwen3-0.6B is the strongest Tier 1 by benchmark; Gemma 3 1B IT
-# benefits from Google's QAT and stronger instruction tuning.
+# generation. Qwen3.5-0.8B, Llama-3.2-1B, MiniCPM5-1B are the Tier 1 members.
 # ---------------------------------------------------------------------------
 #
-# TIER 2 — Mid (1–2B, ~700MB–1.3GB INT4)
+# TIER 2 — Mid    (~1.5–2.5B params, int4_size ~750–1250MB)
 # GSM8K: 70–77%. Most capable tier that runs on all 6GB+ Android devices.
 # SmolLM2-1.7B leads on IFEval (56.7%) — best for instruction-following tasks.
-# Qwen3-1.7B leads on math/reasoning. DeepSeek-R1-Distill-1.5B is specialized
-# for math/reasoning only (MATH-500: 83.9%) but weak on general tasks.
+# DeepSeek-R1-Distill-1.5B is specialized for math/reasoning only (MATH-500: 83.9%).
+# Gemma-3-1b-it (~1.6B actual params) sits in Tier 2 despite its "1B" label.
 # ---------------------------------------------------------------------------
 #
-# TIER 3 — Large (2–3B+, ~1.5–2.1GB INT4)
+# TIER 3 — Large  (~2.5B+ params, int4_size > ~1250MB)
 # GSM8K: 77–82%. Requires 8GB+ RAM phone for comfortable inference. Llama 3.2-3B
 # is the ExecuTorch reference model (fastest on-device path via KleidiAI).
 # Phi-4-mini (3.8B) punches above class on reasoning; Q4_K_M is 2.49GB,
 # fitting the 3GB RAM budget on 8GB devices only (not 6GB).
 # ---------------------------------------------------------------------------
+#
+# Tier formula: params_b = int4_size_mb * 2 / 1000
+# Tier 0: params_b < 0.75B | Tier 1: 0.75–1.5B | Tier 2: 1.5–2.5B | Tier 3: >=2.5B
+# Siblings inherit the base model's tier (not recomputed from sibling's larger file size).
 
 def _q4_sibling(base: ModelSpec) -> ModelSpec:
-    """Q4_K_M GGUF variant. Sizes already Q4_K_M in base; peak RAM = file + 400 MB overhead."""
+    """Q4_K_M GGUF variant. Inherits tier from base (param-count-based)."""
     peak = base.int4_size_mb + 400
-    tier = 0 if peak < 1200 else 1 if peak < 1800 else 2 if peak < 3000 else 3
     return ModelSpec(
         model_id=base.model_id,
         int4_size_mb=base.int4_size_mb,
-        tier=tier,
+        tier=base.tier,
         tok_s_snapdragon_660=base.tok_s_snapdragon_660,
         tok_s_snapdragon_778g=base.tok_s_snapdragon_778g,
         tok_s_snapdragon_8gen3=base.tok_s_snapdragon_8gen3,
@@ -191,14 +193,13 @@ def _q4_sibling(base: ModelSpec) -> ModelSpec:
 
 
 def _q8_sibling(base: ModelSpec) -> ModelSpec:
-    """Q8_0 GGUF variant. ~1.9× larger file, ~35% slower tok/s, higher quality ceiling."""
+    """Q8_0 GGUF variant. ~1.9x larger file, ~35% slower tok/s. Inherits tier from base."""
     q8_size = int(base.int4_size_mb * 1.9)
     peak = q8_size + 400
-    tier = 0 if peak < 1200 else 1 if peak < 1800 else 2 if peak < 3000 else 3
     return ModelSpec(
         model_id=base.model_id,
         int4_size_mb=q8_size,
-        tier=tier,
+        tier=base.tier,
         tok_s_snapdragon_660=round(base.tok_s_snapdragon_660 * 0.65, 1),
         tok_s_snapdragon_778g=round(base.tok_s_snapdragon_778g * 0.65, 1),
         tok_s_snapdragon_8gen3=round(base.tok_s_snapdragon_8gen3 * 0.65, 1),
@@ -283,7 +284,7 @@ ANDROID_POOL: list[ModelSpec] = [
     ModelSpec(
         model_id="google/gemma-3-1b-it",
         int4_size_mb=806,
-        tier=1,
+        tier=2,
         tok_s_snapdragon_660=7.0,
         tok_s_snapdragon_778g=12.0,
         tok_s_snapdragon_8gen3=32.0,
@@ -333,7 +334,7 @@ ANDROID_POOL: list[ModelSpec] = [
     ModelSpec(
         model_id="google/gemma-3n-e2b-it",
         int4_size_mb=1300,
-        tier=2,
+        tier=3,
         tok_s_snapdragon_660=4.0,
         tok_s_snapdragon_778g=7.0,
         tok_s_snapdragon_8gen3=22.0,
@@ -349,7 +350,7 @@ ANDROID_POOL: list[ModelSpec] = [
     ModelSpec(
         model_id="unsloth/Qwen3.5-2B-GGUF",
         int4_size_mb=1350,   # estimated Q4_K_M; exact size at huggingface.co/unsloth/Qwen3.5-2B-GGUF
-        tier=2,
+        tier=3,
         tok_s_snapdragon_660=4.0,
         tok_s_snapdragon_778g=7.5,
         tok_s_snapdragon_8gen3=20.0,
@@ -411,7 +412,7 @@ ANDROID_POOL: list[ModelSpec] = [
 ]
 
 # Expand pool with Q4_K_M and Q8_0 quantized siblings for every base model.
-# Re-tiered by peak_memory_mb so quantized variants compete with appropriately-sized peers.
+# Siblings inherit the base model's tier (param-count based, not re-tiered by file size).
 _BASE_MODELS = [m for m in ANDROID_POOL]  # snapshot before mutation
 ANDROID_POOL = sorted(
     _BASE_MODELS + [_q4_sibling(m) for m in _BASE_MODELS] + [_q8_sibling(m) for m in _BASE_MODELS],
