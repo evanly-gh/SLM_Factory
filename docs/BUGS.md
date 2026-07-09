@@ -68,6 +68,7 @@ Status legend: 🔴 open · 🟢 fixed · 🟡 suspected/unconfirmed · ⚪ desi
 | B58 | 🟢 | lora_trainer | math_reasoning and code_generation fell to else branch with no answer — model trained on empty targets |
 | B59 | 🟢 | harness | max_new_tokens=50 hardcoded; truncates math derivations and code completions |
 | B60 | 🟢 | scorer/classification | substring label match produced wrong label when one label is a substring of another |
+| B61 | 🟢 | metrics | entity_f1 used set (dedup), undercounting TP/FN for repeated entity mentions |
 
 ---
 
@@ -705,3 +706,11 @@ Status legend: 🔴 open · 🟢 fixed · 🟡 suspected/unconfirmed · ⚪ desi
 - **Impact:** multi-class F1 artificially degraded for tasks with overlapping label names.
 - **Status:** 🟢 fixed 2026-07-08 — word-boundary re.search (longest label first) takes priority
   over substring; substring is a fallback only.
+
+## B61 — entity_f1 used set intersection, missing duplicate entity mentions
+- **Where:** `eval/metrics.py` (`entity_f1`)
+- **When:** 2026-07-08, pipeline hardening review
+- **How found:** set intersection deduplicates: gold has "Apple" ORG twice, pred has it once →
+  set gives TP=1, FN=0, F1=1.0 (wrong). Counter gives TP=1, FN=1, F1=0.667 (correct).
+- **Impact:** NER eval overestimated recall for passages with repeated entity mentions.
+- **Status:** 🟢 fixed 2026-07-08 — Counter multiset arithmetic replaces set intersection.
