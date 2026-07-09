@@ -29,6 +29,7 @@ def _train_and_eval(model, state, dataset_path: str):
     task_type = state["task_type"]
     model_id = model.model_id
     model_id_safe = model_id.replace("/", "_")
+    current_safe = state["selected_model"].model_id.replace("/", "_")
     config = TrainingConfig(
         base_model=model_id,
         nr_epochs=_PROBE_EPOCHS,
@@ -39,18 +40,18 @@ def _train_and_eval(model, state, dataset_path: str):
     )
     weights_ref = run_lora_training(
         dataset_path, config,
-        output_dir=os.path.join("artifacts", "downward_probe", model_id_safe),
+        output_dir=os.path.join("artifacts", "downward_probe", current_safe, model_id_safe),
         task_type=task_type,
     ).weights_ref
     gguf_path = None
     if model.quant is not None:
         merged_path = merge_for_quantization(
             weights_ref,
-            os.path.join("artifacts", "merged", model_id_safe, "downward_probe"),
+            os.path.join("artifacts", "merged", model_id_safe, f"downward_probe_from_{current_safe}"),
         )
         gguf_path = quantize_from_model_spec(
             merged_path,
-            os.path.join("artifacts", "gguf", model_id_safe, "downward_probe"),
+            os.path.join("artifacts", "gguf", model_id_safe, f"downward_probe_from_{current_safe}"),
             model.quant,
         )
     result = run_eval(
