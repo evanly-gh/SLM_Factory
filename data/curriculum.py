@@ -1,8 +1,11 @@
 # data/curriculum.py
+import logging
 import random
 from collections import Counter
 from config.config import TEACHER_MODEL_CLAUDE
 from data.eval_set import EvalSet, _infer_pos_label, _infer_neg_label
+
+logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
@@ -387,54 +390,24 @@ def synthesize_hard_negatives(
                 results.append({"text": raw, "entities": []})
 
     elif task_type == "math_reasoning":
-        # Hard negatives for math: plausible wrong answers that contain a subtle
-        # arithmetic or reasoning error. The model must learn to reject off-by-one
-        # errors, wrong operator choices, and unit confusion.
-        candidates = examples[:n]
-        for ex in candidates:
-            source_text = ex.get("prompt", ex.get("text", ""))
-            gold_answer = ex.get("response", ex.get("label", ex.get("answer", "")))
-            prompt = (
-                f"Given this math problem and its correct answer, generate a plausible but "
-                f"WRONG answer that contains a subtle arithmetic or reasoning error "
-                f"(e.g., off-by-one, wrong operation, unit mistake, sign error).\n\n"
-                f"Problem: {source_text}\n"
-                f"Correct answer: {gold_answer}\n\n"
-                f"Reply with only the wrong answer, no explanation."
+        # SFT on wrong answers actively harms math models — skip wrong-answer negatives.
+        # Instead, return the gold examples as-is (CoT annotation in curate_node provides
+        # the real augmentation value for math tasks).
+        if targeted_pattern:
+            logger.warning(
+                "[curriculum] Surgical patterns not supported for math_reasoning hard negatives; "
+                "returning gold examples unchanged."
             )
-            response = anthropic_client.messages.create(
-                model=TEACHER_MODEL_CLAUDE,
-                max_tokens=200,
-                messages=[{"role": "user", "content": prompt}],
-            )
-            wrong_answer = response.content[0].text.strip()
-            results.append(ex)
-            results.append({"prompt": source_text, "response": wrong_answer})
+        return list(examples[:n]) if n < len(examples) else list(examples)
 
     elif task_type == "code_generation":
-        # Hard negatives for code: syntactically valid but functionally wrong solutions
-        # (off-by-one in loop bounds, wrong edge case handling, subtle logic inversion).
-        candidates = examples[:n]
-        for ex in candidates:
-            source_text = ex.get("prompt", ex.get("text", ""))
-            gold_answer = ex.get("response", ex.get("label", ex.get("answer", "")))
-            prompt = (
-                f"Given this coding problem and its correct solution, generate a plausible "
-                f"but WRONG solution that is syntactically valid Python but fails on at "
-                f"least one test case due to a subtle logic error (e.g., off-by-one, "
-                f"wrong base case, missing edge case, incorrect operator).\n\n"
-                f"Problem: {source_text}\n"
-                f"Correct solution:\n{gold_answer}\n\n"
-                f"Reply with only the wrong solution code, no explanation."
+        # Wrong-code SFT examples teach the model to produce bugs — skip.
+        if targeted_pattern:
+            logger.warning(
+                "[curriculum] Surgical patterns not supported for code_generation hard negatives; "
+                "returning gold examples unchanged."
             )
-            response = anthropic_client.messages.create(
-                model=TEACHER_MODEL_CLAUDE,
-                max_tokens=400,
-                messages=[{"role": "user", "content": prompt}],
-            )
-            wrong_solution = response.content[0].text.strip()
-            results.append(ex)
-            results.append({"prompt": source_text, "response": wrong_solution})
+        return list(examples[:n]) if n < len(examples) else list(examples)
 
     elif task_type == "generation":
         candidates = examples[:n]

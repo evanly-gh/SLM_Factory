@@ -69,6 +69,7 @@ Status legend: 🔴 open · 🟢 fixed · 🟡 suspected/unconfirmed · ⚪ desi
 | B59 | 🟢 | harness | max_new_tokens=50 hardcoded; truncates math derivations and code completions |
 | B60 | 🟢 | scorer/classification | substring label match produced wrong label when one label is a substring of another |
 | B61 | 🟢 | metrics | entity_f1 used set (dedup), undercounting TP/FN for repeated entity mentions |
+| B62 | 🟢 | curriculum | math/code hard negatives stored wrong answers as SFT targets, training model to produce errors |
 
 ---
 
@@ -714,3 +715,15 @@ Status legend: 🔴 open · 🟢 fixed · 🟡 suspected/unconfirmed · ⚪ desi
   set gives TP=1, FN=0, F1=1.0 (wrong). Counter gives TP=1, FN=1, F1=0.667 (correct).
 - **Impact:** NER eval overestimated recall for passages with repeated entity mentions.
 - **Status:** 🟢 fixed 2026-07-08 — Counter multiset arithmetic replaces set intersection.
+
+## B62 — math/code hard negatives trained model on wrong answers
+- **Where:** `data/curriculum.py` (`synthesize_hard_negatives`)
+- **When:** 2026-07-08, pipeline hardening review
+- **How found:** synthesize_hard_negatives for math_reasoning called teacher LLM to produce a
+  plausible-but-wrong answer and stored it as {"prompt": ..., "response": wrong_answer}.
+  SFTTrainer maximizes likelihood of whatever is in "response", so the model learned to output
+  wrong answers for those prompts.
+- **Impact:** math/code fine-tuned models were actively trained to produce incorrect outputs on
+  the hard-negative examples — negative transfer rather than positive learning signal.
+- **Status:** 🟢 fixed 2026-07-08 — math/code hard-negative synthesis removed. Gold examples
+  are returned unchanged (CoT annotation in curate_node provides the relevant augmentation).
