@@ -12,6 +12,7 @@ or check the curation log before making its decision.
 """
 import json
 from agent.state import AgentState
+from config.android_pool import check_hardware_constraints, all_constraints_pass
 
 
 _ITERATE_SYSTEM = """\
@@ -309,6 +310,26 @@ def iterate_node(state: AgentState) -> AgentState:
                 state["stop_threshold"] = clamped
 
     if current_score >= state["stop_threshold"]:
+        hw_blocks_termination = False
+        _gating_model = state.get("selected_model")
+        if state.get("hw_gating_enabled") and _gating_model is not None:
+            hw_check = check_hardware_constraints(
+                _gating_model, state["hardware_constraints"]
+            )
+            if not all_constraints_pass(hw_check):
+                hw_blocks_termination = True
+        if hw_blocks_termination:
+            _log(model_id,
+                 f"  Score {current_score:.4f} >= threshold but hardware FAILS — "
+                 f"not accepting as terminal; continuing")
+            if stagnant:
+                state["next_action"] = "escalate"
+                _log(model_id, "  → ESCALATE (hw-blocked terminal + stagnation)")
+            elif intervention == "hyperparameter":
+                state["next_action"] = "train"
+            else:
+                state["next_action"] = "curate"
+            return state
         state["next_action"] = "terminate"
         _log(model_id, f"  → TERMINATE (score {current_score:.4f} >= threshold {state['stop_threshold']:.3f})")
     elif stagnant:
