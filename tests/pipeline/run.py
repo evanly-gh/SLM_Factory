@@ -212,6 +212,7 @@ initial_state = {
     "scores": [],
     "dag": [],
     "consecutive_no_improvement": 0,
+    "downward_probe_done": False,
     "last_eval": None,
     "last_curation": None,
     "last_intervention": "",
