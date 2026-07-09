@@ -54,37 +54,84 @@ Halving model size (N) increases QiD by ~16%. More thoroughly pre-trained models
 
 ---
 
-## 2. Tier Stratification Justification
+## 2. Quantized Siblings
+
+The pool was expanded from 12 base entries to **36 entries** by generating a Q4_K_M sibling and a Q8_0 sibling for each of the 12 base models. The `ModelSpec.quant` field distinguishes them: `None` = base (BF16/FP16 training checkpoint), `"Q4_K_M"` = 4-bit GGUF, `"Q8_0"` = 8-bit GGUF.
+
+The selector loop can select **any quant variant**. The honest quantized-eval path evaluates the actual GGUF file that would ship to the device — not the base checkpoint — so evaluation scores reflect real deployment quality.
+
+### Q4_K_M sibling (`_q4_sibling`)
+
+```python
+peak = base.int4_size_mb + 400   # MB
+int4_size_mb = base.int4_size_mb  # same as base (Q4_K_M is the standard)
+```
+
+INT4 file size is the same as the base model's `int4_size_mb` (since the base spec already reports Q4_K_M size). Peak RAM adds 400 MB for KV cache and runtime overhead.
+
+### Q8_0 sibling (`_q8_sibling`)
+
+```python
+q8_size = int(base.int4_size_mb * 1.9)   # ~1.9x larger file
+peak = q8_size + 400                       # MB
+tok_s_* = round(base.tok_s_* * 0.65, 1)  # ~35% slower tok/s at Q8_0
+```
+
+Q8_0 files are approximately 1.9x larger than the Q4_K_M equivalent. Decode throughput is ~35% slower (0.65× multiplier across all chipsets). Q8_0 is higher quality than Q4_K_M and useful when storage is not the binding constraint.
+
+### Tier inheritance
+
+Siblings inherit their base model's tier. Tier is **not recomputed** from the sibling's (larger) file size. This ensures a Q8_0 variant of a Tier 1 model remains in Tier 1 even though its file is physically larger.
+
+---
+
+## 3. Tier Stratification Justification
 
 ### Why 4 tiers instead of 3 or 5
 
 Capability scales as a **power law** (not step-functions) in perplexity/loss across the 0.5–3B range (Kaplan et al. 2020, Chinchilla 2022). However, downstream task accuracy — particularly on multi-step reasoning benchmarks — shows near-step-function jumps at two specific points that justify tier boundaries.
 
-**GSM8K (grade-school math, multi-step arithmetic) is the stratification benchmark** because it is the most sensitive indicator of reasoning capability at small scales: it shows the sharpest capability cliffs while being concrete enough to be reproducible. MMLU is used as a secondary signal for general knowledge breadth.
+### Primary tiering formula: parameter count
 
-### The two step-functions
+Tier assignment is **parameter-count-based**, computed directly from the INT4 file size:
 
-**Step 1: Tier 0 → Tier 1 (sub-0.6B → 0.8B+)**
+```
+params_b = int4_size_mb * 2 / 1000
+```
+
+Thresholds:
+- **Tier 0** — params_b < 0.75B
+- **Tier 1** — 0.75B ≤ params_b < 1.5B
+- **Tier 2** — 1.5B ≤ params_b < 2.5B
+- **Tier 3** — params_b ≥ 2.5B
+
+Quantized siblings (Q4_K_M and Q8_0) inherit their base model's tier — they are not re-tiered from their own (larger) file size.
+
+**GSM8K (grade-school math, multi-step arithmetic) is used as a secondary signal** for reasoning capability and sorting — it shows the sharpest capability cliffs while being concrete enough to be reproducible. MMLU is used as a further secondary signal for general knowledge breadth.
+
+### The capability step-functions
+
+**Step 1: Tier 0 → Tier 1 (sub-0.75B → ~0.8B+)**
 
 The largest capability jump in the pool:
 - MiniCPM4-0.5B GSM8K: **~55%**
 - Qwen3.5-0.8B GSM8K: **~61%** (estimated, +6 pp)
 - MiniCPM5-1B GSM8K: **~85%** (proxy from MATH-500 91.6%, +30 pp)
 
-At sub-0.6B, models cannot reliably execute multi-step reasoning chains. Passing individual classification labels or named entity spans is feasible; generating coherent multi-sentence reasoning is not. This is the binary threshold between "routing/extraction" and "generation."
+At sub-0.75B, models cannot reliably execute multi-step reasoning chains. Passing individual classification labels or named entity spans is feasible; generating coherent multi-sentence reasoning is not. This is the binary threshold between "routing/extraction" and "generation."
 
-**Step 2: Tier 1 → Tier 2 (1B → 1.5–2B)**
+**Step 2: Tier 1 → Tier 2 (~1.5B)**
 
 A second meaningful jump:
 - Llama 3.2-1B GSM8K: **~44%**
 - Qwen3.5-2B Intelligence Index: **16** (+3 pts over Qwen3-1.7B's 13)
 - DeepSeek-R1-Distill-1.5B MATH-500: **83.9%**
 
-The 1.5–2B tier reliably executes reasoning chains, follows complex instructions, and generates coherent longer outputs. This is where the model transitions from "works on simple tasks" to "works on most SLM Factory target tasks."
+The 1.5–2.5B tier reliably executes reasoning chains, follows complex instructions, and generates coherent longer outputs. This is where the model transitions from "works on simple tasks" to "works on most SLM Factory target tasks."
 
-**Step 3: Tier 2 → Tier 3 (2B → 3B)**
+**Step 3: Tier 2 → Tier 3 (~2.5B+)**
 
-A real but smaller gap. The 3B tier matters only for hard math and complex code, and it costs 8GB+ RAM vs 6GB. The tier boundary here is driven by RAM requirements more than capability.
+A real but smaller gap. The 2.5B+ tier matters only for hard math and complex code, and it costs 8GB+ RAM vs 6GB. The tier boundary here is driven by RAM requirements more than capability.
 
 ### Tier boundaries and RAM budget
 
@@ -94,18 +141,18 @@ Total RAM budget ≤ 3 GB (project requirement, matching typical mid-range Andro
 total_RAM ≈ int4_file_mb + 1000–1500 MB (Android OS + app + KV cache at 2K ctx)
 ```
 
-| Tier | INT4 file range | Peak RAM range | Minimum phone RAM |
-|---|---|---|---|
-| 0 (Micro) | 310 MB | 480 MB | 4 GB (any Android) |
-| 1 (Small) | 500–806 MB | 670–1,050 MB | 4 GB (any Android) |
-| 2 (Mid) | 958–1,350 MB | 1,270–2,200 MB | 6 GB |
-| 3 (Large) | 1,900–2,490 MB | 3,200–4,100 MB | 8 GB |
+| Tier | Param range | INT4 file range | Peak RAM range | Minimum phone RAM |
+|---|---|---|---|---|
+| 0 (Micro) | sub-0.75B | 310 MB | 480 MB | 4 GB (any Android) |
+| 1 (Small) | ~0.75–1.5B | 500–750 MB | 670–1,050 MB | 4 GB (any Android) |
+| 2 (Mid) | ~1.5–2.5B | 806–1,350 MB | 1,050–2,200 MB | 6 GB |
+| 3 (Large) | ~2.5B+ | 1,900–2,490 MB | 3,200–4,100 MB | 8 GB |
 
 ---
 
-## 3. Model-by-Model Justification
+## 4. Model-by-Model Justification
 
-### Tier 0 — Micro (sub-0.6B)
+### Tier 0 — Micro (sub-0.75B)
 
 **Use for:** Binary classification, keyword extraction, simple NER, routing decisions. Do not use for multi-step generation.
 
@@ -120,7 +167,7 @@ total_RAM ≈ int4_file_mb + 1000–1500 MB (Android OS + app + KV cache at 2K c
 
 ---
 
-### Tier 1 — Small (0.6–1B)
+### Tier 1 — Small (~0.75–1.5B)
 
 **Use for:** Simple instruction following, summarization, NER, basic generation.
 
@@ -169,24 +216,24 @@ total_RAM ≈ int4_file_mb + 1000–1500 MB (Android OS + app + KV cache at 2K c
 
 ---
 
+### Tier 2 — Mid (~1.5–2.5B)
+
+**Use for:** Most SLM Factory target tasks. Multi-step reasoning, NER, code generation, complex instruction following. Fits all 6GB+ Android phones.
+
+---
+
 #### `google/gemma-3-1b-it`
-- **INT4 size:** 806 MB | **Peak RAM:** ~1,050 MB
+- **INT4 size:** 806 MB | **Peak RAM:** ~1,050 MB | **Tier:** 2 (params_b = 806 * 2 / 1000 = 1.61B)
 - **Benchmarks:** GSM8K 62.8%, MMLU ~48% (Gemma 3 Technical Report, arXiv 2503.19786)
 - **Why included:** Google's official QAT checkpoint — quantization-aware trained by Google, not post-training quantized. This directly reduces INT4 degradation. It is also the native LiteRT/MediaPipe deployment target: any Android app using Google's on-device AI SDK needs this model specifically.
 - **Runtime:** LiteRT/MediaPipe (best: Google's official on-device AI SDK), llama.cpp/GGUF (via QAT GGUF). **No runtime LoRA loading via LiteRT** — adapters must be merged before TFLite conversion.
 - **Special notes:**
   - Google provides the QAT GGUF at `google_gemma-3-1b-it-qat-GGUF` — higher quality than standard PTQ Q4_K_M
-  - Official LiteRT-LM and MediaPipe deployment path (the only Tier 1 model on Google's official on-device stack)
-  - IFEval 80.2% — strongest instruction following of any Tier 1 model
+  - Official LiteRT-LM and MediaPipe deployment path for the Gemma family
+  - IFEval 80.2% — strongest instruction following in Tier 2
   - **Natively multimodal** — supports image+text input (despite the 1B size)
   - 32K context
 - **Limitations:** MMLU ~48% is lower than Qwen3.5-0.8B (~54%) despite having more parameters — Gemma's training prioritizes instruction following and safety over raw benchmark scores. LiteRT path does not support runtime adapter loading.
-
----
-
-### Tier 2 — Mid (1–2B)
-
-**Use for:** Most SLM Factory target tasks. Multi-step reasoning, NER, code generation, complex instruction following. Fits all 6GB+ Android phones.
 
 ---
 
@@ -205,36 +252,6 @@ total_RAM ≈ int4_file_mb + 1000–1500 MB (Android OS + app + KV cache at 2K c
 
 ---
 
-#### `unsloth/Qwen3.5-2B-GGUF`
-- **INT4 size:** ~1,350 MB (Q4_K_M estimated; verify at [huggingface.co/unsloth/Qwen3.5-2B-GGUF](https://huggingface.co/unsloth/Qwen3.5-2B-GGUF)) | **Peak RAM:** ~1,800 MB
-- **Benchmarks:** Intelligence Index 16.0 (+3 pts over Qwen3-1.7B). Classic GSM8K/MMLU not published — uses newer MMLU-ProX/MAXIFE/WMT24++ suite. Estimated GSM8K ~72%, MMLU ~61%.
-- **Why included:** Same Gated DeltaNet hybrid architecture as Qwen3.5-0.8B but at 2B parameters. Supersedes Qwen3-1.7B with better architecture (+3 Intelligence Index points) plus multimodal capability and 262K context. Unsloth's Dynamic 2.0 GGUF is confirmed working with llama.cpp, Ollama, and compatible tools.
-- **Runtime:** llama.cpp/GGUF (Unsloth Dynamic 2.0 GGUF confirmed), MNN-LLM (fastest prefill for Qwen family)
-- **Special notes:**
-  - **Natively multimodal** — text, image, video input
-  - **262K context window** — largest in Tier 2; suited for long-document tasks
-  - **201 languages** — best multilingual coverage in Tier 2
-  - Unsloth Dynamic 2.0 quantization upcasts important layers to 8/16-bit for better quality than standard Q4_K_M
-  - Thinking mode disabled by default; enable with `--chat-template-kwargs '{"enable_thinking":true}'`
-- **Limitations:** No classic GSM8K/MMLU scores available. Estimated scores inferred from Intelligence Index comparison.
-
----
-
-#### `google/gemma-3n-e2b-it`
-- **INT4 size:** ~1,300 MB | **Peak RAM:** ~2,200 MB
-- **Benchmarks:** MMLU 60.1%, HumanEval 66.5%, MBPP 56.6%, Global-MMLU-Lite 59.0%. Beats Gemma3-1B on **9 out of 9** shared benchmarks.
-- **Why included:** Substantially stronger than Gemma3-1B-IT despite similar branding — HumanEval 66.5% vs 41.5%, MMLU 60.1% vs ~48%. The MatFormer (Matryoshka Transformer) architecture enables 5B total parameters with only 2.3B active via Per-Layer Embedding caching, giving it near-3B capability at 2B memory cost. Only model in the pool that handles text, images, video, and audio natively.
-- **Runtime:** LiteRT/MediaPipe (best: Google's NPU-accelerated path, 50-80 tok/s), llama.cpp/GGUF (universal). **No runtime LoRA loading via LiteRT.**
-- **Special notes:**
-  - **MatFormer architecture** — nested model design means E4B contains a fully functional E2B sub-model; allows dynamic size selection at runtime
-  - **Natively multimodal** — text, image, video, audio input
-  - 50–80 tok/s on NPU (Qualcomm/MediaTek partnerships confirmed)
-  - Official LiteRT + MediaPipe + Android Studio deployment path
-  - **⚠️ Proprietary license** — not Apache 2.0. Check licensing terms before commercial use.
-- **Limitations:** GSM8K not directly published for E2B (E4B ~83%). Larger RAM footprint (2.2 GB peak) than other Tier 2 models — effectively sits at the top of Tier 2 / bottom of Tier 3. LiteRT path does not support runtime adapter loading.
-
----
-
 #### `HuggingFaceTB/SmolLM2-1.7B-Instruct`
 - **INT4 size:** 1,060 MB | **Peak RAM:** ~1,350 MB
 - **Benchmarks:** GSM8K 48.8%, MMLU ~52%, IFEval **56.7%** (SmolLM2 paper, arXiv 2502.02737)
@@ -250,9 +267,39 @@ total_RAM ≈ int4_file_mb + 1000–1500 MB (Android OS + app + KV cache at 2K c
 
 ---
 
-### Tier 3 — Large (2–4B)
+### Tier 3 — Large (~2.5B+)
 
 **Use for:** Hard math, complex code, tasks requiring near-7B capability. Requires 8GB+ RAM phone. GSM8K 77–88%.
+
+---
+
+#### `google/gemma-3n-e2b-it`
+- **INT4 size:** ~1,300 MB | **Peak RAM:** ~2,200 MB | **Tier:** 3 (params_b = 1300 * 2 / 1000 = 2.6B)
+- **Benchmarks:** MMLU 60.1%, HumanEval 66.5%, MBPP 56.6%, Global-MMLU-Lite 59.0%. Beats Gemma3-1B on **9 out of 9** shared benchmarks.
+- **Why included:** Substantially stronger than Gemma3-1B-IT despite similar branding — HumanEval 66.5% vs 41.5%, MMLU 60.1% vs ~48%. The MatFormer (Matryoshka Transformer) architecture enables 5B total parameters with only 2.3B active via Per-Layer Embedding caching, giving it near-3B capability at 2B memory cost. Only model in the pool that handles text, images, video, and audio natively.
+- **Runtime:** LiteRT/MediaPipe (best: Google's NPU-accelerated path, 50-80 tok/s), llama.cpp/GGUF (universal). **No runtime LoRA loading via LiteRT.**
+- **Special notes:**
+  - **MatFormer architecture** — nested model design means E4B contains a fully functional E2B sub-model; allows dynamic size selection at runtime
+  - **Natively multimodal** — text, image, video, audio input
+  - 50–80 tok/s on NPU (Qualcomm/MediaTek partnerships confirmed)
+  - Official LiteRT + MediaPipe + Android Studio deployment path
+  - **⚠️ Proprietary license** — not Apache 2.0. Check licensing terms before commercial use.
+- **Limitations:** GSM8K not directly published for E2B (E4B ~83%). LiteRT path does not support runtime adapter loading.
+
+---
+
+#### `unsloth/Qwen3.5-2B-GGUF`
+- **INT4 size:** ~1,350 MB (Q4_K_M estimated; verify at [huggingface.co/unsloth/Qwen3.5-2B-GGUF](https://huggingface.co/unsloth/Qwen3.5-2B-GGUF)) | **Peak RAM:** ~1,800 MB | **Tier:** 3 (params_b = 1350 * 2 / 1000 = 2.7B)
+- **Benchmarks:** Intelligence Index 16.0 (+3 pts over Qwen3-1.7B). Classic GSM8K/MMLU not published — uses newer MMLU-ProX/MAXIFE/WMT24++ suite. Estimated GSM8K ~72%, MMLU ~61%.
+- **Why included:** Same Gated DeltaNet hybrid architecture as Qwen3.5-0.8B but at 2B parameters. Supersedes Qwen3-1.7B with better architecture (+3 Intelligence Index points) plus multimodal capability and 262K context. Unsloth's Dynamic 2.0 GGUF is confirmed working with llama.cpp, Ollama, and compatible tools.
+- **Runtime:** llama.cpp/GGUF (Unsloth Dynamic 2.0 GGUF confirmed), MNN-LLM (fastest prefill for Qwen family)
+- **Special notes:**
+  - **Natively multimodal** — text, image, video input
+  - **262K context window** — suited for long-document tasks
+  - **201 languages** — best multilingual coverage in Tier 3
+  - Unsloth Dynamic 2.0 quantization upcasts important layers to 8/16-bit for better quality than standard Q4_K_M
+  - Thinking mode disabled by default; enable with `--chat-template-kwargs '{"enable_thinking":true}'`
+- **Limitations:** No classic GSM8K/MMLU scores available. Estimated scores inferred from Intelligence Index comparison.
 
 ---
 
@@ -298,7 +345,7 @@ total_RAM ≈ int4_file_mb + 1000–1500 MB (Android OS + app + KV cache at 2K c
 
 ---
 
-## 4. SLM Factory-Specific Considerations
+## 5. SLM Factory-Specific Considerations
 
 ### Quantization choice for fine-tuned models
 
@@ -324,19 +371,18 @@ The implication: start with Llama-3.2-1B for tasks with large training data and 
 
 This model is not a general-purpose starting checkpoint. Its SFT-only distillation from DeepSeek-R1 causes documented catastrophic forgetting of general skills. If SLM Factory's fine-tuning target is math or formal reasoning, this model is worth trying — but expect failure on any general benchmark during evaluation. The regression gate (`ε=2`) in the iteration policy will correctly catch this.
 
-### The 20 tok/s interactive threshold
+### The throughput floor
 
 The `min_tok_s` field on `HardwareConstraints` (default 0, disabled) enforces the interactive throughput floor from `hardware_metrics.md`:
-- **Hard gate: ≥20 tok/s** — a 200-token response completes in 10 seconds (workable)
-- **Target: ≥30 tok/s** — responses feel genuinely interactive
+- **Hard gate: ≥6 tok/s** — average English reading speed (~250 wpm ≈ 6 tok/s). Below this, streaming output visibly lags behind reading pace. This is a UX floor, not a model property — it is constant regardless of model or task.
 
-On a **Snapdragon 778G** (the design reference chip, CHIP_SCALE_FACTORS = 1.0), Tier 2 and Tier 3 models generally do not hit 20 tok/s. This means SLM Factory deployments on mid-range phones are batch-mode by default unless a Tier 0/1 model is used.
+On a **Snapdragon 778G** (the design reference chip, CHIP_SCALE_FACTORS = 1.0), Tier 2 and Tier 3 models generally do not hit 6 tok/s with larger quantizations. This means SLM Factory deployments on mid-range phones may need to target smaller tiers or use Q4_K_M.
 
-Set `min_tok_s=20.0` when the deployment requires interactive streaming. Leave it at `0.0` for batch fine-tuning eval loops where latency is irrelevant.
+Set `min_tok_s=6.0` when the deployment requires interactive streaming. Leave it at `0.0` for batch fine-tuning eval loops where latency is irrelevant.
 
 ### Escalation logic implication
 
-`filter_pool` returns models sorted by tier then size. The escalation node picks the next model up. The `min_tok_s` filter can change which models appear in this list — if a 3B model doesn't hit the throughput floor on the target chip, it won't appear as an escalation candidate, and the system will terminate rather than escalate to an unusable model. This is correct behavior.
+`filter_pool` returns models sorted by tier then size. When escalation is triggered, the escalation node collects **all feasible models in the next tier** (not just the immediately next model by size), and an LLM selects among them based on the task context. The `min_tok_s` filter can change which models appear in this list — if Tier 3 models don't hit the throughput floor on the target chip, they won't appear as escalation candidates, and the system will terminate rather than escalate to an unusable model. This is correct behavior.
 
 ### Models that were considered but not included
 
