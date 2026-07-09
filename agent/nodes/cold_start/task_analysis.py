@@ -24,16 +24,6 @@ _VALID_TASK_TYPES = {
     "generation",
 }
 
-# Maps each task type to the filter_pool_by_task sort key.
-_TASK_TYPE_TO_POOL_KEY: dict[str, str | None] = {
-    "classification":  "classification",
-    "NER":             "ner",
-    "math_reasoning":  "math",
-    "code_generation": "code",
-    "generation":      None,
-}
-
-
 def task_analysis_node(state: AgentState) -> AgentState:
     """
     Node 1: classify the task, filter hardware pool, set stop threshold.
@@ -70,34 +60,7 @@ def task_analysis_node(state: AgentState) -> AgentState:
     if not feasible:
         raise RuntimeError("No models in Android pool satisfy hardware constraints.")
 
-    # Apply task-preference sort on top of hardware-filtered set.
-    # filter_pool_by_task re-filters from the full ANDROID_POOL; we replicate
-    # its sort logic here directly to avoid re-filtering what we already have.
-    pool_key = _TASK_TYPE_TO_POOL_KEY.get(task_type)
-    if pool_key == "math" or pool_key == "reasoning":
-        feasible = sorted(feasible, key=lambda m: (m.tier, -m.gsm8k))
-    elif pool_key == "classification":
-        def _cls_key(m):
-            smol_bonus = -0.05 if "SmolLM" in m.model_id else 0.0
-            return (m.tier, smol_bonus - m.mmlu)
-        feasible = sorted(feasible, key=_cls_key)
-    elif pool_key in ("ner", "multilingual", "code"):
-        def _qwen_key(m):
-            qwen_bonus = -0.03 if "Qwen" in m.model_id else 0.0
-            return (m.tier, qwen_bonus - m.gsm8k)
-        feasible = sorted(feasible, key=_qwen_key)
-    # else: already sorted largest→smallest from hardware_filter
-
-    # math_reasoning: front-load specialized reasoning models
-    if task_type == "math_reasoning":
-        preferred = [m for m in feasible if any(
-            k in m.model_id for k in ("DeepSeek-R1", "Qwen3", "Phi-4")
-        )]
-        if preferred:
-            others = [m for m in feasible if m not in preferred]
-            feasible = preferred + others
-
-    # Restore size-descending order for scaling_curve_node which relies on
+    # Sort largest→smallest for scaling_curve_node which relies on
     # feasible[0] = largest and feasible[-1] = smallest.
     feasible = sorted(feasible, key=lambda m: m.int4_size_mb, reverse=True)
     state["feasible_models"] = feasible

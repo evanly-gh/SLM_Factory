@@ -63,6 +63,7 @@ Status legend: 🔴 open · 🟢 fixed · 🟡 suspected/unconfirmed · ⚪ desi
 | B53 | 🟢 | android_pool | tiers based on peak_memory_mb (RAM), not parameter count; siblings got different tiers than base |
 | B54 | 🟢 | escalate | escalation stepped by pool index, not by tier; LLM never involved in model selection |
 | B55 | 🟢 | scaling_curve | _probe_model returned 0.0 always; current_dataset_path is None before first curate |
+| B56 | 🟢 | task_analysis | task-preference sort immediately overwritten by size-descending sort — dead code |
 
 ---
 
@@ -643,6 +644,15 @@ Status legend: 🔴 open · 🟢 fixed · 🟡 suspected/unconfirmed · ⚪ desi
   a temporary JSONL seed from eval_set.pos + neg + boundary examples, trains a 1-epoch probe on
   that seed, and cleans up in a finally block. This gives a real ranking signal without restructuring
   graph edges.
+
+## B56 — dead task-preference sort in task_analysis_node
+- **Where:** `agent/nodes/cold_start/task_analysis.py`
+- **When:** 2026-07-08, pipeline hardening review
+- **How found:** sort by (tier, benchmark_score) was applied then immediately overwritten by a
+  size-descending re-sort before storing to state. scaling_curve_node (which reads feasible_models)
+  only needs size order, not task preference.
+- **Impact:** dead code; no functional effect but confuses maintainers.
+- **Status:** 🟢 fixed 2026-07-08 — removed task-preference sort and _TASK_TYPE_TO_POOL_KEY dict.
 
 ## B54 — escalation stepped by index not tier; no LLM model selection
 - **Where:** `agent/nodes/escalate.py`
