@@ -104,7 +104,7 @@ def _run_unsloth_training(
                     messages, tokenize=False, add_generation_prompt=False,
                 )}
             return {"text": f"{user_msg}\n\nEntities: {assistant_msg}"}
-    elif task_type == "generation":
+    elif task_type in ("generation", "math_reasoning", "code_generation"):
         def format_example(ex):
             user_msg = ex.get("text", ex.get("prompt", ""))
             raw_answer = ex.get("answer", ex.get("response", ex.get("label", "")))
