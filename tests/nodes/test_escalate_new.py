@@ -1,3 +1,4 @@
+import pytest
 from unittest.mock import patch, MagicMock
 from config.android_pool import HardwareConstraints, ANDROID_POOL, ModelSpec
 
@@ -43,7 +44,7 @@ def test_escalate_advances_to_next_tier():
 def test_escalate_terminates_at_top_tier():
     tier3_models = [m for m in ANDROID_POOL if m.tier == 3 and m.quant is None]
     if not tier3_models:
-        return  # skip if pool has no tier 3
+        pytest.skip("No tier-3 models in pool")
     state = _make_state(tier3_models[-1])  # largest tier-3 model
     with patch("agent.nodes.escalate._llm_choose_model"):
         from agent.nodes.escalate import escalate_node
