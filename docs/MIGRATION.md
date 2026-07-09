@@ -10,13 +10,17 @@ Everything considered in design docs, paper analysis, and planning sessions that
 `agent/tools/delegate_task.py` exists but is broken and has zero call sites. The sub-agent is given no file-writing tool, so the output file is never written. **Fix:** bind `edit_file` to the sub-agent and add call sites in e.g. `curate_node` (synthesize dataset while training runs in parallel).
 
 ### 1.2 No Actual Quantization (B28)
-`quantize.py` returns a theoretical profile dict from the Android pool definition. No INT4/GGUF export, no ONNX conversion, no QNN packaging. Phase 2 scope, but the interface should be defined now. **Recommended:** define a `HardwareEvalResult` dataclass and `measure_on_device(weights_ref, model_id, chip) -> HardwareEvalResult` interface.
+~~`quantize.py` returns a theoretical profile dict from the Android pool definition. No INT4/GGUF export, no ONNX conversion, no QNN packaging. Phase 2 scope, but the interface should be defined now. **Recommended:** define a `HardwareEvalResult` dataclass and `measure_on_device(weights_ref, model_id, chip) -> HardwareEvalResult` interface.~~
+
+**GGUF export DONE** (2026-07-08): `training/quantize.py` now has `quantize_from_model_spec` doing real GGUF export for Q4_K_M and Q8_0 via llama.cpp (`convert_hf_to_gguf` + `llama-quantize`). The `quantize_checkpoint` function handles the full HF→f16→INT4 pipeline. ONNX conversion and QNN packaging remain Phase 2 scope — still pending.
 
 ### 1.3 No `apply_chat_template` / Assistant-Only Loss Masking (B30)
 The trainer concatenates `PROMPT + LABEL` as a single text field and computes loss over all tokens. Proper SFT applies loss only to the assistant/label portion via `DataCollatorForCompletionOnlyLM` and uses the model's chat template. For classification this is tolerable (short prompts). For NER/generation with long prompts, prompt tokens dominate the loss. **Fix:** use `tokenizer.apply_chat_template` + `DataCollatorForCompletionOnlyLM`.
 
 ### 1.4 Missing Models from Android Pool (B39)
-The design doc pool lists HRM-Text-1B (`sapientinc/HRM-Text-1B`, ~600MB, Tier 1, research candidate, custom runtime) and Gemma3n-E2B (~1.3GB, Tier 2, MatFormer arch). Neither is in `ANDROID_POOL`. Gemma3n-E2B has no custom runtime caveat. HRM-Text-1B needs a `notes` flag for its llama.cpp incompatibility.
+~~The design doc pool lists HRM-Text-1B (`sapientinc/HRM-Text-1B`, ~600MB, Tier 1, research candidate, custom runtime) and Gemma3n-E2B (~1.3GB, Tier 2, MatFormer arch). Neither is in `ANDROID_POOL`. Gemma3n-E2B has no custom runtime caveat. HRM-Text-1B needs a `notes` flag for its llama.cpp incompatibility.~~
+
+**Gemma3n-E2B DONE** (2026-07-08): `google/gemma-3n-e2b-it` is now in `ANDROID_POOL` (Tier 3, int4_size_mb=1300, MatFormer arch, proprietary license warning). HRM-Text-1B (`sapientinc/HRM-Text-1B`) is still absent — the llama.cpp incompatibility caveat remains unresolved. Still pending.
 
 ### 1.5 Generation Training Has No Prompt/Response Separator (B42)
 The generation branch of `format_example` concatenates prompt+response with `\n\n` and no structural delimiter. Combined with the absence of assistant-only loss masking (1.3), generation tasks have no anchor for where generation should begin. **Fix:** use `tokenizer.apply_chat_template` with role-tagged messages, or insert an explicit `\n\nAnswer:` separator.
@@ -52,10 +56,14 @@ Paper §2.6: the new model must not introduce more than 2 new errors on the regr
 The new model must pass the regression gate against all earlier deployment checkpoints, not just the previous one. Prevents accumulated drift. Not started.
 
 ### 2.8 Production Mode Turn Budget (500 Turns)
-Production mode should use a 500-turn limit. Currently only `MAX_TURNS_MAIN = 1500` exists. Need a separate constant and graph compilation path.
+~~Production mode should use a 500-turn limit. Currently only `MAX_TURNS_MAIN = 1500` exists. Need a separate constant and graph compilation path.~~
+
+**Turn budget enforcement DONE** (2026-07-08): `iterate_node` now terminates when `iteration * 2 >= turn_budget`; `agent/graph.py` compiles the graph with `recursion_limit=MAX_TURNS_MAIN`. The 500-turn production constant itself is still absent — `config/config.py` only has `MAX_TURNS_MAIN = 1500`. A separate constant and production graph compilation path remain pending.
 
 ### 2.9 Production Tool Set (`query_traces`, `trace_analysis_subagent`)
-In production mode, `web_search` is removed and two new tools are added: `query_traces` and `trace_analysis_subagent`. Neither exists.
+~~In production mode, `web_search` is removed and two new tools are added: `query_traces` and `trace_analysis_subagent`. Neither exists.~~
+
+**`query_traces` DONE** (2026-07-08): `agent/tools/query_traces.py` now exists — queries judged inference traces from a JSONL file, supporting failures/passing/count/sample:N/category:NAME filters. `trace_analysis_subagent` is still absent — the specialized sub-agent with SQL-style trace analysis remains pending (see 2.10).
 
 ### 2.10 Trace Analyzer Sub-Agent
 A specialized sub-agent with ~100K output token limit for SQL-style trace analysis. Not started.
@@ -97,7 +105,9 @@ Judge prompt template and scoring criteria must be stored in inference table met
 After each training round, quantize to INT4 and measure latency/power/memory on a reference device or Qualcomm AI Hub simulator. Interface defined in `training/on_device_eval.py` but implementation is `raise NotImplementedError`.
 
 ### 4.4 INT4 / GGUF / ONNX / QNN Export Pipeline
-`quantize.py` is a profile lookup only. Real deployment requires GGUF export, ONNX + QNN EP for Qualcomm NPU, W4A16 quantization, LiteRT + QNN Accelerator.
+~~`quantize.py` is a profile lookup only. Real deployment requires GGUF export, ONNX + QNN EP for Qualcomm NPU, W4A16 quantization, LiteRT + QNN Accelerator.~~
+
+**GGUF export DONE** (2026-07-08): `training/quantize.py` now produces real Q4_K_M and Q8_0 GGUF files via llama.cpp. ONNX + QNN EP for Qualcomm NPU, W4A16 quantization for LiteRT + QNN Accelerator are still absent — still pending.
 
 ### 4.5 Qualcomm AI Hub Profiling Integration
 Run best checkpoint through Qualcomm AI Hub for real latency/memory/power numbers. Not started.

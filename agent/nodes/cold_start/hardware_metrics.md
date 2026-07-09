@@ -36,7 +36,7 @@ As a model gets bigger: it uses more storage and RAM, takes longer to load and g
 **Scales linearly.** INT4 bytes are directly proportional to parameter count. Larger models store more weights. This is the first filter: a model that doesn't fit on the device's storage budget is eliminated before any inference runs.
 
 **Threshold: ≤ 5% of total device storage.**
-Reasoning: on a 64GB phone, OS + apps typically consume 20–30GB, leaving ~34–44GB free. Limiting the model to 5% of total (~3.2GB) keeps it from crowding user data and aligns with the pool's largest model (Llama-3.2-3B at ~1.4GB). No citation needed — pure arithmetic from storage spec.
+Reasoning: on a 64GB phone, OS + apps typically consume 20–30GB, leaving ~34–44GB free. Limiting the model to 5% of total (~3.2GB) keeps it from crowding user data and is comfortably above the pool's largest models (Phi-4-mini Q4_K_M at ~2490MB; Phi-4-mini Q8_0 at ~4731MB). No citation needed — pure arithmetic from storage spec.
 
 **Derivable from specs alone? Yes.** Total storage is a static hardware field.
 
@@ -135,7 +135,7 @@ Storage threshold is already a formula (5% × total_storage), so it auto-adjusts
 
 ### "Is it fast enough?" metrics — thresholds are fixed, achievements vary
 Cold start, TTFT, and throughput thresholds are user experience constants, not device capabilities. 2,000ms TTFT feels sluggish on a Pixel 9 Pro the same way it does on a Moto G Stylus — the user's perception doesn't change based on what phone they have.
-What changes is what the device can achieve. A Snapdragon 660 might only push 8 tok/s on the smallest model, which fails the 20 tok/s gate. The correct response to that isn't lowering the bar — it's that no model in the pool is interactively viable on that device, and the agent should say so clearly rather than pretend 8 tok/s is acceptable.
+What changes is what the device can achieve. A Snapdragon 660 might only push 8 tok/s on the smallest model, which passes the 6 tok/s floor. The correct response to a device that can't clear the floor — for example, only reaching 4 tok/s on 3B models — isn't lowering the bar: it's that no model in the pool is interactively viable on that device, and the agent should say so clearly rather than pretend streaming at below reading speed is acceptable.
 So: fixed thresholds, device-varying measurements. The threshold never moves. The device determines which models can clear it.
 
 ### "Battery/heat" metrics — your intuition about efficiency is correct, but the threshold stays fixed
