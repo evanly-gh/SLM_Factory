@@ -62,6 +62,7 @@ Status legend: 🔴 open · 🟢 fixed · 🟡 suspected/unconfirmed · ⚪ desi
 | B52 | 🟢 | iterate | termination on score>=threshold never re-checked hardware constraints |
 | B53 | 🟢 | android_pool | tiers based on peak_memory_mb (RAM), not parameter count; siblings got different tiers than base |
 | B54 | 🟢 | escalate | escalation stepped by pool index, not by tier; LLM never involved in model selection |
+| B55 | 🟢 | scaling_curve | _probe_model returned 0.0 always; current_dataset_path is None before first curate |
 
 ---
 
@@ -630,6 +631,18 @@ Status legend: 🔴 open · 🟢 fixed · 🟡 suspected/unconfirmed · ⚪ desi
 - **Status:** ⚪ design gap — Phase 2 scope. Recommended approach: define a `HardwareEvalResult`
   dataclass and a `measure_on_device(weights_ref, model_id, chip) -> HardwareEvalResult` interface
   now; implement via Qualcomm AI Hub API or ADB shell profiling in Phase 2.
+
+## B55 — scaling_curve probes always returned 0.0
+- **Where:** `agent/nodes/cold_start/scaling_curve.py` (`_probe_model`)
+- **When:** 2026-07-08, pipeline hardening review
+- **How found:** scaling_curve runs before curate_node, so current_dataset_path is always None;
+  every probe returned 0.0 immediately; the linear fit produced a flat zero line; the node always
+  fell back to the largest model. The scaling curve was entirely dead code.
+- **Impact:** model selection always defaulted to largest feasible model regardless of task.
+- **Status:** 🟢 fixed 2026-07-09 — when current_dataset_path is None, _probe_model constructs
+  a temporary JSONL seed from eval_set.pos + neg + boundary examples, trains a 1-epoch probe on
+  that seed, and cleans up in a finally block. This gives a real ranking signal without restructuring
+  graph edges.
 
 ## B54 — escalation stepped by index not tier; no LLM model selection
 - **Where:** `agent/nodes/escalate.py`

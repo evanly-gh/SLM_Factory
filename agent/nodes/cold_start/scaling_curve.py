@@ -4,6 +4,7 @@ Node 1b (runs after task_analysis, before eval_setup is used by the main loop):
 Fit an accuracy-vs-log(size) scaling curve from 3 fine-tuned probe runs,
 then select the smallest model whose predicted accuracy meets stop_threshold.
 """
+import json
 import logging
 import math
 import os
@@ -48,7 +49,11 @@ def _probe_model(
     state: AgentState,
     probe_dir: str,
 ) -> float:
-    """Fine-tune one epoch and return eval f1. Returns 0.0 on failure."""
+    """Fine-tune one epoch and return eval f1. Returns 0.0 on failure.
+
+    When current_dataset_path is None (scaling_curve runs before curate),
+    builds a mini seed dataset from eval_set examples to get a real ranking signal.
+    """
     model_dir = os.path.join(probe_dir, model.model_id.replace("/", "_"))
     config = TrainingConfig(
         base_model=model.model_id,
@@ -58,18 +63,45 @@ def _probe_model(
         lora_rank=_PROBE_LORA_RANK,
         task_type=state["task_type"],
     )
-    try:
-        dataset_path = state.get("current_dataset_path")
-        if not dataset_path:
-            logger.warning("[scaling_curve] No dataset path in state; skipping probe for %s", model.model_id)
+    dataset_path = state.get("current_dataset_path")
+    _seed_file = None
+    if not dataset_path:
+        # No curated dataset yet (scaling_curve runs before curate). Build a
+        # minimal seed from the eval set so probes produce a real ranking signal.
+        eval_set = state.get("eval_set")
+        if eval_set is None:
+            logger.warning(
+                "[scaling_curve] No dataset or eval_set; skipping probe for %s", model.model_id
+            )
             return 0.0
-        weights_ref = run_lora_training(dataset_path, config, output_dir=model_dir, task_type=state["task_type"]).weights_ref
+        seed_examples = list(eval_set.pos) + list(eval_set.neg) + list(eval_set.boundary)
+        if not seed_examples:
+            logger.warning(
+                "[scaling_curve] eval_set is empty; skipping probe for %s", model.model_id
+            )
+            return 0.0
+        _seed_fd, _seed_file = tempfile.mkstemp(suffix=".jsonl", prefix="slm_probe_seed_")
+        with os.fdopen(_seed_fd, "w") as f:
+            for ex in seed_examples:
+                f.write(json.dumps(ex) + "\n")
+        dataset_path = _seed_file
+        logger.info(
+            "[scaling_curve] Using %d eval-set examples as probe seed for %s",
+            len(seed_examples), model.model_id,
+        )
+    try:
+        weights_ref = run_lora_training(
+            dataset_path, config, output_dir=model_dir, task_type=state["task_type"]
+        ).weights_ref
         result = run_eval(state["eval_set"], weights_ref, model.model_id, state["task_type"])
         logger.info("[scaling_curve] Probe %s → f1=%.4f", model.model_id, result.f1)
         return result.f1
     except Exception as exc:
         logger.warning("[scaling_curve] Probe failed for %s: %s", model.model_id, exc)
         return 0.0
+    finally:
+        if _seed_file and os.path.exists(_seed_file):
+            os.remove(_seed_file)
 
 
 def scaling_curve_node(state: AgentState) -> AgentState:
