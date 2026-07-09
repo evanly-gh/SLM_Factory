@@ -1,9 +1,9 @@
 # tests/eval/test_harness.py
-import sys
 import pytest
 from unittest.mock import patch, MagicMock
 from eval.harness import run_eval
 from data.eval_set import EvalSet
+import eval.scorers.classification  # ensure attribute exists on package for patching
 
 
 def _make_eval_set():
@@ -27,7 +27,7 @@ def test_run_eval_uses_infer_batch_when_no_gguf(mock_infer):
     scorer_mock.score.return_value = {
         "f1": 0.9, "per_class": {}, "slices": {"pos": 1.0, "neg": 0.8, "boundary": 0.9}, "failures": []
     }
-    with patch.dict(sys.modules, {"eval.scorers.classification": scorer_mock}):
+    with patch("eval.scorers.classification", scorer_mock):
         result = run_eval(_make_eval_set(), "/weights", "model-id", "classification")
     mock_infer.assert_called_once_with(["p1", "p2"], "/weights", "model-id", max_workers=20, max_new_tokens=50)
     assert result.f1 == 0.9
@@ -40,7 +40,7 @@ def test_run_eval_uses_infer_batch_gguf_when_gguf_path_set(mock_gguf):
     scorer_mock.score.return_value = {
         "f1": 0.85, "per_class": {}, "slices": {"pos": 0.9, "neg": 0.8, "boundary": 0.85}, "failures": []
     }
-    with patch.dict(sys.modules, {"eval.scorers.classification": scorer_mock}):
+    with patch("eval.scorers.classification", scorer_mock):
         result = run_eval(
             _make_eval_set(), "/weights", "model-id", "classification",
             quant="Q4_K_M", gguf_path="/model.gguf"

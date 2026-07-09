@@ -1,6 +1,8 @@
 # tests/eval/test_harness_tokens.py
 from unittest.mock import patch, MagicMock
 from eval.harness import run_eval
+import eval.scorers.classification  # ensure attribute exists on package for patching
+import eval.scorers.generation  # ensure attribute exists on package for patching
 
 
 def _mock_scorer():
@@ -21,7 +23,7 @@ def _eval_set():
 @patch("eval.harness.infer_batch")
 def test_classification_uses_50_tokens(mock_infer):
     mock_infer.return_value = ["spam"]
-    with patch.dict("sys.modules", {"eval.scorers.classification": _mock_scorer()}):
+    with patch("eval.scorers.classification", _mock_scorer()):
         run_eval(_eval_set(), "/w", "m", "classification")
     _, kwargs = mock_infer.call_args
     assert kwargs.get("max_new_tokens", mock_infer.call_args[0][3] if len(mock_infer.call_args[0]) > 3 else None) == 50
@@ -30,7 +32,7 @@ def test_classification_uses_50_tokens(mock_infer):
 @patch("eval.harness.infer_batch")
 def test_math_uses_256_tokens(mock_infer):
     mock_infer.return_value = ["42"]
-    with patch.dict("sys.modules", {"eval.scorers.generation": _mock_scorer()}):
+    with patch("eval.scorers.generation", _mock_scorer()):
         run_eval(_eval_set(), "/w", "m", "math_reasoning")
     _, kwargs = mock_infer.call_args
     max_tok = kwargs.get("max_new_tokens")
