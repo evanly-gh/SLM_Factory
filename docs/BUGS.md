@@ -66,6 +66,7 @@ Status legend: 🔴 open · 🟢 fixed · 🟡 suspected/unconfirmed · ⚪ desi
 | B56 | 🟢 | task_analysis | task-preference sort immediately overwritten by size-descending sort — dead code |
 | B57 | 🟢 | task_planner | _param_range_label formula underestimated param count by 8×; misled stop_threshold calibration |
 | B58 | 🟢 | lora_trainer | math_reasoning and code_generation fell to else branch with no answer — model trained on empty targets |
+| B59 | 🟢 | harness | max_new_tokens=50 hardcoded; truncates math derivations and code completions |
 
 ---
 
@@ -686,3 +687,11 @@ Status legend: 🔴 open · 🟢 fixed · 🟡 suspected/unconfirmed · ⚪ desi
 - **Impact:** math and code models trained on this data learned nothing task-relevant.
 - **Status:** 🟢 fixed 2026-07-08 — both task types now route through the `generation` branch,
   which handles prompt/answer/response/cot_reasoning keys correctly.
+
+## B59 — max_new_tokens=50 truncates math/code eval outputs
+- **Where:** `eval/harness.py`
+- **When:** 2026-07-08, pipeline hardening review
+- **How found:** math derivations and code functions routinely exceed 50 tokens; the model's
+  answer was truncated, degrading eval scores in a non-representative way.
+- **Status:** 🟢 fixed 2026-07-08 — classification/NER use 50 tokens; math_reasoning,
+  code_generation, generation use 256 tokens.
