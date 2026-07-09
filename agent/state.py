@@ -32,6 +32,7 @@ class AgentState(TypedDict):
     scores: list[float]               # f(π) per iteration
     dag: list[dict]                   # lineage DAG nodes
     consecutive_no_improvement: int
+    downward_probe_done: bool         # True once the one-tier-down probe has run for this terminal model
 
     # Last iteration results
     last_eval: Optional[EvalResult]

@@ -161,5 +161,6 @@ def escalate_node(state: AgentState) -> AgentState:
     state["last_hypothesis"] = ""
     state["llm_iterate_decision"] = None
     state["consecutive_no_improvement"] = 0
+    state["downward_probe_done"] = False
     state["next_action"] = "curate"
     return state

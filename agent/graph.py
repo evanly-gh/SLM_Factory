@@ -22,6 +22,7 @@ from agent.nodes.iterate import iterate_node
 from agent.nodes.curate import curate_node
 from agent.nodes.rollback import rollback_node, should_rollback
 from agent.nodes.escalate import escalate_node
+from agent.nodes.downward_probe import downward_probe_node
 
 
 def _route_after_evaluate(state: AgentState) -> str:
@@ -55,6 +56,7 @@ def build_graph(mode: str = "cold_start") -> CompiledStateGraph:
     graph.add_node("curate", curate_node)
     graph.add_node("rollback", rollback_node)
     graph.add_node("escalate", escalate_node)
+    graph.add_node("downward_probe", downward_probe_node)
 
     if mode == "cold_start":
         graph.add_node("task_analysis", task_analysis_node)
@@ -101,9 +103,12 @@ def build_graph(mode: str = "cold_start") -> CompiledStateGraph:
             "train": "train",
             "curate": "curate",
             "escalate": "escalate",
+            "downward_probe": "downward_probe",
             "terminate": END,
         },
     )
+
+    graph.add_edge("downward_probe", END)
 
     graph.add_conditional_edges(
         "escalate",

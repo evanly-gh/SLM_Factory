@@ -70,6 +70,7 @@ Status legend: 🔴 open · 🟢 fixed · 🟡 suspected/unconfirmed · ⚪ desi
 | B60 | 🟢 | scorer/classification | substring label match produced wrong label when one label is a substring of another |
 | B61 | 🟢 | metrics | entity_f1 used set (dedup), undercounting TP/FN for repeated entity mentions |
 | B62 | 🟢 | curriculum | math/code hard negatives stored wrong answers as SFT targets, training model to produce errors |
+| B63 | 🟢 | downward_probe | original downward probe was dead code (scanned reset DAG for cross-tier entries that never exist); replaced with active train+eval probe node |
 
 ---
 
@@ -670,8 +671,9 @@ Status legend: 🔴 open · 🟢 fixed · 🟡 suspected/unconfirmed · ⚪ desi
 - **Impact:** escalation didn't reliably advance capability; LLM task knowledge was unused.
 - **Status:** 🟢 fixed 2026-07-08 — escalation finds all feasible models in `current_tier + 1`,
   calls `_llm_choose_model` to select among them for the task, falls back to largest on LLM failure.
-  Also added downward probe in evaluate_node: if a lower-tier model already cleared the threshold
-  in the DAG, switch to it at termination (minimum-resource terminal model).
+  A downward probe was also added here, but that DAG-scanning version was dead code — see B63 for
+  the corrected active implementation (a real downward_probe graph node that trains + evals the best
+  one-tier-down candidate at termination).
 
 ## B57 — _param_range_label underestimated param count by 8×
 - **Where:** `agent/task_planner.py` (`_param_range_label`)
@@ -727,3 +729,17 @@ Status legend: 🔴 open · 🟢 fixed · 🟡 suspected/unconfirmed · ⚪ desi
   the hard-negative examples — negative transfer rather than positive learning signal.
 - **Status:** 🟢 fixed 2026-07-08 — math/code hard-negative synthesis removed. Gold examples
   are returned unchanged (CoT annotation in curate_node provides the relevant augmentation).
+
+## B63 — downward probe was dead code; replaced with active probe node
+- **Where:** `agent/nodes/iterate.py`, new `agent/nodes/downward_probe.py`, `agent/graph.py`
+- **When:** 2026-07-09, final whole-branch review of pipeline hardening
+- **How found:** the DAG-scanning probe in iterate_node could never fire — the DAG only holds
+  current-model nodes (reset on escalation) and siblings share the base tier, so the
+  `tier < current_tier` condition was unsatisfiable. Escalation only fires on stagnation, so a
+  smaller model that cleared the bar would have terminated earlier, never escalated past.
+- **Impact:** the minimum-resource "downward probe" feature was silently non-functional.
+- **Status:** 🟢 fixed 2026-07-09 — new downward_probe graph node actively trains + evals the best
+  one-tier-down candidate (via escalate._llm_choose_model) on the current dataset, using the honest
+  quantized-eval path when quant is set, and adopts it if it clears the threshold. iterate routes
+  iterate→downward_probe→END once per terminal model (guarded by state["downward_probe_done"],
+  reset on escalation).

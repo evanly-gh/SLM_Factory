@@ -3,7 +3,7 @@ from agent.nodes.iterate import iterate_node
 
 
 def _model():
-    m = MagicMock(); m.model_id = "test/Model-1B"; m.quant = None
+    m = MagicMock(); m.model_id = "test/Model-1B"; m.quant = None; m.tier = 0
     return m
 
 

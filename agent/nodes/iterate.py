@@ -330,33 +330,16 @@ def iterate_node(state: AgentState) -> AgentState:
             else:
                 state["next_action"] = "curate"
             return state
-        # Downward probe: before accepting termination, check if a lower-tier model
-        # already cleared the threshold in an earlier DAG entry. If so, switch to it
-        # (minimum-resource terminal model).
-        threshold = state["stop_threshold"]
+        # Active downward probe: route to the downward_probe node ONCE to try a
+        # smaller model. downward_probe terminates unconditionally, so no loop.
         _current_model = state.get("selected_model")
-        if _current_model is not None:
-            _current_tier = _current_model.tier
-            _probe_candidates = [
-                n for n in state.get("dag", [])
-                if not n.get("pruned") and n.get("score", 0.0) >= threshold
-            ]
-            if _probe_candidates:
-                from config.android_pool import filter_pool as _filter_pool
-                _feasible = _filter_pool(state["hardware_constraints"])
-                for _dag_node in _probe_candidates:
-                    _node_model_id = _dag_node.get("model_id")
-                    _smaller = next(
-                        (m for m in _feasible
-                         if m.model_id == _node_model_id and m.tier < _current_tier),
-                        None,
-                    )
-                    if _smaller is not None:
-                        _log(model_id,
-                             f"  Downward probe: {_smaller.model_id} (tier {_smaller.tier}) "
-                             f"already cleared threshold {threshold:.3f} — switching to smaller model")
-                        state["selected_model"] = _smaller
-                        break
+        if (not state.get("downward_probe_done")
+                and _current_model is not None
+                and _current_model.tier > 0):
+            state["next_action"] = "downward_probe"
+            _log(model_id,
+                 f"  → DOWNWARD_PROBE (score {current_score:.4f} >= threshold; trying smaller model)")
+            return state
         state["next_action"] = "terminate"
         _log(model_id, f"  → TERMINATE (score {current_score:.4f} >= threshold {state['stop_threshold']:.3f})")
     elif stagnant:
