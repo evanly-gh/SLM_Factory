@@ -41,7 +41,7 @@ export HF_HOME=/mmfs1/gscratch/intelligentsystems/evanly/.hf-cache
 export PIP_CACHE_DIR=/mmfs1/gscratch/intelligentsystems/evanly/.pip-cache
 
 nvidia-smi -L || true
-[ -d .venv_gpu ] || bash scripts/setup_gpu_env.sh
+.venv_gpu/bin/python -c '' >/dev/null 2>&1 || bash scripts/setup_gpu_env.sh
 source .venv_gpu/bin/activate
 
 # Cost-saving orchestrator: Haiku drives all planning/decision/generation calls.

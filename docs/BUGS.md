@@ -1043,3 +1043,11 @@ Status legend: 🔴 open · 🟢 fixed · 🟡 suspected/unconfirmed · ⚪ desi
 - **Impact:** MEDIUM (environment/config, not pipeline logic) — tests 3 and 4 could not launch as written. A100 was chosen only "for faster generation-task training", not for correctness.
 - **Fix:** Changed `--gres=gpu:a100:1` → `--gres=gpu:l40:1` on both scripts, keeping partition ckpt-g2 (matches the two working jobs). L40 (48GB) is ample for tier-0/1/2 models; only slower. Committed.
 - **Status:** 🟢 fixed (config).
+
+## B103 -- setup/slurm: venv guards check directory existence, not interpreter validity → zombie venv
+- **Where:** `scripts/setup_gpu_env.sh:11` (`if [ ! -d .venv_gpu ]`) and all four `tests/pipeline/*.slurm` (`[ -d .venv_gpu ] || bash scripts/setup_gpu_env.sh`)
+- **When:** 2026-07-10, overnight validation campaign — first launch of all four jobs
+- **How found:** All four jobs FAILED at 00:00:00 with ExitCode 127. slurm .out shows the GPU allocated, then `line NN: python: command not found`. Root cause: `.venv_gpu/bin/python` symlinks to `~/.local/share/uv/python/cpython-3.11-.../bin/python3.11`, but that uv-managed interpreter directory was deleted (garbage-collected). The venv directory still existed, so both guards passed and setup was skipped, leaving a zombie venv whose every `python` invocation fails with 127. The 18G uv package cache was intact — only the interpreter was gone.
+- **Impact:** BLOCKER — no pipeline job could run until fixed. Not a pipeline-logic bug; an environment/tooling robustness gap.
+- **Fix:** (1) `setup_gpu_env.sh` now validates the interpreter (`.venv_gpu/bin/python -c ''`) and `rm -rf` + recreates on failure, self-healing zombie venvs. (2) All four slurm scripts changed their guard from `[ -d .venv_gpu ]` to `.venv_gpu/bin/python -c '' >/dev/null 2>&1` so a broken venv triggers a rebuild. (3) Rebuilt `.venv_gpu` from the intact cache (fast; only the ~30MB cpython interpreter re-downloaded). Committed.
+- **Status:** 🟢 fixed (config/tooling).
