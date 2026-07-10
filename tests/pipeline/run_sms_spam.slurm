@@ -32,6 +32,7 @@ cd "$PROJ"
 export PATH="$HOME/.local/bin:$PATH"
 export UV_CACHE_DIR=/mmfs1/gscratch/intelligentsystems/evanly/.uv-cache
 export HF_HOME=/mmfs1/gscratch/intelligentsystems/evanly/.hf-cache
+export HF_HUB_DISABLE_XET=1   # xet transport stalls on compute nodes (BUGS B113); use plain HTTPS
 export PIP_CACHE_DIR=/mmfs1/gscratch/intelligentsystems/evanly/.pip-cache
 
 nvidia-smi -L || true
