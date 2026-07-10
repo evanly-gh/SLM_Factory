@@ -1243,3 +1243,7 @@ marked "passed" that wasn't confirmed from its per-job `logs/slurm/*.out` (the s
   - ARC-Challenge → `allenai/ai2_arc` (question + correct-choice text)
   Unknown benchmarks (e.g. BC5CDR) still fall back to the Exa path. Datasets are small parquet downloads (fine on compute nodes with HF_HUB_DISABLE_XET=1).
 - **Status:** 🟢 fixed for GSM8K/FPB/ARC (rerun to confirm end-to-end scores). BC5CDR NER still uses Exa+Claude annotation.
+
+## B116 (fix applied) -- swap ARC's tier-0 model from MiniCPM4-0.5B to Qwen3-0.6B
+- **Fix:** MiniCPM4-0.5B (the only model fitting ARC's 512MB device) is multiply incompatible with transformers 5.5.0 (B111 is_torch_fx_available shimmed, B116 tied-weights list-vs-dict, likely more) — per-symbol shims are whack-a-mole. Replaced the tier-0 pool entry with `unsloth/Qwen3-0.6B` (peak ~500MB, tier 0), a standard safetensors/qwen3 model natively supported by Unsloth/transformers 5.5.0. Preserves the ARC test intent (a tiny tier-0 model that can't reach ARC-Challenge SOTA → impossible → graceful escalate/terminate).
+- **Status:** 🟢 fix applied (rerun to confirm it loads/trains). MiniCPM5-1B (tier 1) shares MiniCPM's remote-code family and is likely similarly broken if ever selected — noted.
