@@ -92,7 +92,11 @@ def evaluate_node(state: AgentState) -> AgentState:
     else:
         state["consecutive_no_improvement"] += 1
 
-    state["scores"].append(current_score)
+    # Assign a NEW list rather than appending in place: `scores` has no LangGraph
+    # reducer, and an in-place mutation keeps the same object identity, so the change is
+    # not reliably persisted to the channel — the list froze after ~3 entries and
+    # stagnation (which reads this window) never fired, looping the run forever (BUGS B122).
+    state["scores"] = list(state.get("scores") or []) + [current_score]
     state["last_eval"] = best_result
 
     _log(model_id,
@@ -133,7 +137,8 @@ def evaluate_node(state: AgentState) -> AgentState:
             "S": {"task_type": task_type, "supervision": "direct"},
         },
     }
-    state["dag"].append(dag_node)
+    # New list (not in-place) so the channel change persists — see B122 note above.
+    state["dag"] = list(state.get("dag") or []) + [dag_node]
 
     # Write data-curation.md entry with hardware PASS/FAIL
     hw_profile = theoretical_hardware_profile(model_id)

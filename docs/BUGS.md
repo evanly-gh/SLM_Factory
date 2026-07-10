@@ -1255,3 +1255,19 @@ marked "passed" that wasn't confirmed from its per-job `logs/slurm/*.out` (the s
 - **Impact:** MEDIUM (design) — defeated the start-small-and-escalate design the escalation tests (NER, ARC) exercise, wasted compute on the largest model, and prevented escalation from ever being demonstrated.
 - **Fix:** Startup now starts SMALL on the no-qualifier fallback (lowest peak-RAM feasible model) and defers growth to escalate_node in the main loop. The "smallest variant predicted to clear threshold" happy path is unchanged. Keeps model *selection* (startup) cleanly separated from model *growth* (main loop).
 - **Status:** 🟢 fixed.
+
+## B122 -- state: in-place list appends not persisted → scores froze, stagnation never fired, run looped forever
+- **Where:** `agent/nodes/evaluate.py` (`state["scores"].append(...)`, `state["dag"].append(...)`); `agent/state.py` (channels have no LangGraph reducer)
+- **When:** 2026-07-10, SMS 36989310 (ran 13+ iterations without terminating)
+- **How found:** SMS trained/evaluated on real data (F1~0.768) but the trajectory froze at exactly `['0.768','0.768','0.765']` from iteration 3 onward; "Stagnation detected"/"ESCALATE" fired 0 times, so it looped on data_rebuild indefinitely. `scores` is a plain `list[float]` (no reducer); evaluate_node mutated it IN PLACE, so the channel value kept the same object identity and LangGraph did not persist the change past the first few super-steps. `_is_stagnant` reads this window, so stagnation could never trigger.
+- **Impact:** HIGH — no run could ever terminate via stagnation/escalation; every non-converging run burned its full SLURM time budget looping.
+- **Fix:** Assign a NEW list (`state["scores"] = list(...) + [x]`, same for `dag`) so the channel change is detected and persisted. (Proper long-term fix: annotate these channels with an `operator.add` reducer and have nodes return partial updates.)
+- **Status:** 🟢 fixed (verification on rerun).
+
+## B123 -- android_pool: Qwen3.5 family is multimodal → text-only LoRA crashes ("Incorrect image source")
+- **Where:** `config/android_pool.py` (`Qwen/Qwen3.5-0.8B`, `Qwen/Qwen3.5-2B`)
+- **When:** 2026-07-10, NER 36989327 crashed after B113 fixed its download
+- **How found:** NER selected Qwen/Qwen3.5-2B; after loading, training crashed with `ValueError: Incorrect image source. Must be a valid URL ... Got <|im_start|>user`. The Qwen3.5 family is natively multimodal (image-text-to-text); Unsloth routes it through a vision processor that rejects the text chat template.
+- **Impact:** BLOCKER for any task selecting a Qwen3.5 model (NER's mid-tier device did). Same class as gemma-3n (B121).
+- **Fix:** Removed both Qwen3.5 entries from the selectable pool; text-only Qwen3-0.6B (tier 0) remains. Pool is now 24 text-only models that load/train on the stack.
+- **Status:** 🟢 fixed.
