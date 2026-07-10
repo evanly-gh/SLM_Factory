@@ -1217,3 +1217,14 @@ marked "passed" that wasn't confirmed from its per-job `logs/slurm/*.out` (the s
 - **Impact:** HIGH — math_reasoning tasks can never score above 0, so GSM8K/ARC could never converge regardless of model quality. Masqueraded as the "Haiku CoT is too weak" config-limitation.
 - **Fix:** Extract the final answer from both gold and prediction (explicit '#### N' / 'answer: N' markers, else the last number; normalize $, commas, trailing .0) and compare those. Unit-tested on 7 GSM8K-style cases. Committed.
 - **Status:** 🟢 fixed (verification pending on a math rerun).
+
+## B119 -- data acquisition: benchmark datasets scraped as web/repo METADATA via Exa, not the actual data
+- **Where:** the web-acquire / curation path that builds train + eval sets from a benchmark name
+- **When:** 2026-07-10, clean round GSM8K 36988857 / 36989010
+- **How found:** GSM8K trained (B109 ✓) and scored 0.0 even after the B118 scorer fix. Inspecting the run's `artifacts/eval_set.json` and `dataset_v1.jsonl`:
+  - eval example: `text="openai/grade-school-math. # Repository: ... Stars: 1437 ..."`, `label="math_reasoning"`, and **no `answer` field**.
+  - train example: `text="README.md at master · openai/grade-school-math ..."`, `cot_reasoning="... This is a README.md file ..."`.
+  The pipeline Exa-searched the GSM8K *repository/webpage* and used the returned snippets as "examples" — so the model is trained to reason about README files and the eval has no gold answers. GSM8K/ARC (and likely BC5CDR NER) can never score meaningfully.
+- **Impact:** CRITICAL for structured benchmarks — no gold answers, no real questions. Classification (FinancialPhraseBank) happened to get usable data (SMS reached F1 0.70), so this had been masked. This is the deepest blocker for the generation/NER tasks.
+- **Fix:** NOT applied (design-level). Structured benchmarks should be loaded from their source (e.g. `datasets.load_dataset("openai/gsm8k")`, BC5CDR, ARC) with real question/answer fields, reserving Exa for genuinely open-web tasks. Needs a deliberate acquisition redesign + a check that eval examples carry a gold `answer`.
+- **Status:** 🔴 open (design) — blocks meaningful GSM8K/ARC (and NER) evaluation regardless of the model/scorer fixes.
