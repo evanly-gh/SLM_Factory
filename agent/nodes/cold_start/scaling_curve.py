@@ -179,13 +179,17 @@ def scaling_curve_node(state: AgentState) -> AgentState:
             )
             return state
 
-    # None predicted to meet threshold — pick the highest-capability feasible variant
-    # (most params; ties broken by more RAM = less aggressive quant) as the best shot.
-    best = max(feasible, key=lambda m: (m.est_params_b(), m.peak_memory_mb))
-    state["selected_model"] = best
+    # None predicted to meet threshold. This is a STARTUP step whose only job is to
+    # choose a STARTING model — growing the model when it stalls is the main loop's
+    # escalate_node, not startup's. So start SMALL (lowest peak RAM) and let the loop
+    # escalate as needed. (Jumping straight to the largest model here would skip
+    # escalation entirely, waste compute, and break the start-small-and-escalate design
+    # the escalation tests exercise.)
+    smallest = min(feasible, key=lambda m: (m.peak_memory_mb, m.est_params_b()))
+    state["selected_model"] = smallest
     logger.warning(
-        "[scaling_curve] No variant predicted to meet threshold %.4f; "
-        "defaulting to highest-capability: %s (quant=%s)",
-        stop_threshold, best.model_id, best.quant,
+        "[scaling_curve] No variant predicted to meet threshold %.4f; starting SMALL "
+        "and deferring growth to escalate_node: %s (tier=%d, quant=%s, peak=%dMB)",
+        stop_threshold, smallest.model_id, smallest.tier, smallest.quant, smallest.peak_memory_mb,
     )
     return state
