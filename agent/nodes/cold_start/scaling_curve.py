@@ -133,50 +133,59 @@ def scaling_curve_node(state: AgentState) -> AgentState:
         len(candidates), [m.model_id for m in candidates],
     )
 
+    # Capability axis is log(params), NOT log(disk size): a model's BF16/Q8/Q4 variants
+    # share parameter count and accuracy, so params is the honest capability proxy.
+    # (Using disk size would falsely rank a model's own BF16 as "more capable" than its Q4.)
     with tempfile.TemporaryDirectory(prefix="slm_probe_") as probe_dir:
         points: list[tuple[float, float]] = []
         for model in candidates:
             f1 = _probe_model(model, state, probe_dir)
-            log_size = math.log(model.int4_size_mb)
-            points.append((log_size, f1))
+            log_params = math.log(max(model.est_params_b(), 1e-3))
+            points.append((log_params, f1))
             logger.info(
-                "[scaling_curve] Point: log(size)=%.3f f1=%.4f (%s, quant=%s)",
-                log_size, f1, model.model_id, model.quant,
+                "[scaling_curve] Point: log(params)=%.3f f1=%.4f (%s, ~%.2fB, quant=%s)",
+                log_params, f1, model.model_id, model.est_params_b(), model.quant,
             )
 
     if len(points) < 2:
-        # Can't fit a line; fall back to smallest feasible model.
-        logger.warning("[scaling_curve] Too few probe points (%d); selecting smallest model.", len(points))
-        # feasible is largest→smallest; smallest is last
-        state["selected_model"] = feasible[-1]
+        # Can't fit a line; fall back to the lowest-RAM feasible variant.
+        logger.warning("[scaling_curve] Too few probe points (%d); selecting lowest-RAM model.", len(points))
+        state["selected_model"] = min(feasible, key=lambda m: m.peak_memory_mb)
         return state
 
-    log_sizes = np.array([p[0] for p in points])
+    log_params = np.array([p[0] for p in points])
     f1s = np.array([p[1] for p in points])
-    coeffs = np.polyfit(log_sizes, f1s, deg=1)  # [a, b]: f1 = a*log(size) + b
+    coeffs = np.polyfit(log_params, f1s, deg=1)  # [a, b]: f1 = a*log(params) + b
     a, b = float(coeffs[0]), float(coeffs[1])
-    logger.info("[scaling_curve] Fit: f1 = %.4f * log(size) + %.4f", a, b)
+    logger.info("[scaling_curve] Fit: f1 = %.4f * log(params) + %.4f", a, b)
 
-    # Walk smallest→largest; pick first whose predicted f1 >= stop_threshold
-    for model in reversed(feasible):  # feasible is largest→smallest, so reversed = smallest→largest
-        predicted = a * math.log(model.int4_size_mb) + b
+    # Objective: the MINIMUM peak-RAM variant whose predicted f1 clears the threshold.
+    # Iterate feasible variants ascending by peak RAM and take the first that qualifies.
+    by_ram = sorted(feasible, key=lambda m: m.peak_memory_mb)
+    for model in by_ram:
+        predicted = a * math.log(max(model.est_params_b(), 1e-3)) + b
+        qualifies = predicted >= stop_threshold
         logger.info(
-            "[scaling_curve] %s: predicted_f1=%.4f vs threshold=%.4f → %s",
-            model.model_id, predicted, stop_threshold,
-            "SELECT" if predicted >= stop_threshold else "skip",
+            "[scaling_curve] %s (quant=%s, peak=%dMB): predicted_f1=%.4f vs %.4f → %s",
+            model.model_id, model.quant, model.peak_memory_mb, predicted, stop_threshold,
+            "SELECT" if qualifies else "skip",
         )
-        if predicted >= stop_threshold:
+        if qualifies:
             state["selected_model"] = model
             logger.info(
-                "[scaling_curve] Selected: %s (tier=%d, quant=%s, predicted_f1=%.4f)",
-                model.model_id, model.tier, model.quant, predicted,
+                "[scaling_curve] Selected lowest-RAM qualifier: %s (tier=%d, quant=%s, "
+                "peak=%dMB, predicted_f1=%.4f)",
+                model.model_id, model.tier, model.quant, model.peak_memory_mb, predicted,
             )
             return state
 
-    # None predicted to meet threshold — use largest (best chance)
-    state["selected_model"] = feasible[0]
+    # None predicted to meet threshold — pick the highest-capability feasible variant
+    # (most params; ties broken by more RAM = less aggressive quant) as the best shot.
+    best = max(feasible, key=lambda m: (m.est_params_b(), m.peak_memory_mb))
+    state["selected_model"] = best
     logger.warning(
-        "[scaling_curve] No model predicted to meet threshold %.4f; "
-        "defaulting to largest: %s", stop_threshold, feasible[0].model_id,
+        "[scaling_curve] No variant predicted to meet threshold %.4f; "
+        "defaulting to highest-capability: %s (quant=%s)",
+        stop_threshold, best.model_id, best.quant,
     )
     return state

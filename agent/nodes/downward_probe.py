@@ -84,18 +84,17 @@ def downward_probe_node(state: AgentState) -> AgentState:
         return state
 
     feasible = filter_pool(state["hardware_constraints"])
-    # Deduplicate to one entry per base model_id (fixes Bug 2: triplicated LLM prompt /
-    # misleading Q8_0 fallback). Prefer the quant level that matches the current model so
-    # the LLM chooses the same quantisation tier as the model we are replacing (fixes
-    # Bug 1: quant selection silently resolving to the unquantized base variant).
-    _lower_candidates = [m for m in feasible if m.tier == current.tier - 1]
-    _preferred = {m.model_id: m for m in _lower_candidates if m.quant == current.quant}
-    _fallback = {m.model_id: m for m in _lower_candidates if m.model_id not in _preferred}
-    lower = list({**_fallback, **_preferred}.values())
-    if not lower:
-        logger.info("[downward_probe][%s] No feasible models in tier %d — skipping",
-                    model_id, current.tier - 1)
+    # Probe the nearest LOWER (less RAM) non-empty tier. Tiers are per-variant RAM
+    # buckets so buckets can be empty for a given budget — step past gaps rather than
+    # giving up on the first empty one. Every variant (incl. a smaller quant of the
+    # SAME model) is a legitimate lower-RAM candidate.
+    lower_tiers = [m.tier for m in feasible if m.tier < current.tier]
+    if not lower_tiers:
+        logger.info("[downward_probe][%s] No feasible models below tier %d — skipping",
+                    model_id, current.tier)
         return state
+    target_tier = max(lower_tiers)  # nearest tier below current
+    lower = [m for m in feasible if m.tier == target_tier]
 
     # Reuse escalate's LLM-driven model chooser to pick the best lower-tier candidate.
     chosen = _llm_choose_model(

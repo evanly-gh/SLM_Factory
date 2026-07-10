@@ -155,7 +155,7 @@ def evaluate_node(state: AgentState) -> AgentState:
         next_intervention=policy["intervention"],
         hypothesis=state.get("last_hypothesis", ""),
         model_id=model_id,
-        int4_size_mb=hw_profile.get("int4_size_mb") or 0,
+        size_mb=hw_profile.get("size_mb") or 0,
         tier=hw_profile.get("tier") or 0,
         hw_constraints=hw_constraints,
     )

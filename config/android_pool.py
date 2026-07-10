@@ -3,18 +3,19 @@
 # MODEL POOL DESIGN — RESEARCH BASIS (see PAPER.md §17 for full writeup)
 #
 # Tier structure rationale:
-#   Capability scales as a power law (not step-functions) in the 0.5–3B range per Kaplan
-#   et al. and BNSL literature. However, benchmark data (GSM8K) shows three natural
-#   capability bands with meaningful gaps that justify 4 tiers:
+#   Tiers are pure PEAK-RAM buckets of each deployed variant, NOT param-count bands.
+#   The loop selects the smallest-RAM variant that still hits the accuracy goal, so the
+#   axis that matters is on-device memory, and a single model's BF16/Q8/Q4 variants can
+#   land in different tiers.
 #
-#     Tier 0  <0.75B     GSM8K ≈30-42%   MMLU ≈45-52%   RAM: <1.2GB peak
-#     Tier 1  0.75–1.5B  GSM8K ≈59-63%   MMLU ≈52-56%   RAM: 1.0–1.8GB peak
-#     Tier 2  1.5–2.5B   GSM8K ≈70-77%   MMLU ≈60-65%   RAM: 1.5–2.5GB peak
-#     Tier 3  ≥2.5B      GSM8K ≈77-82%   MMLU ≈65-70%   RAM: 2.5–4.5GB peak
+#     Tier 0  peak < 750 MB
+#     Tier 1  peak 750–1500 MB
+#     Tier 2  peak 1500–2500 MB
+#     Tier 3  peak >= 2500 MB
 #
-#   The 3GB total RAM budget (user requirement) means: INT4 file + KV cache + Android OS
-#   (~1.5GB baseline) must fit. Practical INT4 file ceiling: ~1.8–2.0GB for Tier 3.
-#   Formula: total_RAM ≈ int4_file_mb + 1000–1500MB (OS+app+KV cache at 2K ctx).
+#   Each base entry below stores the MEASURED Q4_K_M size + peak RAM. _variant() expands
+#   it into three real deployment candidates (BF16 / Q8_0 / Q4_K_M) with honest per-variant
+#   size, peak, tier, and decode speed. Weight bytes/param: BF16 2.0, Q8_0 1.0, Q4_K_M 0.55.
 #
 # Quantization notes:
 #   All sizes below are Q4_K_M GGUF (4.5 bpw effective), the community-recommended
@@ -87,8 +88,8 @@ CHIP_SCALE_FACTORS: dict[str, float] = {
 @dataclass
 class ModelSpec:
     model_id: str          # HuggingFace model ID
-    int4_size_mb: int      # Q4_K_M GGUF file size in MB (measured from HF repos)
-    tier: int              # 0 = micro (<0.75B params), 1 = small (0.75-1.5B), 2 = mid (1.5-2.5B), 3 = large (>=2.5B)
+    size_mb: int           # on-disk weight size in MB for THIS variant's quant (see `quant`)
+    tier: int              # RAM bucket of peak_memory_mb: 0=<0.75GB, 1=0.75-1.5GB, 2=1.5-2.5GB, 3=>=2.5GB
     # Estimated decode throughput on three well-documented reference chips (tok/s, CPU-bound Q4_K_M).
     # For any other chip, check_hardware_constraints uses CHIP_SCALE_FACTORS to interpolate.
     tok_s_snapdragon_660: float   # 2017 entry-level baseline
@@ -100,6 +101,13 @@ class ModelSpec:
     mmlu: float            # MMLU 5-shot accuracy (0–1 scale)
     notes: str = ""
     quant: str | None = None   # None = base (BF16/FP16). "Q4_K_M" or "Q8_0" = GGUF variant.
+
+    def est_params_b(self) -> float:
+        """Estimate parameter count (billions) from this variant's weight size.
+        Uses the quant's bytes/param so all three variants of one model return the
+        same param count (BF16 2.0, Q8_0 1.0, Q4_K_M 0.55 GB/1B)."""
+        bpp = 0.55 if self.quant == "Q4_K_M" else 1.0 if self.quant == "Q8_0" else 2.0
+        return self.size_mb / 1000 / bpp
 
     def tok_s_for_chip(self, chip: str) -> float:
         """Return estimated decode tok/s for any chip, not just the three hardcoded ones."""
@@ -171,55 +179,88 @@ class HardwareConstraints:
 # fitting the 3GB RAM budget on 8GB devices only (not 6GB).
 # ---------------------------------------------------------------------------
 #
-# Tier formula: params_b = int4_size_mb * 2 / 1000
-# Tier 0: params_b < 0.75B | Tier 1: 0.75–1.5B | Tier 2: 1.5–2.5B | Tier 3: >=2.5B
-# Siblings inherit the base model's tier (not recomputed from sibling's larger file size).
+# ---------------------------------------------------------------------------
+# Variant model (BF16 / Q8_0 / Q4_K_M) as INDEPENDENT deployment candidates.
+#
+# The 12 entries in _BASE_MODELS carry the MEASURED Q4_K_M on-disk size and its
+# measured peak RAM (from HF repos / device runs). Each base is expanded into
+# three real, independently-selectable variants that differ in weight precision,
+# on-disk size, peak RAM, and decode speed — but share benchmark accuracy (weight
+# quant barely moves task accuracy, which is exactly why min-RAM selection matters).
+#
+# Sizing model (bytes/param, fact-checked against 2026 GGUF measurements):
+#     BF16  = 2.00 GB/1B params   (Q4 × 3.64)
+#     Q8_0  = 1.00 GB/1B params   (Q4 × 1.82)   near-lossless
+#     Q4_K_M= 0.55 GB/1B params   (× 1.00, the measured anchor)
+# Only the weight-resident bytes scale with quant; the KV-cache + runtime overhead
+# (peak − weights) is quant-independent (KV cache stays FP16), so it is held
+# constant per model and added back on top of each variant's weight size.
+#
+# Decode speed: smaller weights → less memory bandwidth per token → faster decode.
+#     Q4_K_M = measured (anchor, ×1.00) · Q8_0 ≈ ×0.65 · BF16 ≈ ×0.45
+#
+# TIER = pure RAM bucket of the variant's own peak_memory_mb (NOT param count):
+#     Tier 0: peak < 750 MB | Tier 1: 750–1500 | Tier 2: 1500–2500 | Tier 3: >= 2500
+# A model's BF16 / Q8 / Q4 variants can therefore land in DIFFERENT tiers — which is
+# the whole point: the loop picks the smallest-RAM variant that still hits the goal.
+# ---------------------------------------------------------------------------
 
-def _q4_sibling(base: ModelSpec) -> ModelSpec:
-    """Q4_K_M GGUF variant. Inherits tier from base (param-count-based)."""
-    peak = max(base.peak_memory_mb, base.int4_size_mb + 400)
+_BF16_OVER_Q4 = 2.00 / 0.55   # ≈ 3.636
+_Q8_OVER_Q4 = 1.00 / 0.55     # ≈ 1.818
+_SPEED_FACTOR = {"Q4_K_M": 1.00, "Q8_0": 0.65, None: 0.45}  # None == BF16
+
+
+def _ram_tier(peak_mb: int) -> int:
+    """Tier is a pure RAM bucket of peak inference memory."""
+    if peak_mb < 750:
+        return 0
+    if peak_mb < 1500:
+        return 1
+    if peak_mb < 2500:
+        return 2
+    return 3
+
+
+def _variant(base: ModelSpec, quant: str | None) -> ModelSpec:
+    """Build one deployment variant (quant=None→BF16, "Q8_0", or "Q4_K_M") from a
+    base entry whose size_mb/peak_memory_mb hold the MEASURED Q4_K_M values."""
+    q4_size = base.size_mb
+    overhead = max(base.peak_memory_mb - q4_size, 0)  # KV cache + runtime, quant-independent
+    if quant == "Q4_K_M":
+        size = q4_size
+    elif quant == "Q8_0":
+        size = round(q4_size * _Q8_OVER_Q4)
+    else:  # BF16 base
+        size = round(q4_size * _BF16_OVER_Q4)
+    peak = size + overhead
+    speed = _SPEED_FACTOR[quant]
     return ModelSpec(
         model_id=base.model_id,
-        int4_size_mb=base.int4_size_mb,
-        tier=base.tier,
-        tok_s_snapdragon_660=base.tok_s_snapdragon_660,
-        tok_s_snapdragon_778g=base.tok_s_snapdragon_778g,
-        tok_s_snapdragon_8gen3=base.tok_s_snapdragon_8gen3,
+        size_mb=size,
+        tier=_ram_tier(peak),
+        tok_s_snapdragon_660=round(base.tok_s_snapdragon_660 * speed, 1),
+        tok_s_snapdragon_778g=round(base.tok_s_snapdragon_778g * speed, 1),
+        tok_s_snapdragon_8gen3=round(base.tok_s_snapdragon_8gen3 * speed, 1),
         peak_memory_mb=peak,
         gsm8k=base.gsm8k,
         mmlu=base.mmlu,
         notes=base.notes,
-        quant="Q4_K_M",
-    )
-
-
-def _q8_sibling(base: ModelSpec) -> ModelSpec:
-    """Q8_0 GGUF variant. ~1.9x larger file, ~35% slower tok/s. Inherits tier from base."""
-    q8_size = int(base.int4_size_mb * 1.9)
-    peak = q8_size + 400
-    return ModelSpec(
-        model_id=base.model_id,
-        int4_size_mb=q8_size,
-        tier=base.tier,
-        tok_s_snapdragon_660=round(base.tok_s_snapdragon_660 * 0.65, 1),
-        tok_s_snapdragon_778g=round(base.tok_s_snapdragon_778g * 0.65, 1),
-        tok_s_snapdragon_8gen3=round(base.tok_s_snapdragon_8gen3 * 0.65, 1),
-        peak_memory_mb=peak,
-        gsm8k=base.gsm8k,
-        mmlu=base.mmlu,
-        notes=base.notes,
-        quant="Q8_0",
+        quant=quant,
     )
 
 
 ANDROID_POOL: list[ModelSpec] = [
-    # ── Tier 0: Micro  (~0.5B params, int4_size < ~375MB) ─────────────────
+    # NOTE: each entry below is a MEASURED-Q4_K_M SEED. Its size_mb / peak_memory_mb /
+    # tok_s are the real Q4_K_M values, and its `tier=` field is IGNORED — _variant()
+    # recomputes tier per variant from peak RAM via _ram_tier(). The "~params" in the
+    # section headers just groups seeds by model scale for readability.
+    # ── ~0.5B params ──────────────────────────────────────────────────────
     # MiniCPM4-0.5B: Uses BitCPM4 QAT quantization for better INT4 quality.
     # Benchmarks claim to exceed Qwen3-0.6B; specialized sparse attention for
     # long context. Source: arXiv 2506.07900.
     ModelSpec(
         model_id="openbmb/MiniCPM4-0.5B",
-        int4_size_mb=310,
+        size_mb=310,
         tier=0,
         tok_s_snapdragon_660=14.0,
         tok_s_snapdragon_778g=22.0,
@@ -230,14 +271,14 @@ ANDROID_POOL: list[ModelSpec] = [
         notes="QAT-quantized (BitCPM4); best sub-0.6B for long-context tasks; use MNN for best speed",
     ),
 
-    # ── Tier 1: Small  (~0.75–1.5B params, int4_size ~375–750MB) ──────────
+    # ── ~0.75–1.5B params ─────────────────────────────────────────────────
     # Qwen3.5-0.8B (March 2026): Gated DeltaNet hybrid architecture, natively multimodal,
     # 262K context, Apache 2.0. Intelligence Index +2.5 pts over Qwen3-0.6B.
     # CAUTION: documented 67%→33% code generation collapse when few-shot examples are added.
     # INT4 size estimated ~500MB; source: huggingface.co/Qwen/Qwen3.5-0.8B
     ModelSpec(
         model_id="Qwen/Qwen3.5-0.8B",
-        int4_size_mb=500,
+        size_mb=500,
         tier=1,
         tok_s_snapdragon_660=9.0,
         tok_s_snapdragon_778g=15.0,
@@ -252,7 +293,7 @@ ANDROID_POOL: list[ModelSpec] = [
     # Source: Meta model card; PyTorch ExecuTorch blog.
     ModelSpec(
         model_id="meta-llama/Llama-3.2-1B-Instruct",
-        int4_size_mb=658,
+        size_mb=658,
         tier=1,
         tok_s_snapdragon_660=8.0,
         tok_s_snapdragon_778g=14.0,
@@ -269,7 +310,7 @@ ANDROID_POOL: list[ModelSpec] = [
     # Source: openbmb/MiniCPM5-1B model card; deepwiki.com benchmarks.
     ModelSpec(
         model_id="openbmb/MiniCPM5-1B",
-        int4_size_mb=688,
+        size_mb=688,
         tier=1,
         tok_s_snapdragon_660=8.0,
         tok_s_snapdragon_778g=14.0,
@@ -280,15 +321,15 @@ ANDROID_POOL: list[ModelSpec] = [
         notes="Best 1B model (May 2026): MATH-500 91.6%, HumanEval+ 78.7%, IFEval 80.4%; 131K context; hybrid thinking mode",
     ),
 
-    # ── Tier 2: Mid    (~1.5–2.5B params, int4_size ~750–1250MB) ──────────
+    # ── ~1.5–2.5B params ──────────────────────────────────────────────────
     # Gemma 3 1B IT: Google QAT checkpoint; GSM8K 62.8%, benefits from
     # superior instruction tuning. LiteRT/MediaPipe native support.
-    # int4_size_mb=806 → params_b≈1.61B → Tier 2 by the tier formula.
+    # size_mb=806 → params_b≈1.61B → Tier 2 by the tier formula.
     # Despite the "1B" in the name, actual param count places it in Tier 2.
     # Source: arXiv 2503.19786; Google Gemma 3 1B IT model card.
     ModelSpec(
         model_id="google/gemma-3-1b-it",
-        int4_size_mb=806,
+        size_mb=806,
         tier=2,
         tok_s_snapdragon_660=7.0,
         tok_s_snapdragon_778g=12.0,
@@ -304,7 +345,7 @@ ANDROID_POOL: list[ModelSpec] = [
     # Source: arXiv 2501.12948 Table 4.
     ModelSpec(
         model_id="deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B",
-        int4_size_mb=958,
+        size_mb=958,
         tier=2,
         tok_s_snapdragon_660=4.5,
         tok_s_snapdragon_778g=8.0,
@@ -319,7 +360,7 @@ ANDROID_POOL: list[ModelSpec] = [
     # Source: HuggingFaceTB model card; Distil Labs benchmark.
     ModelSpec(
         model_id="HuggingFaceTB/SmolLM2-1.7B-Instruct",
-        int4_size_mb=1060,
+        size_mb=1060,
         tier=2,
         tok_s_snapdragon_660=4.5,
         tok_s_snapdragon_778g=8.0,
@@ -330,11 +371,8 @@ ANDROID_POOL: list[ModelSpec] = [
         notes="Best Tier 2 for IFEval/instruction-following (56.7%); strong for classification; compact training corpus",
     ),
 
-    # ── Tier 3: Large  (~2.5B+ params, int4_size > ~1250MB) — compact entries ─
-    # (The main Tier 3 block follows the Tier 2 section; these two models land
-    #  in Tier 3 by the param-count formula despite their int4 sizes being near
-    #  the Tier 2 ceiling: gemma-3n-e2b-it uses PLE caching (2.3B effective),
-    #  Qwen3.5-2B has 2B actual params → both ≥1.5B effective → tier=3 per formula.)
+    # ── ~2B params (compact) ──────────────────────────────────────────────
+    # gemma-3n-e2b-it uses PLE caching (2.3B effective); Qwen3.5-2B is 2B params.
     # Gemma 3n E2B IT: MatFormer (Matryoshka) architecture, natively multimodal.
     # Beats Gemma3-1B on 9/9 shared benchmarks: HumanEval 66.5% vs 41.5%,
     # MMLU 60.1% vs ~48%. 5B total params / 2.3B effective via PLE caching.
@@ -342,7 +380,7 @@ ANDROID_POOL: list[ModelSpec] = [
     # WARNING: Proprietary license (not Apache 2.0) — check before commercial use.
     ModelSpec(
         model_id="google/gemma-3n-e2b-it",
-        int4_size_mb=1300,
+        size_mb=1300,
         tier=3,
         tok_s_snapdragon_660=4.0,
         tok_s_snapdragon_778g=7.0,
@@ -358,7 +396,7 @@ ANDROID_POOL: list[ModelSpec] = [
     # Source: unsloth/Qwen3.5-2B-GGUF on HuggingFace; unsloth.ai/docs/models/qwen3.5.
     ModelSpec(
         model_id="unsloth/Qwen3.5-2B-GGUF",
-        int4_size_mb=1350,   # estimated Q4_K_M; exact size at huggingface.co/unsloth/Qwen3.5-2B-GGUF
+        size_mb=1350,   # estimated Q4_K_M; exact size at huggingface.co/unsloth/Qwen3.5-2B-GGUF
         tier=3,
         tok_s_snapdragon_660=4.0,
         tok_s_snapdragon_778g=7.5,
@@ -369,14 +407,14 @@ ANDROID_POOL: list[ModelSpec] = [
         notes="NEW (Mar 2026): Gated DeltaNet hybrid, multimodal (text+image+video), 262K ctx, 201 langs; Unsloth GGUF confirmed for llama.cpp; no GSM8K/MMLU published; thinking OFF by default",
     ),
 
-    # ── Tier 3: Large  (~2.5B+ params, int4_size > ~1250MB) ───────────────
+    # ── ~3B+ params ───────────────────────────────────────────────────────
     # Llama 3.2-3B: ExecuTorch reference model for 3B class. Q4_K_M = ~2.02GB.
     # Decode: ~10 tok/s on SD 8 Gen 3 (CPU). GSM8K 77.7%, ARC-C 78.6%.
     # Q3_K_M alternative (~1.5GB) fits tighter storage budgets at quality cost.
     # Source: Meta model card; hugging-quants HF repo (2.02GB confirmed).
     ModelSpec(
         model_id="meta-llama/Llama-3.2-3B-Instruct",
-        int4_size_mb=2020,
+        size_mb=2020,
         tier=3,
         tok_s_snapdragon_660=2.5,
         tok_s_snapdragon_778g=5.0,
@@ -392,7 +430,7 @@ ANDROID_POOL: list[ModelSpec] = [
     # Source: mistralai/Ministral-3-3B-Instruct-2512-GGUF on HuggingFace; codersera.com.
     ModelSpec(
         model_id="mistralai/Ministral-3B-Instruct",
-        int4_size_mb=1900,
+        size_mb=1900,
         tier=3,
         tok_s_snapdragon_660=2.8,
         tok_s_snapdragon_778g=5.5,
@@ -408,7 +446,7 @@ ANDROID_POOL: list[ModelSpec] = [
     # Source: localaimaster.com; unsloth/Phi-4-mini-instruct-GGUF HF repo.
     ModelSpec(
         model_id="microsoft/Phi-4-mini-instruct",
-        int4_size_mb=2490,
+        size_mb=2490,
         tier=3,
         tok_s_snapdragon_660=1.0,
         tok_s_snapdragon_778g=2.5,
@@ -420,31 +458,36 @@ ANDROID_POOL: list[ModelSpec] = [
     ),
 ]
 
-# Expand pool with Q4_K_M and Q8_0 quantized siblings for every base model.
-# Siblings inherit the base model's tier (param-count based, not re-tiered by file size).
-_BASE_MODELS = [m for m in ANDROID_POOL]  # snapshot before mutation
+# Expand each base entry (which holds MEASURED Q4_K_M numbers) into three real,
+# independently-selectable deployment variants: BF16 (quant=None), Q8_0, Q4_K_M.
+# Each variant gets its own honest size/peak/tier/speed. Tier is a pure RAM bucket,
+# so a single model's variants can span multiple tiers.
+_BASE_MODELS = [m for m in ANDROID_POOL]  # snapshot: these carry measured Q4_K_M values
 ANDROID_POOL = sorted(
-    _BASE_MODELS + [_q4_sibling(m) for m in _BASE_MODELS] + [_q8_sibling(m) for m in _BASE_MODELS],
-    key=lambda m: (m.tier, m.int4_size_mb),
+    [_variant(m, None) for m in _BASE_MODELS]       # BF16
+    + [_variant(m, "Q8_0") for m in _BASE_MODELS]
+    + [_variant(m, "Q4_K_M") for m in _BASE_MODELS],
+    key=lambda m: (m.tier, m.size_mb),
 )
 
 
 def filter_pool(constraints: HardwareConstraints) -> list[ModelSpec]:
-    """Return models that satisfy all hard constraints, sorted by tier then size.
+    """Return variants that satisfy all hard constraints, sorted by tier then size.
 
+    Each entry is an independent quant variant (BF16 / Q8_0 / Q4_K_M).
     Filters on:
-      - storage_mb: INT4 file must fit
-      - memory_mb: peak RAM must fit
+      - storage_mb: this variant's on-disk weight file must fit
+      - memory_mb: this variant's peak RAM must fit
       - min_tok_s: sustained decode throughput floor (UX gate, hardware_metrics.md §6.5)
                    Set constraints.min_tok_s=0 to disable (batch/async workflows).
     """
     feasible = [
         m for m in ANDROID_POOL
-        if m.int4_size_mb <= constraints.storage_mb
+        if m.size_mb <= constraints.storage_mb
         and m.peak_memory_mb <= constraints.memory_mb
         and (constraints.min_tok_s <= 0 or m.tok_s_for_chip(constraints.target_chip) >= constraints.min_tok_s)
     ]
-    return sorted(feasible, key=lambda m: (m.tier, m.int4_size_mb))
+    return sorted(feasible, key=lambda m: (m.tier, m.size_mb))
 
 
 def filter_pool_by_task(
@@ -515,9 +558,9 @@ def check_hardware_constraints(
 
     result = {
         "storage": {
-            "value_mb": model.int4_size_mb,
+            "value_mb": model.size_mb,
             "limit_mb": constraints.storage_mb,
-            "pass": model.int4_size_mb <= constraints.storage_mb,
+            "pass": model.size_mb <= constraints.storage_mb,
         },
         "memory": {
             "value_mb": model.peak_memory_mb,

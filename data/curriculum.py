@@ -18,35 +18,42 @@ _CODE_QA_BENCHMARKS = {"humaneval", "mbpp", "code", "triviaqa", "qa"}
 
 
 def get_teacher_client(task_type: str, benchmark: str | None = None):
-    """Return (client, model_name) for CoT annotation based on task domain.
+    """Return (client, model_name, client_type) for CoT annotation based on task domain.
 
     Paper §2.5: 'DeepSeek-R1 is preferred for mathematical and scientific reasoning
     (e.g., GSM8K, ARC-Challenge), while GPT-4.1 is preferred for code generation and
     general-knowledge tasks (e.g., HumanEval, TriviaQA).'
+
+    FALLBACK: the specialist teachers (DeepSeek-R1, GPT-4.1) are optional and only
+    used when their API key is configured. Whenever a specialist is unavailable —
+    or the domain doesn't call for one — CoT annotation falls back to the SAME
+    orchestrator model that drives the rest of the pipeline (config.ORCHESTRATOR_MODEL,
+    exposed here as TEACHER_MODEL_CLAUDE which defaults to it). So a run with no
+    DeepSeek/OpenAI keys still gets CoT traces, authored by the orchestrator.
     """
     from config.config import (
         DEEPSEEK_API_KEY, DEEPSEEK_BASE_URL, TEACHER_MODEL_DEEPSEEK,
         OPENAI_API_KEY, TEACHER_MODEL_GPT,
-        ANTHROPIC_API_KEY, TEACHER_MODEL_CLAUDE,
+        ANTHROPIC_API_KEY, TEACHER_MODEL_CLAUDE, ORCHESTRATOR_MODEL,
     )
 
     bm = (benchmark or "").lower().replace(" ", "_")
 
-    # math_reasoning always uses DeepSeek-R1 — it's the distillation source for
-    # reasoning chains and produces the best step-by-step traces at this task type.
+    # math_reasoning prefers DeepSeek-R1 — the distillation source for reasoning
+    # chains — but only if its key is set; otherwise fall through to the orchestrator.
     if task_type == "math_reasoning" and DEEPSEEK_API_KEY:
         from openai import OpenAI
         client = OpenAI(api_key=DEEPSEEK_API_KEY, base_url=DEEPSEEK_BASE_URL)
         return client, TEACHER_MODEL_DEEPSEEK, "openai"
 
-    # code_generation uses GPT-4.1 — stronger on syntactically valid code generation
-    # and unit-test-passing solutions than DeepSeek-R1.
+    # code_generation prefers GPT-4.1 — stronger on syntactically valid, test-passing
+    # code — but only if its key is set; otherwise fall through to the orchestrator.
     if task_type == "code_generation" and OPENAI_API_KEY:
         from openai import OpenAI
         client = OpenAI(api_key=OPENAI_API_KEY)
         return client, TEACHER_MODEL_GPT, "openai"
 
-    # generation catch-all: route by benchmark domain same as before
+    # generation catch-all: route by benchmark domain when the specialist key exists.
     if task_type == "generation" and bm in _MATH_SCIENCE_BENCHMARKS and DEEPSEEK_API_KEY:
         from openai import OpenAI
         client = OpenAI(api_key=DEEPSEEK_API_KEY, base_url=DEEPSEEK_BASE_URL)
@@ -57,9 +64,11 @@ def get_teacher_client(task_type: str, benchmark: str | None = None):
         client = OpenAI(api_key=OPENAI_API_KEY)
         return client, TEACHER_MODEL_GPT, "openai"
 
+    # FALLBACK: no specialist available → use the orchestrator model itself.
     import anthropic
     client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
-    return client, TEACHER_MODEL_CLAUDE, "anthropic"
+    teacher = TEACHER_MODEL_CLAUDE or ORCHESTRATOR_MODEL
+    return client, teacher, "anthropic"
 
 
 def annotate_cot(
@@ -67,6 +76,7 @@ def annotate_cot(
     teacher_client,
     teacher_model: str,
     client_type: str = "anthropic",
+    task_type: str = "generation",
 ) -> list[dict]:
     """Add chain-of-thought reasoning to generation examples via a teacher model.
 
@@ -75,7 +85,8 @@ def annotate_cot(
     than only WHAT the answer is.'
 
     Returns examples with an added 'cot_reasoning' field. The CoT is prepended to the
-    response during training formatting.
+    response during training formatting. The prompt is task-aware: code-generation gets
+    an implementation-plan style explanation rather than a prose math-style derivation.
     """
     annotated = []
     for ex in examples:
@@ -85,13 +96,24 @@ def annotate_cot(
             annotated.append(ex)
             continue
 
-        cot_prompt = (
-            f"Solve this problem step by step, showing your reasoning clearly.\n\n"
-            f"Problem: {prompt_text}\n\n"
-            f"The correct answer is: {gold_answer}\n\n"
-            f"Provide a clear step-by-step explanation of how to arrive at this answer. "
-            f"Reply with only the reasoning steps, not the final answer."
-        )
+        if task_type == "code_generation":
+            cot_prompt = (
+                f"Explain the reasoning behind this code solution as a concise implementation "
+                f"plan a developer would follow: the approach, key steps, and any edge cases "
+                f"handled. Do NOT restate the full code.\n\n"
+                f"Problem:\n{prompt_text}\n\n"
+                f"Correct solution:\n{gold_answer}\n\n"
+                f"Reply with only the step-by-step implementation reasoning, not the code and "
+                f"not the final answer."
+            )
+        else:
+            cot_prompt = (
+                f"Solve this problem step by step, showing your reasoning clearly.\n\n"
+                f"Problem: {prompt_text}\n\n"
+                f"The correct answer is: {gold_answer}\n\n"
+                f"Provide a clear step-by-step explanation of how to arrive at this answer. "
+                f"Reply with only the reasoning steps, not the final answer."
+            )
 
         try:
             if client_type == "openai":
@@ -328,7 +350,9 @@ def synthesize_hard_negatives(
         all_labels = list({e.get("label") for e in examples if e.get("label")})
         candidates = examples[:n]
         pattern_hint = (
-            f"\nFocus on this failure pattern: {targeted_pattern}\n"
+            f"\nThe example should specifically exercise this failure mode: "
+            f"{targeted_pattern}. Construct text that a model failing in that way "
+            f"would misclassify.\n"
             if targeted_pattern else ""
         )
         for ex in candidates:
@@ -337,11 +361,14 @@ def synthesize_hard_negatives(
             target_labels = [l for l in all_labels if l != src_label]
             target_label = target_labels[0] if target_labels else src_label
             prompt = (
-                f"Generate a counterexample that looks superficially similar to "
-                f"the following example labelled '{src_label}' but has a genuine "
-                f"'{target_label}' meaning. Be realistic and subtle.{pattern_hint}\n\n"
-                f"Source example: {ex['text']}\n\n"
-                f"Respond with only the counterexample text, no explanation."
+                f"You are generating a HARD NEGATIVE for a text classifier: a realistic "
+                f"example that superficially resembles the '{src_label}' class but genuinely "
+                f"belongs to the '{target_label}' class. The surface features should mislead "
+                f"toward '{src_label}' while the true meaning is unambiguously '{target_label}'."
+                f"{pattern_hint}\n\n"
+                f"Reference '{src_label}' example:\n{ex['text']}\n\n"
+                f"Output ONLY the new example text for the '{target_label}' class — no preamble, "
+                f"no explanation, no quotation marks, no label prefix."
             )
             response = anthropic_client.messages.create(
                 model=TEACHER_MODEL_CLAUDE,
@@ -353,6 +380,11 @@ def synthesize_hard_negatives(
             results.append({"text": generated_text, "label": target_label})
 
     elif task_type == "NER":
+        # Hard negatives for NER are HARDER-TO-TAG examples with CORRECT labels — a
+        # passage where the same entity mentions sit in a more ambiguous context, with
+        # the gold entity types the model SHOULD predict. (An earlier version asked for
+        # WRONG types and stored them as targets, which trains the model to mis-tag —
+        # negative transfer. We keep labels correct so the SFT signal is positive.)
         candidates = examples[:n]
         for ex in candidates:
             original_entities = ex.get("entities", [])
@@ -360,16 +392,17 @@ def synthesize_hard_negatives(
                 f'"{e.get("text", "")}" ({e.get("type", "")})' for e in original_entities[:5]
             ) if original_entities else "unknown entities"
             prompt = (
-                f"Rewrite the following passage so that the named entities appear in an "
-                f"ambiguous or near-miss context (e.g., 'Apple' as fruit vs company). "
-                f"Keep the entity mentions but change their context so the correct entity "
-                f"TYPE is different from the original.\n\n"
-                f"Original entities: {entity_desc}\n"
-                f"Passage: {ex.get('text', '')}\n\n"
-                f"Reply with JSON: {{\"text\": \"<rewritten passage>\", "
-                f"\"entities\": [{{\"text\": \"<span>\", \"type\": \"<WRONG_TYPE>\"}}]}}\n"
-                f"The entities list should contain the spans with INCORRECT entity types "
-                f"(the types the model should learn NOT to predict). Reply with JSON only."
+                f"You are generating a HARD training example for a named-entity recognizer. "
+                f"Rewrite the passage so the SAME entities appear in a more ambiguous or "
+                f"confusable context (e.g. a word that could read as either a company or a "
+                f"common noun), so their correct type is harder to infer from surface form "
+                f"alone — but keep each entity's CORRECT type unchanged.\n\n"
+                f"Original entities (text → correct type): {entity_desc}\n"
+                f"Original passage: {ex.get('text', '')}\n\n"
+                f"Reply with JSON only: {{\"text\": \"<rewritten passage>\", "
+                f"\"entities\": [{{\"text\": \"<span>\", \"type\": \"<CORRECT_TYPE>\"}}]}}\n"
+                f"The 'entities' list must contain the spans with their TRUE types (what the "
+                f"model SHOULD predict for the rewritten passage). JSON only, no prose."
             )
             response = anthropic_client.messages.create(
                 model=TEACHER_MODEL_CLAUDE,

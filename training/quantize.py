@@ -35,7 +35,7 @@ def theoretical_hardware_profile(model_id: str) -> dict:
     if spec is None:
         return {
             "model_id": model_id,
-            "int4_size_mb": None,
+            "size_mb": None,
             "tier": None,
             "tok_s_snapdragon_778g": None,
             "peak_memory_mb": None,
@@ -44,7 +44,7 @@ def theoretical_hardware_profile(model_id: str) -> dict:
         }
     return {
         "model_id": spec.model_id,
-        "int4_size_mb": spec.int4_size_mb,
+        "size_mb": spec.size_mb,
         "tier": spec.tier,
         "tok_s_snapdragon_660": spec.tok_s_snapdragon_660,
         "tok_s_snapdragon_778g": spec.tok_s_snapdragon_778g,

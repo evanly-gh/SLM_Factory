@@ -116,7 +116,7 @@ def curate_node(state: AgentState) -> AgentState:
             benchmark = plan.get("benchmark", plan.get("task_name", ""))
             teacher_client, teacher_model, client_type = get_teacher_client(task_type, benchmark)
             _log(model_id, f"  CoT annotation: teacher={teacher_model} ({client_type})")
-            gold = annotate_cot(gold, teacher_client, teacher_model, client_type)
+            gold = annotate_cot(gold, teacher_client, teacher_model, client_type, task_type=task_type)
 
         dataset = apply_quality_controls(gold + hard, task_type=task_type)
         n_hard_added = len(hard)

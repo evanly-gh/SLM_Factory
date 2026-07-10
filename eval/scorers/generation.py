@@ -3,13 +3,28 @@ from data.eval_set import EvalSet
 import anthropic
 import os
 
+# System prompt anchors the judge role and forces a strict, calibrated scale.
+# Without a rubric the judge clusters everything around 0.7–0.9; the anchored
+# scale below keeps scores discriminative across eval runs.
+JUDGE_SYSTEM = (
+    "You are a strict, impartial evaluator of a language model's answer against a "
+    "reference (gold) answer. Judge only semantic correctness relative to the gold "
+    "answer — ignore style, verbosity, and formatting differences. Be conservative: "
+    "most answers are NOT perfect. Reserve 1.0 for answers that are fully correct and "
+    "complete. Output a single decimal number in [0.0, 1.0] and nothing else."
+)
+
 JUDGE_PROMPT = (
-    "You are an impartial judge evaluating a model's answer.\n"
-    "Question: {question}\n"
-    "Gold answer: {gold}\n"
-    "Model answer: {predicted}\n\n"
-    "Rate correctness from 0.0 (completely wrong) to 1.0 (perfectly correct). "
-    "Reply with only a number."
+    "Task/question:\n{question}\n\n"
+    "Gold (reference) answer:\n{gold}\n\n"
+    "Model answer:\n{predicted}\n\n"
+    "Score the model answer against the gold answer using this rubric:\n"
+    "  1.0  — fully correct and complete; matches the gold answer's meaning\n"
+    "  0.7  — mostly correct; minor omission or imprecision, no factual error\n"
+    "  0.4  — partially correct; missing key information or a notable error\n"
+    "  0.0  — wrong, irrelevant, empty, or a refusal when an answer was expected\n"
+    "Interpolate between anchors when warranted. "
+    "Reply with ONLY the decimal number."
 )
 
 GENERATE_PROMPT = "Answer the following question:\n\n{text}"
@@ -49,11 +64,13 @@ def score(eval_set: EvalSet, predictions: list[str]) -> dict:
 
     else:
         # task_type == "generation": LLM-as-judge
-        client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
+        from config.config import ANTHROPIC_API_KEY, JUDGE_MODEL
+        client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
         for ex, pred in zip(eval_set.all, predictions):
             resp = client.messages.create(
-                model="claude-haiku-4-5",
+                model=JUDGE_MODEL,
                 max_tokens=10,
+                system=JUDGE_SYSTEM,
                 messages=[{"role": "user", "content": JUDGE_PROMPT.format(
                     question=ex.get("text", ""),
                     gold=ex.get("answer", ex.get("label", "")),
