@@ -24,8 +24,13 @@ source .venv_gpu/bin/activate
 uv pip install --upgrade pip
 uv pip install "unsloth"
 uv pip install "trl" "transformers" "peft" "accelerate" "datasets" "bitsandbytes"
-# Orchestration deps (same as the dev venv).
-uv pip install "langgraph>=0.2.0" "anthropic>=0.40.0" "exa-py" "python-dotenv"
+# timm: required to load the gemma-3n-e2b-it multimodal wrapper (TimmWrapperModel),
+# otherwise its scaling-curve probe fails (see BUGS B114).
+uv pip install "timm"
+# Orchestration deps (same as the dev venv). langchain-anthropic is required by
+# iterate_node's LLM per-iteration decision; without it every iteration silently
+# falls back to score-band rules (see BUGS B112).
+uv pip install "langgraph>=0.2.0" "anthropic>=0.40.0" "exa-py" "python-dotenv" "langchain-anthropic"
 
 python -c "import torch; print('torch', torch.__version__, 'cuda', torch.cuda.is_available())"
 echo "GPU env ready: .venv_gpu"

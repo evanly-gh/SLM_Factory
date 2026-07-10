@@ -1102,3 +1102,43 @@ Status legend: 🔴 open · 🟢 fixed · 🟡 suspected/unconfirmed · ⚪ desi
 - **Impact:** BLOCKER for math_reasoning tasks (tests 3 GSM8K & 4 ARC). Likely also at risk for NER (long PubMed abstracts) — to be confirmed on rerun. Classification (test 1, short sequences) is unaffected.
 - **Fix:** NOT applied. Migrating the SFTTrainer construction to `SFTConfig(dataset_text_field=..., max_length=512, ...)` + `processing_class=tokenizer` is the correct API alignment, but (a) it may not resolve the Unsloth-internal fused-CE mismatch (which looks like an Unsloth/transformers version bug), and (b) it risks regressing the currently-working classification path — cannot be verified without a GPU rerun. Per campaign guardrails (risky/ambiguous → log, don't guess destructively) this is left for review. Candidate follow-ups for a human: (i) migrate to SFTConfig and pin/patch Unsloth's fused CE, (ii) disable Unsloth fused-CE loss for long-sequence tasks, (iii) pin trl/transformers/unsloth to a mutually-tested set.
 - **Status:** 🟡 needs-review (BLOCKS tests 3 & 4).
+
+## B110 -- run.py: concurrent jobs share one run dir (second-resolution timestamp) → clobber each other
+- **Where:** `tests/pipeline/run.py:38-40`
+- **When:** 2026-07-10, overnight campaign — batch rerun 36988105-108
+- **How found:** All four jobs launched together started Python in the same second and computed identical `TS=20260710_105759`; `os.makedirs(..., exist_ok=True)` + `open(run.log, "w")` meant they shared one `logs/runs/<TS>/` and truncated/overwrote each other's run.log, scores.json, dag.json, device_research.json, and artifacts. Only ONE cold-start banner survived in the shared run.log.
+- **Impact:** HIGH — concurrent validation runs produce corrupted, unattributable artifacts. (Per-job `logs/slurm/*-<jobid>.out` stay clean, so those remain the source of truth.)
+- **Fix:** Append `SLURM_JOB_ID` (or PID off-cluster) to the timestamp and use `exist_ok=False`. Committed.
+- **Status:** 🟢 fixed (code).
+
+## B111 -- stack: `is_torch_fx_available` removed in transformers 5.5.0 → scaling-curve probe fails AND training crashes
+- **Where:** third-party (`transformers.utils.import_utils`); surfaced via `agent/nodes/cold_start/scaling_curve.py` probe and the training forward path
+- **When:** 2026-07-10, overnight campaign — all reruns
+- **How found:** `ImportError: cannot import name 'is_torch_fx_available' from 'transformers.utils.import_utils'`. A dependency (peft/accelerate/unsloth chain) imports this symbol, which transformers 5.5.0 deleted. (a) scaling_curve's per-model probe catches it → "Probe failed for openbmb/MiniCPM4-0.5B" → "Too few probe points; defaulting to highest-capability". (b) During ARC(108) training it is raised uncaught at `[train] Iteration 1` → whole run crashes (iterations=0).
+- **Impact:** HIGH — (1) breaks the scaling-curve probe, so model selection defaults to the LARGEST feasible model instead of starting small — this is why SMS/GSM8K/NER all jumped straight to Llama-3.2-3B / Qwen3.5-2B and undercuts the escalation design (test 2). (2) Crashes tier-0 training (ARC/MiniCPM4).
+- **Fix:** NOT a code fix in this repo (the symbol is imported by third-party libs). Resolved by rebuilding the venv on a known-good version matrix (transformers/torch/unsloth/peft that mutually agree). Part of the planned rebuild.
+- **Status:** 🟡 needs-review (env/version) — targeted by venv rebuild.
+
+## B112 -- iterate: langchain_anthropic not installed → LLM per-iteration decision never runs (silent rule fallback)
+- **Where:** `agent/nodes/iterate.py:135` (`from langchain_anthropic import ChatAnthropic`); missing from `scripts/setup_gpu_env.sh`
+- **When:** 2026-07-10, overnight campaign
+- **How found:** `[iterate] LLM call failed (ModuleNotFoundError("No module named 'langchain_anthropic'")), falling back to score-band rules`. The agentic LLM-driven iteration decision (design §) is never exercised; every iteration silently uses deterministic score-band rules.
+- **Impact:** MEDIUM-HIGH — a core "agentic" behavior is silently disabled on every run. Not a crash (it's caught), but it means the pipeline is not doing what it claims.
+- **Fix:** Add `langchain-anthropic` to setup_gpu_env.sh deps (installed on the venv rebuild). Committed to setup script.
+- **Status:** 🟡 fix staged (dep added; effective after venv rebuild).
+
+## B113 -- hardware/model download: Qwen/Qwen3.5-2B xet snapshot stalls (incomplete snapshot)
+- **Where:** `unsloth_zoo/hf_xet_fallback.py` during model download for NER (Qwen/Qwen3.5-2B)
+- **When:** 2026-07-10, overnight campaign — NER 36988106
+- **How found:** `DownloadStallError: Download for 'Qwen/Qwen3.5-2B' returned an incomplete snapshot even with HF_HUB_DISABLE_XET=1 -- missing files, check your network connection` (preceded by an automatic retry with xet disabled).
+- **Impact:** MEDIUM — partly environmental (network/xet on compute nodes). Can nondeterministically fail runs that must download a not-yet-cached model. Qwen/Qwen3.5-2B is the B107 model, not previously cached (only its GGUF was).
+- **Fix:** Not a code bug. Mitigations for the rebuild: pre-download models to HF_HOME on a login node, and/or set `HF_HUB_DISABLE_XET=1` in the slurm scripts. Noted for follow-up.
+- **Status:** 🟡 needs-review (env/network).
+
+## B114 -- model pool: gemma-3n-e2b-it requires `timm` (not installed) → probe fails
+- **Where:** third-party (`TimmWrapperModel`); pool entry `google/gemma-3n-e2b-it`; missing from `scripts/setup_gpu_env.sh`
+- **When:** 2026-07-10, overnight campaign
+- **How found:** `TimmWrapperModel requires the timm library but it was not found... Probe failed for google/gemma-3n-e2b-it`. gemma-3n is multimodal and pulls a timm vision wrapper.
+- **Impact:** MEDIUM — gemma-3n-e2b-it can never be probed/selected/trained; contributes to the scaling-curve probe having too few points (compounds B111).
+- **Fix:** Add `timm` to setup_gpu_env.sh deps (installed on rebuild). Committed to setup script.
+- **Status:** 🟡 fix staged (dep added; effective after venv rebuild).

@@ -36,8 +36,14 @@ load_dotenv(os.path.join(PROJ, ".env"))
 # Run directory + tee logger (set up before any imports that might print)
 # --------------------------------------------------------------------------
 TS = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+# Disambiguate concurrent runs: several jobs launched together start Python within
+# the same second, and a bare %H%M%S timestamp makes them share one run dir and
+# clobber each other's run.log/scores.json/artifacts (all opened with "w"). Append
+# the SLURM job id (or PID off-cluster) so every run gets its own directory.
+_RUN_UID = os.environ.get("SLURM_JOB_ID") or str(os.getpid())
+TS = f"{TS}_{_RUN_UID}"
 RUN_DIR = os.path.join(PROJ, "logs", "runs", TS)
-os.makedirs(os.path.join(RUN_DIR, "artifacts"), exist_ok=True)
+os.makedirs(os.path.join(RUN_DIR, "artifacts"), exist_ok=False)
 _LOGF = open(os.path.join(RUN_DIR, "run.log"), "w", buffering=1)
 
 
