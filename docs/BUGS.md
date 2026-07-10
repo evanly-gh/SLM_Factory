@@ -1142,3 +1142,11 @@ Status legend: 🔴 open · 🟢 fixed · 🟡 suspected/unconfirmed · ⚪ desi
 - **Impact:** MEDIUM — gemma-3n-e2b-it can never be probed/selected/trained; contributes to the scaling-curve probe having too few points (compounds B111).
 - **Fix:** Add `timm` to setup_gpu_env.sh deps (installed on rebuild). Committed to setup script.
 - **Status:** 🟡 fix staged (dep added; effective after venv rebuild).
+
+## B116 -- MiniCPM4-0.5B remote code incompatible with transformers 5.5.0 (tied-weights list vs dict)
+- **Where:** `openbmb/MiniCPM4-0.5B` remote `modeling_minicpm.py:1163` (__init__ → post_init) → `transformers/modeling_utils.py:2472 get_expanded_tied_weights_keys`
+- **When:** 2026-07-10, overnight campaign — ARC canary 36988759 (after the B111 shim)
+- **How found:** With the B111 shim in place MiniCPM4 got past the `is_torch_fx_available` import, then crashed at model init: `AttributeError: 'list' object has no attribute 'keys'` — transformers 5.5.0's `get_expanded_tied_weights_keys` does `tied_mapping.keys() | tied_mapping.values()`, but MiniCPM4's remote code supplies `_tied_weights_keys` as a LIST (older format). Also breaks the scaling-curve probe for MiniCPM4.
+- **Impact:** BLOCKER for ARC (test 4) — its 2GB Redmi 9A restricts the pool to tier-0, and MiniCPM4-0.5B is the selected tier-0 model. This is the SECOND MiniCPM4-vs-transformers-5.5.0 incompatibility (after B111); the model's remote code predates transformers 5.5.0's API and is multiply incompatible.
+- **Fix:** NOT applied. Per-symbol/-attribute shims are whack-a-mole and fragile. Correct fixes: (a) rebuild the venv with a transformers version compatible with MiniCPM4's remote code (risks the newer Qwen3.5/gemma-3n model types), or (b) replace/remove tier-0 MiniCPM models in the pool with ones that load on transformers 5.5.0, or (c) pin a MiniCPM4 revision whose remote code targets transformers 5.5.0 if one exists. Needs a deliberate version/pool decision.
+- **Status:** 🟡 needs-review (BLOCKS test 4; version/model-compat).
