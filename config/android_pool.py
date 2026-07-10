@@ -393,9 +393,11 @@ ANDROID_POOL: list[ModelSpec] = [
     # Qwen3.5-2B (March 2026): Gated DeltaNet hybrid architecture, multimodal, 262K ctx.
     # Same family as Qwen3.5-0.8B but at 2B params. Unsloth Dynamic 2.0 GGUF confirmed
     # working with llama.cpp, Ollama. No classic GSM8K/MMLU published (uses newer suite).
-    # Source: unsloth/Qwen3.5-2B-GGUF on HuggingFace; unsloth.ai/docs/models/qwen3.5.
+    # Source: Qwen/Qwen3.5-2B (base, trainable) on HuggingFace; GGUF deployment variant
+    # is unsloth/Qwen3.5-2B-GGUF. model_id MUST be the base transformers repo — a -GGUF
+    # repo has no config.json model_type and cannot be loaded for LoRA fine-tuning.
     ModelSpec(
-        model_id="unsloth/Qwen3.5-2B-GGUF",
+        model_id="Qwen/Qwen3.5-2B",
         size_mb=1350,   # estimated Q4_K_M; exact size at huggingface.co/unsloth/Qwen3.5-2B-GGUF
         tier=3,
         tok_s_snapdragon_660=4.0,

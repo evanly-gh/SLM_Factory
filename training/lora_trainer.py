@@ -46,6 +46,9 @@ def _run_unsloth_training(
         model_name=config.base_model,
         max_seq_length=max_seq_length,
         load_in_4bit=config.lora_rank is not None,
+        # Many pool models (MiniCPM4/5, Qwen3.5, Gemma3n) ship custom modeling code and
+        # will not load without this — transformers raises and asks for it explicitly.
+        trust_remote_code=True,
     )
 
     if config.lora_rank is not None:
@@ -176,6 +179,7 @@ def merge_for_quantization(checkpoint_path: str, output_dir: str) -> str:
         model_name=checkpoint_path,
         max_seq_length=512,
         load_in_4bit=False,
+        trust_remote_code=True,
     )
     model.save_pretrained_merged(merged_dir, tokenizer, save_method="merged_16bit")
     return merged_dir

@@ -1,5 +1,6 @@
 # agent/nodes/evaluate.py
 import os
+import config.config as config
 from agent.state import AgentState
 from eval.harness import run_eval
 from data.curation_log import CurationLog
@@ -54,7 +55,12 @@ def evaluate_node(state: AgentState) -> AgentState:
         quant = state["selected_model"].quant
         iteration = state["iteration"]
         gguf_path = None
-        if quant is not None:
+        # Only build a real GGUF (which requires llama.cpp: convert_hf_to_gguf +
+        # llama-quantize) when we actually measure the quantized model on-device. In
+        # the default "theoretical" backend the run is accuracy-only: score the HF/LoRA
+        # weights via Unsloth (gguf_path=None → eval/harness.py uses infer_batch). This
+        # keeps accuracy-only runs from crashing on a missing llama.cpp toolchain.
+        if quant is not None and config.HW_ONDEVICE_BACKEND != "theoretical":
             model_id_safe = model_id.replace("/", "_")
             merged_path = merge_for_quantization(
                 weights_ref,
