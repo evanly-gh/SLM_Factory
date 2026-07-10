@@ -129,8 +129,16 @@ def _run_unsloth_training(
     from datasets import Dataset
     dataset = Dataset.from_list([format_example(e) for e in raw])
 
+    from trl import SFTConfig
     _bf16 = torch.cuda.is_available() and torch.cuda.is_bf16_supported()
-    args = TrainingArguments(
+    # trl >= ~0.20 moved the SFT-specific knobs into SFTConfig: dataset_text_field and
+    # max_length live there (max_seq_length was renamed to max_length), and the tokenizer
+    # is passed as processing_class. The previous code passed max_seq_length/tokenizer as
+    # bare SFTTrainer kwargs, which the current trl silently ignores — so NO truncation was
+    # applied. Long (math CoT / NER abstract) sequences then reached Unsloth's fused
+    # cross-entropy with mismatched logits vs label lengths and crashed (see BUGS B109).
+    # Build an SFTConfig with an explicit max_length so sequences are truncated to 512.
+    sft_config = SFTConfig(
         output_dir=output_dir,
         num_train_epochs=config.nr_epochs,
         per_device_train_batch_size=config.batch_size,
@@ -143,21 +151,19 @@ def _run_unsloth_training(
         # final model explicitly via save_pretrained below.
         save_strategy="no",
         report_to="none",
+        dataset_text_field="text",
+        max_length=max_seq_length,
     )
-
-    # trl changed the SFTTrainer signature across versions (dataset_text_field /
-    # max_seq_length / tokenizer moved into SFTConfig). Try modern first, fall back.
     try:
         trainer = SFTTrainer(
-            model=model, tokenizer=tokenizer, train_dataset=dataset,
-            dataset_text_field="text", max_seq_length=max_seq_length, args=args,
+            model=model, processing_class=tokenizer,
+            train_dataset=dataset, args=sft_config,
         )
-    except TypeError as e:
-        if "max_seq_length" not in str(e):
-            raise
+    except TypeError:
+        # Older trl still accepts tokenizer + dataset_text_field on the trainer itself.
         trainer = SFTTrainer(
             model=model, tokenizer=tokenizer, train_dataset=dataset,
-            dataset_text_field="text", args=args,
+            dataset_text_field="text", args=sft_config,
         )
     trainer.train()
 

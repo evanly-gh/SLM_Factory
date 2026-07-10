@@ -248,6 +248,25 @@ if force_model:
     log(f"  model override: {force_model}")
 
 # --------------------------------------------------------------------------
+# Compatibility shim (BUGS B111)
+# --------------------------------------------------------------------------
+# Several HF model repos ship custom modeling code (loaded via trust_remote_code)
+# that still imports `is_torch_fx_available` from transformers.utils.import_utils —
+# e.g. openbmb/MiniCPM4-0.5B's modeling_minicpm.py. transformers 5.5.0 removed that
+# symbol, so the import crashes model load (ARC/MiniCPM) and the scaling-curve probe.
+# Re-add it: torch.fx has existed since torch 1.8, so availability tracks torch itself.
+import importlib.util as _ilu
+import transformers.utils.import_utils as _tf_iu
+if not hasattr(_tf_iu, "is_torch_fx_available"):
+    def _is_torch_fx_available():
+        return _ilu.find_spec("torch") is not None and _ilu.find_spec("torch.fx") is not None
+    _tf_iu.is_torch_fx_available = _is_torch_fx_available
+    # Some remote code imports it from the transformers top-level namespace too.
+    import transformers as _tf
+    if not hasattr(_tf, "is_torch_fx_available"):
+        _tf.is_torch_fx_available = _is_torch_fx_available
+
+# --------------------------------------------------------------------------
 # Run
 # --------------------------------------------------------------------------
 from agent.graph import build_graph
