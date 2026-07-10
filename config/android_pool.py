@@ -274,22 +274,11 @@ ANDROID_POOL: list[ModelSpec] = [
     ),
 
     # ── ~0.75–1.5B params ─────────────────────────────────────────────────
-    # Qwen3.5-0.8B (March 2026): Gated DeltaNet hybrid architecture, natively multimodal,
-    # 262K context, Apache 2.0. Intelligence Index +2.5 pts over Qwen3-0.6B.
-    # CAUTION: documented 67%→33% code generation collapse when few-shot examples are added.
-    # INT4 size estimated ~500MB; source: huggingface.co/Qwen/Qwen3.5-0.8B
-    ModelSpec(
-        model_id="Qwen/Qwen3.5-0.8B",
-        size_mb=500,
-        tier=1,
-        tok_s_snapdragon_660=9.0,
-        tok_s_snapdragon_778g=15.0,
-        tok_s_snapdragon_8gen3=42.0,
-        peak_memory_mb=670,
-        gsm8k=0.610,   # estimated from Intelligence Index comparison vs Qwen3-0.6B
-        mmlu=0.540,    # estimated
-        notes="Gated DeltaNet hybrid, multimodal, 262K ctx, 201 langs; avoid few-shot code generation; replaces Qwen3-0.6B",
-    ),
+    # NOTE (BUGS B123): Qwen/Qwen3.5-0.8B removed — the Qwen3.5 family is natively
+    # MULTIMODAL (image-text-to-text). Loading it for text-only LoRA routes through the
+    # vision processor, which rejects the text chat template ("Incorrect image source ...
+    # Got <|im_start|>user"). Re-add only via a vision-aware trainer. Qwen3-0.6B (tier 0,
+    # text-only) remains the small-Qwen option.
     # Llama 3.2-1B: ExecuTorch reference model (SpinQuant + KleidiAI).
     # >350 tok/s prefill on Samsung S24+. Best for latency-critical apps.
     # Source: Meta model card; PyTorch ExecuTorch blog.
@@ -371,24 +360,11 @@ ANDROID_POOL: list[ModelSpec] = [
     # MatFormer/multimodal architecture fails to LoRA-train on this Unsloth/transformers
     # stack ("mat1 and mat2 shapes cannot be multiplied" in the scaling-curve probe).
     # Re-add with a vision-aware trainer (FastVisionModel) or a compatible version.
-    # Qwen3.5-2B (March 2026): Gated DeltaNet hybrid architecture, multimodal, 262K ctx.
-    # Same family as Qwen3.5-0.8B but at 2B params. Unsloth Dynamic 2.0 GGUF confirmed
-    # working with llama.cpp, Ollama. No classic GSM8K/MMLU published (uses newer suite).
-    # Source: Qwen/Qwen3.5-2B (base, trainable) on HuggingFace; GGUF deployment variant
-    # is unsloth/Qwen3.5-2B-GGUF. model_id MUST be the base transformers repo — a -GGUF
-    # repo has no config.json model_type and cannot be loaded for LoRA fine-tuning.
-    ModelSpec(
-        model_id="Qwen/Qwen3.5-2B",
-        size_mb=1350,   # estimated Q4_K_M; exact size at huggingface.co/unsloth/Qwen3.5-2B-GGUF
-        tier=3,
-        tok_s_snapdragon_660=4.0,
-        tok_s_snapdragon_778g=7.5,
-        tok_s_snapdragon_8gen3=20.0,
-        peak_memory_mb=1800,
-        gsm8k=0.720,   # estimated; no official score — uses MMLU-ProX/MAXIFE/WMT24++ suite
-        mmlu=0.610,    # estimated
-        notes="NEW (Mar 2026): Gated DeltaNet hybrid, multimodal (text+image+video), 262K ctx, 201 langs; Unsloth GGUF confirmed for llama.cpp; no GSM8K/MMLU published; thinking OFF by default",
-    ),
+    # NOTE (BUGS B123): Qwen/Qwen3.5-2B removed — same natively-MULTIMODAL Qwen3.5 family
+    # as Qwen3.5-0.8B; text-only LoRA crashes in the vision processor ("Incorrect image
+    # source ... Got <|im_start|>user"). This was the model NER selected; without it NER
+    # falls to a text model (SmolLM2-1.7B / DeepSeek-R1-Distill-Qwen-1.5B). Re-add via a
+    # vision-aware trainer.
 
     # ── ~3B+ params ───────────────────────────────────────────────────────
     # Llama 3.2-3B: ExecuTorch reference model for 3B class. Q4_K_M = ~2.02GB.
