@@ -172,6 +172,7 @@ from agent.nodes.cold_start.hardware_research import research_device
 log(f"=== SLM Factory cold-start  (run {TS}) ===")
 log(f"task: {description}")
 log(f"turn budget: {config.MAX_TURNS_MAIN}")
+log(f"orchestrator model: {config.ORCHESTRATOR_MODEL}  |  judge model: {config.JUDGE_MODEL}")
 log("")
 log("  ▶ hardware_research")
 
