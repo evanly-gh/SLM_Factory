@@ -1035,3 +1035,11 @@ Status legend: 🔴 open · 🟢 fixed · 🟡 suspected/unconfirmed · ⚪ desi
 - **Impact:** HIGH for tests 3 (GSM8K, task_type=math_reasoning) and 4 (ARC-Challenge, generation + math/science benchmark) — both route to a dead DeepSeek endpoint. Tests 1 (classification) and 2 (NER) are unaffected (they never request a specialist teacher).
 - **Fix:** Blanked the two placeholder values in `.env` (`OPENAI_API_KEY=` / `DEEPSEEK_API_KEY=`) so they parse falsy and the intended Claude/Haiku CoT fallback triggers, matching the campaign premise ("no DeepSeek/OpenAI key available"). `.env` is gitignored so this is a working-tree-only change (not committed). Code hardening (treat `your_*` placeholders as unset) noted as a follow-up but not applied to avoid touching routing logic mid-campaign.
 - **Status:** 🟢 fixed (config) — related to B26.
+
+## B102 -- slurm: GSM8K/ARC scripts request gpu:a100 on ckpt-g2, which has no A100 nodes
+- **Where:** `tests/pipeline/run_gsm8k_math.slurm:5`, `tests/pipeline/run_arc_challenge.slurm:5`
+- **When:** 2026-07-10, overnight validation campaign submit
+- **How found:** `sbatch` rejected both with "Batch job submission failed: Requested node configuration is not available". `sinfo -p ckpt-g2 -N -o "%N %G"` shows ckpt-g2 exposes only gpu:l40 / gpu:l40s / gpu:h200 — no a100 (A100 nodes live on the `ckpt`/`gpu-a100` partitions). The two L40 jobs (sms, ner) submitted fine.
+- **Impact:** MEDIUM (environment/config, not pipeline logic) — tests 3 and 4 could not launch as written. A100 was chosen only "for faster generation-task training", not for correctness.
+- **Fix:** Changed `--gres=gpu:a100:1` → `--gres=gpu:l40:1` on both scripts, keeping partition ckpt-g2 (matches the two working jobs). L40 (48GB) is ample for tier-0/1/2 models; only slower. Committed.
+- **Status:** 🟢 fixed (config).
