@@ -1067,3 +1067,27 @@ Status legend: 🔴 open · 🟢 fixed · 🟡 suspected/unconfirmed · ⚪ desi
 - **Impact:** LOW (observability), but it blocks the campaign's model-confirmation check. (Separately: cost.json over-reports cost whenever a cheaper model like Haiku is used, since it always bills at Sonnet rates — noted, not fixed.)
 - **Fix:** Added `log(f"orchestrator model: {config.ORCHESTRATOR_MODEL}  |  judge model: {config.JUDGE_MODEL}")` to the run.py startup banner. Picked up by the three still-pending jobs (NER/GSM8K/ARC). The already-running SMS job (36983575) predates the edit; its Haiku usage is confirmed via the slurm script's `export SLM_ORCHESTRATOR_MODEL=claude-haiku-4-5` (grepped pre-submit) which config.py reads with that exact env override.
 - **Status:** 🟢 fixed (observability).
+
+## B106 -- lora_trainer/slm_helpers: model load omits trust_remote_code=True → custom-code models crash
+- **Where:** `training/lora_trainer.py:45,175`; `training/slm_helpers.py:108,114` (all `FastLanguageModel.from_pretrained` sites)
+- **When:** 2026-07-10, overnight campaign — first successful model-load attempts (ARC job 36983578)
+- **How found:** ARC selected `openbmb/MiniCPM4-0.5B` (tier-0, only model that fits 512MB) and crashed at load: "The repository openbmb/MiniCPM4-0.5B contains custom code which must be executed... Please pass the argument `trust_remote_code=True`." iterations=0, converged=false. Many pool models (MiniCPM4/5, Qwen3.5, Gemma3n) ship custom modeling code.
+- **Impact:** BLOCKER for any task whose selected model needs remote code (tier-0 devices like ARC's Redmi 9A always land on MiniCPM4-0.5B). Llama models (SMS/GSM8K) are unaffected, which is why they loaded.
+- **Fix:** Added `trust_remote_code=True` to all four `FastLanguageModel.from_pretrained` call sites (train, merge-for-quant, inference-adapter, inference-merged). Committed.
+- **Status:** 🟢 fixed (verification pending on rerun).
+
+## B107 -- android_pool: Qwen3.5-2B entry uses a -GGUF repo as trainable model_id
+- **Where:** `config/android_pool.py:398` (now :400)
+- **When:** 2026-07-10, overnight campaign — NER job 36983576
+- **How found:** NER (A14, usable 2300MB) selected `unsloth/Qwen3.5-2B-GGUF` (largest tier that fits) and crashed at load: "Unrecognized model in unsloth/Qwen3.5-2B-GGUF. Should have a `model_type` key in its config.json." A GGUF (llama.cpp deployment) repo has no transformers config and cannot be LoRA-fine-tuned. It is the ONLY pool entry whose model_id is a GGUF repo; all siblings use base repos (`Qwen/Qwen3.5-0.8B`, etc.). The `model_id` field is documented as "HuggingFace model ID" with `quant` separately holding the GGUF variant.
+- **Impact:** BLOCKER for any task selecting this model (mid-tier devices ~2-2.5GB usable, e.g. NER's A14).
+- **Fix:** Changed `model_id` to the base repo `Qwen/Qwen3.5-2B` (verified to exist on HF as a transformers/safetensors repo; the GGUF's own metadata lists `base_model:Qwen/Qwen3.5-2B`). Committed.
+- **Status:** 🟢 fixed (verification pending on rerun).
+
+## B108 -- evaluate: GGUF quantization not gated on on-device mode → accuracy-only runs crash on missing llama.cpp
+- **Where:** `agent/nodes/evaluate.py:57` (`if quant is not None:`) → `training/quantize.py:183`
+- **When:** 2026-07-10, overnight campaign — SMS job 36983575 (the happy-path classification test)
+- **How found:** SMS trained iteration 1 on Llama-3.2-3B, then crashed in evaluate_node: "Quantization failed... convert_hf_to_gguf not found. Clone llama.cpp and add it to PATH." The model selector set `quant="Q4_K_M"` on Llama-3.2-3B to fit 4GB RAM; evaluate_node then unconditionally built a real GGUF (needs the llama.cpp toolchain, which is not installed) even though the run is accuracy-only (on-device eval OFF, `HW_ONDEVICE_BACKEND=theoretical`). eval/harness.py only needs gguf_path for on-device (llama.cpp) inference; with gguf_path=None it scores the HF/LoRA weights via Unsloth.
+- **Impact:** BLOCKER for ALL four tests — every task trains then evaluates, and any feasible model on a RAM-constrained phone carries a quant, so eval always tried (and failed) to quantize. This is the reason SMS/NER/GSM8K/ARC all produced empty scores.
+- **Fix:** Gated the GGUF build on `config.HW_ONDEVICE_BACKEND != "theoretical"` in evaluate_node. In the default theoretical/accuracy-only mode the GGUF is skipped (gguf_path=None) and eval scores the HF weights via Unsloth infer_batch — matching the campaign's "accuracy only (theoretical hardware filter)" requirement. Committed. (llama.cpp remains uninstalled; that's only needed for actual on-device measurement, which is intentionally OFF.)
+- **Status:** 🟢 fixed (verification pending on rerun).

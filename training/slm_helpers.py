@@ -107,12 +107,14 @@ def infer(prompt: str, weights_ref: str, base_model: str, max_new_tokens: int = 
             # Load the base model first, then apply the adapter on top.
             model, tokenizer = FastLanguageModel.from_pretrained(
                 model_name=base_model, max_seq_length=512, load_in_4bit=False,
+                trust_remote_code=True,
             )
             model.load_adapter(weights_ref)
         else:
             # Full merged checkpoint: weights_ref contains everything needed.
             model, tokenizer = FastLanguageModel.from_pretrained(
                 model_name=weights_ref, max_seq_length=512, load_in_4bit=False,
+                trust_remote_code=True,
             )
         FastLanguageModel.for_inference(model)
         _inference_cache[cache_key] = (model, tokenizer)
