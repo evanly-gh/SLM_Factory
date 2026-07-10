@@ -1247,3 +1247,11 @@ marked "passed" that wasn't confirmed from its per-job `logs/slurm/*.out` (the s
 ## B116 (fix applied) -- swap ARC's tier-0 model from MiniCPM4-0.5B to Qwen3-0.6B
 - **Fix:** MiniCPM4-0.5B (the only model fitting ARC's 512MB device) is multiply incompatible with transformers 5.5.0 (B111 is_torch_fx_available shimmed, B116 tied-weights list-vs-dict, likely more) — per-symbol shims are whack-a-mole. Replaced the tier-0 pool entry with `unsloth/Qwen3-0.6B` (peak ~500MB, tier 0), a standard safetensors/qwen3 model natively supported by Unsloth/transformers 5.5.0. Preserves the ARC test intent (a tiny tier-0 model that can't reach ARC-Challenge SOTA → impossible → graceful escalate/terminate).
 - **Status:** 🟢 fix applied (rerun to confirm it loads/trains). MiniCPM5-1B (tier 1) shares MiniCPM's remote-code family and is likely similarly broken if ever selected — noted.
+
+## B120 -- scaling_curve (startup model selection): fell back to LARGEST model, breaking start-small-and-escalate
+- **Where:** `agent/nodes/cold_start/scaling_curve.py` (final fallback)
+- **When:** 2026-07-10, reviewing GSM8K 36988857 (user observation)
+- **How found:** The startup model-selection probes 3 candidates (train+eval each) and fits an accuracy-vs-log(params) curve. When probes fail (they do often — e.g. gemma-3n "mat1/mat2 shapes", MiniCPM4 tied-weights) or no variant is predicted to clear the threshold, it selected `max(feasible, key=params)` — the LARGEST model. So the run jumped straight to the biggest model (e.g. Llama-3.2-3B), and the main loop's escalate_node (grow the model when it stalls — "find the next best model") never fired. Choosing the strongest model is not startup's job; it contaminated the start-model decision with growth logic that belongs to the main loop.
+- **Impact:** MEDIUM (design) — defeated the start-small-and-escalate design the escalation tests (NER, ARC) exercise, wasted compute on the largest model, and prevented escalation from ever being demonstrated.
+- **Fix:** Startup now starts SMALL on the no-qualifier fallback (lowest peak-RAM feasible model) and defers growth to escalate_node in the main loop. The "smallest variant predicted to clear threshold" happy path is unchanged. Keeps model *selection* (startup) cleanly separated from model *growth* (main loop).
+- **Status:** 🟢 fixed.
