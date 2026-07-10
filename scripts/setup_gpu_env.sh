@@ -8,7 +8,14 @@ export PIP_CACHE_DIR="${PIP_CACHE_DIR:-/mmfs1/gscratch/intelligentsystems/evanly
 
 cd /mmfs1/gscratch/intelligentsystems/evanly/SLM_Factory
 
-if [ ! -d .venv_gpu ]; then
+# Rebuild if the venv is missing OR broken. A venv can become a zombie when its
+# uv-managed interpreter under ~/.local/share/uv/python is garbage-collected/deleted:
+# the directory still exists (so a `[ -d .venv_gpu ]` guard passes) but `python` is a
+# dangling symlink and every command fails with exit 127. Validate the interpreter, not
+# just the directory, and recreate from scratch when it can't run.
+if ! .venv_gpu/bin/python -c '' >/dev/null 2>&1; then
+  echo "[setup] .venv_gpu missing or broken interpreter — (re)creating"
+  rm -rf .venv_gpu
   uv venv --python 3.11 .venv_gpu
 fi
 source .venv_gpu/bin/activate
