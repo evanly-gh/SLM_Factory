@@ -1,26 +1,31 @@
 #!/bin/bash
-#SBATCH --job-name=slm-sms-spam
+#SBATCH --job-name=slm-fin-sentiment
 #SBATCH --account=intelligentsystems
 #SBATCH --partition=ckpt-g2
 #SBATCH --gres=gpu:l40:1
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=64G
-#SBATCH --time=4:00:00
-#SBATCH --output=/mmfs1/gscratch/intelligentsystems/evanly/SLM_Factory/logs/slurm/slm-sms-spam-%j.out
-# TEST CASE: Classification — clean convergence baseline
+#SBATCH --time=6:00:00
+#SBATCH --output=/mmfs1/gscratch/intelligentsystems/evanly/SLM_Factory/logs/slurm/slm-fin-sentiment-%j.out
+# TEST CASE: Classification — clean convergence baseline + Exa HW fallback
 #
 # PURPOSE: Verify the full classification pipeline converges correctly on an
-# achievable task. SMS spam is well-separated (high TF-IDF signal, short texts)
-# so a tier-1 or tier-2 model should reach F1 >= stop_threshold within ~10
-# iterations without needing escalation. This is the happy-path test.
+# achievable 3-class task. FinancialPhraseBank sentiment (positive/negative/neutral)
+# is learnable for a tier-1/2 model within ~10-15 iterations without needing
+# escalation. This is the happy-path test.
+#
+# The Moto G Stylus 5G 2023 is NOT in devices.csv (only the 2020/2021 models are),
+# so hardware_research will fall back to Exa web search for specs — intentionally
+# testing the Exa hardware fallback path. Check device_research.json after the run
+# to confirm spec_source="exa" and that usable_ram_mb is reasonable (~3500-4500MB).
 #
 # What to check in logs/runs/<timestamp>/scores.json:
 #   - converged: true
-#   - iterations: <= 12
+#   - iterations: <= 15
 #   - no "ESCALATE" lines in run.log
 #   - task_type: "classification"
-#
-# Paper baseline: GLiNER2-base F1 0.159 → 0.997 (+83.8pp) in 10 iterations
+# What to check in logs/runs/<timestamp>/device_research.json:
+#   - spec_source: "exa" (confirms the fallback path was exercised)
 set -euo pipefail
 PROJ=/mmfs1/gscratch/intelligentsystems/evanly/SLM_Factory
 cd "$PROJ"
@@ -33,8 +38,12 @@ nvidia-smi -L || true
 [ -d .venv_gpu ] || bash scripts/setup_gpu_env.sh
 source .venv_gpu/bin/activate
 
-TASK="Fine tune a small model for SMS spam classification (binary: spam vs ham) using the UCI SMS Spam Collection dataset, targeting deployment on my Moto G Stylus 5G 2023 with 6GB RAM and 256GB storage"
-echo "=== SMS Spam Classification pipeline test ==="
+# Cost-saving orchestrator: Haiku drives all planning/decision/generation calls.
+# With no DEEPSEEK_API_KEY/OPENAI_API_KEY set, CoT teachers also fall back to this.
+export SLM_ORCHESTRATOR_MODEL=claude-haiku-4-5
+
+TASK="Fine tune a small model for financial news sentiment classification (positive, negative, neutral) using the FinancialPhraseBank dataset, targeting deployment on my Moto G Stylus 5G 2023 with 6GB RAM and 256GB storage"
+echo "=== Financial Sentiment Classification pipeline test ==="
 echo "Task: $TASK"
-python run.py "$TASK"
+python tests/pipeline/run.py "$TASK"
 echo "=== done ==="

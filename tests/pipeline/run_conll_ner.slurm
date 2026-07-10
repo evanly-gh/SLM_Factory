@@ -39,10 +39,15 @@ nvidia-smi -L || true
 [ -d .venv_gpu ] || bash scripts/setup_gpu_env.sh
 source .venv_gpu/bin/activate
 
-# Samsung Galaxy A14 5G: 3GB RAM, 64GB storage — forces planner to pick a small
-# tier-0/1 model that will stagnate on biomedical NER, triggering escalation.
-TASK="Fine tune a small model for biomedical named entity recognition (NER) on PubMed abstracts, extracting Chemical and Disease entity spans (BC5CDR dataset style), targeting deployment on my Samsung Galaxy A14 5G with 3GB RAM and 64GB storage"
+# Cost-saving orchestrator: Haiku drives all planning/decision/generation calls.
+# With no DEEPSEEK_API_KEY/OPENAI_API_KEY set, CoT teachers also fall back to this.
+export SLM_ORCHESTRATOR_MODEL=claude-haiku-4-5
+
+# Samsung Galaxy A14 5G: 4GB RAM, 64GB storage (confirmed in devices.csv: 4096MB).
+# After OS overhead (~1.5-2GB), usable RAM ~2000-2500MB — only tier-0/1 models fit.
+# Those models will stagnate on biomedical NER, triggering escalation.
+TASK="Fine tune a small model for biomedical named entity recognition (NER) on PubMed abstracts, extracting Chemical and Disease entity spans (BC5CDR dataset style), targeting deployment on my Samsung Galaxy A14 5G with 4GB RAM and 64GB storage"
 echo "=== Biomedical NER (escalation path) pipeline test ==="
 echo "Task: $TASK"
-python run.py "$TASK"
+python tests/pipeline/run.py "$TASK"
 echo "=== done ==="

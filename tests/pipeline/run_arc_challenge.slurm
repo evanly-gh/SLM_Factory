@@ -44,11 +44,22 @@ nvidia-smi -L || true
 [ -d .venv_gpu ] || bash scripts/setup_gpu_env.sh
 source .venv_gpu/bin/activate
 
-# Redmi 9A: 2GB RAM, 32GB storage — only tier-0 models (~500MB peak) fit.
-# ARC-Challenge requires multi-step scientific reasoning that sub-500M models
-# cannot reach at SOTA-calibrated accuracy regardless of fine-tuning effort.
-TASK="Fine tune a small model for science reasoning on ARC-Challenge (multiple choice science questions from grades 3-9 requiring multi-step reasoning), targeting deployment on my Redmi 9A with 2GB RAM and 32GB storage"
+# Cost-saving orchestrator: Haiku drives all planning/decision/generation calls.
+# With no DEEPSEEK_API_KEY/OPENAI_API_KEY set, CoT teachers also fall back to this.
+export SLM_ORCHESTRATOR_MODEL=claude-haiku-4-5
+
+# Redmi 9A: 2GB RAM, 32GB storage (confirmed in devices.csv: 2048MB RAM).
+# After OS overhead, usable RAM ~500MB — only the smallest tier-0 variants fit.
+# Framed as open-ended reasoning (not multiple-choice) so the planner assigns
+# task_type="generation" or "math_reasoning" rather than "classification",
+# exercising the 256-token / LLM-as-judge / exact-match scorer paths.
+# NOTE: the planner sets stop_threshold dynamically against SOTA. If it anchors
+# too low (knowing sub-500M models score ~30%), the task may not be impossible.
+# Monitor task_plan.json after the run — if stop_threshold < 0.50, the test
+# is not a clean "impossible" case. The Redmi 9A chipset (Helio G25) is not in
+# CHIP_SCALE_FACTORS and will fall back to snapdragon_778g for throughput estimation.
+TASK="Fine tune a small model to solve ARC-Challenge science questions by producing step-by-step reasoning and a final answer in natural language (not multiple choice), targeting deployment on my Redmi 9A with 2GB RAM and 32GB storage"
 echo "=== ARC-Challenge (impossible — guaranteed no convergence) pipeline test ==="
 echo "Task: $TASK"
-python run.py "$TASK"
+python tests/pipeline/run.py "$TASK"
 echo "=== done ==="

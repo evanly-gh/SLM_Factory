@@ -563,9 +563,16 @@ def check_hardware_constraints(
             "pass": model.size_mb <= constraints.storage_mb,
         },
         "memory": {
-            "value_mb": model.peak_memory_mb,
+            # Prefer measured peak RSS from a real device run; fall back to the
+            # ModelSpec's theoretical peak_memory_mb when unmeasured.
+            "value_mb": (measured["peak_memory_mb"]
+                         if measured and measured.get("peak_memory_mb") is not None
+                         else model.peak_memory_mb),
             "limit_mb": constraints.memory_mb,
-            "pass": model.peak_memory_mb <= constraints.memory_mb,
+            "measured": bool(measured and measured.get("peak_memory_mb") is not None),
+            "pass": ((measured["peak_memory_mb"]
+                      if measured and measured.get("peak_memory_mb") is not None
+                      else model.peak_memory_mb) <= constraints.memory_mb),
         },
         "latency": {
             # TTFT sub-check: prompt processing latency

@@ -42,16 +42,15 @@ def run_hardware_filter(constraints: HardwareConstraints) -> list[ModelSpec]:
     stage1_desc = sorted(stage1, key=lambda m: m.size_mb, reverse=True)
 
     # ── Stage 2 ──────────────────────────────────────────────────────────────
+    # No GGUF exists yet at pre-training screening, so run_on_device_eval falls
+    # back to the theoretical backend regardless of SLM_HW_BACKEND. Real measured
+    # gating happens post-convergence (see run.py on-device verification step).
     passed: list[ModelSpec] = []
     for model in stage1_desc:
         hw_result = run_on_device_eval(model, constraints)
-        measured = {
-            "ttft_ms": hw_result.ttft_ms,
-            "tok_per_s": hw_result.tok_per_s,
-            "avg_watts": hw_result.avg_watts,
-            "peak_memory_mb": hw_result.peak_memory_mb,
-        }
-        hw_check = check_hardware_constraints(model, constraints, measured=measured)
+        hw_check = check_hardware_constraints(
+            model, constraints, measured=hw_result.to_measured()
+        )
         ok = all_constraints_pass(hw_check)
         logger.info(
             "[hardware_filter] Stage 2: %s %s (ttft=%.0fms, tok/s=%.1f)",

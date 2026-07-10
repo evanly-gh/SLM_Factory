@@ -25,7 +25,7 @@ import os
 import sys
 import time
 
-PROJ = os.path.dirname(os.path.abspath(__file__))
+PROJ = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, PROJ)
 os.chdir(PROJ)
 
@@ -223,7 +223,7 @@ initial_state = {
     "next_action": "train",
     "model_baselines": [],
     "quantize_enabled": False,
-    "hw_gating_enabled": False,
+    "hw_gating_enabled": config.HW_GATING_ENABLED,
     "mode": "cold_start",
     "deployed_model_ref": None,
     "traces": None,
@@ -276,6 +276,71 @@ except Exception as exc:
     log(traceback.format_exc())
 
 elapsed = time.time() - t_start
+
+# --------------------------------------------------------------------------
+# Post-convergence on-device hardware verification (opt-in via SLM_HW_VERIFY_ON_DEVICE=1)
+# --------------------------------------------------------------------------
+# Measures the FINAL selected model on real hardware, writes hardware_eval.json,
+# re-checks the four constraints against MEASURED values, and records the deployed
+# model reference. Fully guarded: any failure logs and continues.
+hardware_eval_report = None
+if config.HW_VERIFY_ON_DEVICE:
+    log("")
+    log("  ▶ on-device hardware verification")
+    try:
+        final_model = last_state.get("selected_model")
+        best_ref = last_state.get("best_weights_ref")
+        if final_model is None or not best_ref:
+            log("      [hw-verify] no converged model/weights — skipping")
+        elif final_model.quant is None:
+            log("      [hw-verify] final model is BF16 (no GGUF path) — skipping "
+                "SmolChat/GGUF verification; set a quantized variant to enable")
+        else:
+            from training.lora_trainer import merge_for_quantization
+            from training.quantize import quantize_from_model_spec
+            from hardware_eval.on_device_eval import run_on_device_eval, result_to_dict
+            from config.android_pool import check_hardware_constraints, all_constraints_pass
+
+            mid_safe = final_model.model_id.replace("/", "_")
+            merged = merge_for_quantization(
+                best_ref, os.path.join(ART, "merged", mid_safe, "final_verify"))
+            gguf = quantize_from_model_spec(
+                merged, os.path.join(ART, "gguf", mid_safe, "final_verify"), final_model.quant)
+
+            hw_result = run_on_device_eval(
+                final_model, HW, gguf_path=gguf,
+                backend=config.HW_ONDEVICE_BACKEND, log=log)
+            hw_check = check_hardware_constraints(
+                final_model, HW, measured=hw_result.to_measured())
+            passed = all_constraints_pass(hw_check)
+
+            hardware_eval_report = {
+                "backend": config.HW_ONDEVICE_BACKEND,
+                "model_id": final_model.model_id,
+                "quant": final_model.quant,
+                "gguf_path": gguf,
+                "measured_success": hw_result.success,
+                "measured_error": hw_result.error,
+                "result": result_to_dict(hw_result),
+                "constraint_check": hw_check,
+                "all_constraints_pass": passed,
+            }
+            with open(os.path.join(RUN_DIR, "hardware_eval.json"), "w") as f:
+                json.dump(hardware_eval_report, f, indent=2, default=str)
+
+            if hw_result.success:
+                log(f"      [hw-verify] {hw_result.eval_method}: "
+                    f"TTFT={hw_result.ttft_ms}ms  tok/s={hw_result.tok_per_s}  "
+                    f"peakRSS={hw_result.peak_memory_mb}MB  power={hw_result.avg_watts}W  "
+                    f"→ constraints {'PASS' if passed else 'FAIL'}")
+                if passed:
+                    last_state["deployed_model_ref"] = best_ref
+            else:
+                log(f"      [hw-verify] measurement failed: {hw_result.error}")
+    except Exception as exc:
+        import traceback
+        log(f"      [hw-verify] skipped due to error: {exc}")
+        log(traceback.format_exc())
 
 # --------------------------------------------------------------------------
 # Artifacts
