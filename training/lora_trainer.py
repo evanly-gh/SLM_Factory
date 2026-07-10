@@ -7,6 +7,34 @@ TrainingOutput = collections.namedtuple("TrainingOutput", ["weights_ref", "gguf_
 
 VALID_LORA_RANKS = {4, 8, 16, 32, 64}
 
+
+def _ensure_model_cached(model_id: str, retries: int = 3, log=print) -> None:
+    """Robustly pre-populate the HF cache for a hub model before Unsloth loads it.
+
+    Unsloth's own downloader (unsloth_zoo xet fallback) stalls on some large repos on
+    compute nodes ("incomplete snapshot -- missing files", BUGS B113). The standard
+    huggingface_hub downloader with xet disabled is reliable, so we pre-fetch here; a
+    subsequent FastLanguageModel.from_pretrained then finds everything cached. No-op for
+    local checkpoint paths (escalated/merged models).
+    """
+    if not model_id or os.path.isdir(model_id):
+        return
+    os.environ.setdefault("HF_HUB_DISABLE_XET", "1")
+    from huggingface_hub import snapshot_download
+    from huggingface_hub.utils import GatedRepoError, RepositoryNotFoundError
+    for attempt in range(1, retries + 1):
+        try:
+            snapshot_download(
+                model_id,
+                ignore_patterns=["*.gguf", "original/*", "*.pth", "consolidated*"],
+            )
+            return
+        except (GatedRepoError, RepositoryNotFoundError):
+            return  # let from_pretrained surface a clear error
+        except Exception as e:
+            log(f"      [train] model prefetch {attempt}/{retries} for {model_id} failed: {str(e)[:90]}")
+    log(f"      [train] prefetch incomplete for {model_id}; letting the loader try anyway")
+
 @dataclass
 class TrainingConfig:
     base_model: str
@@ -42,6 +70,7 @@ def _run_unsloth_training(
     import torch
 
     max_seq_length = 512
+    _ensure_model_cached(config.base_model)
     model, tokenizer = FastLanguageModel.from_pretrained(
         model_name=config.base_model,
         max_seq_length=max_seq_length,
