@@ -6,6 +6,45 @@ was discovered, **how** it was found, and current **status**.
 
 Status legend: 🔴 open · 🟢 fixed · 🟡 suspected/unconfirmed · ⚪ design gap (not a crash)
 
+---
+
+## Overnight validation campaign — 2026-07-10 (summary)
+
+Ran the four `tests/pipeline/*.slurm` pipeline tests on the SLURM GPU cluster
+(orchestrator pinned to Haiku; on-device HW eval OFF; only Anthropic + Exa keys).
+Every early run crashed; root-causing surfaced an **18-bug chain (B101–B118)** across
+environment, model-loading, training, download, and scoring. Status per test:
+
+| # | Test | Result | Blocking issue |
+|---|------|--------|----------------|
+| 1 | **Financial sentiment (classification)** | ✅ **WORKING** — trains, evaluates, iterates; F1 0.111→0.697 (threshold 0.82). `spec_source="exa"` ✓, `task_type=classification` ✓, Haiku ✓ | — |
+| 2 | Biomedical NER | 🔴 blocked | **B113** — `Qwen/Qwen3.5-2B` download stalls on compute nodes (infra; `HF_HUB_DISABLE_XET` insufficient) |
+| 3 | GSM8K math | 🟡 fixed, verifying | **B109** (fused-CE) + **B118** (math scorer) fixed; training now runs (iters 1/2/3); rerun 36989010 in flight to confirm non-zero scores |
+| 4 | ARC-Challenge (impossible) | 🔴 blocked | **B116** — MiniCPM4-0.5B remote code multiply-incompatible with transformers 5.5.0 (only tier-0 model that fits the 2GB device) |
+
+**Fixed & committed:** B101 (placeholder .env keys), B102 (A100→L40 partition), B103
+(zombie-venv guards), B105 (log orchestrator model), B106 (`trust_remote_code`), B107
+(GGUF→base model_id), B108 (gate GGUF quant on on-device mode), B109 (SFTConfig
+truncation), B110 (per-job run dir), B111 (`is_torch_fx_available` shim), B112/B114
+(missing `langchain-anthropic`/`timm`), B115 (chat-template train/serve parity), B118
+(math final-answer extraction).
+
+**Open / needs human decision:**
+- **B116** (blocks ARC): MiniCPM4/transformers version conflict — needs a version-matrix
+  rebuild or a tier-0 pool-model swap. Per-symbol shims are whack-a-mole.
+- **B113** (blocks NER): compute-node download reliability for the large multimodal
+  Qwen3.5-2B — needs a warmed shared cache, the `unsloth/` mirror, or a retry wrapper.
+- **B104** (`data/devices.csv` missing → all hardware research via Exa; harmless but off-spec).
+- **B117** (agentic iterate decision degrades to score-band rules — Haiku exhausts tool rounds).
+- **B111** relies on a runtime shim; **B109** disables no Unsloth internals but truncates to 512.
+
+**Not done / caveats:** on-device HW eval left OFF as instructed; DeepSeek/GPT-4.1 CoT
+teachers unavailable (keys absent) so CoT is Haiku-annotated (expected). No run was
+marked "passed" that wasn't confirmed from its per-job `logs/slurm/*.out` (the shared
+`logs/runs/<ts>/` artifacts were unreliable until B110 was fixed).
+
+---
+
 | ID | Status | Area | One-line |
 |----|--------|------|----------|
 | B1 | 🟢 | eval_setup | classification path hardcoded SMS-spam for every task |
