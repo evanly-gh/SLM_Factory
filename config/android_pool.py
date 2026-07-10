@@ -254,21 +254,23 @@ ANDROID_POOL: list[ModelSpec] = [
     # tok_s are the real Q4_K_M values, and its `tier=` field is IGNORED — _variant()
     # recomputes tier per variant from peak RAM via _ram_tier(). The "~params" in the
     # section headers just groups seeds by model scale for readability.
-    # ── ~0.5B params ──────────────────────────────────────────────────────
-    # MiniCPM4-0.5B: Uses BitCPM4 QAT quantization for better INT4 quality.
-    # Benchmarks claim to exceed Qwen3-0.6B; specialized sparse attention for
-    # long context. Source: arXiv 2506.07900.
+    # ── ~0.5-0.6B params ──────────────────────────────────────────────────
+    # Qwen3-0.6B: smallest tier-0 model that loads cleanly on the installed stack.
+    # Replaces openbmb/MiniCPM4-0.5B, whose custom remote code is multiply
+    # incompatible with transformers 5.5.0 (BUGS B111/B116: is_torch_fx_available +
+    # tied-weights list-vs-dict) and cannot be trained. Qwen3 is natively supported
+    # by Unsloth/transformers and is present in the HF cache.
     ModelSpec(
-        model_id="openbmb/MiniCPM4-0.5B",
-        size_mb=310,
+        model_id="unsloth/Qwen3-0.6B",
+        size_mb=400,
         tier=0,
-        tok_s_snapdragon_660=14.0,
-        tok_s_snapdragon_778g=22.0,
-        tok_s_snapdragon_8gen3=60.0,
-        peak_memory_mb=480,
-        gsm8k=0.55,   # extrapolated; paper shows it exceeds Qwen3-0.6B on most evals
-        mmlu=0.53,
-        notes="QAT-quantized (BitCPM4); best sub-0.6B for long-context tasks; use MNN for best speed",
+        tok_s_snapdragon_660=13.0,
+        tok_s_snapdragon_778g=21.0,
+        tok_s_snapdragon_8gen3=58.0,
+        peak_memory_mb=500,
+        gsm8k=0.36,   # ~0.6B open-answer; low (intended: ARC-Challenge is impossible here)
+        mmlu=0.45,
+        notes="Qwen3-0.6B (Unsloth mirror); loads on transformers 5.5.0 unlike MiniCPM4-0.5B (B111/B116); smallest tier-0 fit for ~512MB devices",
     ),
 
     # ── ~0.75–1.5B params ─────────────────────────────────────────────────
