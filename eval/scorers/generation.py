@@ -2,6 +2,7 @@
 from data.eval_set import EvalSet
 import anthropic
 import os
+import re
 
 # System prompt anchors the judge role and forces a strict, calibrated scale.
 # Without a rubric the judge clusters everything around 0.7–0.9; the anchored
@@ -35,9 +36,37 @@ def build_prompts(eval_set: EvalSet) -> list[str]:
 def extract_predictions(raw_outputs: list[str], eval_set: EvalSet) -> list[str]:
     return [r.strip() for r in raw_outputs]
 
+def _final_answer(s: str) -> str:
+    """Extract the final answer for math_reasoning comparison.
+
+    Chain-of-thought outputs (and GSM8K gold, often '... #### 42') never match by
+    full-string equality (BUGS B118). Prefer an explicit final-answer marker
+    ('#### X', 'answer: X', 'the answer is X'); otherwise fall back to the LAST
+    number in the string. Numbers are normalized (strip $, commas, trailing '.0').
+    """
+    if s is None:
+        return ""
+    text = s.strip()
+    # Explicit markers first
+    m = re.search(r'(?:####|answer\s*(?:is|:)?)\s*\$?(-?[\d,]+(?:\.\d+)?)', text, re.IGNORECASE)
+    if not m:
+        nums = re.findall(r'-?\d[\d,]*(?:\.\d+)?', text)
+        if nums:
+            m_val = nums[-1]
+        else:
+            return text.lower()
+    else:
+        m_val = m.group(1)
+    val = m_val.replace(",", "").lstrip("$")
+    # Normalize 42.0 -> 42 so integer/float spellings compare equal
+    if re.fullmatch(r'-?\d+\.0+', val):
+        val = val.split(".")[0]
+    return val
+
 def _exact_match(gold: str, pred: str) -> float:
-    """Normalize whitespace and case, then compare gold vs predicted answer."""
-    return 1.0 if gold.strip().lower() == pred.strip().lower() else 0.0
+    """Compare the extracted final answers of gold and prediction."""
+    g, p = _final_answer(gold), _final_answer(pred)
+    return 1.0 if g != "" and g == p else 0.0
 
 def _code_pass_at_1(code: str) -> float:
     """Execute predicted code in a restricted sandbox and return 1.0 if no exception."""

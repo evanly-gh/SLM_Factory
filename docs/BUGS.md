@@ -1163,3 +1163,18 @@ Status legend: 🔴 open · 🟢 fixed · 🟡 suspected/unconfirmed · ⚪ desi
 - **When:** 2026-07-10, clean round NER 36988856
 - **Finding:** With `export HF_HUB_DISABLE_XET=1` in the slurm script, NER STILL failed: `DownloadStallError: ... returned an incomplete snapshot even with HF_HUB_DISABLE_XET=1 -- missing files`. unsloth_zoo already retries with xet disabled, so the env var is redundant. Llama-3.2-3B downloads fine on the same compute nodes, so this is specific to `Qwen/Qwen3.5-2B` (a large multimodal repo with image/video preprocessors) — a compute-node network/download-reliability issue, not pipeline logic.
 - **Status:** 🔴 open (infra). Options for a human: (a) warm the shared HF cache for this model from a node with reliable network (standard HPC practice — the model weights are infra, distinct from the loop's decisions); (b) switch the B107 pool entry to the `unsloth/Qwen3.5-2B` mirror which may fetch/load more reliably under Unsloth; (c) add a bounded download-with-retry wrapper before training. NER (test 2) is blocked on this. NOT re-pre-staged per user direction to keep the loop autonomous.
+
+## B117 -- iterate: LLM decision "exhausted tool rounds without producing a final JSON decision" → rule fallback
+- **Where:** `agent/nodes/iterate.py` (LLM tool-calling decision loop)
+- **When:** 2026-07-10, clean round GSM8K 36988857 (after B112 installed langchain-anthropic)
+- **How found:** `[iterate] LLM call failed (RuntimeError('LLM exhausted tool rounds without producing a final JSON decision')), falling back to score-band rules` on every iteration. With langchain-anthropic now installed the LLM call runs, but Haiku doesn't emit a final decision within the allotted tool rounds.
+- **Impact:** MEDIUM — the agentic per-iteration decision still degrades to deterministic score-band rules (as it did under B112, now for a different reason). Not a crash. Likely Haiku being too weak for the tool-calling protocol, or the tool-round cap being too low.
+- **Status:** 🟡 needs-review (agentic decision not exercised; raise tool-round cap or use a stronger orchestrator for the decision node).
+
+## B118 -- scorer/generation: math_reasoning used full-string exact match → always 0.0 (even baseline)
+- **Where:** `eval/scorers/generation.py` `_exact_match`
+- **When:** 2026-07-10, clean round GSM8K 36988857
+- **How found:** GSM8K trained fine (B109 fixed) but scored F1=0.0000 every iteration INCLUDING the zero-shot baseline — impossible for a base Llama-3.2-3B on GSM8K if scoring were correct. Root cause: `_exact_match` compared the model's ENTIRE chain-of-thought generation to the gold answer by normalized string equality, which never matches (gold is often '#### 42'; the model emits a paragraph ending in the number).
+- **Impact:** HIGH — math_reasoning tasks can never score above 0, so GSM8K/ARC could never converge regardless of model quality. Masqueraded as the "Haiku CoT is too weak" config-limitation.
+- **Fix:** Extract the final answer from both gold and prediction (explicit '#### N' / 'answer: N' markers, else the last number; normalize $, commas, trailing .0) and compare those. Unit-tested on 7 GSM8K-style cases. Committed.
+- **Status:** 🟢 fixed (verification pending on a math rerun).
