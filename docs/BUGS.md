@@ -1027,3 +1027,11 @@ Status legend: 🔴 open · 🟢 fixed · 🟡 suspected/unconfirmed · ⚪ desi
 - **Impact:** HIGH -- eval set construction crashes for tasks without text field.
 - **Status:** Already fixed -- changed to e.get("text", "") throughout.
 
+
+## B101 -- curriculum: placeholder API keys in .env are truthy, defeating the Claude teacher fallback
+- **Where:** `.env` (lines 3-4) + `data/curriculum.py:44,51,57,62` (`if ... and DEEPSEEK_API_KEY:` truthy gate)
+- **When:** 2026-07-10, overnight validation campaign pre-submit check
+- **How found:** `.env` shipped `OPENAI_API_KEY=your_key_here` / `DEEPSEEK_API_KEY=your_key_here` (placeholders, non-empty). `get_teacher_client()` gates specialist routing on `if task_type == "math_reasoning" and DEEPSEEK_API_KEY:` — a truthy check, not a validity check. Non-empty placeholder → truthy → the code builds `OpenAI(api_key="your_key_here", base_url="https://api.deepseek.com")` and calls it during CoT annotation, hitting an auth error, instead of falling back to the Claude/Haiku teacher.
+- **Impact:** HIGH for tests 3 (GSM8K, task_type=math_reasoning) and 4 (ARC-Challenge, generation + math/science benchmark) — both route to a dead DeepSeek endpoint. Tests 1 (classification) and 2 (NER) are unaffected (they never request a specialist teacher).
+- **Fix:** Blanked the two placeholder values in `.env` (`OPENAI_API_KEY=` / `DEEPSEEK_API_KEY=`) so they parse falsy and the intended Claude/Haiku CoT fallback triggers, matching the campaign premise ("no DeepSeek/OpenAI key available"). `.env` is gitignored so this is a working-tree-only change (not committed). Code hardening (treat `your_*` placeholders as unset) noted as a follow-up but not applied to avoid touching routing logic mid-campaign.
+- **Status:** 🟢 fixed (config) — related to B26.
