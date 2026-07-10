@@ -12,15 +12,17 @@ Status legend: 🔴 open · 🟢 fixed · 🟡 suspected/unconfirmed · ⚪ desi
 
 Ran the four `tests/pipeline/*.slurm` pipeline tests on the SLURM GPU cluster
 (orchestrator pinned to Haiku; on-device HW eval OFF; only Anthropic + Exa keys).
-Every early run crashed; root-causing surfaced an **18-bug chain (B101–B118)** across
-environment, model-loading, training, download, and scoring. Status per test:
+Every early run crashed; root-causing surfaced a **19-bug chain (B101–B119)** across
+environment, model-loading, training, download, scoring, and data acquisition. Status per test:
 
 | # | Test | Result | Blocking issue |
 |---|------|--------|----------------|
-| 1 | **Financial sentiment (classification)** | ✅ **WORKING** — trains, evaluates, iterates; F1 0.111→0.697 (threshold 0.82). `spec_source="exa"` ✓, `task_type=classification` ✓, Haiku ✓ | — |
+| 1 | **Financial sentiment (classification)** | 🟢 **pipeline functional, ✗ not converged** — trains/evaluates/iterates with real scores; F1 0.111→**0.697** best, then plateaus ~0.66 and exhausts budget (threshold 0.82). `spec_source="exa"` ✓, `task_type=classification` ✓, Haiku ✓. Mechanics validated; convergence capped by data/curation quality + degraded iterate decision (B117) | data/curation + B117 |
 | 2 | Biomedical NER | 🔴 blocked | **B113** — `Qwen/Qwen3.5-2B` download stalls on compute nodes (infra; `HF_HUB_DISABLE_XET` insufficient) |
-| 3 | GSM8K math | 🟡 fixed, verifying | **B109** (fused-CE) + **B118** (math scorer) fixed; training now runs (iters 1/2/3); rerun 36989010 in flight to confirm non-zero scores |
-| 4 | ARC-Challenge (impossible) | 🔴 blocked | **B116** — MiniCPM4-0.5B remote code multiply-incompatible with transformers 5.5.0 (only tier-0 model that fits the 2GB device) |
+| 3 | GSM8K math | 🔴 blocked (crash+scorer fixed) | **B109** (fused-CE) + **B118** (math scorer) FIXED and training runs, but **B119** blocks meaningful scores: eval/train "data" is Exa-scraped repo metadata with no real questions/answers |
+| 4 | ARC-Challenge (impossible) | 🔴 blocked | **B116** — MiniCPM4-0.5B remote code multiply-incompatible with transformers 5.5.0 (only tier-0 model that fits the 2GB device); also **B119** |
+
+**Bottom line:** the crash chain is fixed and the core loop (research → select → curate → train → eval → iterate) is **proven functional** on classification with a real learning curve. **No test meets its strict PASS criteria**; the remaining blockers are deeper (infra/version/design) and each needs a human decision — most importantly **B119** (data acquisition) and **B116** (model/transformers version).
 
 **Fixed & committed:** B101 (placeholder .env keys), B102 (A100→L40 partition), B103
 (zombie-venv guards), B105 (log orchestrator model), B106 (`trust_remote_code`), B107
@@ -29,14 +31,19 @@ truncation), B110 (per-job run dir), B111 (`is_torch_fx_available` shim), B112/B
 (missing `langchain-anthropic`/`timm`), B115 (chat-template train/serve parity), B118
 (math final-answer extraction).
 
-**Open / needs human decision:**
+**Open / needs human decision (in priority order):**
+- **B119** (blocks GSM8K/ARC math + likely NER data quality): benchmark "data" is Exa-scraped
+  repo/webpage metadata — no real questions, no gold answers. Structured benchmarks must be
+  loaded from source (`datasets.load_dataset`, etc.). Deepest issue; masked earlier because
+  classification (FinancialPhraseBank) happened to get usable data.
 - **B116** (blocks ARC): MiniCPM4/transformers version conflict — needs a version-matrix
   rebuild or a tier-0 pool-model swap. Per-symbol shims are whack-a-mole.
 - **B113** (blocks NER): compute-node download reliability for the large multimodal
   Qwen3.5-2B — needs a warmed shared cache, the `unsloth/` mirror, or a retry wrapper.
+- **B117**: agentic iterate decision degrades to score-band rules (Haiku exhausts tool rounds);
+  contributed to SMS plateauing without escalation.
 - **B104** (`data/devices.csv` missing → all hardware research via Exa; harmless but off-spec).
-- **B117** (agentic iterate decision degrades to score-band rules — Haiku exhausts tool rounds).
-- **B111** relies on a runtime shim; **B109** disables no Unsloth internals but truncates to 512.
+- **B111** relies on a runtime shim; **B109** truncates to 512 rather than fixing Unsloth internals.
 
 **Not done / caveats:** on-device HW eval left OFF as instructed; DeepSeek/GPT-4.1 CoT
 teachers unavailable (keys absent) so CoT is Haiku-annotated (expected). No run was
