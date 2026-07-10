@@ -43,11 +43,16 @@ nvidia-smi -L || true
 [ -d .venv_gpu ] || bash scripts/setup_gpu_env.sh
 source .venv_gpu/bin/activate
 
+# Cost-saving orchestrator: Haiku drives all planning/decision/generation calls.
+# With no DEEPSEEK_API_KEY/OPENAI_API_KEY set, CoT teachers also fall back to this
+# (so GSM8K math CoT is annotated by Haiku — watch for weak reasoning chains).
+export SLM_ORCHESTRATOR_MODEL=claude-haiku-4-5
+
 # Pixel 6a: 6GB RAM, 128GB storage — tier-1/2 models are feasible.
 # GSM8K is hard enough to require several iterations and likely one escalation,
 # but within reach for a tier-2 model with CoT fine-tuning.
 TASK="Fine tune a small model for grade-school math word problem solving (GSM8K dataset), producing step-by-step reasoning and a final numeric answer, targeting deployment on my Pixel 6a with 6GB RAM and 128GB storage"
 echo "=== GSM8K Math Reasoning (generation, escalation-convergent) pipeline test ==="
 echo "Task: $TASK"
-python run.py "$TASK"
+python tests/pipeline/run.py "$TASK"
 echo "=== done ==="

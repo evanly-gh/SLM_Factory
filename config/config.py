@@ -81,3 +81,20 @@ HW_LATENCY_TTFT_MS = 2000
 HW_POWER_WATTS = 5.0
 HW_MIN_TOK_S = 0.0
 HW_FALLBACK_CHIP = "snapdragon_778g"
+
+# --- On-device hardware evaluation (hardware_eval/on_device_eval.py) ---
+# HW_ONDEVICE_BACKEND — how metrics are gathered:
+#     "theoretical" (default) : ModelSpec estimates, no hardware. Safe on a GPU node.
+#     "llama_cpp"             : local llama-cli timing on the built GGUF (no phone).
+#     "adb_llama"             : llama-cli on a connected device via ADB.
+#     "smolchat"              : broadcast to the SmolChat app + logcat scrape (richest).
+# HW_GATING_ENABLED — when True, latency/power/memory become HARD gates in iterate_node
+#     (a converged model that violates hardware is not accepted as terminal).
+# HW_VERIFY_ON_DEVICE — when True, run.py runs a real on-device measurement pass after
+#     convergence and writes hardware_eval.json. Requires a non-theoretical backend
+#     and a connected device; on failure it logs and continues (never crashes the run).
+HW_ONDEVICE_BACKEND = os.environ.get("SLM_HW_BACKEND", "theoretical")
+HW_GATING_ENABLED = os.environ.get("SLM_HW_GATING", "0") == "1"
+HW_VERIFY_ON_DEVICE = os.environ.get("SLM_HW_VERIFY_ON_DEVICE", "0") == "1"
+# Nominal Li-ion voltage for mA→W power conversion when live voltage is unreadable.
+HW_BATTERY_VOLTAGE_V = float(os.environ.get("SLM_HW_BATTERY_VOLTAGE_V", "3.85"))
