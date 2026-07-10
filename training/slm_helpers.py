@@ -121,7 +121,19 @@ def infer(prompt: str, weights_ref: str, base_model: str, max_new_tokens: int = 
         _cache_order.append(cache_key)
 
     model, tokenizer = _inference_cache[cache_key]
-    inputs = tokenizer(prompt, return_tensors="pt").to(model.device)
+    # Train/serve parity (BUGS B115): training formats every example with the chat
+    # template (lora_trainer.format_example → apply_chat_template). Inference must wrap
+    # the prompt the same way — as a user turn with the assistant generation prompt
+    # appended — or the model sees an out-of-distribution raw string and emits garbage,
+    # so eval (classification/NER/generation) scores ~0 even after successful training.
+    if getattr(tokenizer, "chat_template", None):
+        prompt_text = tokenizer.apply_chat_template(
+            [{"role": "user", "content": prompt}],
+            tokenize=False, add_generation_prompt=True,
+        )
+    else:
+        prompt_text = prompt
+    inputs = tokenizer(prompt_text, return_tensors="pt").to(model.device)
     with torch.no_grad():
         outputs = model.generate(**inputs, max_new_tokens=max_new_tokens, do_sample=False)
     new_tokens = outputs[0][inputs["input_ids"].shape[1]:]
