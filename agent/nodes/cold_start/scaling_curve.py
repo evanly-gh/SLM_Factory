@@ -147,49 +147,52 @@ def scaling_curve_node(state: AgentState) -> AgentState:
                 log_params, f1, model.model_id, model.est_params_b(), model.quant,
             )
 
-    if len(points) < 2:
-        # Can't fit a line; fall back to the lowest-RAM feasible variant.
-        logger.warning("[scaling_curve] Too few probe points (%d); selecting lowest-RAM model.", len(points))
-        state["selected_model"] = min(feasible, key=lambda m: m.peak_memory_mb)
-        return state
+    # Build a predicted accuracy for EVERY feasible variant. Prefer the empirical
+    # scaling fit (needs >=2 non-zero probe points). If too many probes failed to load/
+    # train, fall back to each model's PUBLISHED benchmark score so selection still has a
+    # real capability signal instead of a blind default.
+    valid = [(lp, f1) for lp, f1 in points if f1 > 0.0]
+    if len(valid) >= 2:
+        lp_arr = np.array([p[0] for p in valid])
+        f1_arr = np.array([p[1] for p in valid])
+        a, b = (float(c) for c in np.polyfit(lp_arr, f1_arr, deg=1))
+        logger.info("[scaling_curve] Empirical fit over %d point(s): f1 = %.4f*log(params) + %.4f",
+                    len(valid), a, b)
 
-    log_params = np.array([p[0] for p in points])
-    f1s = np.array([p[1] for p in points])
-    coeffs = np.polyfit(log_params, f1s, deg=1)  # [a, b]: f1 = a*log(params) + b
-    a, b = float(coeffs[0]), float(coeffs[1])
-    logger.info("[scaling_curve] Fit: f1 = %.4f * log(params) + %.4f", a, b)
-
-    # Objective: the MINIMUM peak-RAM variant whose predicted f1 clears the threshold.
-    # Iterate feasible variants ascending by peak RAM and take the first that qualifies.
-    by_ram = sorted(feasible, key=lambda m: m.peak_memory_mb)
-    for model in by_ram:
-        predicted = a * math.log(max(model.est_params_b(), 1e-3)) + b
-        qualifies = predicted >= stop_threshold
-        logger.info(
-            "[scaling_curve] %s (quant=%s, peak=%dMB): predicted_f1=%.4f vs %.4f → %s",
-            model.model_id, model.quant, model.peak_memory_mb, predicted, stop_threshold,
-            "SELECT" if qualifies else "skip",
+        def predict(m: ModelSpec) -> float:
+            return a * math.log(max(m.est_params_b(), 1e-3)) + b
+    else:
+        logger.warning(
+            "[scaling_curve] Only %d usable probe point(s); using published benchmark "
+            "scores as the accuracy estimate.", len(valid),
         )
-        if qualifies:
-            state["selected_model"] = model
-            logger.info(
-                "[scaling_curve] Selected lowest-RAM qualifier: %s (tier=%d, quant=%s, "
-                "peak=%dMB, predicted_f1=%.4f)",
-                model.model_id, model.tier, model.quant, model.peak_memory_mb, predicted,
-            )
-            return state
+        _tt = state.get("task_type", "")
 
-    # None predicted to meet threshold. This is a STARTUP step whose only job is to
-    # choose a STARTING model — growing the model when it stalls is the main loop's
-    # escalate_node, not startup's. So start SMALL (lowest peak RAM) and let the loop
-    # escalate as needed. (Jumping straight to the largest model here would skip
-    # escalation entirely, waste compute, and break the start-small-and-escalate design
-    # the escalation tests exercise.)
-    smallest = min(feasible, key=lambda m: (m.peak_memory_mb, m.est_params_b()))
-    state["selected_model"] = smallest
-    logger.warning(
-        "[scaling_curve] No variant predicted to meet threshold %.4f; starting SMALL "
-        "and deferring growth to escalate_node: %s (tier=%d, quant=%s, peak=%dMB)",
-        stop_threshold, smallest.model_id, smallest.tier, smallest.quant, smallest.peak_memory_mb,
+        def predict(m: ModelSpec) -> float:
+            s = m.gsm8k if _tt == "math_reasoning" else m.mmlu
+            return float(s) if s is not None else 0.0
+
+    # Choose the model CLOSEST to the accuracy goal:
+    #   - if any variant is predicted to MEET the threshold, take the SMALLEST such one
+    #     (the cheapest model that reaches the goal);
+    #   - otherwise take the variant whose predicted accuracy is nearest the goal (the
+    #     best achievable start; the main loop's escalate_node grows it if it still falls short).
+    # (ModelSpec is unhashable — keep predictions as (model, pred) pairs, not a dict.)
+    scored = [(m, predict(m)) for m in feasible]
+    for m, p in sorted(scored, key=lambda mp: mp[0].peak_memory_mb):
+        logger.info("[scaling_curve] %s (peak=%dMB, ~%.2fB): predicted_f1=%.4f vs goal %.4f",
+                    m.model_id, m.peak_memory_mb, m.est_params_b(), p, stop_threshold)
+    qualifiers = [(m, p) for m, p in scored if p >= stop_threshold]
+    if qualifiers:
+        selected, sel_pred = min(qualifiers, key=lambda mp: mp[0].peak_memory_mb)
+        why = "smallest variant predicted to meet the goal"
+    else:
+        selected, sel_pred = min(scored, key=lambda mp: abs(mp[1] - stop_threshold))
+        why = "closest to the goal (none predicted to meet it)"
+    state["selected_model"] = selected
+    logger.info(
+        "[scaling_curve] Selected %s (tier=%d, quant=%s, peak=%dMB, predicted_f1=%.4f) — %s",
+        selected.model_id, selected.tier, selected.quant, selected.peak_memory_mb,
+        sel_pred, why,
     )
     return state

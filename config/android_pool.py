@@ -305,23 +305,11 @@ ANDROID_POOL: list[ModelSpec] = [
         mmlu=0.490,    # MMLU approximate
         notes="ExecuTorch reference model; best TTFT via KleidiAI SpinQuant; most tunable 1B (largest fine-tuning gains)",
     ),
-    # MiniCPM5-1B: Best-in-class 1B as of May 2026. MATH-500 91.6%, HumanEval+ 78.7%,
-    # IFEval 80.4%, τ²-Bench (agentic) 79.5%. Average 42.57 vs 26.77 for Qwen3-0.6B.
-    # Q4_K_M GGUF = 688MB confirmed (openbmb/MiniCPM5-1B-GGUF on HuggingFace).
-    # llama.cpp supported (OpenBMB docs confirm).
-    # Source: openbmb/MiniCPM5-1B model card; deepwiki.com benchmarks.
-    ModelSpec(
-        model_id="openbmb/MiniCPM5-1B",
-        size_mb=688,
-        tier=1,
-        tok_s_snapdragon_660=8.0,
-        tok_s_snapdragon_778g=14.0,
-        tok_s_snapdragon_8gen3=38.0,
-        peak_memory_mb=920,
-        gsm8k=0.850,   # proxy from MATH-500 91.6%; GSM8K not separately published
-        mmlu=0.620,    # estimated from benchmark suite aggregate 42.57/100
-        notes="Best 1B model (May 2026): MATH-500 91.6%, HumanEval+ 78.7%, IFEval 80.4%; 131K context; hybrid thinking mode",
-    ),
+    # NOTE (BUGS B116/B121): openbmb/MiniCPM5-1B removed from the selectable pool —
+    # same openbmb MiniCPM remote-code family as MiniCPM4-0.5B, which is multiply
+    # incompatible with transformers 5.5.0 (is_torch_fx_available + tied-weights). It
+    # loaded/trained fine in neither probe nor main loop. Re-add once a compatible
+    # transformers/MiniCPM version matrix exists.
 
     # ── ~1.5–2.5B params ──────────────────────────────────────────────────
     # Gemma 3 1B IT: Google QAT checkpoint; GSM8K 62.8%, benefits from
@@ -379,19 +367,10 @@ ANDROID_POOL: list[ModelSpec] = [
     # Beats Gemma3-1B on 9/9 shared benchmarks: HumanEval 66.5% vs 41.5%,
     # MMLU 60.1% vs ~48%. 5B total params / 2.3B effective via PLE caching.
     # Source: llm-stats.com/models/compare/gemma-3-1b-it-vs-gemma-3n-e2b-it; Google.
-    # WARNING: Proprietary license (not Apache 2.0) — check before commercial use.
-    ModelSpec(
-        model_id="google/gemma-3n-e2b-it",
-        size_mb=1300,
-        tier=3,
-        tok_s_snapdragon_660=4.0,
-        tok_s_snapdragon_778g=7.0,
-        tok_s_snapdragon_8gen3=22.0,
-        peak_memory_mb=2200,
-        gsm8k=0.700,   # estimated; GSM8K not directly published for E2B (E4B ~83%)
-        mmlu=0.601,    # MMLU 60.1% from llm-stats comparison
-        notes="MatFormer arch; natively multimodal (text+image+video+audio); beats Gemma3-1B on all benchmarks; HumanEval 66.5%; 50-80 tok/s on NPU; ⚠️ proprietary license",
-    ),
+    # NOTE (BUGS B121): google/gemma-3n-e2b-it removed from the selectable pool — its
+    # MatFormer/multimodal architecture fails to LoRA-train on this Unsloth/transformers
+    # stack ("mat1 and mat2 shapes cannot be multiplied" in the scaling-curve probe).
+    # Re-add with a vision-aware trainer (FastVisionModel) or a compatible version.
     # Qwen3.5-2B (March 2026): Gated DeltaNet hybrid architecture, multimodal, 262K ctx.
     # Same family as Qwen3.5-0.8B but at 2B params. Unsloth Dynamic 2.0 GGUF confirmed
     # working with llama.cpp, Ollama. No classic GSM8K/MMLU published (uses newer suite).
