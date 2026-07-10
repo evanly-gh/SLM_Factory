@@ -26,12 +26,17 @@ def taxonomy_construct_node(state: AgentState) -> AgentState:
         state["failure_taxonomy"] = {"clusters": [], "summary": "No failures to classify"}
         return state
 
-    sample = failures[:50]
+    # Single consistent sample window: the LLM sees exactly the traces it is asked to
+    # assign, and only those get a cluster tag. (Previously it saw 20 but the code
+    # tagged against a 50-slice, leaving a silent mismatch.)
+    SAMPLE_N = 40
+    sample = failures[:SAMPLE_N]
     sample_text = json.dumps(
-        [{"idx": i, **t} for i, t in enumerate(sample[:20])],
+        [{"idx": i, **t} for i, t in enumerate(sample)],
         indent=2,
         default=str,
     )
+    unsampled = len(failures) - len(sample)
 
     client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
     response = client.messages.create(
@@ -39,23 +44,26 @@ def taxonomy_construct_node(state: AgentState) -> AgentState:
         max_tokens=2048,
         system=(
             "You are analyzing failure patterns in a deployed model's inference logs. "
-            "Cluster the failures into categories. For each category, determine:\n"
-            "1. Category name\n"
-            "2. Count of failures in this category\n"
-            "3. Root cause description\n"
-            "4. Fixability: 'fixable' (can be addressed by training) or 'external' "
-            "(prompt design, schema mismatch, ambiguous input)\n"
-            "5. The list of 'idx' values (from the input) that belong to this cluster\n\n"
-            "Output JSON: {\"clusters\": [{\"name\": ..., \"count\": ..., "
-            "\"root_cause\": ..., \"fixable\": true/false, \"trace_indices\": [...]}], "
-            "\"summary\": \"...\"}"
+            "Cluster the sampled failures into a small number of categories (aim for 3-8). "
+            "For each cluster, determine:\n"
+            "1. name: a short descriptive cluster name\n"
+            "2. count: how many of the sampled traces fall in this cluster\n"
+            "3. root_cause: one sentence on the shared cause\n"
+            "4. fixable: a JSON boolean — true if more/better TRAINING DATA would fix it "
+            "(the model can learn the pattern); false if it is EXTERNAL (prompt design, "
+            "schema mismatch, genuinely ambiguous input, or beyond model capacity)\n"
+            "5. trace_indices: the list of 'idx' values belonging to this cluster\n\n"
+            "Output STRICT JSON only:\n"
+            "{\"clusters\": [{\"name\": \"...\", \"count\": 0, \"root_cause\": \"...\", "
+            "\"fixable\": true, \"trace_indices\": [0, 1]}], \"summary\": \"...\"}"
         ),
         messages=[{"role": "user", "content": (
-            f"Total failures: {len(failures)}\n\n"
-            f"Sample failures (first {len(sample[:20])}, each has an 'idx' field):\n{sample_text}\n\n"
-            f"Classify these into failure categories and assign each trace to exactly one cluster "
-            f"via its 'idx'. Every idx 0-{len(sample[:20]) - 1} must appear in exactly one cluster's "
-            f"trace_indices list."
+            f"Total failures observed: {len(failures)} "
+            f"({'showing all' if unsampled <= 0 else f'showing a sample of {len(sample)}; {unsampled} more not shown'}).\n\n"
+            f"Sampled failures (each has an 'idx' field):\n{sample_text}\n\n"
+            f"Cluster ONLY the sampled traces above. Assign each to exactly one cluster via "
+            f"its 'idx'. Every idx 0-{len(sample) - 1} must appear in exactly one cluster's "
+            f"trace_indices list. 'fixable' MUST be a JSON boolean (true/false), not a string."
         )}],
     )
 

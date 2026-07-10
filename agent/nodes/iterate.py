@@ -95,6 +95,33 @@ def _is_stagnant(scores: list[float]) -> bool:
     return delta < STAGNATION_MIN_DELTA
 
 
+def _format_failures(failures: list[dict], task_type: str) -> str:
+    """Render sample failures in a task-appropriate, readable form.
+
+    The generic `predicted=X gold=Y text=Z` layout is unreadable for NER (gold is a
+    list of entity dicts) and generation (gold is a long answer). Formatting per task
+    type gives the orchestrator LLM a signal it can actually diagnose.
+    """
+    lines = []
+    for f in failures:
+        if task_type == "classification":
+            text = str(f.get("text", ""))[:120]
+            lines.append(f"  - text={text!r}\n    predicted={f.get('predicted','?')!r}  gold={f.get('label','?')!r}")
+        elif task_type == "NER":
+            text = str(f.get("text", ""))[:120]
+            gold = f.get("entities", f.get("label", "?"))
+            pred = f.get("predicted", "?")
+            lines.append(f"  - text={text!r}\n    predicted_spans={pred!r}\n    gold_spans={gold!r}")
+        else:  # math_reasoning, code_generation, generation
+            prompt = str(f.get("prompt", f.get("text", "")))[:120]
+            gold = str(f.get("answer", f.get("response", f.get("label", "?"))))[:150]
+            pred = str(f.get("predicted", "?"))[:150]
+            judge = f.get("judge_score")
+            judge_str = f"  (judge={judge})" if judge is not None else ""
+            lines.append(f"  - prompt={prompt!r}{judge_str}\n    predicted={pred!r}\n    gold={gold!r}")
+    return "\n".join(lines)
+
+
 def _llm_iterate(state: AgentState) -> dict:
     """Call the orchestrator LLM with tool access to reason about the trajectory.
 
@@ -128,18 +155,15 @@ def _llm_iterate(state: AgentState) -> dict:
     last_eval = state.get("last_eval")
     failures_summary = ""
     if last_eval and last_eval.failures:
-        sample = last_eval.failures[:10]
-        failures_summary = "\n".join(
-            f"  - predicted={f.get('predicted','?')} gold={f.get('label', f.get('entities', f.get('response', '?')))!r} text={str(f.get('text', f.get('prompt', '')))[:80]}"
-            for f in sample
-        )
+        failures_summary = _format_failures(last_eval.failures[:10], state["task_type"])
 
     scores = state["scores"]
     window = scores[-STAGNATION_WINDOW:] if len(scores) >= STAGNATION_WINDOW else scores
     recent_delta = round(max(window) - min(window), 4) if window else 0.0
 
     user_content = f"""\
-## Current training trajectory
+## Training trajectory so far (from data-curation.md — each row is one past iteration:
+## its dataset version, intervention applied, and resulting score)
 
 {trajectory if trajectory else "(no iterations logged yet)"}
 
@@ -153,10 +177,13 @@ def _llm_iterate(state: AgentState) -> dict:
 - Recent delta (last {len(window)} evals, improvement to trigger escalation = {STAGNATION_MIN_DELTA}): {recent_delta:.4f}
 - Stop threshold: {state['stop_threshold']} (initial floor: {state.get('initial_stop_threshold', state['stop_threshold']):.3f})
 
-## Sample failures (up to 10)
+## Sample failures from the latest eval (up to 10, formatted for a {state['task_type']} task)
 {failures_summary if failures_summary else "(none yet)"}
 
-Decide the next intervention. Use tools if needed, then output JSON.
+Diagnose WHY the score is where it is from the failures and the trajectory above,
+then decide the next intervention. Do not repeat an intervention that the trajectory
+shows already failed to move the score. Use tools if you need to inspect the data,
+then output the decision JSON.
 """
 
     messages = [SystemMessage(content=_ITERATE_SYSTEM), HumanMessage(content=user_content)]

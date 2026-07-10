@@ -31,7 +31,7 @@ class CurationLog:
         next_intervention: str,
         hypothesis: str,
         model_id: str,
-        int4_size_mb: int,
+        size_mb: int,
         tier: int,
         hardware_notes: str = "Phase 1: theoretical",
         hw_constraints: dict | None = None,
@@ -96,7 +96,7 @@ class CurationLog:
 - Hypothesis: {hypothesis}
 
 ### Hardware profile ({hardware_notes})
-- Model: {model_id} | INT4 size: {int4_size_mb}MB | Tier: {tier}
+- Model: {model_id} | Weight size: {size_mb}MB | Tier: {tier}
 {hw_lines if hw_lines else "- (Phase 1: theoretical estimates only)"}
 ---
 """

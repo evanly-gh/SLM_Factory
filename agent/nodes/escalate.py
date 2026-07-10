@@ -18,6 +18,26 @@ def _log(model_id: str, msg: str):
     print(f"[escalate][{model_id}] {msg}")
 
 
+_CHOOSE_SYSTEM = (
+    "You are the model-selection stage of an autonomous on-device fine-tuning agent. "
+    "You choose which small language model to fine-tune next for a specific task. "
+    "All candidates already fit the device's hardware budget, so choose purely on "
+    "expected task capability after LoRA fine-tuning — not on size. Prefer the model "
+    "whose architecture and published benchmarks best match the task type. Output STRICT "
+    "JSON only."
+)
+
+# Which published benchmark matters most, per task type. Steers the LLM away from
+# defaulting to GSM8K (a math benchmark) when the task is, e.g., NER or code.
+_BENCHMARK_HINT = {
+    "classification": "MMLU and instruction-following (IFEval) — reasoning/label discrimination.",
+    "NER": "MMLU and instruction-following — structured extraction follows instructions.",
+    "math_reasoning": "GSM8K — arithmetic/word-problem reasoning is the primary signal.",
+    "code_generation": "code benchmarks (HumanEval/MBPP); MMLU as a secondary signal.",
+    "generation": "MMLU and instruction-following (IFEval) — open-ended answer quality.",
+}
+
+
 def _llm_choose_model(
     candidates: list[ModelSpec],
     task_type: str,
@@ -25,51 +45,94 @@ def _llm_choose_model(
     current_best_score: float,
 ) -> ModelSpec:
     """Ask the orchestrator LLM to choose a model from `candidates` given the task context.
-    Falls back to the largest candidate (best chance) on any failure.
+    Returns the chosen ModelSpec. Falls back to the largest candidate on any failure.
+
+    Direction-neutral: used both for UPWARD escalation (bigger tier) and the DOWNWARD
+    probe (smaller tier). The prompt frames the choice as "best task fit", which is
+    correct in both directions since all candidates already satisfy the hardware budget.
     """
     from config.config import ORCHESTRATOR_MODEL, ANTHROPIC_API_KEY
     import anthropic
+    import json
 
     if not candidates:
         raise ValueError("No candidates to choose from")
 
     candidate_lines = "\n".join(
-        f"  {i+1}. {m.model_id} (quant={m.quant}, {m.int4_size_mb}MB, "
-        f"gsm8k={m.gsm8k:.2f}, mmlu={m.mmlu:.2f})"
-        for i, m in enumerate(candidates)
+        f"  - model_id: {m.model_id}\n"
+        f"    quant: {m.quant or 'none (bf16)'}  size: {m.size_mb}MB  "
+        f"gsm8k: {m.gsm8k:.2f}  mmlu: {m.mmlu:.2f}\n"
+        f"    notes: {getattr(m, 'notes', '') or 'n/a'}"
+        for m in candidates
     )
     task_name = task_plan.get("task_name", task_type)
     task_labels = task_plan.get("labels", [])
-    task_notes = (
-        f"Task type: {task_type}\n"
-        f"Task name: {task_name}\n"
-        f"Labels: {task_labels}\n"
-        f"Current best score: {current_best_score:.4f}"
-    )
+    benchmark_hint = _BENCHMARK_HINT.get(task_type, "MMLU as a general capability proxy.")
+
     prompt = (
-        f"You are selecting the best model for a fine-tuning task from the candidates below.\n\n"
-        f"Task context:\n{task_notes}\n\n"
-        f"Candidates (all satisfy hardware constraints, same tier):\n{candidate_lines}\n\n"
-        f"Choose the model ID most likely to solve this task given its benchmarks and architecture. "
-        f"Reply with ONLY the exact model_id string, nothing else."
+        f"Task to fine-tune for:\n"
+        f"  type: {task_type}\n"
+        f"  name: {task_name}\n"
+        f"  labels/schema: {task_labels}\n"
+        f"  current best F1 (previous model): {current_best_score:.4f}\n\n"
+        f"For a {task_type} task, prioritise: {benchmark_hint}\n\n"
+        f"'quant' is the on-device weight format: none/bf16 (highest quality, largest), "
+        f"Q8_0 (near-lossless, ~1.9x smaller), Q4_K_M (4-bit, smallest, minor quality loss). "
+        f"All listed candidates already fit the device budget.\n\n"
+        f"Candidates:\n{candidate_lines}\n\n"
+        f"Choose the single candidate most likely to reach the highest task accuracy after "
+        f"LoRA fine-tuning. Reply with STRICT JSON only, no prose:\n"
+        f'{{"model_id": "<exact model_id from the list>", "reason": "<one sentence>"}}'
     )
     try:
         client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
         resp = client.messages.create(
             model=ORCHESTRATOR_MODEL,
-            max_tokens=128,
+            max_tokens=256,
+            system=_CHOOSE_SYSTEM,
             messages=[{"role": "user", "content": prompt}],
         )
         first_block = resp.content[0]
-        chosen_id = first_block.text.strip().strip('"') if isinstance(first_block, anthropic.types.TextBlock) else ""
+        raw = first_block.text.strip() if isinstance(first_block, anthropic.types.TextBlock) else ""
+        chosen_id, reason = _parse_choice(raw)
         match = next((m for m in candidates if m.model_id == chosen_id), None)
         if match is not None:
+            logger.info("[escalate] LLM chose %s — %s", chosen_id, reason or "(no reason given)")
             return match
         logger.warning("[escalate] LLM returned unknown model_id %r; falling back to largest", chosen_id)
     except Exception as e:
         logger.warning("[escalate] LLM model-choice failed (%s); falling back to largest", e)
-    # Fallback: largest model in the tier (highest int4_size_mb = most capable)
-    return max(candidates, key=lambda m: m.int4_size_mb)
+    # Fallback: largest model in the tier (highest size_mb = most capable)
+    return max(candidates, key=lambda m: m.size_mb)
+
+
+def _parse_choice(raw: str) -> tuple[str, str]:
+    """Extract (model_id, reason) from the LLM reply. Tolerates JSON, code fences,
+    or a bare model_id string (back-compat with the old plain-string protocol)."""
+    import json
+    import re
+
+    text = raw.strip()
+    if text.startswith("```"):
+        text = re.sub(r"^```[a-zA-Z]*\n?", "", text)
+        text = re.sub(r"\n?```$", "", text).strip()
+    # Try JSON first
+    try:
+        obj = json.loads(text)
+        if isinstance(obj, dict) and "model_id" in obj:
+            return str(obj["model_id"]).strip().strip('"'), str(obj.get("reason", "")).strip()
+    except (json.JSONDecodeError, ValueError):
+        pass
+    m = re.search(r"\{.*\}", text, re.DOTALL)
+    if m:
+        try:
+            obj = json.loads(m.group())
+            if isinstance(obj, dict) and "model_id" in obj:
+                return str(obj["model_id"]).strip().strip('"'), str(obj.get("reason", "")).strip()
+        except (json.JSONDecodeError, ValueError):
+            pass
+    # Back-compat: treat the whole reply as a bare model_id string
+    return text.strip().strip('"'), ""
 
 
 def escalate_node(state: AgentState) -> AgentState:
@@ -109,20 +172,18 @@ def escalate_node(state: AgentState) -> AgentState:
                 entry.get("best_finetuned_f1", 0.0), state["best_score"]
             )
 
-    # Collect ALL feasible models in the next tier
-    if current_tier >= 3:
-        _log(current_id, "  Already at tier 3 (max) — TERMINATING")
-        state["next_action"] = "terminate"
-        return state
-    next_tier = current_tier + 1
-
+    # Escalate to the nearest higher (more RAM) non-empty tier. Tiers are per-variant
+    # RAM buckets, so a bucket can be empty for a given hardware budget — step past gaps
+    # rather than terminating on the first empty tier. Exclude variants of the CURRENT
+    # model_id at the same tier (no point re-selecting what already stagnated).
     feasible = filter_pool(state["hardware_constraints"])
-    next_tier_candidates = [m for m in feasible if m.tier == next_tier]
-
-    if not next_tier_candidates:
-        _log(current_id, f"  No feasible models in tier {next_tier} — TERMINATING")
+    higher = [m for m in feasible if m.tier > current_tier]
+    if not higher:
+        _log(current_id, f"  No feasible models above tier {current_tier} — TERMINATING")
         state["next_action"] = "terminate"
         return state
+    next_tier = min(m.tier for m in higher)
+    next_tier_candidates = [m for m in higher if m.tier == next_tier]
 
     _log(current_id,
          f"  Tier {next_tier} candidates ({len(next_tier_candidates)}): "

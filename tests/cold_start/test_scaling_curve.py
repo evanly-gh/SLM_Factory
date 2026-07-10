@@ -12,15 +12,15 @@ from agent.nodes.cold_start.scaling_curve import (
 )
 
 
-def _make_model(model_id, int4_size_mb, tier=1, quant=None):
+def _make_model(model_id, size_mb, tier=1, quant=None):
     return ModelSpec(
         model_id=model_id,
-        int4_size_mb=int4_size_mb,
+        size_mb=size_mb,
         tier=tier,
         tok_s_snapdragon_660=5.0,
         tok_s_snapdragon_778g=10.0,
         tok_s_snapdragon_8gen3=25.0,
-        peak_memory_mb=int4_size_mb + 400,
+        peak_memory_mb=size_mb + 400,
         gsm8k=0.6,
         mmlu=0.5,
         quant=quant,
@@ -113,7 +113,7 @@ def test_probe_uses_eval_set_when_no_dataset(tmp_path):
     from agent.nodes.cold_start.scaling_curve import _probe_model
 
     model = ModelSpec(
-        model_id="test/Model", int4_size_mb=500, tier=1,
+        model_id="test/Model", size_mb=500, tier=1,
         tok_s_snapdragon_660=8.0, tok_s_snapdragon_778g=14.0, tok_s_snapdragon_8gen3=38.0,
         peak_memory_mb=900, gsm8k=0.6, mmlu=0.5, quant=None,
     )

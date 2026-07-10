@@ -3,7 +3,8 @@
 LangGraph state machine for the SLM Factory fine-tuning loop.
 
 Paper §2.1: 'Pioneer Agent is built on a LangGraph state machine orchestrated by
-Claude Sonnet 4.6.'
+Claude Sonnet 4.6.' (In this codebase the orchestrator model is set in ONE place —
+config.config.ORCHESTRATOR_MODEL — and every LLM node resolves it from there.)
 
 Supports two modes (paper §2.5, §2.6):
   - cold_start: task_analysis → eval_setup → scaling_curve → curate → train → evaluate → iterate loop

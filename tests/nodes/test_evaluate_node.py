@@ -9,7 +9,7 @@ from eval.harness import EvalResult
 def _make_model(quant=None):
     return ModelSpec(
         model_id="test/Model-1B",
-        int4_size_mb=700,
+        size_mb=700,
         tier=1,
         tok_s_snapdragon_660=8.0,
         tok_s_snapdragon_778g=14.0,
@@ -53,7 +53,7 @@ def _mock_eval_result(f1=0.85):
 @patch("agent.nodes.evaluate.apply_iteration_policy", return_value={"band": "good", "intervention": "hyperparameter"})
 @patch("agent.nodes.evaluate.run_eval")
 @patch("agent.nodes.evaluate.CurationLog")
-@patch("agent.nodes.evaluate.theoretical_hardware_profile", return_value={"int4_size_mb": 700, "tier": 1})
+@patch("agent.nodes.evaluate.theoretical_hardware_profile", return_value={"size_mb": 700, "tier": 1})
 @patch("config.android_pool.check_hardware_constraints", return_value={"storage": {"pass": True}, "memory": {"pass": True}, "latency": {"pass": True}, "power": {"pass": True}})
 def test_evaluate_node_uses_bf16_path_when_quant_none(mock_hw, mock_profile, mock_log, mock_eval, mock_policy):
     mock_eval.return_value = _mock_eval_result()
@@ -73,7 +73,7 @@ def test_evaluate_node_uses_bf16_path_when_quant_none(mock_hw, mock_profile, moc
 @patch("agent.nodes.evaluate.merge_for_quantization", return_value="/merged/checkpoint")
 @patch("agent.nodes.evaluate.run_eval")
 @patch("agent.nodes.evaluate.CurationLog")
-@patch("agent.nodes.evaluate.theoretical_hardware_profile", return_value={"int4_size_mb": 700, "tier": 1})
+@patch("agent.nodes.evaluate.theoretical_hardware_profile", return_value={"size_mb": 700, "tier": 1})
 @patch("config.android_pool.check_hardware_constraints", return_value={"storage": {"pass": True}, "memory": {"pass": True}, "latency": {"pass": True}, "power": {"pass": True}})
 def test_evaluate_node_quantizes_and_uses_gguf_path_when_quant_set(
     mock_hw, mock_profile, mock_log, mock_eval, mock_merge, mock_quantize, mock_policy

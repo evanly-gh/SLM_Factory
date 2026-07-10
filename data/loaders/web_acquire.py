@@ -120,8 +120,12 @@ def _annotate_ner_entities(examples: list[dict], log=print) -> list[dict]:
                 max_tokens=400,
                 messages=[{"role": "user", "content": (
                     "Extract all named entities from this text. Return a JSON list of "
-                    "objects with \"text\" (the exact span) and \"type\" (PER, ORG, LOC, "
-                    "MISC, or other standard NER types). Return [] if no entities.\n\n"
+                    "objects with \"text\" (the exact span as it appears in the text) and "
+                    "\"type\" (PER, ORG, LOC, MISC, or other standard NER types). "
+                    "Rules for consistency: use the EXACT substring from the text for each "
+                    "span; for overlapping candidates prefer the LONGEST span; do NOT emit "
+                    "nested or duplicated spans; assign each span exactly one type. "
+                    "Return [] if there are no entities.\n\n"
                     f"Text: {ex['text'][:500]}\n\n"
                     "Reply with JSON only, no explanation."
                 )}],

@@ -5,7 +5,7 @@ from eval.harness import EvalResult
 
 def _model(tier, model_id="test/M", quant=None):
     return ModelSpec(
-        model_id=model_id, int4_size_mb=1000, tier=tier,
+        model_id=model_id, size_mb=1000, tier=tier,
         tok_s_snapdragon_660=8.0, tok_s_snapdragon_778g=14.0, tok_s_snapdragon_8gen3=38.0,
         peak_memory_mb=1400, gsm8k=0.6, mmlu=0.5, quant=quant,
     )

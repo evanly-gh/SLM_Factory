@@ -5,15 +5,22 @@
 #SBATCH --gres=gpu:l40:1
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=64G
-#SBATCH --time=12:00:00
+#SBATCH --time=4:00:00
 #SBATCH --output=/mmfs1/gscratch/intelligentsystems/evanly/SLM_Factory/logs/slurm/slm-sms-spam-%j.out
-# Classification pipeline test: SMS Spam binary classification
-# Targeting Moto G Stylus 5G 2023 (6GB RAM, 256GB storage)
-# Paper baseline: GLiNER2-base F1 0.159 → 0.997 (+83.8pp) in 10 iterations
-# Our target: decoder model from Android pool, similar improvement trajectory
+# TEST CASE: Classification — clean convergence baseline
 #
-# Termination: reaches F1 >= stop_threshold (default 0.96, calibrated by planner)
-# or exhausts the 1500-turn cold-start budget. No artificial step caps.
+# PURPOSE: Verify the full classification pipeline converges correctly on an
+# achievable task. SMS spam is well-separated (high TF-IDF signal, short texts)
+# so a tier-1 or tier-2 model should reach F1 >= stop_threshold within ~10
+# iterations without needing escalation. This is the happy-path test.
+#
+# What to check in logs/runs/<timestamp>/scores.json:
+#   - converged: true
+#   - iterations: <= 12
+#   - no "ESCALATE" lines in run.log
+#   - task_type: "classification"
+#
+# Paper baseline: GLiNER2-base F1 0.159 → 0.997 (+83.8pp) in 10 iterations
 set -euo pipefail
 PROJ=/mmfs1/gscratch/intelligentsystems/evanly/SLM_Factory
 cd "$PROJ"

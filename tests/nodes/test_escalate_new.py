@@ -26,26 +26,28 @@ def _make_state(current_model):
     }
 
 
-def test_escalate_advances_to_next_tier():
-    # Start with a tier-0 model; should escalate to tier 1
-    tier0_model = next(m for m in ANDROID_POOL if m.tier == 0 and m.quant is None)
-    state = _make_state(tier0_model)
+def test_escalate_advances_to_higher_tier():
+    # Start with the lowest-tier feasible variant; should escalate to a higher RAM tier.
+    lowest_tier = min(m.tier for m in ANDROID_POOL)
+    start_model = next(m for m in ANDROID_POOL if m.tier == lowest_tier)
+    state = _make_state(start_model)
+    # Determine the nearest higher non-empty tier (matches escalate's own logic).
+    higher_tiers = sorted({m.tier for m in ANDROID_POOL if m.tier > lowest_tier})
+    next_tier = higher_tiers[0]
     with patch("agent.nodes.escalate._llm_choose_model") as mock_llm:
-        # LLM picks the first tier-1 model
-        tier1_candidates = [m for m in ANDROID_POOL if m.tier == 1 and m.quant is None]
-        mock_llm.return_value = tier1_candidates[0]
+        mock_llm.return_value = next(m for m in ANDROID_POOL if m.tier == next_tier)
         from agent.nodes.escalate import escalate_node
         out = escalate_node(state)
-    assert out["selected_model"].tier == 1
+    assert out["selected_model"].tier == next_tier
     assert out["scores"] == []
     assert out["dag"] == []
 
 
 def test_escalate_terminates_at_top_tier():
-    tier3_models = [m for m in ANDROID_POOL if m.tier == 3 and m.quant is None]
-    if not tier3_models:
-        pytest.skip("No tier-3 models in pool")
-    state = _make_state(tier3_models[-1])  # largest tier-3 model
+    top_tier = max(m.tier for m in ANDROID_POOL)
+    # A variant already at the top RAM tier has nothing higher to escalate to.
+    top_model = next(m for m in ANDROID_POOL if m.tier == top_tier)
+    state = _make_state(top_model)
     with patch("agent.nodes.escalate._llm_choose_model"):
         from agent.nodes.escalate import escalate_node
         out = escalate_node(state)

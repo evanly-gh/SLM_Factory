@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 def run_hardware_filter(constraints: HardwareConstraints) -> list[ModelSpec]:
     """
     Return models that pass both stages, sorted largest→smallest
-    (by int4_size_mb descending within tier) so scaling_curve_node
+    (by size_mb descending within tier) so scaling_curve_node
     can slice small/medium/large candidates from the ends and middle.
 
     Stage 1: filter_pool() inequality checks (storage, memory, min_tok_s).
@@ -39,7 +39,7 @@ def run_hardware_filter(constraints: HardwareConstraints) -> list[ModelSpec]:
         return []
 
     # Sort largest→smallest for Stage 2 iteration
-    stage1_desc = sorted(stage1, key=lambda m: m.int4_size_mb, reverse=True)
+    stage1_desc = sorted(stage1, key=lambda m: m.size_mb, reverse=True)
 
     # ── Stage 2 ──────────────────────────────────────────────────────────────
     passed: list[ModelSpec] = []

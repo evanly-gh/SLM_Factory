@@ -17,15 +17,19 @@ def delegate_task(task_description: str, output_file: str) -> str:
     from config.config import ORCHESTRATOR_MODEL, ANTHROPIC_API_KEY
 
     client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
+    # Phase 1 sub-agents have NO tools, so they cannot write files. The prompt is
+    # honest about this: return the structured result inline; the caller persists it
+    # to `output_file`. (An earlier version told the model to "write the file", which
+    # it could never do — the caller then silently fell back to the response text.)
     system = (
-        "You are a sub-agent in an agentic fine-tuning pipeline. "
-        f"Complete the task and write your structured output to: {output_file}\n"
-        "Be concise. Write the file before responding."
+        "You are a focused sub-agent in an agentic fine-tuning pipeline. You have NO "
+        "file-system or tool access, so you cannot write files. Complete the task and "
+        "return your complete, structured result as the body of your reply — it will be "
+        "captured and saved by the calling agent. Be concise and return only the result "
+        "(no preamble)."
     )
     messages = [{"role": "user", "content": task_description}]
 
-    # Simple single-turn sub-agent for Phase 1
-    # Phase 2 can extend to multi-turn with tool use
     response = client.messages.create(
         model=ORCHESTRATOR_MODEL,
         max_tokens=4096,
@@ -33,9 +37,11 @@ def delegate_task(task_description: str, output_file: str) -> str:
         messages=messages,
     )
 
-    # Read output file written by sub-agent (if it did so via tool calls in extended use)
+    result_text = next((b.text for b in response.content if b.type == "text"), "")
+    # Persist the sub-agent's result on its behalf so callers can rely on output_file.
     try:
-        with open(output_file, encoding="utf-8") as f:
-            return f.read()
-    except FileNotFoundError:
-        return next((b.text for b in response.content if b.type == 'text'), '')
+        with open(output_file, "w", encoding="utf-8") as f:
+            f.write(result_text)
+    except OSError:
+        pass
+    return result_text
