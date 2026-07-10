@@ -39,13 +39,86 @@ def survey_baseline(exa, description, log=print) -> str:
     return ""
 
 
+# ---------------------------------------------------------------------------
+# Real benchmark datasets (BUGS B119). For well-known public benchmarks the plan
+# names, load the ACTUAL dataset (real questions + gold answers) instead of
+# Exa-scraping webpage/repo metadata. Falls back to Exa for unknown benchmarks.
+# ---------------------------------------------------------------------------
+_BENCHMARK_ALIASES = {
+    "gsm8k": "gsm8k",
+    "financialphrasebank": "fpb", "fpb": "fpb",
+    "arcchallenge": "arc", "arc": "arc", "ai2arc": "arc", "arcc": "arc",
+}
+
+
+def _norm_bench(s: str) -> str:
+    return "".join(ch for ch in (s or "").lower() if ch.isalnum())
+
+
+def load_benchmark_dataset(plan: dict, log=print, max_train: int = 150, max_test: int = 25):
+    """Return (train, test) from the real benchmark dataset, or None if unknown/failed."""
+    import re as _re
+    key = _BENCHMARK_ALIASES.get(_norm_bench(plan.get("benchmark")))
+    if not key:
+        return None
+    name = plan.get("benchmark")
+    try:
+        from datasets import load_dataset
+        if key == "gsm8k":
+            def conv(ds):
+                out = []
+                for ex in ds:
+                    ans_full = ex["answer"]
+                    m = _re.search(r'####\s*(-?[\d,]+)', ans_full)
+                    final = m.group(1).replace(",", "") if m else ans_full.strip()
+                    cot = _re.sub(r'####.*$', '', ans_full, flags=_re.DOTALL).strip()
+                    out.append({"text": ex["question"], "answer": final,
+                                "cot_reasoning": cot, "label": "math_reasoning"})
+                return out
+            train = conv(load_dataset("openai/gsm8k", "main", split=f"train[:{max_train}]"))
+            test = conv(load_dataset("openai/gsm8k", "main", split=f"test[:{max_test}]"))
+        elif key == "fpb":
+            ds = load_dataset("ChanceFocus/flare-fpb", split="train")
+            rows = [{"text": ex["text"], "label": ex["answer"]}
+                    for ex in ds if ex.get("text") and ex.get("answer")]
+            import random as _rnd
+            _rnd.Random(42).shuffle(rows)
+            train, test = rows[:max_train], rows[max_train:max_train + max_test]
+        elif key == "arc":
+            def conv(ds):
+                out = []
+                for ex in ds:
+                    ch = ex["choices"]
+                    ans = ch["text"][ch["label"].index(ex["answerKey"])] \
+                        if ex["answerKey"] in ch["label"] else ""
+                    out.append({"text": ex["question"], "answer": ans, "label": "generation"})
+                return out
+            train = conv(load_dataset("allenai/ai2_arc", "ARC-Challenge", split=f"train[:{max_train}]"))
+            test = conv(load_dataset("allenai/ai2_arc", "ARC-Challenge", split=f"test[:{max_test}]"))
+        else:
+            return None
+    except Exception as e:
+        log(f"      [acquire] real-benchmark loader failed for {name!r}: {e}; falling back to Exa")
+        return None
+    if not train or not test:
+        return None
+    log(f"      [acquire] loaded REAL benchmark {name!r}: train={len(train)} test={len(test)}")
+    return train, test
+
+
 def acquire_dataset(plan: dict, description: str = "", n_per_label: int = DEFAULT_N_PER_LABEL,
                     test_fraction: float = 0.3, log=print):
     """
-    Acquire a labeled dataset from the web per the task plan.
-    Returns (train_examples, test_examples) as lists of {"text", "label"} dicts
-    (classification) or {"text"} dicts (NER/generation).
+    Acquire a labeled dataset per the task plan.
+    Prefers the real public benchmark dataset when the plan names a known one
+    (B119); otherwise acquires from the web via Exa.
+    Returns (train_examples, test_examples) as lists of {"text", "label", ...} dicts
+    (classification/generation) or {"text", "entities"} dicts (NER).
     """
+    real = load_benchmark_dataset(plan, log=log)
+    if real is not None:
+        return real
+
     from config.config import EXA_API_KEY
     from exa_py import Exa
 
