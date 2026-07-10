@@ -1235,3 +1235,11 @@ marked "passed" that wasn't confirmed from its per-job `logs/slurm/*.out` (the s
 - **Impact:** CRITICAL for structured benchmarks — no gold answers, no real questions. Classification (FinancialPhraseBank) happened to get usable data (SMS reached F1 0.70), so this had been masked. This is the deepest blocker for the generation/NER tasks.
 - **Fix:** NOT applied (design-level). Structured benchmarks should be loaded from their source (e.g. `datasets.load_dataset("openai/gsm8k")`, BC5CDR, ARC) with real question/answer fields, reserving Exa for genuinely open-web tasks. Needs a deliberate acquisition redesign + a check that eval examples carry a gold `answer`.
 - **Status:** 🔴 open (design) — blocks meaningful GSM8K/ARC (and NER) evaluation regardless of the model/scorer fixes.
+
+## B119 (fix applied) -- load real benchmark datasets instead of Exa-scraping
+- **Fix:** Added `load_benchmark_dataset()` in `data/loaders/web_acquire.py` and call it first in `acquire_dataset()`. Known benchmarks load their REAL data (verified on the login node):
+  - GSM8K → `openai/gsm8k` (question + gold final number + real CoT solution)
+  - FinancialPhraseBank → `ChanceFocus/flare-fpb` (sentence + sentiment label)
+  - ARC-Challenge → `allenai/ai2_arc` (question + correct-choice text)
+  Unknown benchmarks (e.g. BC5CDR) still fall back to the Exa path. Datasets are small parquet downloads (fine on compute nodes with HF_HUB_DISABLE_XET=1).
+- **Status:** 🟢 fixed for GSM8K/FPB/ARC (rerun to confirm end-to-end scores). BC5CDR NER still uses Exa+Claude annotation.
