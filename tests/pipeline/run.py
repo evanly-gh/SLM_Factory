@@ -182,6 +182,7 @@ from agent.nodes.cold_start.hardware_research import research_device
 
 log(f"=== SLM Factory cold-start  (run {TS}) ===")
 log(f"task: {description}")
+log(f"model selection strategy: {config.MODEL_SELECTION_STRATEGY}")
 log(f"turn budget: {config.MAX_TURNS_MAIN}")
 log(f"orchestrator model: {config.ORCHESTRATOR_MODEL}  |  judge model: {config.JUDGE_MODEL}")
 log("")
@@ -244,6 +245,7 @@ initial_state = {
     "regression_set": None,
     "replay_buffer": None,
     "turn_budget": config.MAX_TURNS_MAIN,
+    "_largest_first_phase": None,
     "_pending_weights_refs": None,
     "_pending_training_outputs": None,
     "_pending_configs": None,

@@ -62,6 +62,17 @@ TEACHER_MODEL_GPT = os.environ.get("SLM_TEACHER_MODEL_GPT", "gpt-4.1")
 # ORCHESTRATOR_MODEL change moves the Claude CoT teacher with it.
 TEACHER_MODEL_CLAUDE = os.environ.get("SLM_TEACHER_MODEL_CLAUDE", ORCHESTRATOR_MODEL)
 
+# --- Model selection strategy ---
+# Which approach to use for initial model selection from the feasible set.
+# Override per-run with SLM_MODEL_SELECTION_STRATEGY.
+#   "smallest_first"      — start smallest, escalate on failure (no probing)
+#   "largest_first"       — probe largest for feasibility, then start smallest
+#   "interpolation"       — 3-probe scaling curve, pick closest to RAM target
+#   "orchestrator_choice" — LLM picks based on task context (no probing)
+MODEL_SELECTION_STRATEGY = os.environ.get(
+    "SLM_MODEL_SELECTION_STRATEGY", "smallest_first"
+)
+
 MAX_TURNS_MAIN = 1500
 
 DEFAULT_STOP_THRESHOLD = 0.96
