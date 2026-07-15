@@ -59,6 +59,9 @@ class AgentState(TypedDict):
     replay_buffer: Optional[list[dict]]   # D_replay ⊂ D_parent (10-20%)
     turn_budget: int                      # 1500 cold-start, 500 production
 
+    # Model selection strategy state
+    _largest_first_phase: Optional[str]   # "probe" | "escalate" | "done" (largest_first strategy only)
+
     # Internal: carry training results between train_node and evaluate_node
     _pending_weights_refs: Optional[dict]  # label -> weights_ref
     _pending_training_outputs: Optional[dict]  # label -> TrainingOutput

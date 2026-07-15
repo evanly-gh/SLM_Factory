@@ -27,9 +27,14 @@ Runs in `run.py` **before the LangGraph graph is invoked**. Implemented in [agen
 **Writes to state (initial_state):** `hardware_constraints`
 **Decision made:** what the hardware budget is for model selection and hardware-gate checks
 
-**Note on `hardware_filter` (Stages 1+2):** `run_hardware_filter` (implemented in `agent/nodes/cold_start/hardware_filter.py`) runs **inside `task_analysis_node`**, not as a separate pre-graph step. It applies Stage 1 (memory/storage/latency inequality checks) and Stage 2 (on-device benchmark stub, largest→smallest ordering) against `ANDROID_POOL` to produce the `feasible_models` list. This list is written to state by `task_analysis_node` and consumed by `scaling_curve_node`.
+**Note on `hardware_filter` (Stages 1+2):** `run_hardware_filter` (implemented in `agent/nodes/cold_start/hardware_filter.py`) runs **inside `task_analysis_node`**, not as a separate pre-graph step. It applies Stage 1 (memory/storage/latency inequality checks) and Stage 2 (on-device benchmark stub, largest→smallest ordering) against `ANDROID_POOL` to produce the `feasible_models` list. This list is written to state by `task_analysis_node` and consumed by the model selection node.
 
-**Model pool — `ANDROID_POOL`:** The pool now contains **36 entries** — 12 base models each expanded to three quantization siblings (`bf16`, `Q4_K_M`, `Q8_0`). Siblings inherit the base model's param-count tier (not recomputed from the sibling's larger file size). `ANDROID_POOL` is sorted by `(tier, int4_size_mb)`. The `ModelSpec` dataclass includes a `quant` field (`None`, `"Q4_K_M"`, or `"Q8_0"`) alongside the existing fields.
+**Model pool — `ANDROID_POOL` (Qwen-only branch):** The pool contains **9 entries** — 3 Qwen-family base models each expanded to three quantization siblings (`bf16`, `Q4_K_M`, `Q8_0`):
+- `Qwen/Qwen3.5-0.8B` — Gated DeltaNet hybrid, 262K ctx, multimodal
+- `deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B` — Qwen arch, R1 distilled, math/reasoning
+- `unsloth/Qwen3.5-2B-GGUF` — Gated DeltaNet hybrid, 262K ctx, multimodal
+
+`ANDROID_POOL` is sorted by `(tier, size_mb)`. The `ModelSpec` dataclass includes a `quant` field (`None`, `"Q4_K_M"`, or `"Q8_0"`) alongside the existing fields.
 
 ---
 
@@ -41,7 +46,7 @@ Entry point for cold-start. Reads `state["description"]` and `state["autonomous"
 
 - If autonomous mode (or no valid `task_type` provided), calls `plan_task()` — a Claude Sonnet call that returns `task_type`, `task_name`, `labels`, `multi_label`, `schema`, `multilingual`, `exa_queries`, `benchmark`, `stop_threshold`, and `rationale` as JSON.
 - Valid task types: `classification`, `NER`, `math_reasoning`, `code_generation`, `generation`. Variants (multi-label classification, schema-constrained extraction, multilingual tasks) are expressed as flags on the plan dict, not separate types.
-- Calls `run_hardware_filter(hardware_constraints, ANDROID_POOL)` internally (Stages 1+2) to produce `feasible_models` — the hardware-feasible subset of the pool, sorted largest→smallest by `int4_size_mb` descending. This list is written to `state["feasible_models"]`. **`task_analysis_node` does NOT set `selected_model`**; model selection is deferred to `scaling_curve_node`.
+- Calls `run_hardware_filter(hardware_constraints, ANDROID_POOL)` internally (Stages 1+2) to produce `feasible_models` — the hardware-feasible subset of the pool, sorted largest→smallest by `size_mb` descending. This list is written to `state["feasible_models"]`. **`task_analysis_node` does NOT set `selected_model`**; model selection is deferred to the configurable `model_selection` node.
 - Sets `state["stop_threshold"]` from the planner's output (calibrated relative to model-size SOTA, not a fixed 0.96) and records `state["initial_stop_threshold"]` as the immutable floor.
 
 **Writes to state:** `task_type`, `task_plan`, `feasible_models`, `stop_threshold`, `initial_stop_threshold`
@@ -49,27 +54,52 @@ Entry point for cold-start. Reads `state["description"]` and `state["autonomous"
 
 ---
 
-### Node 1b: `scaling_curve` (new)
+### Node 1b: `model_selection` (configurable strategy)
 
-**Purpose:** Select the smallest model from `feasible_models` that is predicted to meet the accuracy goal, using a lightweight probe-and-fit approach. Avoids committing to an over-sized model when a smaller one would suffice.
+**Purpose:** Select the initial model from `feasible_models` for LoRA fine-tuning. The strategy is configurable via `config.config.MODEL_SELECTION_STRATEGY` (env: `SLM_MODEL_SELECTION_STRATEGY`).
 
-**Input state fields:** `feasible_models`, `stop_threshold`, `eval_set`, `current_dataset_path`, `task_type`
+**Input state fields:** `feasible_models`, `stop_threshold`, `eval_set`, `current_dataset_path`, `task_type`, `hardware_constraints`, `description`, `task_plan`
 
 **Output state fields:** `selected_model`
 
+**Position in graph:** `eval_setup → model_selection → curate`
+
+**Available strategies** (defined in `agent/nodes/cold_start/model_selection/`):
+
+#### `smallest_first` (default)
+
+Start with the smallest feasible model (lowest peak RAM). If the training loop stagnates, normal escalation moves to the next tier up. No probing overhead — the first training cycle uses the production config.
+
+**Algorithm:** `state["selected_model"] = min(feasible, key=peak_memory_mb)`
+
+#### `largest_first`
+
+Start with the largest feasible model to probe whether the task is solvable within the hardware budget. If the largest model reaches the accuracy goal, switch to the smallest model and escalate from there (resource-optimized). If the largest model stagnates without reaching the goal, terminate early — the task is infeasible.
+
+**Algorithm:**
+1. `state["selected_model"] = max(feasible, key=peak_memory_mb)`
+2. Set `state["_largest_first_phase"] = "probe"`
+3. On iterate: if probe model reaches threshold → switch to smallest, reset scores, `next_action = "curate"`
+4. On iterate: if probe model stagnates → `next_action = "terminate"` (task infeasible)
+
+#### `interpolation`
+
+Probe 3 models (smallest, middle, largest from feasible set) with 1-epoch LoRA training, fit a log-linear accuracy-vs-size curve, then select the model whose peak RAM is closest to the hardware memory budget while still meeting the accuracy goal. (Refined version of the original `scaling_curve` approach from the paper.)
+
 **Algorithm:**
 1. Pick 3 candidates (largest, middle, smallest) from `feasible_models`.
-2. For each candidate: run a 1-epoch LoRA probe fine-tune on `current_dataset_path`, eval on `eval_set`, record `(log(int4_size_mb), f1)`.
-3. Fit `f1 = a * log(size) + b` via least-squares.
-4. Walk models smallest→largest; select the first whose predicted f1 ≥ `stop_threshold`. If none meet the threshold, select the largest.
-5. Write the winner to `state["selected_model"]`.
+2. For each: 1-epoch LoRA probe → record `(log(params), f1)`.
+3. Fit `f1 = a * log(params) + b` via least-squares.
+4. Filter models whose predicted f1 ≥ `stop_threshold`.
+5. From qualifiers, pick the one closest to `hardware_constraints.memory_mb`.
+6. If no qualifier, fall back to the highest-capability model.
 
-**Position in graph:** `eval_setup → scaling_curve → curate`
+#### `orchestrator_choice`
 
-**Known limitation — first cold-start run:** On the very first cold-start run, `current_dataset_path` is `None` (it is set by `curate_node`, which runs after `scaling_curve`). When this field is `None`, `_probe_model` builds a temporary seed dataset from the `eval_set` examples (`pos + neg + boundary`) and still runs the 1-epoch probe, producing a real ranking signal. Probing is only truly skipped (probe returns 0.0, causing `scaling_curve_node` to fall back to selecting the smallest feasible model) when **both** `current_dataset_path` and `eval_set` are unavailable — an unlikely condition in normal operation. The caller may pre-populate `current_dataset_path` in the initial state with a seed dataset to bypass the eval-set seed path from the first run.
+Let the orchestrator LLM choose the starting model directly, using the task type, task plan, benchmark affinities, and hardware constraints as context. No probing overhead — single API call. Falls back to the largest feasible model if the LLM call fails.
 
-**Writes to state:** `selected_model`
-**Decision made:** which model to fine-tune, based on predicted accuracy-vs-size trade-off
+**Writes to state:** `selected_model`, optionally `_largest_first_phase`
+**Decision made:** which model to fine-tune first
 
 ---
 
@@ -268,7 +298,7 @@ Reached from `iterate` when `current_score >= stop_threshold`, `downward_probe_d
 [hardware_research]  (pre-graph, run.py)
         │
         ▼
-task_analysis → eval_setup → scaling_curve → curate → train → evaluate
+task_analysis → eval_setup → model_selection → curate → train → evaluate
                                                   │
                       ┌── score regressed? ───────┤
                       ↓ yes                        ↓ no
@@ -310,6 +340,8 @@ task_analysis → eval_setup → scaling_curve → curate → train → evaluate
 7. **Curate early-returns for any intervention that isn't `data_rebuild` or `surgical`.** The `else` branch catches `"hyperparameter"`, `"rollback"`, and any other value — returning state unchanged with no disk writes.
 8. **Escalation trigger is delta-based, not count-based.** `escalate` fires when the total improvement across the last 3 evaluations is < 0.02 — slow but real progress does not trigger it, only genuine plateaus.
 9. **`stop_threshold` can be lowered at runtime, never raised.** `iterate_node` may lower it when the LLM identifies OOD failures, but it is clamped to `initial_stop_threshold` as a hard floor.
+10. **Model selection strategy is configurable.** Set `MODEL_SELECTION_STRATEGY` in config (or `SLM_MODEL_SELECTION_STRATEGY` env var). All strategies share the same interface: `(AgentState) → AgentState`, setting `state["selected_model"]`. The `largest_first` strategy additionally uses `state["_largest_first_phase"]` to coordinate with `iterate_node`.
+11. **Model pool is Qwen-only.** The `ANDROID_POOL` contains 3 Qwen-family base models (9 entries total with quant variants). All models share the same tokenizer lineage and MNN-LLM compatibility.
 
 ---
 
@@ -320,8 +352,8 @@ Key fields that flow through every node:
 | Field | Type | Set by | Used by |
 |---|---|---|---|
 | `task_type` | str | `task_analysis` | all nodes |
-| `feasible_models` | `list[ModelSpec]` | `task_analysis` | `scaling_curve` |
-| `selected_model` | `ModelSpec` | `scaling_curve`, `escalate` | `train`, `evaluate`, `escalate` |
+| `feasible_models` | `list[ModelSpec]` | `task_analysis` | `model_selection` |
+| `selected_model` | `ModelSpec` | `model_selection`, `escalate` | `train`, `evaluate`, `escalate` |
 | `hardware_constraints` | `HardwareConstraints` | `hardware_research` (pre-graph) | `task_analysis`, `escalate` |
 | `stop_threshold` | float | `task_analysis`, `iterate` | `iterate` |
 | `initial_stop_threshold` | float | `task_analysis` | `iterate` (floor for threshold adjustments) |
@@ -329,6 +361,7 @@ Key fields that flow through every node:
 | `train_examples` | list | `eval_setup` | `curate` |
 | `current_dataset_path` | str | `curate` | `train`, `escalate` (carried forward) |
 | `dataset_version` | int | `curate` | `evaluate` (logging) |
+| `_largest_first_phase` | str or None | `largest_first` model selection, `iterate` | `iterate` (gates probe→smallest switch) |
 | `_pending_weights_refs` | dict | `train` | `evaluate` |
 | `_pending_configs` | dict | `train` | `evaluate` |
 | `_pending_training_outputs` | dict | `train` | *(reserved; not currently consumed by any node)* |
