@@ -9,10 +9,15 @@ import json
 from training.lora_trainer import TrainingConfig, TrainingOutput, run_lora_training
 
 # Lazy-loaded inference model cache: weights_ref -> (model, tokenizer).
-# Limited to _MAX_CACHED models to avoid OOM on long runs (B47).
+# Capped at _MAX_CACHED=1 (B142): evaluation is sequential (one checkpoint at a time),
+# and holding several FULL-PRECISION models resident — especially the 4B tier-3 models —
+# fills VRAM. When VRAM runs low Unsloth/accelerate silently offload layers to the CPU
+# ("Some parameters are on the meta device"), and Unsloth's fast-generate then crashes
+# with `ValueError: Invalid target device: None`. Keeping only the current model resident
+# (and emptying the CUDA cache on eviction) leaves the whole GPU for it.
 _inference_cache: dict = {}
 _cache_order: list = []
-_MAX_CACHED = 3
+_MAX_CACHED = 1
 
 # GGUF inference cache: gguf_path -> Llama instance.
 _gguf_cache: dict = {}

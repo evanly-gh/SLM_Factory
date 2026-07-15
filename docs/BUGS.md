@@ -1417,3 +1417,28 @@ Driven by a review of CoNLL/biomedical-NER run 36989405 (`logs/slurm/slm-conll-n
 - **What:** Replaced single-pass Exa scraping with a 3-stage ladder: (1) real benchmark loader (B131/B119); (2) **bounded, diversified** Exa rounds — up to `MAX_ACQUIRE_ROUNDS=3`, each round rephrases queries (`_diversify_query`) so re-runs fetch NEW docs (not duplicates), deduped, stopping at `target_examples`; (3) if still below the viability floor (`target*0.5`), **verified synthesis** (`synthesize_seed_examples`) tops up with orchestrator-generated, deduped, label-validated examples. `target_examples` is an UPPER bound (quality-over-quantity), passed per task type from `eval_setup`. Provenance (web vs synth counts) logged and stored in `state["data_source"]`.
 - **Why not the literal "rerun Exa forever + generate to the cap" plan:** more noisy web docs amplify label noise (B119); identical re-runs return duplicates; unbounded retries risk cost blowup; unfiltered synthesis trains on the teacher's hallucinations. The ladder bounds retries, diversifies queries, and validates/dedups synthetic gold.
 - **Status:** 🟢 implemented (synthesis path needs live API keys to exercise end-to-end).
+
+---
+
+## Live escalation run (job 37110415) — bugs caught — 2026-07-15 (B141–B143)
+
+Caught while running `run_qwen_escalation.slurm` end-to-end (the run validated the whole loop
+through tier-0→3 escalation before hitting B142; see the run report).
+
+## B141 -- annotate_cot regenerated gold CoT that the benchmark already provides
+- **Where:** `data/curriculum.py` (`annotate_cot`)
+- **How found:** the run sat ~15 min in "CoT annotation" per curate. The GSM8K loader ships REAL gold `cot_reasoning` for all 300 gold examples, but `annotate_cot` called the teacher for every one anyway — 300 sequential Haiku calls per curate, per tier — AND replaced the gold CoT with a weaker teacher CoT.
+- **Fix:** `annotate_cot` now (1) skips examples that already carry a non-empty `cot_reasoning` (preserves gold), and (2) runs the remaining calls concurrently (ThreadPoolExecutor, ≤16 workers). For GSM8K this makes CoT annotation instant.
+- **Status:** 🟢 fixed.
+
+## B142 -- tier-3 (4B) inference crashed: "Invalid target device: None" (VRAM/meta offload)
+- **Where:** `training/slm_helpers.py` (inference cache), `training/lora_trainer.py` (post-train cleanup)
+- **How found:** on the 4B tier-3 model, iteration 4's eval crashed with `ValueError: Invalid target device: None` from Unsloth's `move_to_device`. The preceding log line was accelerate's "Some parameters are on the meta device because they were offloaded to the cpu" — i.e. VRAM was full, so the 4B model was partially offloaded to CPU, and Unsloth fast-generate then got a `None` device. The inference cache held up to 3 FULL-PRECISION models and the just-trained model's VRAM was never freed. (The partial offload also likely corrupted iters 2–3, explaining the tier-3 score collapse 0.333→0.042→0.014.)
+- **Fix:** inference cache `_MAX_CACHED` 3→1 (eval is sequential; evicting frees VRAM + `empty_cache`), and `_run_unsloth_training` now `del`s the trained model + `torch.cuda.empty_cache()` before returning so the checkpoint loads for eval on a clear GPU.
+- **Status:** 🟢 fixed; **re-verification blocked** — a clean re-run could not complete because the Anthropic API ran out of credits (billing, not code). The fix is unit-safe and addresses the exact offload cause.
+
+## B143 -- device DB matcher dropped 2-digit model numbers ("OnePlus 12")
+- **Where:** `agent/nodes/cold_start/hardware_research.py` (`_lookup_local_db`)
+- **How found:** the run logged "No match in local DB ... falling back to Exa" for "OnePlus 12" even though it's in `devices.csv`. The matcher kept only 4-digit numbers, so "12" was dropped → only "oneplus" matched (1 < the ≥2 threshold).
+- **Fix:** keep short bare numbers (≤4 digits) as keywords — they are model numbers ("12", "8") or years. Verified all four test devices + OnePlus 12 now resolve locally (no Exa fallback).
+- **Status:** 🟢 fixed.

@@ -87,17 +87,16 @@ def annotate_cot(
     Returns examples with an added 'cot_reasoning' field. The CoT is prepended to the
     response during training formatting. The prompt is task-aware: code-generation gets
     an implementation-plan style explanation rather than a prose math-style derivation.
-    """
-    annotated = []
-    for ex in examples:
-        prompt_text = ex.get("prompt", ex.get("text", ""))
-        gold_answer = ex.get("response", ex.get("label", ex.get("answer", "")))
-        if not prompt_text or not gold_answer:
-            annotated.append(ex)
-            continue
 
+    Efficiency (B141): examples that ALREADY carry a non-empty 'cot_reasoning' are left
+    untouched — e.g. the GSM8K loader ships real gold chains-of-thought, so re-generating
+    them via the teacher was both wasteful (300 sequential calls per curate, per tier) and
+    quality-reducing (gold CoT replaced by a weaker teacher CoT). The examples that DO need
+    annotation are processed concurrently with a bounded thread pool.
+    """
+    def _build_prompt(prompt_text: str, gold_answer: str) -> str:
         if task_type == "code_generation":
-            cot_prompt = (
+            return (
                 f"Explain the reasoning behind this code solution as a concise implementation "
                 f"plan a developer would follow: the approach, key steps, and any edge cases "
                 f"handled. Do NOT restate the full code.\n\n"
@@ -106,15 +105,23 @@ def annotate_cot(
                 f"Reply with only the step-by-step implementation reasoning, not the code and "
                 f"not the final answer."
             )
-        else:
-            cot_prompt = (
-                f"Solve this problem step by step, showing your reasoning clearly.\n\n"
-                f"Problem: {prompt_text}\n\n"
-                f"The correct answer is: {gold_answer}\n\n"
-                f"Provide a clear step-by-step explanation of how to arrive at this answer. "
-                f"Reply with only the reasoning steps, not the final answer."
-            )
+        return (
+            f"Solve this problem step by step, showing your reasoning clearly.\n\n"
+            f"Problem: {prompt_text}\n\n"
+            f"The correct answer is: {gold_answer}\n\n"
+            f"Provide a clear step-by-step explanation of how to arrive at this answer. "
+            f"Reply with only the reasoning steps, not the final answer."
+        )
 
+    def _annotate_one(ex: dict) -> dict:
+        # Preserve any existing gold CoT (e.g. GSM8K) — do not regenerate.
+        if str(ex.get("cot_reasoning", "")).strip():
+            return ex
+        prompt_text = ex.get("prompt", ex.get("text", ""))
+        gold_answer = ex.get("response", ex.get("label", ex.get("answer", "")))
+        if not prompt_text or not gold_answer:
+            return ex
+        cot_prompt = _build_prompt(prompt_text, gold_answer)
         try:
             if client_type == "openai":
                 resp = teacher_client.chat.completions.create(
@@ -130,11 +137,24 @@ def annotate_cot(
                     messages=[{"role": "user", "content": cot_prompt}],
                 )
                 cot = resp.content[0].text.strip()
-
-            annotated.append({**ex, "cot_reasoning": cot})
+            return {**ex, "cot_reasoning": cot}
         except Exception:
-            annotated.append(ex)
+            return ex
 
+    # Only spend API calls on examples that actually need a CoT.
+    need_idx = [i for i, ex in enumerate(examples)
+                if not str(ex.get("cot_reasoning", "")).strip()
+                and (ex.get("prompt") or ex.get("text"))
+                and (ex.get("response") or ex.get("label") or ex.get("answer"))]
+    if not need_idx:
+        return list(examples)
+
+    from concurrent.futures import ThreadPoolExecutor
+    annotated = list(examples)
+    max_workers = min(16, len(need_idx))
+    with ThreadPoolExecutor(max_workers=max_workers) as pool:
+        for i, result in zip(need_idx, pool.map(lambda i: _annotate_one(examples[i]), need_idx)):
+            annotated[i] = result
     return annotated
 
 
