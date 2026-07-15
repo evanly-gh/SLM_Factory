@@ -149,11 +149,19 @@ def curate_node(state: AgentState) -> AgentState:
         _pool = list(failures) + list(train_examples)
         _random.Random(rebuild_seed).shuffle(_pool)
         source_examples = _pool[:n_hard_effective] if len(_pool) >= n_hard_effective else _pool
+        # Rotate the generation temperature per rebuild so successive data_rebuild rounds
+        # produce genuinely DIFFERENT negatives (not a byte-identical regeneration) — this
+        # is what gives the "variety of data" the rebuild is supposed to provide even when
+        # the gold pool is fixed. Cycles 0.7 → 0.9 → 1.1 → 0.7 ...
+        _rebuild_temps = [0.7, 0.9, 1.1]
+        gen_temperature = _rebuild_temps[int(state.get("dataset_version", 0)) % len(_rebuild_temps)]
+        _log(model_id, f"  Hard-negative generation temperature: {gen_temperature} (rotates per rebuild for variety)")
         hard = synthesize_hard_negatives(
             source_examples,
             n=n_hard_effective,
             anthropic_client=client,
             task_type=task_type,
+            temperature=gen_temperature,
         )
         _log(model_id, f"  Hard negatives synthesized: {len(hard)} (source: LLM {'; math/code return gold unchanged' if task_type in ('math_reasoning', 'code_generation') else 'contrastive generation'})")
 

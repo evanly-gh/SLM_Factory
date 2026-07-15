@@ -68,6 +68,7 @@ def test_evaluate_node_uses_bf16_path_when_quant_none(mock_hw, mock_profile, moc
     assert call_kwargs.get("quant") is None
 
 
+@patch("agent.nodes.evaluate.config.HW_ONDEVICE_BACKEND", "smolchat")
 @patch("agent.nodes.evaluate.apply_iteration_policy", return_value={"band": "good", "intervention": "hyperparameter"})
 @patch("agent.nodes.evaluate.quantize_from_model_spec", return_value="/gguf/model.gguf")
 @patch("agent.nodes.evaluate.merge_for_quantization", return_value="/merged/checkpoint")

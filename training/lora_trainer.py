@@ -8,6 +8,26 @@ TrainingOutput = collections.namedtuple("TrainingOutput", ["weights_ref", "gguf_
 VALID_LORA_RANKS = {4, 8, 16, 32, 64}
 
 
+def text_tokenizer(tok):
+    """Return the underlying TEXT tokenizer for a possibly-multimodal load.
+
+    Multimodal models (e.g. Qwen3.5, Gemma-3n) load as a *processor* that wraps a
+    text tokenizer plus an image/video processor. Calling `apply_chat_template` /
+    tokenizing text through the processor routes the text into the vision path and
+    crashes ("Incorrect image source ... Got <|im_start|>user", BUGS B123). The text
+    tokenizer is exposed as processor.tokenizer — use it directly for text-only LoRA
+    so the vision processor is never involved. For plain text models this is a no-op.
+    """
+    # Only unwrap for an actual multimodal *Processor* class (e.g. Qwen2VLProcessor,
+    # Gemma3Processor). Gate on the class name so a plain text tokenizer — or a test
+    # MagicMock, which auto-creates a `.tokenizer` attribute — is never unwrapped.
+    if type(tok).__name__.endswith("Processor"):
+        inner = getattr(tok, "tokenizer", None)
+        if inner is not None and hasattr(inner, "apply_chat_template"):
+            return inner
+    return tok
+
+
 def _ensure_model_cached(model_id: str, retries: int = 3, log=print) -> None:
     """Robustly pre-populate the HF cache for a hub model before Unsloth loads it.
 
@@ -81,6 +101,10 @@ def _run_unsloth_training(
         # will not load without this — transformers raises and asks for it explicitly.
         trust_remote_code=True,
     )
+
+    # Multimodal models load as a processor; use the inner text tokenizer for text-only
+    # LoRA so the vision path is never exercised (B123). No-op for plain text models.
+    tokenizer = text_tokenizer(tokenizer)
 
     if config.lora_rank is not None:
         model = FastLanguageModel.get_peft_model(

@@ -23,8 +23,8 @@ logger = logging.getLogger(__name__)
 def run_hardware_filter(constraints: HardwareConstraints) -> list[ModelSpec]:
     """
     Return models that pass both stages, sorted largest→smallest
-    (by size_mb descending within tier) so scaling_curve_node
-    can slice small/medium/large candidates from the ends and middle.
+    (by size_mb descending within tier) so the model_selection node
+    (interpolation strategy) can slice small/medium/large candidates.
 
     Stage 1: filter_pool() inequality checks (storage, memory, min_tok_s).
     Stage 2: on-device eval from largest candidate downward; discard failures.

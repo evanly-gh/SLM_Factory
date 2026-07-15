@@ -2,6 +2,20 @@
 
 This document records the research behind `android_pool.py` for future reference. It covers what has actually been run on Android hardware, why the pool is structured the way it is, the justification for each individual model, and SLM Factory-specific considerations.
 
+> **⚠️ STATUS (2026-07-15) — read `config/android_pool.py` for the live pool; this doc is historical rationale for the broader candidate set.** Two things below are now out of date:
+> 1. **The shipped pool is QWEN-ONLY**: 6 Qwen-family base models → 18 variants (Q4_K_M/Q8_0/BF16):
+>    `unsloth/Qwen3-0.6B`, `Qwen/Qwen2.5-1.5B-Instruct`, `deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B`,
+>    `Qwen/Qwen2.5-3B-Instruct`, `Qwen/Qwen3.5-0.8B` (multimodal), `Qwen/Qwen3.5-2B` (multimodal).
+>    The non-Qwen models described below (MiniCPM4/5, Gemma3/3n, Llama-3.2, Phi-4-mini, Ministral,
+>    SmolLM2) are **not** in the current pool — several were dropped for load/train incompatibility
+>    on transformers 5.5.0 (BUGS B111/B116/B121) and the pool was narrowed to Qwen for controlled
+>    model-selection ablation.
+> 2. **Tiering is by PEAK RAM, not parameter count.** §3 below describes a `params_b = int4_size_mb*2/1000`
+>    formula; the code actually buckets each variant by `peak_memory_mb` (`_ram_tier`: <750 / 750–1500 /
+>    1500–2500 / ≥2500 MB), so a model's Q4/Q8/BF16 variants can land in different tiers. The multimodal
+>    Qwen3.5 models are fine-tuned text-only via `training.lora_trainer.text_tokenizer()` (B123), and
+>    Qwen3.5-2B uses the base transformers repo, never `-GGUF` (B107).
+
 ---
 
 ## 1. What Has Been Run on Android and What Happened

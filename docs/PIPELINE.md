@@ -29,15 +29,17 @@ Runs in `run.py` **before the LangGraph graph is invoked**. Implemented in [agen
 
 **Note on `hardware_filter` (Stages 1+2):** `run_hardware_filter` (implemented in `agent/nodes/cold_start/hardware_filter.py`) runs **inside `task_analysis_node`**, not as a separate pre-graph step. It applies Stage 1 (memory/storage/latency inequality checks) and Stage 2 (on-device benchmark stub, largest→smallest ordering) against `ANDROID_POOL` to produce the `feasible_models` list. This list is written to state by `task_analysis_node` and consumed by the model selection node.
 
-**Model pool — `ANDROID_POOL` (Qwen-only, text-only):** The pool contains **12 entries** — 4 Qwen-family **text-only** base models each expanded to three quantization siblings (`bf16`, `Q4_K_M`, `Q8_0`):
+**Model pool — `ANDROID_POOL` (Qwen family):** The pool contains **18 entries** — 6 Qwen-family base models each expanded to three quantization siblings (`bf16`, `Q4_K_M`, `Q8_0`):
 - `unsloth/Qwen3-0.6B` — text-only; Tier 0 seed
 - `Qwen/Qwen2.5-1.5B-Instruct` — text-only general 1.5B; Tier 1 seed
 - `deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B` — Qwen arch, R1 distilled, math/reasoning; Tier 1 seed
 - `Qwen/Qwen2.5-3B-Instruct` — text-only, top-capability; Tier 2/3 seed
+- `Qwen/Qwen3.5-0.8B` — **multimodal**; text-only LoRA via `text_tokenizer()`
+- `Qwen/Qwen3.5-2B` — **multimodal**; base transformers repo (not `-GGUF`); text-only LoRA via `text_tokenizer()`
 
-Tier coverage after quant expansion: tier 0 ×1, tier 1 ×3, tier 2 ×4, tier 3 ×4 — so escalation can walk tiers 0→3 on a large-enough device. `ANDROID_POOL` is sorted by `(tier, size_mb)`. The `ModelSpec` dataclass includes a `quant` field (`None`, `"Q4_K_M"`, or `"Q8_0"`).
+Tier coverage after quant expansion: tier 0 ×2, tier 1 ×4, tier 2 ×6, tier 3 ×6 — so escalation can walk tiers 0→3. `ANDROID_POOL` is sorted by `(tier, size_mb)`. `ModelSpec` includes `quant` (`None`/`"Q4_K_M"`/`"Q8_0"`) and `multimodal` (bool).
 
-> **B123 reconciliation:** the `qwen-only` branch originally seeded the multimodal `Qwen/Qwen3.5-0.8B` and `unsloth/Qwen3.5-2B-GGUF`, which crash text-only LoRA on this stack (the vision processor rejects the text chat template). The merge swapped them for the text-only Qwen models above, preserving the qwen-only intent while keeping the pipeline runnable. Re-add the Qwen3.5 multimodal seeds only behind a vision-aware trainer.
+> **Multimodal handling (B123/B107):** the two Qwen3.5 models are natively multimodal (image-text-to-text) and load as a *processor*. Text-only LoRA works because `training.lora_trainer.text_tokenizer()` extracts the inner text tokenizer so the vision path is never exercised (used in both `lora_trainer` and `slm_helpers`). Qwen3.5-2B uses the **base** transformers repo `Qwen/Qwen3.5-2B`, never the `-GGUF` repo (which has no transformers config and cannot be fine-tuned). Multimodal LoRA on this stack is **best-effort / unverified** without a GPU run; the four text-only Qwen models are the reliable path and `smallest_first` starts on one of them (Qwen3-0.6B).
 
 ---
 
@@ -347,7 +349,7 @@ task_analysis → eval_setup → model_selection → curate → train → evalua
 8. **Escalation trigger is delta-based, not count-based.** `escalate` fires when the total improvement across the last 3 evaluations is < 0.02 — slow but real progress does not trigger it, only genuine plateaus.
 9. **`stop_threshold` can be lowered at runtime, never raised.** `iterate_node` may lower it when the LLM identifies OOD failures, but it is clamped to `initial_stop_threshold` as a hard floor.
 10. **Model selection strategy is configurable.** Set `MODEL_SELECTION_STRATEGY` in config (or `SLM_MODEL_SELECTION_STRATEGY` env var). All strategies share the same interface: `(AgentState) → AgentState`, setting `state["selected_model"]`. The `largest_first` strategy additionally uses `state["_largest_first_phase"]` to coordinate with `iterate_node`.
-11. **Model pool is Qwen-only (text-only).** The `ANDROID_POOL` contains 4 text-only Qwen-family base models (12 entries with quant variants), spanning tiers 0–3. All share the same tokenizer lineage and MNN-LLM compatibility. The multimodal Qwen3.5 seeds from the `qwen-only` branch were swapped out (B123) because they crash text-only LoRA.
+11. **Model pool is Qwen-only.** The `ANDROID_POOL` contains 6 Qwen-family base models (18 entries with quant variants), spanning tiers 0–3: 4 text-only + 2 multimodal (Qwen3.5). Multimodal models are fine-tuned text-only via `text_tokenizer()` (B123); Qwen3.5-2B uses the base repo, not `-GGUF` (B107).
 
 ---
 

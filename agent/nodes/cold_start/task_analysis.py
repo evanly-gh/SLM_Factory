@@ -29,9 +29,10 @@ def task_analysis_node(state: AgentState) -> AgentState:
     """
     Node 1: classify the task, filter hardware pool, set stop threshold.
 
-    Does NOT select the final model — that is done by scaling_curve_node (Node 1b)
-    after fine-tuning 3 candidates. Stores the hardware-filtered feasible set in
-    state["feasible_models"] for scaling_curve_node to consume.
+    Does NOT select the final model — that is done by the configurable
+    `model_selection` node (Node 1b, agent/nodes/cold_start/model_selection/).
+    Stores the hardware-filtered feasible set in state["feasible_models"] for the
+    model_selection node to consume.
     """
     task_type = state.get("task_type", "")
     need_plan = state.get("autonomous") or task_type not in _VALID_TASK_TYPES
@@ -71,14 +72,13 @@ def task_analysis_node(state: AgentState) -> AgentState:
     if not feasible:
         raise RuntimeError("No models in Android pool satisfy hardware constraints.")
 
-    # Sort largest→smallest for scaling_curve_node which relies on
-    # feasible[0] = largest and feasible[-1] = smallest.
+    # Sort largest→smallest. The model_selection strategies read feasible_models;
+    # interpolation relies on feasible[0]=largest / feasible[-1]=smallest.
     feasible = sorted(feasible, key=lambda m: m.size_mb, reverse=True)
     state["feasible_models"] = feasible
 
     if not state.get("stop_threshold"):
         state["stop_threshold"] = 0.96
 
-    # selected_model is intentionally NOT set here.
-    # scaling_curve_node sets it after probing candidates.
+    # selected_model is intentionally NOT set here — the model_selection node does it.
     return state

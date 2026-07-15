@@ -1370,3 +1370,32 @@ Driven by a review of CoNLL/biomedical-NER run 36989405 (`logs/slurm/slm-conll-n
 - **Added testing knob:** `SLM_STOP_THRESHOLD` env override in `task_analysis_node` — pins the stop threshold (and its floor) so a validation run can be steered deterministically (e.g. above the pool's best benchmark to force escalation through every tier).
 - **Validation test:** `tests/pipeline/run_qwen_escalation.slurm` — GSM8K on a 16 GB device with `smallest_first` + `SLM_STOP_THRESHOLD=0.90`, designed to walk tier 0→3 and exercise data_rebuild / hyperparameter / rollback / escalate / terminate. (downward_probe + surgical are mutually exclusive with full-tier escalation and are covered by a documented complementary run.)
 - **Status:** 🟢 merged; all 29 model-selection + iterate + pool tests pass with full deps.
+
+---
+
+## Cleanup + Qwen3.5 support pass — 2026-07-15 (B135–B138)
+
+## B135 -- dead code removed
+- **Where:** `agent/nodes/cold_start/scaling_curve.py`, `tests/cold_start/test_scaling_curve.py`, `training/on_device_eval.py`
+- **When:** 2026-07-15
+- **What:** `scaling_curve.py` was replaced by the `model_selection/` package at merge time (graph no longer imports it; `interpolation.py` is its successor) — deleted with its test. `training/on_device_eval.py` was unified into `hardware_eval/on_device_eval.py` and imported by nothing — deleted. Stale `scaling_curve_node` references in `task_analysis.py`/`hardware_filter.py` comments updated to `model_selection`.
+- **Status:** 🟢 done.
+
+## B136 -- Qwen3.5 multimodal LoRA support (text-only path)
+- **Where:** `training/lora_trainer.py` (`text_tokenizer()`), `training/slm_helpers.py`, `config/android_pool.py`
+- **When:** 2026-07-15 (user: "make the pipeline work for Qwen 3.5")
+- **How addressed:** Qwen3.5 is natively multimodal and loads as a *processor*; text-only LoRA previously crashed ("Incorrect image source ... Got <|im_start|>user", B123) because the vision processor received the text chat template. Added `text_tokenizer()`, which unwraps the processor's inner text tokenizer (gated on the class name ending in "Processor" so plain tokenizers / test mocks are untouched) and is applied in both training and inference. Re-added `Qwen/Qwen3.5-0.8B` and `Qwen/Qwen3.5-2B` to the pool with a `multimodal=True` `ModelSpec` flag, using the BASE transformers repo (not `-GGUF`, B107).
+- **Status:** 🟡 implemented; **UNVERIFIED** without a GPU run + model download. The 4 text-only Qwen models remain the reliable path and `smallest_first` starts on one of them. If the processor still routes text through the vision path, the fallback is a FastVisionModel loader.
+
+## B137 -- quantization separated from on-device eval
+- **Where:** new `hardware_eval/quantize_model.py`; `hardware_eval/run_autobench.py`
+- **When:** 2026-07-15 (user request)
+- **What:** `run_autobench.py` used to convert HF→GGUF inline via an external `~/Model-Conversion/convert_to_gguf.py` (which does not exist here). Split into two clean steps sharing one engine (`training/quantize.py`): `quantize_model.py` (HF checkpoint → GGUF) and `run_autobench.py` (GGUF → on-device metrics, no conversion). `on_device_eval.py` already only consumed a `gguf_path`.
+- **Does quantization work?** The code is correct but **NON-FUNCTIONAL in this environment**: `convert_hf_to_gguf` and `llama-quantize` (llama.cpp) are not on PATH, so `quantize_from_model_spec` raises a clear "install llama.cpp tools" error. Accuracy-only pipeline runs are unaffected (they gate GGUF behind a non-`theoretical` HW backend, B108). To enable: build/clone llama.cpp and add its tools to PATH.
+- **Status:** 🟢 separated; quantization itself blocked on the missing llama.cpp toolchain (infra).
+
+## B138 -- data_rebuild variety (rotating generation temperature)
+- **Where:** `data/curriculum.py` (`synthesize_hard_negatives` `temperature` param), `agent/nodes/curate.py`
+- **When:** 2026-07-15 (user: "data rebuild should have a variety of data")
+- **What:** Beyond the per-rebuild seed rotation (B125, varies gold sampling + hard-neg source order), the synthetic hard negatives are now generated with a temperature that rotates per rebuild (0.7 → 0.9 → 1.1), so successive `data_rebuild` rounds produce genuinely different negatives instead of a near-identical regeneration. Combined with the gold-cap warning + real-benchmark loaders (B131), this gives the rebuild real variety when the gold pool has surplus; when the corpus is fully consumed the negatives still differ via temperature.
+- **Status:** 🟢 done.
