@@ -1354,3 +1354,19 @@ Driven by a review of CoNLL/biomedical-NER run 36989405 (`logs/slurm/slm-conll-n
 - **When:** 2026-07-15, NER 36989405 (user question)
 - **Explanation:** Galaxy A14 5G has 4 GB RAM → hardware_research resolved ~2300 MB usable. `filter_pool` keeps only variants with `peak_memory_mb ≤ 2300`; the pool's tier-3 models (Llama-3.2-3B peak 3400, Ministral 3200, Phi-4-mini 4100) all exceed it, so tier 2 is genuinely the top feasible tier. Escalation *did* fire (3 zero-score evals → stagnation → escalate) and correctly terminated because there is nothing bigger that fits. This is the intended behavior, unlike the GSM8K rollback loop (B124).
 - **Status:** ⚪ working as designed (documented for clarity).
+
+---
+
+## Merge of `qwen-only` branch — 2026-07-15 (B134)
+
+## B134 -- merged configurable model-selection strategies; reconciled qwen-only pool with B123
+- **Where:** `agent/nodes/cold_start/model_selection/` (new package), `agent/graph.py`, `agent/nodes/iterate.py`, `config/config.py`, `config/android_pool.py`, `agent/state.py`, `tests/cold_start/test_model_selection.py`
+- **When:** 2026-07-15 (user: "merge the qwen-only branch")
+- **What merged:** The branch adds a configurable initial-model-selection stage (replacing the hard-wired `scaling_curve` node) with 4 strategies selected via `config.MODEL_SELECTION_STRATEGY` (env `SLM_MODEL_SELECTION_STRATEGY`): `smallest_first` (default), `largest_first` (feasibility probe → drop to smallest), `interpolation` (the original 3-probe scaling curve, now picking the model closest to the RAM budget), and `orchestrator_choice` (LLM picks). `graph.py` wires `eval_setup → model_selection → curate`; `iterate.py` gained largest-first probe hooks; `state.py` gained `_largest_first_phase`.
+- **Merge conflict resolution:**
+  - `agent/nodes/iterate.py`: combined the branch's `largest_first` probe-stagnation handling with this session's stall backstop — `elif stagnant or stalled:` now terminates if in the largest_first probe phase, else escalates.
+  - `agent/graph.py`: kept BOTH the branch's `model_selection` wiring AND this session's `rollback → iterate` edge (B124).
+  - `config/android_pool.py`: **the branch's pool reintroduced the multimodal `Qwen/Qwen3.5-0.8B` and `unsloth/Qwen3.5-2B-GGUF`, which crash text-only LoRA (B123).** Reconciled by keeping the qwen-only intent but seeding 4 TEXT-ONLY Qwen-family models that load cleanly and span tiers 0-3: `unsloth/Qwen3-0.6B`, `Qwen/Qwen2.5-1.5B-Instruct`, `deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B`, `Qwen/Qwen2.5-3B-Instruct` (12 variants total: tier0×1, tier1×3, tier2×4, tier3×4).
+- **Added testing knob:** `SLM_STOP_THRESHOLD` env override in `task_analysis_node` — pins the stop threshold (and its floor) so a validation run can be steered deterministically (e.g. above the pool's best benchmark to force escalation through every tier).
+- **Validation test:** `tests/pipeline/run_qwen_escalation.slurm` — GSM8K on a 16 GB device with `smallest_first` + `SLM_STOP_THRESHOLD=0.90`, designed to walk tier 0→3 and exercise data_rebuild / hyperparameter / rollback / escalate / terminate. (downward_probe + surgical are mutually exclusive with full-tier escalation and are covered by a documented complementary run.)
+- **Status:** 🟢 merged; all 29 model-selection + iterate + pool tests pass with full deps.

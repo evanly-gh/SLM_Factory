@@ -1,4 +1,5 @@
 # agent/nodes/cold_start/task_analysis.py
+import os
 from agent.state import AgentState
 from config.android_pool import ANDROID_POOL
 from agent.nodes.cold_start.hardware_filter import run_hardware_filter
@@ -48,6 +49,16 @@ def task_analysis_node(state: AgentState) -> AgentState:
             # iterate_node may lower it further at runtime, but never below initial_stop_threshold.
             if state.get("initial_stop_threshold") is None:
                 state["initial_stop_threshold"] = threshold
+
+    # Testing/validation override: pin the stop threshold from the environment so a run
+    # can be steered deterministically (e.g. set it above the pool's best benchmark to
+    # force escalation through every tier). Takes precedence over the planner and sets
+    # the immutable floor too, so iterate_node cannot lower it below the pinned value.
+    _threshold_override = os.environ.get("SLM_STOP_THRESHOLD")
+    if _threshold_override:
+        threshold = float(_threshold_override)
+        state["stop_threshold"] = threshold
+        state["initial_stop_threshold"] = threshold
 
     if task_type not in _VALID_TASK_TYPES:
         raise ValueError(
