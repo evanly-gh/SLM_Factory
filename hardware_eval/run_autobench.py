@@ -1,17 +1,23 @@
 #!/usr/bin/env python3
 """
-SmolChat Automated Benchmark — CLI wrapper.
+SmolChat Automated Benchmark — on-device MEASUREMENT CLI.
 
-Thin command-line front-end over the measurement engine in
-hardware_eval/on_device_eval.py. This script owns only CLI concerns:
-  - argument parsing and pre-flight device checks
-  - resolving --model to a device-side GGUF (local push, or HF→GGUF conversion)
-  - loading the question set
-  - writing the JSON report and printing the summary table
+Measurement only. This script does NOT quantize: it consumes a ready GGUF and
+runs it on-device. Produce the GGUF first with the separate quantization step:
 
-All metric gathering (broadcast, logcat scrape, per-question stats, mA→W power
-conversion) lives in on_device_eval so the pipeline and this CLI share one
-implementation. See on_device_eval.measure_smolchat / benchmark_smolchat.
+    python hardware_eval/quantize_model.py --checkpoint <merged_hf_dir> --quant Q4_K_M --out <dir>
+
+then measure it here:
+
+    python hardware_eval/run_autobench.py --model <dir>/model-q4_k_m.gguf --device phone
+
+This clean split (quantize_model.py = quantization, run_autobench.py +
+on_device_eval.py = measurement) means there is exactly one quantization engine
+(training/quantize.py) and no hidden HF→GGUF conversion buried in the benchmark.
+
+This script owns only CLI concerns: argument parsing, pre-flight device checks,
+pushing the GGUF, loading the question set, and writing the report. All metric
+gathering lives in on_device_eval (measure_smolchat / benchmark_smolchat).
 """
 
 import argparse
@@ -21,7 +27,6 @@ import subprocess
 import sys
 import time
 from datetime import datetime, timezone
-from pathlib import Path
 
 from hardware_eval.on_device_eval import (
     Adb,
@@ -33,12 +38,6 @@ from hardware_eval.on_device_eval import (
     benchmark_smolchat,
     summarize_smolchat,
 )
-
-CONVERT_SCRIPT = str(Path.home() / "Model-Conversion/convert_to_gguf.py")
-CONVERSION_REPORT_CANDIDATES = [
-    str(Path.home() / "Model-Conversion/conversion_report.json"),
-    str(Path.cwd() / "conversion_report.json"),
-]
 
 COLD_BOOT_SETTLE_SECONDS = 25
 COLD_LOAD_NOTE = (
@@ -105,38 +104,6 @@ def reset_smolchat(adb: Adb):
 # Model resolution / conversion / deploy
 # ---------------------------------------------------------------------------
 
-def convert_to_gguf(model_id: str, quant: str) -> str:
-    print(f"\n[CONVERSION] Converting {model_id} to GGUF ({quant}) and deploying...")
-    if not os.path.exists(CONVERT_SCRIPT):
-        print(f"[ERROR] Conversion script not found: {CONVERT_SCRIPT}")
-        sys.exit(1)
-    result = subprocess.run([sys.executable, CONVERT_SCRIPT, "--model", model_id,
-                             "--quant", quant, "--deploy"])
-    if result.returncode != 0:
-        print(f"[ERROR] Conversion failed for {model_id} (exit {result.returncode})")
-        sys.exit(1)
-    report_path = next((p for p in CONVERSION_REPORT_CANDIDATES if os.path.exists(p)), None)
-    if not report_path:
-        print(f"[ERROR] conversion_report.json not found in: {CONVERSION_REPORT_CANDIDATES}")
-        sys.exit(1)
-    try:
-        with open(report_path) as f:
-            report = json.load(f)
-    except (json.JSONDecodeError, OSError) as e:
-        print(f"[ERROR] Failed to read conversion report {report_path}: {e}")
-        sys.exit(1)
-    device_path = report.get("device_path") or report.get("deployed_path")
-    if not device_path:
-        filename = report.get("filename") or (
-            os.path.basename(report["output_path"]) if report.get("output_path") else None)
-        if not filename:
-            print(f"[ERROR] Could not determine deployed filename from report: {report}")
-            sys.exit(1)
-        device_path = f"/sdcard/Download/{filename}"
-    print(f"[OK] Conversion + deploy complete. Device path: {device_path}")
-    return device_path
-
-
 def push_local_gguf(adb: Adb, local_path: str) -> str:
     local_path = os.path.expanduser(local_path)
     if not os.path.exists(local_path):
@@ -152,14 +119,15 @@ def push_local_gguf(adb: Adb, local_path: str) -> str:
     return device_path
 
 
-def resolve_model(model_arg: str, quant: str, adb: Adb) -> tuple:
-    """Return (device_path, display_name)."""
+def resolve_model(model_arg: str, adb: Adb) -> tuple:
+    """Return (device_path, display_name). Measurement CLI: GGUF input only."""
     expanded = os.path.expanduser(model_arg)
-    if model_arg.lower().endswith(".gguf") or os.path.isfile(expanded):
+    if model_arg.lower().endswith(".gguf") and os.path.isfile(expanded):
         return push_local_gguf(adb, model_arg), os.path.basename(expanded)
-    if "/" in model_arg:
-        return convert_to_gguf(model_arg, quant), model_arg
-    print(f"[ERROR] --model '{model_arg}' is neither a local .gguf nor a HF model ID (no '/').")
+    print(f"[ERROR] --model '{model_arg}' is not a local .gguf file.")
+    print("        This is the MEASUREMENT step and does not quantize. Produce a GGUF first:")
+    print("          python hardware_eval/quantize_model.py --checkpoint <merged_hf_dir> "
+          "--quant Q4_K_M --out <dir>")
     sys.exit(1)
 
 
@@ -219,12 +187,14 @@ def save_results(output_path: str, run_info: dict, summary: dict, results: list)
 
 def parse_args():
     p = argparse.ArgumentParser(description="Automated SmolChat GGUF benchmark (CLI over on_device_eval)")
-    p.add_argument("--model", required=True, help="HuggingFace model ID or path to a local .gguf file")
+    p.add_argument("--model", required=True,
+                   help="Path to a local .gguf file (quantize first with quantize_model.py)")
     p.add_argument("--device", choices=["phone", "emulator"], default="phone")
     p.add_argument("--serial", default="", help="Explicit adb device serial (overrides --device flag)")
     p.add_argument("--questions", default=None, help="Path to .txt file, one question per line")
     p.add_argument("--output", default="autobench_results.json")
-    p.add_argument("--quant", choices=["Q4_K_M", "Q5_K_M", "Q8_0"], default="Q4_K_M")
+    p.add_argument("--quant", choices=["Q4_K_M", "Q5_K_M", "Q8_0"], default="Q4_K_M",
+                   help="Descriptive label recorded in the report only (no conversion happens here)")
     p.add_argument("--timeout", type=int, default=60, help="Seconds to wait per question")
     p.add_argument("--reboot-before", action="store_true",
                    help="Reboot the device before benchmarking for a genuine cold-load read")
@@ -254,7 +224,7 @@ def main():
     battery_info = check_battery(adb)
     reset_smolchat(adb)
 
-    model_path, model_name = resolve_model(args.model, args.quant, adb)
+    model_path, model_name = resolve_model(args.model, adb)
     questions = load_questions(args.questions)
     voltage = read_battery_voltage_v(adb)
 

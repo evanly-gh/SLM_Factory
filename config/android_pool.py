@@ -21,16 +21,19 @@
 #   it into three real deployment candidates (BF16 / Q8_0 / Q4_K_M) with honest per-variant
 #   size, peak, tier, and decode speed. Weight bytes/param: BF16 2.0, Q8_0 1.0, Q4_K_M 0.55.
 #
-# Pool members (4 TEXT-ONLY Qwen-family base models × 3 quant variants = 12 entries):
+# Pool members (6 Qwen-family base models × 3 quant variants = 18 entries):
 #   Qwen3-0.6B                        — text-only; Tier 0 seed (Q4 peak ~500MB)
 #   Qwen2.5-1.5B-Instruct             — text-only; general 1.5B; Tier 1 seed
 #   DeepSeek-R1-Distill-Qwen-1.5B     — Qwen arch, R1 distilled, math/reasoning; Tier 1 seed
 #   Qwen2.5-3B-Instruct               — text-only; top-capability; Tier 2/3 seed
+#   Qwen3.5-0.8B   (multimodal)       — text-only LoRA via text_tokenizer() (B123)
+#   Qwen3.5-2B     (multimodal)       — base repo, not -GGUF (B107); text-only LoRA via text_tokenizer()
 #
-# NOTE (B123 reconciliation): the qwen-only branch originally seeded the multimodal
-# Qwen3.5-0.8B / Qwen3.5-2B, which crash text-only LoRA on this stack (vision processor
-# rejects the text chat template). They were swapped for the text-only Qwen models above,
-# which span the same tiers and load cleanly. Re-add Qwen3.5 behind a vision-aware trainer.
+# B123/B107 handling: the multimodal Qwen3.5 models load as a *processor*; text-only LoRA
+# works because lora_trainer/slm_helpers extract the inner text tokenizer (text_tokenizer()).
+# The text-only Qwen models are the RELIABLE path; Qwen3.5 multimodal LoRA is best-effort
+# and unverified without a GPU run. Qwen3.5-2B uses the base transformers repo (Qwen/Qwen3.5-2B),
+# never the -GGUF repo (which has no transformers config and cannot be fine-tuned, B107).
 #
 # Android framework compatibility:
 #   llama.cpp (GGUF): all models — broadest format support, CPU+Vulkan backends
@@ -89,6 +92,8 @@ class ModelSpec:
     mmlu: float            # MMLU 5-shot accuracy (0–1 scale)
     notes: str = ""
     quant: str | None = None   # None = base (BF16/FP16). "Q4_K_M" or "Q8_0" = GGUF variant.
+    multimodal: bool = False   # True for image-text-to-text models (Qwen3.5, Gemma-3n).
+                               # Handled via text_tokenizer() in lora_trainer/slm_helpers.
 
     def est_params_b(self) -> float:
         """Estimate parameter count (billions) from this variant's weight size.
@@ -203,6 +208,7 @@ def _variant(base: ModelSpec, quant: str | None) -> ModelSpec:
         mmlu=base.mmlu,
         notes=base.notes,
         quant=quant,
+        multimodal=base.multimodal,
     )
 
 
@@ -269,6 +275,42 @@ ANDROID_POOL: list[ModelSpec] = [
         gsm8k=0.870,
         mmlu=0.580,
         notes="Qwen arch, R1 distilled; MATH-500 83.9%, AIME 28.9%; best for math/reasoning tasks",
+    ),
+
+    # ── Multimodal Qwen3.5 (text-only LoRA via text_tokenizer(), B123) ────
+    # Qwen3.5-0.8B / Qwen3.5-2B: Gated DeltaNet hybrid, natively multimodal
+    # (image-text-to-text), 262K ctx. They load as a *processor*; text-only LoRA works
+    # only because lora_trainer/slm_helpers extract the inner text tokenizer via
+    # text_tokenizer() (otherwise the vision path rejects the text chat template).
+    # IMPORTANT: use the BASE transformers repos (Qwen/Qwen3.5-*), NOT the -GGUF repo
+    # (a GGUF repo has no transformers config and cannot be LoRA-fine-tuned, B107).
+    # NOTE: multimodal LoRA on this stack is best-effort and unverified without a GPU
+    # run + model download; the text-only Qwen models above are the reliable path.
+    ModelSpec(
+        model_id="Qwen/Qwen3.5-0.8B",
+        size_mb=500,
+        tier=0,
+        tok_s_snapdragon_660=9.0,
+        tok_s_snapdragon_778g=15.0,
+        tok_s_snapdragon_8gen3=42.0,
+        peak_memory_mb=670,
+        gsm8k=0.610,
+        mmlu=0.540,
+        notes="Gated DeltaNet hybrid, multimodal, 262K ctx; text-only LoRA via text_tokenizer()",
+        multimodal=True,
+    ),
+    ModelSpec(
+        model_id="Qwen/Qwen3.5-2B",
+        size_mb=1350,
+        tier=2,
+        tok_s_snapdragon_660=4.0,
+        tok_s_snapdragon_778g=7.5,
+        tok_s_snapdragon_8gen3=20.0,
+        peak_memory_mb=1800,
+        gsm8k=0.720,
+        mmlu=0.610,
+        notes="Gated DeltaNet hybrid, multimodal, 262K ctx; base transformers repo (not -GGUF, B107); text-only LoRA via text_tokenizer()",
+        multimodal=True,
     ),
 
     # ── ~3B params (Tier 2/3 seed) ────────────────────────────────────────

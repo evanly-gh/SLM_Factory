@@ -118,6 +118,10 @@ def infer(prompt: str, weights_ref: str, base_model: str, max_new_tokens: int = 
                 model_name=weights_ref, max_seq_length=512, load_in_4bit=False,
                 trust_remote_code=True,
             )
+        # Multimodal models load as a processor; use the inner text tokenizer so the
+        # chat template / tokenization never routes text through the vision path (B123).
+        from training.lora_trainer import text_tokenizer
+        tokenizer = text_tokenizer(tokenizer)
         FastLanguageModel.for_inference(model)
         # We always cap generation with an explicit max_new_tokens at the call site.
         # Many chat models (e.g. Qwen3) also ship a generation_config.max_length (40960),

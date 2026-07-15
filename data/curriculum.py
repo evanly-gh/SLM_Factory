@@ -327,6 +327,7 @@ def synthesize_hard_negatives(
     anthropic_client,
     task_type: str = "classification",
     targeted_pattern: str = "",
+    temperature: float = 1.0,
 ) -> list[dict]:
     """
     Generate hard negatives using the 2-for-1 rule (paper §2.3).
@@ -336,6 +337,11 @@ def synthesize_hard_negatives(
     TO predict and what NOT to predict for similar surface forms.
 
     Returns up to 2*n examples (n originals + n synthetics).
+
+    `temperature` controls generation diversity. curate_node rotates it across
+    successive data_rebuild rounds so a rebuild produces DIFFERENT negatives each
+    time (avoids re-generating an identical dataset that just re-plays the same
+    training signal — see the data_rebuild variety note in curate_node).
 
     Uses Claude API directly (no teacher model needed for phase 1).
     """
@@ -373,6 +379,7 @@ def synthesize_hard_negatives(
             response = anthropic_client.messages.create(
                 model=TEACHER_MODEL_CLAUDE,
                 max_tokens=200,
+                temperature=temperature,
                 messages=[{"role": "user", "content": prompt}],
             )
             generated_text = response.content[0].text.strip()
@@ -407,6 +414,7 @@ def synthesize_hard_negatives(
             response = anthropic_client.messages.create(
                 model=TEACHER_MODEL_CLAUDE,
                 max_tokens=400,
+                temperature=temperature,
                 messages=[{"role": "user", "content": prompt}],
             )
             raw = response.content[0].text.strip()
@@ -458,6 +466,7 @@ def synthesize_hard_negatives(
             response = anthropic_client.messages.create(
                 model=TEACHER_MODEL_CLAUDE,
                 max_tokens=300,
+                temperature=temperature,
                 messages=[{"role": "user", "content": prompt}],
             )
             wrong_answer = response.content[0].text.strip()
