@@ -7,7 +7,7 @@ How the LangGraph state machine is wired, what each node does, and what decision
 Three conditional edges and one hard edge control the loop:
 
 - **`evaluate → rollback | iterate`** — decided by `should_rollback(state)`, a pure function, no LLM
-- **`rollback → train`** — hard edge; rolls back to the best checkpoint then re-trains without an LLM intervention round
+- **`rollback → iterate`** — hard edge; restores the best checkpoint then re-enters the decision loop so the next action is *different* from the config that just regressed (a bare re-train of the identical config would deterministically regress again — an endless loop)
 - **`iterate → train | curate | escalate | downward_probe | terminate`** — decided by `state["next_action"]`, set by the LLM inside `iterate_node`
 - **`escalate → train | curate | terminate`** — decided by `state["next_action"]`; `escalate_node` always writes `"curate"` or `"terminate"`, so the `"train"` branch is registered but unreachable under current code (kept for forward-compatibility)
 - **`downward_probe → END`** — hard edge; downward_probe always terminates
@@ -168,7 +168,7 @@ Only reached if the latest score was worse than the previous.
 - Restores `best_weights_ref` and `best_score` to the highest-scoring non-pruned DAG node.
 - Increments `consecutive_no_improvement`.
 
-After rollback the graph always proceeds directly to `train` — **not** `iterate`. The best checkpoint is restored and the model re-trains on the existing dataset without an LLM intervention round. This avoids the LLM being asked to reason about a regression before it can observe whether the rollback alone recovers performance.
+After rollback the graph proceeds to `iterate` (**changed** — it previously went straight to `train`). Restoring the best checkpoint and re-training the *same* dataset + hyperparameters is (near-)deterministic, so it reproduces the same regressing score and rolls back again — an endless loop that was observed to burn the entire turn budget (e.g. ARC-Challenge and GSM8K oscillating for 20+ iterations at a fixed best score). Routing to `iterate` forces the next step to be a genuinely different action: a `data_rebuild` with a rotated sampling seed, a hyperparameter change, escalation to a bigger model, or a clean termination via the stall backstop.
 
 **Writes to state:** `scores`, `dag`, `best_weights_ref`, `best_score`, `last_intervention`, `consecutive_no_improvement`
 **Decision made:** none — all logic is rule-based
@@ -198,6 +198,8 @@ STAGNATION_MIN_DELTA = 0.02  # minimum cumulative improvement over that window t
 ```
 
 If `max(scores[-3:]) - min(scores[-3:]) < 0.02`, the model is stagnant and `next_action = "escalate"` regardless of what intervention the LLM chose.
+
+**Stall backstop (`MAX_STALL_EVALS = 4`):** `should_rollback` pops the regressing score, so on a rollback→re-decide churn the stagnation window can stay short and never fire. As a hard backstop, `iterate_node` also escalates when `consecutive_no_improvement >= MAX_STALL_EVALS` (that counter is set in `evaluate_node` on every non-improving eval and is **not** popped by rollback). Escalation promotes to a bigger model if one fits the hardware budget, otherwise terminates — guaranteeing the loop always makes progress or ends.
 
 Routing logic (evaluated in this order):
 
@@ -272,9 +274,10 @@ task_analysis → eval_setup → scaling_curve → curate → train → evaluate
                                                   │
                       ┌── score regressed? ───────┤
                       ↓ yes                        ↓ no
-                   rollback ──────→ train       iterate
+                   rollback ──────→ iterate ←───── iterate
                    (restore best              (LLM reasons
-                    checkpoint)               about trajectory)
+                    checkpoint,               about trajectory)
+                    then re-decide)
                                                   │
                    ┌──────────────────────────────┤
                    ↓         ↓         ↓           ↓              ↓
@@ -303,7 +306,7 @@ task_analysis → eval_setup → scaling_curve → curate → train → evaluate
 
 1. **Eval set never changes.** Fixed after `eval_setup`, never touched again. The same `E` measures every iteration.
 2. **Always trains from the base model.** `train_node` never loads a prior adapter. Each run is fully determined by the current dataset. Always LoRA — no full fine-tuning — for adapter-manager deployment.
-3. **Rollback bypasses iterate.** `should_rollback` fires before `iterate` is called. On regression, the graph goes `evaluate → rollback → train` — the LLM never sees a regressed score and is not asked to reason about it before the rollback re-train completes.
+3. **Rollback re-enters the decision loop.** On regression the graph goes `evaluate → rollback → iterate`: the best checkpoint is restored and then `iterate` chooses a *different* next action. (Previously rollback went straight to `train`, which caused an endless rollback→re-train→rollback loop because re-training an identical config deterministically regresses again.) A `consecutive_no_improvement >= MAX_STALL_EVALS` backstop in `iterate` guarantees the loop escalates or terminates rather than churning.
 4. **Escalation preserves the dataset.** When promoting to the next model tier, `current_dataset_path` is carried forward. Only weights and score history are reset. The new model goes through a fresh curation round on the carried-over dataset (`escalate → curate → train`).
 5. **Escalation resets all score history.** The new model starts from zero — stale DAG nodes from the prior model do not pollute the rollback gate.
 6. **Hyperparameter interventions skip curate entirely.** `iterate → train` directly; the dataset is held fixed to isolate the optimization effect.

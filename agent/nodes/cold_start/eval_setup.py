@@ -16,16 +16,18 @@ def eval_setup_node(state: AgentState) -> AgentState:
     task_type = state["task_type"]
     plan = state.get("task_plan")
 
+    acquire_meta: dict = {}
     if plan is not None:
         # Autonomous, general path: acquire the dataset from the web per the
         # orchestrator's plan (works for any task / task_type).
         from data.loaders.web_acquire import acquire_dataset
         train_examples, test_examples = acquire_dataset(
-            plan, description=state.get("description", "")
+            plan, description=state.get("description", ""), meta=acquire_meta
         )
     elif task_type == "classification":
         from data.loaders.sms_spam import download_sms_spam
         train_examples, test_examples = download_sms_spam()
+        acquire_meta["source"] = "bundled SMS Spam dataset (UCI)"
     else:
         raise NotImplementedError(
             f"eval_setup_node does not yet have a data loader for task_type={task_type!r}. "
@@ -33,6 +35,7 @@ def eval_setup_node(state: AgentState) -> AgentState:
         )
 
     state["train_examples"] = train_examples
+    state["data_source"] = acquire_meta.get("source", "unknown")
 
     # Forward planner flags so the eval set carries multi_label/schema/multilingual
     # context for downstream scorer dispatch.

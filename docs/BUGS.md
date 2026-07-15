@@ -1271,3 +1271,86 @@ marked "passed" that wasn't confirmed from its per-job `logs/slurm/*.out` (the s
 - **Impact:** BLOCKER for any task selecting a Qwen3.5 model (NER's mid-tier device did). Same class as gemma-3n (B121).
 - **Fix:** Removed both Qwen3.5 entries from the selectable pool; text-only Qwen3-0.6B (tier 0) remains. Pool is now 24 text-only models that load/train on the stack.
 - **Status:** 🟢 fixed.
+
+---
+
+## Log-readability + control-flow pass — 2026-07-15 (B124–B128)
+
+Driven by a review of ARC-Challenge run 36989407 (`logs/slurm/slm-arc-challenge-36989407.out`).
+
+## B124 -- endless rollback→re-train loop; regression never triggered a different action
+- **Where:** `agent/graph.py` (`rollback → train` edge); `agent/nodes/iterate.py`; `agent/nodes/rollback.py`
+- **When:** 2026-07-15, ARC 36989407 + GSM8K 36989406 (user observation)
+- **How found:** On every regression the graph went `evaluate → rollback → train`, re-training the SAME dataset + hyperparameters. Training is (near-)deterministic, so it reproduced the same regressing score and rolled back again. ARC churned ~7 iterations and GSM8K ~23, each pinned at a fixed best score, until the turn/recursion budget ran out. `should_rollback` also pops the regressing score, so the stagnation window never filled and escalation never fired.
+- **Impact:** HIGH — any model that beats its best once then can't again burns the entire budget oscillating; makes no progress and never terminates cleanly.
+- **Fix:** (1) Re-routed `rollback → iterate` so a regression forces a *different* next action (data_rebuild with a rotated seed / hyperparameter / escalate / terminate). (2) Added a stall backstop in `iterate_node`: `MAX_STALL_EVALS = 4` — escalate when `consecutive_no_improvement` (set in evaluate, not popped by rollback) reaches it. Escalation promotes to a bigger model if one fits, else terminates. Updated `PIPELINE.md` invariant #3 and the loop diagram.
+- **Status:** 🟢 fixed.
+
+## B125 -- data_rebuild regenerated a byte-identical gold slice every iteration
+- **Where:** `agent/nodes/curate.py`; `data/curriculum.py` (`build_initial_curriculum(seed=42)`)
+- **When:** 2026-07-15, ARC 36989407 (user observation: "synthesizes the exact same data")
+- **How found:** `build_initial_curriculum` used a fixed `seed=42`, and curate seeded hard-negative sourcing off the unshuffled train list, so repeated `data_rebuild` rounds produced the same curriculum — feeding B124's loop with identical retrains.
+- **Impact:** MEDIUM — repeated rebuilds could not diversify data, so re-training could not escape a plateau.
+- **Fix:** curate now rotates the seed per rebuild (`seed = 42 + dataset_version`) for both gold selection and hard-negative source shuffling. NOTE: when the acquired corpus is smaller than the gold target (e.g. ARC's 150 real examples < 650 target), the gold slice is necessarily identical regardless of seed — that is a data-availability cap (B119 family), now surfaced by an explicit warning (B126), not a shuffling bug.
+- **Status:** 🟢 fixed (diversifies whenever the corpus has surplus).
+
+## B126 -- curate: no provenance logging; gold-cap was silent
+- **Where:** `agent/nodes/curate.py`; `agent/nodes/cold_start/eval_setup.py`; `data/loaders/web_acquire.py`; `agent/state.py`
+- **When:** 2026-07-15 (user question: "why only 150 gold vs target 650? where does data come from?")
+- **How found:** curate logged `gold_target=650` then `Gold examples built: 150` with no explanation. The 150 cap is simply the number of REAL examples acquired (`load_benchmark_dataset` caps ARC/GSM8K at `max_train=150`); hard negatives are LLM-synthesized, not scraped. None of this was visible in the log.
+- **Fix:** Threaded a `data_source` provenance string from `acquire_dataset`/`load_benchmark_dataset` (via a `meta` out-param) into `state["data_source"]`, and curate now logs: the gold data source, the number of acquired examples, that hard negatives are LLM-synthetic (contrastive 2-for-1), the CoT teacher, and a ⚠ warning when gold is capped below target with the reason + how to raise the cap.
+- **Status:** 🟢 fixed (observability). Underlying small-corpus cap is the B119-family design limit.
+
+## B127 -- ML-stack log flood buried the signal
+- **Where:** new `agent/logging_setup.py`; `tests/pipeline/run.py`; `training/lora_trainer.py`; `training/slm_helpers.py`
+- **When:** 2026-07-15 (user: "these lines are flooding the logs")
+- **How found:** Each run emitted hundreds of transformers deprecation aliases (`Accessing is_flash_linear_attention_available from .models.<X>.image_processing_<X>` — one per image processor, triggered when Unsloth Zoo patches every module), per-load `Loading weights:` bars, `Unsloth: Tokenizing [...]` bars, per-generate `Both max_new_tokens (=256) and max_length (=40960)` warnings, and FutureWarnings.
+- **Fix:** `set_ml_env()` at the top of `run.py` sets `TRANSFORMERS_VERBOSITY=error` (+ `DATASETS_VERBOSITY`, `HF_HUB_DISABLE_PROGRESS_BARS`, `TOKENIZERS_PARALLELISM`) BEFORE any heavy import, and filters Future/Deprecation warnings. `quiet_ml_logging()` (called after unsloth import in train/merge/infer) additionally calls `transformers.logging.disable_progress_bar()` + `datasets.disable_progress_bars()`. `SFTConfig(disable_tqdm=True)` drops the training progress bar while KEEPING the periodic `{'loss':..., 'grad_norm':..., 'learning_rate':..., 'epoch':...}` lines (printed by PrinterCallback, not gated by verbosity).
+- **Status:** 🟢 fixed.
+
+## B128 -- infer: max_new_tokens vs generation_config.max_length conflict (per-call warning)
+- **Where:** `training/slm_helpers.py` (`infer`)
+- **When:** 2026-07-15 (user question about the "two max tokens")
+- **How found:** We always pass an explicit `max_new_tokens` (50 classification / 256 generation), but chat models like Qwen3 also ship `generation_config.max_length=40960`; with both set transformers logs "Both max_new_tokens and max_length seem to have been set" on EVERY generate() (i.e. once per eval example).
+- **Fix:** After loading, set `model.generation_config.max_length = None` so `max_new_tokens` (a cap on NEWLY generated tokens — the correct control for our short answers) is the single length knob. This is a root-cause fix, not just a warning suppression.
+- **Status:** 🟢 fixed.
+
+## B129 (improvement) -- iterate: exhausted-tool-rounds fell straight to score-band rules
+- **Where:** `agent/nodes/iterate.py` (`_llm_iterate`)
+- **When:** 2026-07-15 (user question: "what is 'LLM exhausted tool rounds'?")
+- **How found:** The orchestrator gets `MAX_TOOL_ROUNDS = 5` rounds of bash/read_file/edit_file/web_search before it must emit final JSON. When it was still calling tools at round 5, `_llm_iterate` raised `RuntimeError('LLM exhausted tool rounds ...')` and `iterate_node` fell back to pure score-band rules (the frequent log line). NOT the 1500 recursion limit and NOT an API-credit issue — purely the local tool-round budget.
+- **Fix:** On exhaustion, make ONE final call with a non-tool-bound client and an explicit "answer now, no tools" instruction to salvage a real decision before giving up to the fallback.
+- **Status:** 🟢 improved (fallback still exists for genuine failures).
+
+---
+
+## NER task review — 2026-07-15 (B130–B133)
+
+Driven by a review of CoNLL/biomedical-NER run 36989405 (`logs/slurm/slm-conll-ner-36989405.out`).
+
+## B130 (B104 resolved) -- local device DB missing → every run went to Exa; short model codes never matched
+- **Where:** `data/devices.csv` (absent); `agent/nodes/cold_start/hardware_research.py` (`_lookup_local_db`)
+- **When:** 2026-07-15 (user: "I need to refresh the database")
+- **How found:** Every run logged `Local device DB not found (run scripts/refresh_device_db.py to populate)` and fell back to Exa for hardware research. `refresh_device_db.py` needs the Kaggle CLI + credentials + network, unavailable on the compute nodes. Separately, the matcher required ≥2 keyword hits but dropped tokens ≤2 chars, so single-distinctive-token phones (Pixel 6a → only "pixel"; Redmi 9A → only "redmi") could never reach the threshold even with a DB.
+- **Fix:** (1) Committed a curated `data/devices.csv` (30 common phones incl. all four test devices) in the schema `_lookup_local_db` expects (device, ram_mb, storage_mb, chipset) — the local DB now resolves without Kaggle. (`refresh_device_db.py` still performs a full Kaggle refresh when creds exist.) (2) Improved keyword extraction to keep alphanumeric MODEL CODES containing a digit ("9a", "6a", "5g", "a14", "2023") and strip punctuation. Verified all four test devices now match the correct row locally.
+- **Status:** 🟢 fixed. Full 8k-device Kaggle DB still requires `pip install kaggle` + `~/.kaggle/kaggle.json`, then `python scripts/refresh_device_db.py`.
+
+## B131 -- NER curriculum: acquired data tiny; gold reported as 0; dataset ~100% synthetic
+- **Where:** `data/loaders/web_acquire.py`; `agent/nodes/curate.py`
+- **When:** 2026-07-15, NER 36989405 (user: "total=32 train=22 test=10 ... 0 gold?!")
+- **How found:** NER named a real benchmark (BC5CDR) but there was no benchmark loader for it, so it Exa-scraped 32 generic web docs (22 train / 10 test) and Claude-annotated entities — and yes, iteration 1 trained on that. Curate then reported `Gold: 0 (0.0%) / Hard: 100%`: the composition was computed as `n_hard = min(hard_synth_count, total); n_gold = total − n_hard`, so whenever the synthetic count exceeded the QC-filtered total (64 > 25) it underflowed gold to 0 — a reporting bug, and the dataset really was mostly synthetic because the full hard target (105) was generated against only ~14 gold.
+- **Fix:** (1) Added real NER benchmark loaders (`_load_ner_benchmark`) for BC5CDR (`tner/bc5cdr`) and CoNLL-2003 (`eriktks/conll2003`) that convert token+BIO tags into `{text, entities}` spans; defensive (falls back to Exa if a dataset is unreachable). (2) Raised acquisition caps (`max_train 150→300`, `max_test 25→80`) and the Exa fallback `n_per_label` (16→24) so the curriculum + eval set are larger. (3) Fixed composition accounting with provenance tags (`_slice`) counted AFTER quality controls (stripped before the JSONL is written). (4) Scaled the hard-negative target to the ACTUAL gold count to preserve the ~65:35 ratio when gold is scarce, instead of producing a 100%-synthetic set.
+- **Status:** 🟢 fixed (real-benchmark load is best-effort/defensive; Exa fallback improved regardless).
+
+## B132 -- NER eval truncated at 50 tokens → empty predictions → F1=0 on every run
+- **Where:** `eval/harness.py`
+- **When:** 2026-07-15, NER 36989405 (user: "how is it 0 accuracy on every run?")
+- **How found:** `max_new_tokens = 256 if generation else 50` gave NER only 50 tokens. A JSON entity list for a passage can exceed that, and the selected model (DeepSeek-R1-Distill-Qwen-1.5B — a *reasoning* model whose notes literally say "Do not use for classification/NER") emits a long `<think>` preamble before any JSON, so 50 tokens produced no parseable entity list → all predictions `[]` → entity-F1 0. Compounded by poor synthetic gold (Claude-annotated generic web text, exact-(text,type)-match metric) and a tiny 10-example eval set.
+- **Fix:** Give NER the same 256-token budget as generation. (The model-family mismatch — a math/reasoning model chosen for NER — is a separate model-selection concern; noted, not yet auto-corrected.)
+- **Status:** 🟢 fixed (token budget). Model-selection preference for NER remains a follow-up.
+
+## B133 (not a bug) -- NER escalation "no feasible models above tier 2" is correct
+- **Where:** `agent/nodes/escalate.py` + `config/android_pool.py`
+- **When:** 2026-07-15, NER 36989405 (user question)
+- **Explanation:** Galaxy A14 5G has 4 GB RAM → hardware_research resolved ~2300 MB usable. `filter_pool` keeps only variants with `peak_memory_mb ≤ 2300`; the pool's tier-3 models (Llama-3.2-3B peak 3400, Ministral 3200, Phi-4-mini 4100) all exceed it, so tier 2 is genuinely the top feasible tier. Escalation *did* fire (3 zero-score evals → stagnation → escalate) and correctly terminated because there is nothing bigger that fits. This is the intended behavior, unlike the GSM8K rollback loop (B124).
+- **Status:** ⚪ working as designed (documented for clarity).

@@ -95,7 +95,13 @@ def build_graph(mode: str = "cold_start") -> CompiledStateGraph:
         {"rollback": "rollback", "iterate": "iterate"},
     )
 
-    graph.add_edge("rollback", "train")
+    # After a regression we rollback (restore the best checkpoint) and then RE-ENTER the
+    # decision loop (iterate) rather than blindly re-training the identical config. A bare
+    # re-train on the same dataset + hyperparameters is (near-)deterministic, so it would
+    # reproduce the same regressing score and rollback again — an endless loop. Routing to
+    # iterate forces a *different* next action (data_rebuild with a rotated seed, a
+    # hyperparameter change, escalation, or termination via the stall guard).
+    graph.add_edge("rollback", "iterate")
 
     graph.add_conditional_edges(
         "iterate",

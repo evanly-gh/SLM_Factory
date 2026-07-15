@@ -50,8 +50,12 @@ def run_eval(
             f"Must be one of: classification, NER, math_reasoning, code_generation, generation."
         )
 
-    _GENERATION_TASKS = {"math_reasoning", "code_generation", "generation"}
-    max_new_tokens = 256 if task_type in _GENERATION_TASKS else 50
+    # NER needs room for a full JSON entity list (many spans) and, for reasoning models,
+    # for the <think> preamble before the JSON — 50 tokens truncated both, yielding empty
+    # predictions and F1=0. Give NER the same 256 budget as generation; only single-label
+    # classification (one short label word) stays at 50.
+    _LONG_OUTPUT_TASKS = {"math_reasoning", "code_generation", "generation", "NER"}
+    max_new_tokens = 256 if task_type in _LONG_OUTPUT_TASKS else 50
     prompts = scorer.build_prompts(eval_set)
 
     if gguf_path is not None:
