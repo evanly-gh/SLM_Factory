@@ -216,17 +216,79 @@ def load_benchmark_dataset(plan: dict, log=print, max_train: int = 300, max_test
     return train, test
 
 
-def acquire_dataset(plan: dict, description: str = "", n_per_label: int = DEFAULT_N_PER_LABEL,
-                    test_fraction: float = 0.3, log=print, meta: dict | None = None):
-    """
-    Acquire a labeled dataset per the task plan.
-    Prefers the real public benchmark dataset when the plan names a known one
-    (B119); otherwise acquires from the web via Exa.
-    Returns (train_examples, test_examples) as lists of {"text", "label", ...} dicts
-    (classification/generation) or {"text", "entities"} dicts (NER).
+# Data-acquisition budget/floors (B139). Acquisition ladder: real benchmark → bounded,
+# diversified Exa rounds → verified LLM synthesis. Quality-over-quantity: `target` is an
+# UPPER bound, `floor` is the minimum we insist on before falling back to synthesis.
+MAX_ACQUIRE_ROUNDS = 3           # bounded Exa retries (each round diversifies the queries)
+DEFAULT_TARGET_EXAMPLES = 120    # desired acquired pool size (train+test), a ceiling
+MIN_VIABLE_FRACTION = 0.5        # below target*this → try more rounds, then synthesis
 
-    When `meta` is provided it is populated with a `source` string describing where the
-    data came from (real benchmark vs Exa web search), for downstream provenance logging.
+
+def _diversify_query(base_query: str, round_idx: int) -> str:
+    """Rephrase a query per round so re-runs fetch NEW documents, not the same top hits.
+
+    Exa is roughly deterministic for a fixed query, so blindly re-running returns
+    duplicates. Rotating the phrasing surfaces different parts of the web.
+    """
+    if round_idx == 0:
+        return base_query
+    templates = [
+        "real-world examples of {q}",
+        "labeled dataset or corpus of {q}",
+        "annotated {q} samples with ground-truth labels",
+    ]
+    return templates[(round_idx - 1) % len(templates)].format(q=base_query)
+
+
+def _exa_round(exa, task_type, plan, description, n_per_label, round_idx,
+               seen_texts: set, log=print) -> list[dict]:
+    """One Exa acquisition round across all labels/topics; dedups against seen_texts."""
+    queries: dict = plan.get("exa_queries") or {}
+    out: list[dict] = []
+    if task_type == "classification":
+        labels = (plan.get("labels") or list(queries.keys()))[:MAX_LABELS]
+        items = [(lbl, queries.get(lbl, f"{lbl} example text")) for lbl in labels]
+    else:
+        items = list(queries.items())[:MAX_LABELS] or [("general", description)]
+    for label, base_query in items:
+        query = _diversify_query(base_query, round_idx)
+        try:
+            r = _exa_search(exa, query, n_per_label)
+            kept = 0
+            for x in r.results:
+                text = (x.text or "").strip().replace("\n", " ")
+                if not _looks_useful(x.url, text):
+                    continue
+                doc = f"{(x.title or '').strip()}. {text}"[:700]
+                if doc in seen_texts:
+                    continue
+                seen_texts.add(doc)
+                out.append({"text": doc, "label": label})
+                kept += 1
+            log(f"      [acquire] round {round_idx} {label!r} q={query!r}: kept {kept} new")
+        except Exception as e:
+            log(f"      [acquire] round {round_idx} {label!r}: Exa error: {e}")
+        time.sleep(0.2)
+    return out
+
+
+def acquire_dataset(plan: dict, description: str = "", n_per_label: int = DEFAULT_N_PER_LABEL,
+                    test_fraction: float = 0.3, target_examples: int = DEFAULT_TARGET_EXAMPLES,
+                    log=print, meta: dict | None = None):
+    """
+    Acquire a labeled dataset per the task plan, following the acquisition ladder (B139):
+
+      1. REAL benchmark dataset if the plan names a known one (highest quality; B119).
+      2. Otherwise BOUNDED + DIVERSIFIED Exa rounds: up to MAX_ACQUIRE_ROUNDS, each round
+         rephrases the queries so re-runs fetch NEW documents (not duplicates), deduping,
+         stopping once `target_examples` is reached.
+      3. If still below `target_examples * MIN_VIABLE_FRACTION`, TOP UP with verified LLM
+         synthesis (`synthesize_seed_examples`) — deduped and label-validated.
+
+    `target_examples` is an UPPER bound (quality-over-quantity); we do not chase it past
+    what clean sources provide, but we do insist on the viability floor before proceeding.
+
+    Returns (train, test). `meta["source"]` records provenance (benchmark / web+synth mix).
     """
     real = load_benchmark_dataset(plan, log=log, meta=meta)
     if real is not None:
@@ -237,48 +299,40 @@ def acquire_dataset(plan: dict, description: str = "", n_per_label: int = DEFAUL
 
     exa = Exa(api_key=EXA_API_KEY)
     task_type = plan["task_type"]
-    queries: dict = plan.get("exa_queries") or {}
-
     survey_baseline(exa, description or plan.get("task_name", ""), log=log)
 
+    # --- Stage 2: bounded, diversified Exa rounds -------------------------------------
     examples: list[dict] = []
-    if task_type == "classification":
-        labels = (plan.get("labels") or list(queries.keys()))[:MAX_LABELS]
-        for label in labels:
-            query = queries.get(label, f"{label} example text")
-            try:
-                r = _exa_search(exa, query, n_per_label)
-                kept = 0
-                for x in r.results:
-                    text = (x.text or "").strip().replace("\n", " ")
-                    if _looks_useful(x.url, text):
-                        doc = f"{(x.title or '').strip()}. {text}"[:700]
-                        examples.append({"text": doc, "label": label})
-                        kept += 1
-                log(f"      [acquire] {label!r}: {len(r.results)} hits -> kept {kept}")
-            except Exception as e:
-                log(f"      [acquire] {label!r}: Exa error: {e}")
-            time.sleep(0.2)
-    else:
-        topics = list(queries.items())[:MAX_LABELS] or [("general", description)]
-        for topic, query in topics:
-            try:
-                r = _exa_search(exa, query, n_per_label)
-                for x in r.results:
-                    text = (x.text or "").strip().replace("\n", " ")
-                    if _looks_useful(x.url, text):
-                        examples.append({"text": f"{(x.title or '').strip()}. {text}"[:700],
-                                         "label": topic})
-                log(f"      [acquire] topic {topic!r}: collected")
-            except Exception as e:
-                log(f"      [acquire] topic {topic!r}: Exa error: {e}")
-            time.sleep(0.2)
+    seen_texts: set = set()
+    floor = max(1, int(target_examples * MIN_VIABLE_FRACTION))
+    for round_idx in range(MAX_ACQUIRE_ROUNDS):
+        examples.extend(_exa_round(exa, task_type, plan, description, n_per_label,
+                                   round_idx, seen_texts, log=log))
+        if len(examples) >= target_examples:
+            break
+        if round_idx + 1 < MAX_ACQUIRE_ROUNDS:
+            log(f"      [acquire] have {len(examples)}/{target_examples} — diversifying and retrying")
+    n_web = len(examples)
+
+    # --- Stage 3: verified synthesis fallback (only if below the viability floor) ------
+    n_synth = 0
+    if len(examples) < floor:
+        needed = target_examples - len(examples)
+        log(f"      [acquire] ⚠ web acquisition returned {len(examples)} < floor {floor}; "
+            f"synthesizing up to {needed} gold examples via the orchestrator (verified/deduped)")
+        synth = synthesize_seed_examples(plan, task_type, needed,
+                                         existing_texts=seen_texts, log=log)
+        n_synth = len(synth)
+        examples.extend(synth)
 
     if not examples:
-        raise RuntimeError("Exa acquisition returned no usable examples for this task.")
+        raise RuntimeError(
+            "Data acquisition returned no usable examples (real benchmark, Exa rounds, "
+            "and synthesis all failed). Provide a known benchmark or check API keys."
+        )
 
-    # For NER tasks, acquired documents lack entity annotations. Use Claude to
-    # extract gold entity spans from each passage. (B48 fix; paper §2.5 data acquisition)
+    # For NER, acquired documents lack entity annotations — annotate via Claude (B48).
+    # (Synthesized NER examples already carry entities and are skipped inside the annotator.)
     if task_type == "NER":
         examples = _annotate_ner_entities(examples, log=log)
 
@@ -287,14 +341,95 @@ def acquire_dataset(plan: dict, description: str = "", n_per_label: int = DEFAUL
     rng.shuffle(examples)
     split = int(len(examples) * (1 - test_fraction))
     train, test = examples[:split], examples[split:]
-    log(f"      [acquire] total={len(examples)} train={len(train)} test={len(test)} "
+    log(f"      [acquire] total={len(examples)} (web={n_web}, synthesized={n_synth}) "
+        f"train={len(train)} test={len(test)} "
         f"labels={sorted(set(e.get('label', '?') for e in examples))}")
     if meta is not None:
-        meta["source"] = (
-            f"web search via Exa ({len(examples)} documents scraped for task "
-            f"{plan.get('task_name', plan.get('task_type', '?'))!r})"
-        )
+        parts = []
+        if n_web:
+            parts.append(f"{n_web} web docs via Exa ({MAX_ACQUIRE_ROUNDS}-round diversified)")
+        if n_synth:
+            parts.append(f"{n_synth} LLM-synthesized+verified examples")
+        meta["source"] = "; ".join(parts) or "web/synthesis"
     return train, test
+
+
+def synthesize_seed_examples(plan: dict, task_type: str, n_needed: int,
+                             existing_texts: set | None = None, log=print) -> list[dict]:
+    """Last-resort GOLD synthesis via the orchestrator, deduped + label-validated.
+
+    Only used when real-benchmark and bounded web acquisition can't reach the viability
+    floor. Kept deliberately conservative: the orchestrator generates task-appropriate
+    labeled examples, we drop duplicates and anything that fails a basic validity check
+    (label in the allowed set / required fields present). NOTE: synthetic gold for
+    knowledge-heavy tasks can encode the teacher's errors — this is a fallback, not the
+    preferred source; the low-data warning still fires downstream.
+    """
+    if n_needed <= 0:
+        return []
+    import json as _json
+    import re as _re
+    import anthropic
+    from config.config import ANTHROPIC_API_KEY, ORCHESTRATOR_MODEL
+
+    existing_texts = existing_texts or set()
+    labels = plan.get("labels") or []
+    task_name = plan.get("task_name", task_type)
+    client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
+
+    if task_type == "classification":
+        schema = '{"examples": [{"text": "<input text>", "label": "<one of LABELS>"}]}'
+        label_line = f"LABELS = {labels}. Balance examples across all labels."
+    elif task_type == "NER":
+        schema = ('{"examples": [{"text": "<passage>", '
+                  '"entities": [{"text": "<span>", "type": "<TYPE>"}]}]}')
+        label_line = f"Entity types = {labels}. Every entity span must be an exact substring of text."
+    else:  # math_reasoning / code_generation / generation
+        schema = '{"examples": [{"text": "<problem/prompt>", "answer": "<correct answer>"}]}'
+        label_line = "Each answer must be correct and verifiable."
+
+    prompt = (
+        f"Generate {n_needed} diverse, realistic training examples for this task.\n"
+        f"Task: {task_name} (type: {task_type}).\n{label_line}\n"
+        f"Return STRICT JSON only, no prose: {schema}"
+    )
+    try:
+        resp = client.messages.create(
+            model=ORCHESTRATOR_MODEL, max_tokens=4096, temperature=1.0,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        raw = resp.content[0].text.strip()
+        m = _re.search(r'\{.*\}', raw, _re.DOTALL)
+        parsed = _json.loads(m.group()) if m else {}
+        candidates = parsed.get("examples", []) if isinstance(parsed, dict) else []
+    except Exception as e:
+        log(f"      [acquire] synthesis failed: {e}")
+        return []
+
+    valid: list[dict] = []
+    for ex in candidates:
+        if not isinstance(ex, dict):
+            continue
+        text = str(ex.get("text", "")).strip()
+        if not text or text in existing_texts:
+            continue
+        if task_type == "classification":
+            if labels and ex.get("label") not in labels:
+                continue
+            valid.append({"text": text, "label": ex["label"]})
+        elif task_type == "NER":
+            ents = [e for e in ex.get("entities", [])
+                    if isinstance(e, dict) and e.get("text") and e.get("text") in text]
+            valid.append({"text": text, "entities": ents})
+        else:
+            ans = str(ex.get("answer", "")).strip()
+            if not ans:
+                continue
+            valid.append({"text": text, "answer": ans, "label": task_type})
+        existing_texts.add(text)
+    log(f"      [acquire] synthesized {len(valid)}/{len(candidates)} valid examples "
+        f"(deduped + validated)")
+    return valid
 
 
 def _annotate_ner_entities(examples: list[dict], log=print) -> list[dict]:
@@ -305,6 +440,11 @@ def _annotate_ner_entities(examples: list[dict], log=print) -> list[dict]:
     client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
     annotated = []
     for i, ex in enumerate(examples):
+        # Skip examples that already carry entities (e.g. synthesized seeds) — don't
+        # re-annotate and clobber known-good gold.
+        if ex.get("entities"):
+            annotated.append(ex)
+            continue
         try:
             response = client.messages.create(
                 model=ORCHESTRATOR_MODEL,

@@ -105,24 +105,31 @@ def infer(prompt: str, weights_ref: str, base_model: str, max_new_tokens: int = 
                     torch.cuda.empty_cache()
                 except Exception:
                     pass
+        # Multimodal base models ("Causal LM with Vision", e.g. Qwen3.5) must load via
+        # FastVisionModel; plain FastLanguageModel routes text through the vision path
+        # and crashes (B123/B136). Detected from the pool's `multimodal` flag.
+        from training.lora_trainer import text_tokenizer, is_multimodal_model
+        if is_multimodal_model(base_model):
+            from unsloth import FastVisionModel as _Loader
+        else:
+            _Loader = FastLanguageModel
         if adapter_only:
             # Load the base model first, then apply the adapter on top.
-            model, tokenizer = FastLanguageModel.from_pretrained(
+            model, tokenizer = _Loader.from_pretrained(
                 model_name=base_model, max_seq_length=512, load_in_4bit=False,
                 trust_remote_code=True,
             )
             model.load_adapter(weights_ref)
         else:
             # Full merged checkpoint: weights_ref contains everything needed.
-            model, tokenizer = FastLanguageModel.from_pretrained(
+            model, tokenizer = _Loader.from_pretrained(
                 model_name=weights_ref, max_seq_length=512, load_in_4bit=False,
                 trust_remote_code=True,
             )
-        # Multimodal models load as a processor; use the inner text tokenizer so the
-        # chat template / tokenization never routes text through the vision path (B123).
-        from training.lora_trainer import text_tokenizer
+        # Multimodal loads return a processor; use the inner text tokenizer so the chat
+        # template / tokenization never routes text through the vision path (B123).
         tokenizer = text_tokenizer(tokenizer)
-        FastLanguageModel.for_inference(model)
+        _Loader.for_inference(model)
         # We always cap generation with an explicit max_new_tokens at the call site.
         # Many chat models (e.g. Qwen3) also ship a generation_config.max_length (40960),
         # and when BOTH are set transformers logs a "Both max_new_tokens and max_length
