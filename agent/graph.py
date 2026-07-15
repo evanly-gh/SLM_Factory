@@ -7,16 +7,22 @@ Claude Sonnet 4.6.' (In this codebase the orchestrator model is set in ONE place
 config.config.ORCHESTRATOR_MODEL — and every LLM node resolves it from there.)
 
 Supports two modes (paper §2.5, §2.6):
-  - cold_start: task_analysis → eval_setup → scaling_curve → curate → train → evaluate → iterate loop
+  - cold_start: task_analysis → eval_setup → model_selection → curate → train → evaluate → iterate loop
   - production: trace_ingest → taxonomy → live_confirm → parent_awareness → curate → train loop
+
+Model selection strategy is configurable via config.config.MODEL_SELECTION_STRATEGY:
+  - "smallest_first"      — start smallest, escalate on failure
+  - "largest_first"       — probe largest for feasibility, then start smallest
+  - "interpolation"       — 3-probe scaling curve, pick closest to RAM target
+  - "orchestrator_choice" — LLM picks based on task context
 """
 from langgraph.graph import StateGraph, END
 from langgraph.graph.state import CompiledStateGraph
 from agent.state import AgentState
-from config.config import MAX_TURNS_MAIN
+from config.config import MAX_TURNS_MAIN, MODEL_SELECTION_STRATEGY
 from agent.nodes.cold_start.task_analysis import task_analysis_node
 from agent.nodes.cold_start.eval_setup import eval_setup_node
-from agent.nodes.cold_start.scaling_curve import scaling_curve_node
+from agent.nodes.cold_start.model_selection import get_model_selection_node
 from agent.nodes.train import train_node
 from agent.nodes.evaluate import evaluate_node
 from agent.nodes.iterate import iterate_node
@@ -60,14 +66,16 @@ def build_graph(mode: str = "cold_start") -> CompiledStateGraph:
     graph.add_node("downward_probe", downward_probe_node)
 
     if mode == "cold_start":
+        model_selection_node = get_model_selection_node(MODEL_SELECTION_STRATEGY)
+
         graph.add_node("task_analysis", task_analysis_node)
         graph.add_node("eval_setup", eval_setup_node)
-        graph.add_node("scaling_curve", scaling_curve_node)
+        graph.add_node("model_selection", model_selection_node)
 
         graph.set_entry_point("task_analysis")
         graph.add_edge("task_analysis", "eval_setup")
-        graph.add_edge("eval_setup", "scaling_curve")
-        graph.add_edge("scaling_curve", "curate")
+        graph.add_edge("eval_setup", "model_selection")
+        graph.add_edge("model_selection", "curate")
     else:
         from agent.nodes.production.trace_ingest import trace_ingest_node
         from agent.nodes.production.taxonomy import taxonomy_construct_node

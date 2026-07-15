@@ -1,6 +1,10 @@
 # android_pool.py
 #
-# MODEL POOL DESIGN — RESEARCH BASIS (see PAPER.md §17 for full writeup)
+# MODEL POOL DESIGN — QWEN-ONLY BRANCH
+#
+# This branch restricts the model pool to the Qwen architecture family for
+# controlled ablation of model selection strategies. All models share the same
+# tokenizer lineage and MNN-LLM runtime compatibility.
 #
 # Tier structure rationale:
 #   Tiers are pure PEAK-RAM buckets of each deployed variant, NOT param-count bands.
@@ -17,42 +21,26 @@
 #   it into three real deployment candidates (BF16 / Q8_0 / Q4_K_M) with honest per-variant
 #   size, peak, tier, and decode speed. Weight bytes/param: BF16 2.0, Q8_0 1.0, Q4_K_M 0.55.
 #
-# Quantization notes:
-#   All sizes below are Q4_K_M GGUF (4.5 bpw effective), the community-recommended
-#   default. Q4_K_M is ~4.7x lower perplexity degradation than Q4_0 at only 8.6% more
-#   storage (llama.cpp official benchmarks). Q4_0 is obsolete. Q5_K_M is recommended
-#   when storage is not the constraint.
+# Pool members (4 TEXT-ONLY Qwen-family base models × 3 quant variants = 12 entries):
+#   Qwen3-0.6B                        — text-only; Tier 0 seed (Q4 peak ~500MB)
+#   Qwen2.5-1.5B-Instruct             — text-only; general 1.5B; Tier 1 seed
+#   DeepSeek-R1-Distill-Qwen-1.5B     — Qwen arch, R1 distilled, math/reasoning; Tier 1 seed
+#   Qwen2.5-3B-Instruct               — text-only; top-capability; Tier 2/3 seed
 #
-#   Sub-1B models suffer more from INT4 quantization than 3B models (IJCAI-25:
-#   >10% perplexity increase for sub-1B decoders vs. ~5-10% for 3B). AWQ and QAT
-#   both help, especially at 4-bit and below. For Tier 0 models specifically,
-#   prefer QAT-quantized variants (Unsloth Dynamic 2.0 or Google's QAT checkpoints)
-#   over standard PTQ when available.
+# NOTE (B123 reconciliation): the qwen-only branch originally seeded the multimodal
+# Qwen3.5-0.8B / Qwen3.5-2B, which crash text-only LoRA on this stack (vision processor
+# rejects the text chat template). They were swapped for the text-only Qwen models above,
+# which span the same tiers and load cleanly. Re-add Qwen3.5 behind a vision-aware trainer.
 #
 # Android framework compatibility:
-#   llama.cpp (GGUF): all models below — broadest format support, CPU+Vulkan backends
-#   ExecuTorch: Llama 3.2 1B/3B, Qwen3 all sizes, Phi-4-mini, Gemma 3 — best for
-#               production Android apps (SpinQuant INT4, KleidiAI acceleration)
-#   MNN-LLM:    Qwen3/3.5, Llama 3.2, DeepSeek R1 distills, Gemma — fastest CPU
-#               prefill (8.6x vs llama.cpp); strongest for Qwen family
-#   LiteRT-LM:  Gemma family (official Google path), Llama, Phi-4, Qwen
-#
-# Chipset decode throughput reference (4-bit INT4, CPU-bound):
-#   Snapdragon 660:   ~6-8  tok/s (1B),  ~2-3  tok/s (3B)
-#   Snapdragon 778G:  ~12-15 tok/s (1B), ~4-6  tok/s (3B)
-#   Snapdragon 8 Gen3:~20-30 tok/s (1B), ~8-12 tok/s (3B), ~12.85 tok/s (7B QNN NPU)
-#   Source: arXiv 2410.03613; Qualcomm AI Hub model cards; Grokipedia community benchmarks
+#   llama.cpp (GGUF): all models — broadest format support, CPU+Vulkan backends
+#   MNN-LLM:    Qwen family — fastest CPU prefill (8.6x vs llama.cpp)
+#   ExecuTorch: Qwen3 all sizes — SpinQuant INT4, KleidiAI acceleration
 #
 # Benchmark sources:
 #   Qwen3 scores: arXiv 2505.09388 (Qwen3 Technical Report, Table 8)
-#   Qwen2.5 scores: arXiv 2412.15115 (Qwen2.5 Technical Report, Table 5)
-#   Gemma 3 scores: arXiv 2503.19786 (Gemma 3 Technical Report)
-#   Llama 3.2 scores: Meta model card / arXiv 2407.21783
-#   SmolLM2 scores: HuggingFaceTB model card / Distil Labs benchmark
-#   MiniCPM4 scores: arXiv 2506.07900 (MiniCPM4 Technical Report)
 #   DeepSeek-R1-Distill: arXiv 2501.12948 (DeepSeek-R1 paper, Table 4)
-#   Phi-4-mini: Microsoft Phi-4-mini-instruct model card / localaimaster.com
-#   INT4 sizes: HuggingFace GGUF repos (hugging-quants, bartowski, unsloth)
+#   INT4 sizes: HuggingFace GGUF repos (unsloth)
 
 from dataclasses import dataclass, field
 
@@ -152,41 +140,15 @@ class HardwareConstraints:
 
 
 # ---------------------------------------------------------------------------
-# TIER 0 — Micro  (~0.5B params, int4_size < ~375MB)
-# Use for: binary classification, simple NER, keyword extraction, routing
-# Avoid for: multi-step reasoning, math, code, open-ended generation
-# Quantization risk: HIGH — these models lose the most from INT4; prefer QAT
-#   variants. MiniCPM4-0.5B uses BitCPM4 (QAT-aware), Qwen2.5-0.5B is PTQ.
-# ---------------------------------------------------------------------------
+# QWEN-ONLY POOL TIERS (by peak RAM, not param count)
 #
-# TIER 1 — Small  (~0.75–1.5B params, int4_size ~375–750MB)
-# GSM8K: 59–63%. The capability gap from Tier 0→1 is the LARGEST relative jump
-# in the pool (e.g., GSM8K: 41.6% → 59.6%). Good for classification, NER, simple
-# generation. Qwen3.5-0.8B, Llama-3.2-1B, MiniCPM5-1B are the Tier 1 members.
-# ---------------------------------------------------------------------------
-#
-# TIER 2 — Mid    (~1.5–2.5B params, int4_size ~750–1250MB)
-# GSM8K: 70–77%. Most capable tier that runs on all 6GB+ Android devices.
-# SmolLM2-1.7B leads on IFEval (56.7%) — best for instruction-following tasks.
-# DeepSeek-R1-Distill-1.5B is specialized for math/reasoning only (MATH-500: 83.9%).
-# Gemma-3-1b-it (~1.6B actual params) sits in Tier 2 despite its "1B" label.
-# ---------------------------------------------------------------------------
-#
-# TIER 3 — Large  (~2.5B+ params, int4_size > ~1250MB)
-# GSM8K: 77–82%. Requires 8GB+ RAM phone for comfortable inference. Llama 3.2-3B
-# is the ExecuTorch reference model (fastest on-device path via KleidiAI).
-# Phi-4-mini (3.8B) punches above class on reasoning; Q4_K_M is 2.49GB,
-# fitting the 3GB RAM budget on 8GB devices only (not 6GB).
-# ---------------------------------------------------------------------------
+# Tier 0 — peak < 750 MB  (Qwen3.5-0.8B Q4_K_M lands here)
+# Tier 1 — 750–1500 MB    (Qwen3.5-0.8B Q8_0/BF16, R1-Distill Q4_K_M)
+# Tier 2 — 1500–2500 MB   (R1-Distill Q8_0/BF16, Qwen3.5-2B Q4_K_M/Q8_0)
+# Tier 3 — >= 2500 MB     (Qwen3.5-2B BF16)
 #
 # ---------------------------------------------------------------------------
-# Variant model (BF16 / Q8_0 / Q4_K_M) as INDEPENDENT deployment candidates.
-#
-# The 12 entries in _BASE_MODELS carry the MEASURED Q4_K_M on-disk size and its
-# measured peak RAM (from HF repos / device runs). Each base is expanded into
-# three real, independently-selectable variants that differ in weight precision,
-# on-disk size, peak RAM, and decode speed — but share benchmark accuracy (weight
-# quant barely moves task accuracy, which is exactly why min-RAM selection matters).
+# Variant expansion: 3 base models × 3 quant variants = 9 entries.
 #
 # Sizing model (bytes/param, fact-checked against 2026 GGUF measurements):
 #     BF16  = 2.00 GB/1B params   (Q4 × 3.64)
@@ -198,11 +160,6 @@ class HardwareConstraints:
 #
 # Decode speed: smaller weights → less memory bandwidth per token → faster decode.
 #     Q4_K_M = measured (anchor, ×1.00) · Q8_0 ≈ ×0.65 · BF16 ≈ ×0.45
-#
-# TIER = pure RAM bucket of the variant's own peak_memory_mb (NOT param count):
-#     Tier 0: peak < 750 MB | Tier 1: 750–1500 | Tier 2: 1500–2500 | Tier 3: >= 2500
-# A model's BF16 / Q8 / Q4 variants can therefore land in DIFFERENT tiers — which is
-# the whole point: the loop picks the smallest-RAM variant that still hits the goal.
 # ---------------------------------------------------------------------------
 
 _BF16_OVER_Q4 = 2.00 / 0.55   # ≈ 3.636
@@ -254,12 +211,19 @@ ANDROID_POOL: list[ModelSpec] = [
     # tok_s are the real Q4_K_M values, and its `tier=` field is IGNORED — _variant()
     # recomputes tier per variant from peak RAM via _ram_tier(). The "~params" in the
     # section headers just groups seeds by model scale for readability.
-    # ── ~0.5-0.6B params ──────────────────────────────────────────────────
-    # Qwen3-0.6B: smallest tier-0 model that loads cleanly on the installed stack.
-    # Replaces openbmb/MiniCPM4-0.5B, whose custom remote code is multiply
-    # incompatible with transformers 5.5.0 (BUGS B111/B116: is_torch_fx_available +
-    # tied-weights list-vs-dict) and cannot be trained. Qwen3 is natively supported
-    # by Unsloth/transformers and is present in the HF cache.
+    #
+    # QWEN-ONLY POOL (reconciled with B123): restrict the pool to the Qwen model FAMILY
+    # for controlled model-selection ablation, but use only TEXT-ONLY Qwen models that
+    # actually LoRA-train on this Unsloth/transformers 5.5.0 stack. The qwen-only branch
+    # originally seeded the multimodal Qwen3.5-0.8B / Qwen3.5-2B, which route text-only
+    # LoRA through a vision processor and crash ("Incorrect image source ... Got
+    # <|im_start|>user", B123). They are swapped here for Qwen3-0.6B + Qwen2.5-1.5B/3B,
+    # which span the same tiers and load cleanly. Re-add the Qwen3.5 multimodal seeds
+    # only behind a vision-aware trainer.
+
+    # ── ~0.6B params (Tier 0 seed) ────────────────────────────────────────
+    # Qwen3-0.6B: smallest text-only Qwen that loads on transformers 5.5.0. Q4 peak
+    # ~500MB (tier 0); Q8→tier 1; BF16→tier 2. Source: unsloth/Qwen3-0.6B.
     ModelSpec(
         model_id="unsloth/Qwen3-0.6B",
         size_mb=400,
@@ -268,59 +232,31 @@ ANDROID_POOL: list[ModelSpec] = [
         tok_s_snapdragon_778g=21.0,
         tok_s_snapdragon_8gen3=58.0,
         peak_memory_mb=500,
-        gsm8k=0.36,   # ~0.6B open-answer; low (intended: ARC-Challenge is impossible here)
+        gsm8k=0.36,
         mmlu=0.45,
-        notes="Qwen3-0.6B (Unsloth mirror); loads on transformers 5.5.0 unlike MiniCPM4-0.5B (B111/B116); smallest tier-0 fit for ~512MB devices",
+        notes="Qwen3-0.6B (Unsloth mirror); text-only; smallest tier-0 fit; loads on transformers 5.5.0",
     ),
 
-    # ── ~0.75–1.5B params ─────────────────────────────────────────────────
-    # NOTE (BUGS B123): Qwen/Qwen3.5-0.8B removed — the Qwen3.5 family is natively
-    # MULTIMODAL (image-text-to-text). Loading it for text-only LoRA routes through the
-    # vision processor, which rejects the text chat template ("Incorrect image source ...
-    # Got <|im_start|>user"). Re-add only via a vision-aware trainer. Qwen3-0.6B (tier 0,
-    # text-only) remains the small-Qwen option.
-    # Llama 3.2-1B: ExecuTorch reference model (SpinQuant + KleidiAI).
-    # >350 tok/s prefill on Samsung S24+. Best for latency-critical apps.
-    # Source: Meta model card; PyTorch ExecuTorch blog.
+    # ── ~1.5B params (Tier 1 seed) ────────────────────────────────────────
+    # Qwen2.5-1.5B-Instruct: text-only, standard Qwen2.5 arch (loads/trains cleanly).
+    # Q4 peak ~1150MB (tier 1); Q8→tier 2; BF16→tier 3. GSM8K ~62%, MMLU ~60%.
+    # Source: Qwen2.5 Technical Report (arXiv 2412.15115).
     ModelSpec(
-        model_id="meta-llama/Llama-3.2-1B-Instruct",
-        size_mb=658,
+        model_id="Qwen/Qwen2.5-1.5B-Instruct",
+        size_mb=825,
         tier=1,
-        tok_s_snapdragon_660=8.0,
-        tok_s_snapdragon_778g=14.0,
-        tok_s_snapdragon_8gen3=40.0,
-        peak_memory_mb=900,
-        gsm8k=0.535,   # IFEval 53.5%, GSM8K approximate from Meta model card
-        mmlu=0.490,    # MMLU approximate
-        notes="ExecuTorch reference model; best TTFT via KleidiAI SpinQuant; most tunable 1B (largest fine-tuning gains)",
+        tok_s_snapdragon_660=6.0,
+        tok_s_snapdragon_778g=11.0,
+        tok_s_snapdragon_8gen3=30.0,
+        peak_memory_mb=1150,
+        gsm8k=0.620,
+        mmlu=0.600,
+        notes="Qwen2.5-1.5B text-only; strong general 1.5B; spans tier 1 (Q4) → tier 3 (BF16)",
     ),
-    # NOTE (BUGS B116/B121): openbmb/MiniCPM5-1B removed from the selectable pool —
-    # same openbmb MiniCPM remote-code family as MiniCPM4-0.5B, which is multiply
-    # incompatible with transformers 5.5.0 (is_torch_fx_available + tied-weights). It
-    # loaded/trained fine in neither probe nor main loop. Re-add once a compatible
-    # transformers/MiniCPM version matrix exists.
 
-    # ── ~1.5–2.5B params ──────────────────────────────────────────────────
-    # Gemma 3 1B IT: Google QAT checkpoint; GSM8K 62.8%, benefits from
-    # superior instruction tuning. LiteRT/MediaPipe native support.
-    # size_mb=806 → params_b≈1.61B → Tier 2 by the tier formula.
-    # Despite the "1B" in the name, actual param count places it in Tier 2.
-    # Source: arXiv 2503.19786; Google Gemma 3 1B IT model card.
-    ModelSpec(
-        model_id="google/gemma-3-1b-it",
-        size_mb=806,
-        tier=2,
-        tok_s_snapdragon_660=7.0,
-        tok_s_snapdragon_778g=12.0,
-        tok_s_snapdragon_8gen3=32.0,
-        peak_memory_mb=1050,
-        gsm8k=0.628,   # GSM8K 5-shot, Gemma 3 tech report
-        mmlu=0.480,    # MMLU 5-shot, approximate from Gemma 3 tech report
-        notes="Google QAT INT4; best for LiteRT/MediaPipe deployment; official on-device path for Gemma; multimodal (image+text)",
-    ),
-    # DeepSeek-R1-Distill-Qwen-1.5B: Specialized reasoning only.
-    # MATH-500: 83.9%, AIME 2024: 28.9%. Distilled from DeepSeek-R1 671B.
-    # NOT recommended for classification/NER/general tasks — use Qwen models instead.
+    # ── ~1.5B params ──────────────────────────────────────────────────────
+    # DeepSeek-R1-Distill-Qwen-1.5B: Qwen-architecture model distilled from R1 671B.
+    # Specialized reasoning: MATH-500 83.9%, AIME 2024 28.9%.
     # Source: arXiv 2501.12948 Table 4.
     ModelSpec(
         model_id="deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B",
@@ -330,90 +266,27 @@ ANDROID_POOL: list[ModelSpec] = [
         tok_s_snapdragon_778g=8.0,
         tok_s_snapdragon_8gen3=22.0,
         peak_memory_mb=1270,
-        gsm8k=0.870,   # proxy from MATH-500 83.9%; official GSM8K not reported for 1.5B distill
-        mmlu=0.580,    # approximate; MMLU not officially reported for 1.5B distill
-        notes="SPECIALIZED REASONING ONLY: MATH-500 83.9%, AIME 28.9%. Do not use for classification/NER. R1 distillation requires longer generation.",
+        gsm8k=0.870,
+        mmlu=0.580,
+        notes="Qwen arch, R1 distilled; MATH-500 83.9%, AIME 28.9%; best for math/reasoning tasks",
     ),
-    # SmolLM2-1.7B: Best Tier 2 for instruction following (IFEval 56.7%,
-    # beats Llama 3.2-1B and Qwen2.5-1.5B). Strong for classification tasks.
-    # Source: HuggingFaceTB model card; Distil Labs benchmark.
+
+    # ── ~3B params (Tier 2/3 seed) ────────────────────────────────────────
+    # Qwen2.5-3B-Instruct: text-only, standard Qwen2.5 arch. Q4 peak ~2050MB (tier 2);
+    # Q8/BF16 → tier 3. GSM8K ~79%, MMLU ~66% — the strongest, largest Qwen text model
+    # in this pool, so escalation has a real top tier to reach.
+    # Source: Qwen2.5 Technical Report (arXiv 2412.15115).
     ModelSpec(
-        model_id="HuggingFaceTB/SmolLM2-1.7B-Instruct",
-        size_mb=1060,
+        model_id="Qwen/Qwen2.5-3B-Instruct",
+        size_mb=1650,
         tier=2,
-        tok_s_snapdragon_660=4.5,
-        tok_s_snapdragon_778g=8.0,
-        tok_s_snapdragon_8gen3=22.0,
-        peak_memory_mb=1350,
-        gsm8k=0.488,   # GSM8K 5-shot from HuggingFaceTB model card / Distil Labs
-        mmlu=0.520,    # MMLU approximate from Distil Labs benchmark
-        notes="Best Tier 2 for IFEval/instruction-following (56.7%); strong for classification; compact training corpus",
-    ),
-
-    # ── ~2B params (compact) ──────────────────────────────────────────────
-    # gemma-3n-e2b-it uses PLE caching (2.3B effective); Qwen3.5-2B is 2B params.
-    # Gemma 3n E2B IT: MatFormer (Matryoshka) architecture, natively multimodal.
-    # Beats Gemma3-1B on 9/9 shared benchmarks: HumanEval 66.5% vs 41.5%,
-    # MMLU 60.1% vs ~48%. 5B total params / 2.3B effective via PLE caching.
-    # Source: llm-stats.com/models/compare/gemma-3-1b-it-vs-gemma-3n-e2b-it; Google.
-    # NOTE (BUGS B121): google/gemma-3n-e2b-it removed from the selectable pool — its
-    # MatFormer/multimodal architecture fails to LoRA-train on this Unsloth/transformers
-    # stack ("mat1 and mat2 shapes cannot be multiplied" in the scaling-curve probe).
-    # Re-add with a vision-aware trainer (FastVisionModel) or a compatible version.
-    # NOTE (BUGS B123): Qwen/Qwen3.5-2B removed — same natively-MULTIMODAL Qwen3.5 family
-    # as Qwen3.5-0.8B; text-only LoRA crashes in the vision processor ("Incorrect image
-    # source ... Got <|im_start|>user"). This was the model NER selected; without it NER
-    # falls to a text model (SmolLM2-1.7B / DeepSeek-R1-Distill-Qwen-1.5B). Re-add via a
-    # vision-aware trainer.
-
-    # ── ~3B+ params ───────────────────────────────────────────────────────
-    # Llama 3.2-3B: ExecuTorch reference model for 3B class. Q4_K_M = ~2.02GB.
-    # Decode: ~10 tok/s on SD 8 Gen 3 (CPU). GSM8K 77.7%, ARC-C 78.6%.
-    # Q3_K_M alternative (~1.5GB) fits tighter storage budgets at quality cost.
-    # Source: Meta model card; hugging-quants HF repo (2.02GB confirmed).
-    ModelSpec(
-        model_id="meta-llama/Llama-3.2-3B-Instruct",
-        size_mb=2020,
-        tier=3,
-        tok_s_snapdragon_660=2.5,
-        tok_s_snapdragon_778g=5.0,
-        tok_s_snapdragon_8gen3=12.0,
-        peak_memory_mb=3400,
-        gsm8k=0.777,   # GSM8K from Meta model card / arXiv
-        mmlu=0.630,    # MMLU approximate from community benchmarks
-        notes="ExecuTorch 3B reference; Q4_K_M 2.02GB confirmed; needs 8GB+ RAM; Q3_K_M ~1.5GB fits tighter budgets at quality cost",
-    ),
-    # Ministral-3B: MMLU ~65% (beats Llama-3.2-3B's 63.4%), 256K context window
-    # (unique in the pool — others max at 128K). Native function calling and JSON.
-    # Q4_K_M estimated ~1.9GB (3B params × 0.63 GB/B). 6GB RAM phones feasible.
-    # Source: mistralai/Ministral-3-3B-Instruct-2512-GGUF on HuggingFace; codersera.com.
-    ModelSpec(
-        model_id="mistralai/Ministral-3B-Instruct",
-        size_mb=1900,
-        tier=3,
         tok_s_snapdragon_660=2.8,
         tok_s_snapdragon_778g=5.5,
         tok_s_snapdragon_8gen3=13.0,
-        peak_memory_mb=3200,
-        gsm8k=0.760,   # estimated; benchmark suite confirms strong math reasoning
-        mmlu=0.650,    # ~65% reported (beats Llama-3.2-3B 63.4%) from codersera.com
-        notes="256K context (largest in pool); native function calling + JSON; MMLU ~65% beats Llama-3.2-3B; edge-optimized architecture; ~225 tok/s on desktop GPU",
-    ),
-    # Phi-4-mini (3.8B): Best reasoning-per-GB in the pool. Q4_K_M = 2.49GB.
-    # Fits 8GB RAM phones only (peak ~4.1GB with OS). Microsoft's recommended
-    # on-device model. ONNX + LiteRT deployment paths available.
-    # Source: localaimaster.com; unsloth/Phi-4-mini-instruct-GGUF HF repo.
-    ModelSpec(
-        model_id="microsoft/Phi-4-mini-instruct",
-        size_mb=2490,
-        tier=3,
-        tok_s_snapdragon_660=1.0,
-        tok_s_snapdragon_778g=2.5,
-        tok_s_snapdragon_8gen3=7.0,
-        peak_memory_mb=4100,
-        gsm8k=0.880,   # GSM8K from Phi-4-mini model card / localaimaster.com
-        mmlu=0.720,    # MMLU from Phi-4-mini model card
-        notes="Best reasoning-per-GB; 8GB+ RAM phone only (Q4_K_M 2.49GB); ONNX GenAI + LiteRT paths available",
+        peak_memory_mb=2050,
+        gsm8k=0.790,
+        mmlu=0.660,
+        notes="Qwen2.5-3B text-only; top-capability Qwen in this pool; spans tier 2 (Q4) → tier 3 (Q8/BF16)",
     ),
 ]
 
@@ -456,32 +329,21 @@ def filter_pool_by_task(
     """
     Return feasible models, optionally pre-sorted for a specific task type.
 
-    task_type values:
-      "math"           — prefer Qwen3, DeepSeek-R1-Distill (high GSM8K)
-      "classification" — prefer SmolLM2, Qwen (high IFEval)
-      "ner"            — prefer Qwen (structured output strength)
-      "code"           — prefer Qwen (Qwen2.5-Coder lineage), Phi-4-mini
-      "multilingual"   — prefer Qwen family (CJK training advantage)
-      "reasoning"      — prefer Phi-4-mini, DeepSeek-R1-Distill, Qwen3
-      None             — default sort by tier then size
+    With the Qwen-only pool, all models share the same architecture family.
+    Sorting still applies benchmark-based ranking within the pool:
+      "math" / "reasoning" — sort by GSM8K within tier
+      "classification"     — sort by MMLU within tier
+      "ner" / "code" / "multilingual" — sort by GSM8K within tier
+      None                 — default sort by tier then size
     """
     feasible = filter_pool(constraints)
 
-    if task_type == "math" or task_type == "reasoning":
-        # Sort by GSM8K score within tier, then by tier
+    if task_type in ("math", "reasoning"):
         return sorted(feasible, key=lambda m: (m.tier, -m.gsm8k))
     if task_type == "classification":
-        # SmolLM2 leads on IFEval; otherwise sort by MMLU
-        def classification_key(m: ModelSpec):
-            smol_bonus = -0.05 if "SmolLM" in m.model_id else 0.0
-            return (m.tier, smol_bonus - m.mmlu)
-        return sorted(feasible, key=classification_key)
+        return sorted(feasible, key=lambda m: (m.tier, -m.mmlu))
     if task_type in ("ner", "multilingual", "code"):
-        # Qwen family preferred; sort by GSM8K as proxy for structured generation
-        def qwen_first_key(m: ModelSpec):
-            qwen_bonus = -0.03 if "Qwen" in m.model_id else 0.0
-            return (m.tier, qwen_bonus - m.gsm8k)
-        return sorted(feasible, key=qwen_first_key)
+        return sorted(feasible, key=lambda m: (m.tier, -m.gsm8k))
 
     return feasible
 

@@ -381,6 +381,15 @@ def iterate_node(state: AgentState) -> AgentState:
                      f"(floor={floor:.3f}). Reason: {reason}")
                 state["stop_threshold"] = clamped
 
+    # Largest-first strategy: when the probe model hits the threshold,
+    # switch to the smallest model and restart the training loop.
+    if state.get("_largest_first_phase") == "probe" and current_score >= state["stop_threshold"]:
+        from agent.nodes.cold_start.model_selection.largest_first import check_probe_result
+        state = check_probe_result(state)
+        if state.get("next_action") == "curate":
+            _log(model_id, f"  → CURATE (largest_first probe succeeded; switching to smallest model)")
+            return state
+
     if current_score >= state["stop_threshold"]:
         hw_blocks_termination = False
         _gating_model = state.get("selected_model")
@@ -415,9 +424,15 @@ def iterate_node(state: AgentState) -> AgentState:
         state["next_action"] = "terminate"
         _log(model_id, f"  → TERMINATE (score {current_score:.4f} >= threshold {state['stop_threshold']:.3f})")
     elif stagnant or stalled:
-        state["next_action"] = "escalate"
-        _reason = "stagnation" if stagnant else f"{state.get('consecutive_no_improvement')} stalled evals"
-        _log(model_id, f"  → ESCALATE ({_reason} overrides LLM decision)")
+        if state.get("_largest_first_phase") == "probe":
+            # largest_first feasibility probe couldn't clear the goal → task infeasible.
+            _log(model_id, "  → TERMINATE (largest_first probe stagnated — task infeasible)")
+            state["next_action"] = "terminate"
+            state["_largest_first_phase"] = "done"
+        else:
+            state["next_action"] = "escalate"
+            _reason = "stagnation" if stagnant else f"{state.get('consecutive_no_improvement')} stalled evals"
+            _log(model_id, f"  → ESCALATE ({_reason} overrides LLM decision)")
     elif intervention == "hyperparameter":
         state["next_action"] = "train"
         _log(model_id, f"  → TRAIN (hyperparameter intervention, dataset held fixed)")
