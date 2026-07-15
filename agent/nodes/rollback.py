@@ -61,6 +61,7 @@ def rollback_node(state: AgentState) -> AgentState:
             f"was triggered. scores={state['scores']} — cannot restore a valid checkpoint."
         )
 
-    _log(model_id, f"  Proceeding to re-train on existing dataset")
+    _log(model_id, f"  Restored best checkpoint; re-entering decision loop (iterate) to pick a "
+                   f"DIFFERENT next action — a bare re-train of the same config would just regress again")
 
     return state

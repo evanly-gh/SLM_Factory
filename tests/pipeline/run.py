@@ -29,6 +29,11 @@ PROJ = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)
 sys.path.insert(0, PROJ)
 os.chdir(PROJ)
 
+# Quiet the ML-stack log flood BEFORE transformers/unsloth/datasets are imported anywhere
+# (transformers reads TRANSFORMERS_VERBOSITY at import time). Keeps training-loss lines.
+from agent.logging_setup import set_ml_env
+set_ml_env()
+
 from dotenv import load_dotenv
 load_dotenv(os.path.join(PROJ, ".env"))
 
@@ -212,6 +217,7 @@ initial_state = {
     "initial_stop_threshold": config.DEFAULT_STOP_THRESHOLD,
     "train_examples": [],
     "eval_set": None,
+    "data_source": None,
     "current_dataset_path": None,
     "dataset_version": 0,
     "best_weights_ref": None,

@@ -79,6 +79,13 @@ MAX_TOOL_ROUNDS = 5
 STAGNATION_WINDOW = 3       # number of recent evaluations to look at
 STAGNATION_MIN_DELTA = 0.02  # minimum cumulative improvement over that window
 
+# Hard backstop against a rollback→re-decide→rollback churn. `should_rollback` pops the
+# regressing score, so the stagnation window can stay short and never fire; meanwhile
+# `consecutive_no_improvement` (set in evaluate_node) grows every non-improving eval and
+# is NOT popped. Once this many evals in a row fail to beat the best score, stop churning
+# and escalate — which promotes to a bigger model if one fits, else terminates cleanly.
+MAX_STALL_EVALS = 4
+
 
 def _is_stagnant(scores: list[float]) -> bool:
     """
@@ -215,15 +222,31 @@ then output the decision JSON.
                 result = f"[unknown tool] {tc['name']}"
             messages.append(ToolMessage(content=str(result), tool_call_id=tc["id"]))
 
-    # Exhausted tool rounds — only attempt to parse if the last response has no tool calls
+    # Exhausted the tool-use budget. Rather than giving up straight to the score-band
+    # fallback (the frequent "LLM exhausted tool rounds" warning in the logs), make ONE
+    # final call with tools removed and an explicit instruction to answer now. This
+    # salvages a real, reasoned decision in the common case where the model was still
+    # exploring with tools when it ran out of rounds.
     if response is None:
         raise RuntimeError(
             "LLM exhausted tool rounds without producing a final JSON decision"
         )
     if response.tool_calls:
-        raise RuntimeError(
-            "LLM exhausted tool rounds without producing a final JSON decision"
-        )
+        llm_final = ChatAnthropic(
+            model=ORCHESTRATOR_MODEL,
+            anthropic_api_key=ANTHROPIC_API_KEY,
+            max_tokens=1024,
+        )  # NOT tool-bound: forces a text answer
+        messages.append(HumanMessage(content=(
+            "You have used all available tool rounds. Do NOT call any tools. "
+            "Respond NOW with ONLY the decision JSON described in the system prompt "
+            "(no prose, no code fences)."
+        )))
+        response = llm_final.invoke(messages)
+        if getattr(response, "tool_calls", None):
+            raise RuntimeError(
+                "LLM exhausted tool rounds without producing a final JSON decision"
+            )
     raw = response.content if isinstance(response.content, str) else str(response.content)
     raw = raw.strip()
     if raw.startswith("```"):
@@ -301,6 +324,14 @@ def iterate_node(state: AgentState) -> AgentState:
         delta = max(window) - min(window)
         _log(model_id, f"  Stagnation detected: window={[f'{s:.4f}' for s in window]}  "
              f"delta={delta:.4f} < {STAGNATION_MIN_DELTA}")
+
+    # Stall backstop: catches the rollback churn that stagnation can miss (scores are
+    # popped on rollback, so the window may never fill). Counts consecutive non-improving
+    # evals, which survive rollback.
+    stalled = state.get("consecutive_no_improvement", 0) >= MAX_STALL_EVALS
+    if stalled and not stagnant:
+        _log(model_id, f"  Stall detected: {state.get('consecutive_no_improvement')} consecutive "
+             f"evals without beating best {state['best_score']:.4f} (>= {MAX_STALL_EVALS})")
 
     # Try LLM-driven decision with tool access
     llm_decision = None
@@ -383,9 +414,10 @@ def iterate_node(state: AgentState) -> AgentState:
             return state
         state["next_action"] = "terminate"
         _log(model_id, f"  → TERMINATE (score {current_score:.4f} >= threshold {state['stop_threshold']:.3f})")
-    elif stagnant:
+    elif stagnant or stalled:
         state["next_action"] = "escalate"
-        _log(model_id, f"  → ESCALATE (stagnation overrides LLM decision)")
+        _reason = "stagnation" if stagnant else f"{state.get('consecutive_no_improvement')} stalled evals"
+        _log(model_id, f"  → ESCALATE ({_reason} overrides LLM decision)")
     elif intervention == "hyperparameter":
         state["next_action"] = "train"
         _log(model_id, f"  → TRAIN (hyperparameter intervention, dataset held fixed)")

@@ -68,6 +68,8 @@ def _run_unsloth_training(
     from transformers import TrainingArguments
     from trl import SFTTrainer
     import torch
+    from agent.logging_setup import quiet_ml_logging
+    quiet_ml_logging()
 
     max_seq_length = 512
     _ensure_model_cached(config.base_model)
@@ -175,6 +177,11 @@ def _run_unsloth_training(
         fp16=not _bf16 and torch.cuda.is_available(),
         bf16=_bf16,
         logging_steps=10,
+        # disable_tqdm swaps the HF Trainer's tqdm ProgressCallback for PrinterCallback:
+        # the per-step progress bar ("0%|...| 0/57") disappears, but the periodic loss
+        # dict ({'loss':..., 'grad_norm':..., 'learning_rate':..., 'epoch':...}) is still
+        # printed every `logging_steps`. So we keep the useful signal, drop the bar spam.
+        disable_tqdm=True,
         # "no" avoids mid-training checkpointing, which torch.save's the trainer args and
         # fails under Unsloth's patched SFTConfig (pickle identity mismatch). We persist the
         # final model explicitly via save_pretrained below.
@@ -208,6 +215,8 @@ def merge_for_quantization(checkpoint_path: str, output_dir: str) -> str:
     Returns path to the merged HF checkpoint directory.
     """
     from unsloth import FastLanguageModel
+    from agent.logging_setup import quiet_ml_logging
+    quiet_ml_logging()
     merged_dir = os.path.join(output_dir, "merged")
     os.makedirs(merged_dir, exist_ok=True)
     model, tokenizer = FastLanguageModel.from_pretrained(

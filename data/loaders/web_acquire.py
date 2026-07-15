@@ -11,7 +11,7 @@ import time
 
 _SKIP_URL_MARKERS = ("/archive/", "/list/", "/find/")
 MAX_LABELS = 6          # bound Exa spend
-DEFAULT_N_PER_LABEL = 16
+DEFAULT_N_PER_LABEL = 24  # docs requested per label/topic (Exa fallback path)
 
 
 def _looks_useful(url: str, text: str) -> bool:
@@ -48,20 +48,125 @@ _BENCHMARK_ALIASES = {
     "gsm8k": "gsm8k",
     "financialphrasebank": "fpb", "fpb": "fpb",
     "arcchallenge": "arc", "arc": "arc", "ai2arc": "arc", "arcc": "arc",
+    # NER benchmarks: load real token+BIO-tag data and convert to entity spans.
+    "bc5cdr": "bc5cdr", "bc5cdrner": "bc5cdr",
+    "conll": "conll", "conll2003": "conll", "conll03": "conll",
 }
+
+
+def _bio_to_spans(tokens: list[str], tags: list, names: list[str] | None):
+    """Convert a token sequence + BIO tag sequence into (text, entity spans).
+
+    `names` maps integer tag ids → label strings (e.g. from a ClassLabel feature).
+    Returns (text, [{"text","type"}, ...]) with contiguous B-/I- runs merged.
+    """
+    text = " ".join(tokens)
+    spans: list[dict] = []
+    cur_toks: list[str] = []
+    cur_type: str | None = None
+
+    def _flush():
+        nonlocal cur_toks, cur_type
+        if cur_toks and cur_type:
+            spans.append({"text": " ".join(cur_toks), "type": cur_type})
+        cur_toks, cur_type = [], None
+
+    for tok, tag in zip(tokens, tags):
+        label = names[tag] if names is not None and isinstance(tag, int) else str(tag)
+        if label in ("O", "0") or not label:
+            _flush()
+            continue
+        prefix, _, etype = label.partition("-")
+        etype = etype or label
+        if prefix == "B" or etype != cur_type:
+            _flush()
+            cur_toks, cur_type = [tok], etype
+        else:  # "I-" continuation of the same type
+            cur_toks.append(tok)
+    _flush()
+    return text, spans
+
+
+def _load_ner_benchmark(key: str, max_train: int, max_test: int, log=print):
+    """Load a real NER benchmark (BC5CDR / CoNLL-2003) as {"text","entities"} dicts.
+
+    Tries a few known HuggingFace dataset ids; returns (train, test) or None if none
+    load (caller then falls back to Exa). Defensive by design — an unreachable dataset
+    must not crash the run.
+    """
+    from datasets import load_dataset
+
+    # (dataset_id, config, tokens_key, tags_key) candidates, most-canonical first.
+    candidates = {
+        "conll": [("eriktks/conll2003", None, "tokens", "ner_tags"),
+                  ("conll2003", None, "tokens", "ner_tags")],
+        "bc5cdr": [("tner/bc5cdr", None, "tokens", "tags"),
+                   ("spyysalo/bc5cdr", None, "tokens", "ner_tags")],
+    }.get(key, [])
+    # Fallback label map for datasets whose tags are bare ints (no ClassLabel names).
+    _FALLBACK_NAMES = {
+        "bc5cdr": ["O", "B-Chemical", "B-Disease", "I-Disease", "I-Chemical"],
+    }
+
+    for ds_id, cfg, tok_key, tag_key in candidates:
+        try:
+            def _split(split, n):
+                ds = (load_dataset(ds_id, cfg, split=f"{split}[:{n}]", trust_remote_code=True)
+                      if cfg else
+                      load_dataset(ds_id, split=f"{split}[:{n}]", trust_remote_code=True))
+                feat = ds.features.get(tag_key)
+                names = getattr(getattr(feat, "feature", None), "names", None) or _FALLBACK_NAMES.get(key)
+                out = []
+                for ex in ds:
+                    text, spans = _bio_to_spans(ex[tok_key], ex[tag_key], names)
+                    if text.strip():
+                        out.append({"text": text, "entities": spans})
+                return out
+            train = _split("train", max_train)
+            # CoNLL uses "validation"; BC5CDR uses "test" — try both.
+            try:
+                test = _split("validation", max_test)
+            except Exception:
+                test = _split("test", max_test)
+            if train and test:
+                log(f"      [acquire] loaded REAL NER benchmark via {ds_id!r}: "
+                    f"train={len(train)} test={len(test)}")
+                return ds_id, train, test
+        except Exception as e:
+            log(f"      [acquire] NER benchmark {ds_id!r} unavailable ({str(e)[:80]}); trying next")
+    return None
 
 
 def _norm_bench(s: str) -> str:
     return "".join(ch for ch in (s or "").lower() if ch.isalnum())
 
 
-def load_benchmark_dataset(plan: dict, log=print, max_train: int = 150, max_test: int = 25):
-    """Return (train, test) from the real benchmark dataset, or None if unknown/failed."""
+def load_benchmark_dataset(plan: dict, log=print, max_train: int = 300, max_test: int = 80,
+                           meta: dict | None = None):
+    """Return (train, test) from the real benchmark dataset, or None if unknown/failed.
+
+    When `meta` is provided it is populated with a human-readable `source` string so
+    callers can report data provenance downstream (e.g. in the curate log).
+    """
     import re as _re
     key = _BENCHMARK_ALIASES.get(_norm_bench(plan.get("benchmark")))
     if not key:
         return None
     name = plan.get("benchmark")
+
+    # NER benchmarks are token/BIO-tagged, not question/answer — handle separately.
+    if key in ("bc5cdr", "conll"):
+        ner = _load_ner_benchmark(key, max_train, max_test, log=log)
+        if ner is None:
+            return None
+        ds_id, train, test = ner
+        if meta is not None:
+            meta["source"] = (
+                f"real NER benchmark {name!r} via HuggingFace {ds_id!r} "
+                f"(token/BIO tags → entity spans; train={len(train)}/test={len(test)})"
+            )
+        return train, test
+
     try:
         from datasets import load_dataset
         if key == "gsm8k":
@@ -103,19 +208,27 @@ def load_benchmark_dataset(plan: dict, log=print, max_train: int = 150, max_test
     if not train or not test:
         return None
     log(f"      [acquire] loaded REAL benchmark {name!r}: train={len(train)} test={len(test)}")
+    if meta is not None:
+        meta["source"] = (
+            f"real benchmark dataset {name!r} (HuggingFace datasets.load_dataset; "
+            f"capped at max_train={max_train}/max_test={max_test})"
+        )
     return train, test
 
 
 def acquire_dataset(plan: dict, description: str = "", n_per_label: int = DEFAULT_N_PER_LABEL,
-                    test_fraction: float = 0.3, log=print):
+                    test_fraction: float = 0.3, log=print, meta: dict | None = None):
     """
     Acquire a labeled dataset per the task plan.
     Prefers the real public benchmark dataset when the plan names a known one
     (B119); otherwise acquires from the web via Exa.
     Returns (train_examples, test_examples) as lists of {"text", "label", ...} dicts
     (classification/generation) or {"text", "entities"} dicts (NER).
+
+    When `meta` is provided it is populated with a `source` string describing where the
+    data came from (real benchmark vs Exa web search), for downstream provenance logging.
     """
-    real = load_benchmark_dataset(plan, log=log)
+    real = load_benchmark_dataset(plan, log=log, meta=meta)
     if real is not None:
         return real
 
@@ -176,6 +289,11 @@ def acquire_dataset(plan: dict, description: str = "", n_per_label: int = DEFAUL
     train, test = examples[:split], examples[split:]
     log(f"      [acquire] total={len(examples)} train={len(train)} test={len(test)} "
         f"labels={sorted(set(e.get('label', '?') for e in examples))}")
+    if meta is not None:
+        meta["source"] = (
+            f"web search via Exa ({len(examples)} documents scraped for task "
+            f"{plan.get('task_name', plan.get('task_type', '?'))!r})"
+        )
     return train, test
 
 

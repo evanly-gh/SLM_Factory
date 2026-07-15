@@ -96,14 +96,37 @@ def _lookup_local_db(description: str, log) -> str | None:
         import csv
         # Extract search keywords from the description (device name words)
         desc_lower = description.lower()
-        # Common device name keywords to search for
-        keywords = [w for w in desc_lower.split()
-                    if len(w) > 2 and w not in (
-                        "the", "for", "and", "with", "that", "this", "run", "fine",
-                        "tune", "small", "model", "ram", "rom", "storage", "deploy",
-                        "deployment", "targeting", "efficiently", "should", "phone",
-                        "smartphone", "device", "mobile",
-                    )]
+        _STOP = {
+            "the", "for", "and", "with", "that", "this", "run", "fine",
+            "tune", "small", "model", "ram", "rom", "storage", "deploy",
+            "deployment", "targeting", "efficiently", "should", "phone",
+            "smartphone", "device", "mobile", "gb", "mb", "my", "using",
+        }
+
+        def _clean(tok: str) -> str:
+            # strip surrounding punctuation ("9a," → "9a", "(2023)" → "2023")
+            return tok.strip(".,;:()[]{}\"'").strip()
+
+        keywords = []
+        for w in (_clean(t) for t in desc_lower.split()):
+            if not w or w in _STOP:
+                continue
+            has_digit = any(c.isdigit() for c in w)
+            # Keep normal name words (len>2) AND short alphanumeric MODEL CODES that
+            # contain a digit (e.g. "9a", "6a", "5g", "a14", "s24", "2023") — these are
+            # the most discriminative tokens for a phone and were previously dropped by
+            # the blanket len>2 rule, so single-distinctive-token phones (Pixel 6a,
+            # Redmi 9A) never reached the >=2 match threshold. Drop pure memory sizes
+            # like "2gb"/"128gb" (they don't appear in device names) and bare digits.
+            if w.isdigit():
+                # keep 4-digit model years (2023), drop small bare numbers
+                if len(w) == 4:
+                    keywords.append(w)
+                continue
+            if w.endswith("gb") or w.endswith("mb"):
+                continue
+            if len(w) > 2 or has_digit:
+                keywords.append(w)
 
         matches = []
         with open(csv_path, encoding="utf-8") as f:

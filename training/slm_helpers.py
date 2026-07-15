@@ -83,6 +83,8 @@ def infer(prompt: str, weights_ref: str, base_model: str, max_new_tokens: int = 
     cache_key = (weights_ref, base_model)
     if cache_key not in _inference_cache:
         from unsloth import FastLanguageModel
+        from agent.logging_setup import quiet_ml_logging
+        quiet_ml_logging()
         adapter_only = _is_adapter_only_checkpoint(weights_ref)
         if adapter_only and (not base_model or base_model == weights_ref):
             raise ValueError(
@@ -117,6 +119,16 @@ def infer(prompt: str, weights_ref: str, base_model: str, max_new_tokens: int = 
                 trust_remote_code=True,
             )
         FastLanguageModel.for_inference(model)
+        # We always cap generation with an explicit max_new_tokens at the call site.
+        # Many chat models (e.g. Qwen3) also ship a generation_config.max_length (40960),
+        # and when BOTH are set transformers logs a "Both max_new_tokens and max_length
+        # seem to have been set" warning on EVERY generate() call. Clear the config-level
+        # max_length so max_new_tokens is the single, unambiguous length control.
+        try:
+            if getattr(model, "generation_config", None) is not None:
+                model.generation_config.max_length = None
+        except Exception:
+            pass
         _inference_cache[cache_key] = (model, tokenizer)
         _cache_order.append(cache_key)
 

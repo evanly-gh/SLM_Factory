@@ -22,6 +22,7 @@ class AgentState(TypedDict):
     # Data
     train_examples: list[dict]
     eval_set: Optional[EvalSet]
+    data_source: Optional[str]        # provenance of train/eval examples (real benchmark vs web/Exa)
     current_dataset_path: Optional[str]  # path to Dcold JSONL on disk
     dataset_version: int              # incremented each curate call
 
