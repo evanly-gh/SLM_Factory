@@ -20,16 +20,15 @@
 #         openai/gsm8k, capped at 300 train / 80 test — cheap). Math is genuinely
 #         hard for sub-3B models, so small models cannot shortcut to convergence —
 #         this is what forces escalation instead of an early stop.
-# Device: 16 GB RAM phone → ~14 GB usable, so ALL 12 pool variants (tiers 0-3)
+# Device: 16 GB RAM phone → ~14 GB usable, so ALL 18 pool variants (tiers 0-3)
 #         are hardware-feasible and escalation has somewhere to climb to.
-# Strategy: smallest_first — start at the smallest model (tier 0) and let the
-#         stagnation/stall logic escalate upward tier by tier.
+# Strategy: smallest_first — start at the smallest model (tier 0, Qwen3-0.6B) and let
+#         the stagnation/stall logic escalate upward tier by tier.
 # Threshold: pinned to 0.90 via SLM_STOP_THRESHOLD. The pool's BEST GSM8K score is
-#         DeepSeek-R1-Distill-1.5B at 0.87, so NO tier can clear 0.90 — every tier
+#         Qwen3-4B-Instruct-2507 at ~0.88, so NO tier can clear 0.90 — every tier
 #         stalls and escalates, walking tier 0 → 1 → 2 → 3 before terminating at
-#         the top. (This is the only way to force full-tier escalation: any
-#         threshold ≤ 0.87 would converge at the tier where DeepSeek first appears,
-#         which is tier 1, and never climb further.)
+#         the top. (Any threshold ≤ ~0.88 would converge at the tier where the 4B
+#         model first appears and never climb to the top.)
 #
 # EXPECTED TRAJECTORY (verify in logs/runs/<ts>/ and the .out file)
 # -----------------------------------------------------------------

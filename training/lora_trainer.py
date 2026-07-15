@@ -270,6 +270,19 @@ def _run_unsloth_training(
     checkpoint_path = os.path.join(output_dir, "final_checkpoint")
     model.save_pretrained(checkpoint_path)
     tokenizer.save_pretrained(checkpoint_path)
+
+    # Free the training model's VRAM before the caller loads the checkpoint for eval.
+    # Without this, the just-trained model stays resident and, combined with the
+    # inference load, pushes large (4B) models into CPU/meta offload → Unsloth
+    # fast-generate crashes with "Invalid target device: None" (B142).
+    try:
+        import gc
+        del trainer, model
+        gc.collect()
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+    except Exception:
+        pass
     return checkpoint_path
 
 def merge_for_quantization(checkpoint_path: str, output_dir: str) -> str:

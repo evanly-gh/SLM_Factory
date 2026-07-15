@@ -119,8 +119,10 @@ def _lookup_local_db(description: str, log) -> str | None:
             # Redmi 9A) never reached the >=2 match threshold. Drop pure memory sizes
             # like "2gb"/"128gb" (they don't appear in device names) and bare digits.
             if w.isdigit():
-                # keep 4-digit model years (2023), drop small bare numbers
-                if len(w) == 4:
+                # Keep short bare numbers — they are phone MODEL numbers ("12" in
+                # "OnePlus 12", "8" in "Pixel 8") or years ("2023"). Only very long
+                # digit runs (RAM/storage sizes already stripped of GB/MB) are dropped.
+                if len(w) <= 4:
                     keywords.append(w)
                 continue
             if w.endswith("gb") or w.endswith("mb"):
