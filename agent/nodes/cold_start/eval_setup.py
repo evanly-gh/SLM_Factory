@@ -19,10 +19,14 @@ def eval_setup_node(state: AgentState) -> AgentState:
     acquire_meta: dict = {}
     if plan is not None:
         # Autonomous, general path: acquire the dataset from the web per the
-        # orchestrator's plan (works for any task / task_type).
+        # orchestrator's plan (works for any task / task_type). The acquisition target
+        # is a realistic UPPER bound for the web/synthesis fallback (real benchmarks
+        # ignore it and use their own caps); quality-over-quantity means we don't chase it.
+        _ACQUIRE_TARGET = {"classification": 150, "NER": 200}.get(task_type, 120)
         from data.loaders.web_acquire import acquire_dataset
         train_examples, test_examples = acquire_dataset(
-            plan, description=state.get("description", ""), meta=acquire_meta
+            plan, description=state.get("description", ""),
+            target_examples=_ACQUIRE_TARGET, meta=acquire_meta,
         )
     elif task_type == "classification":
         from data.loaders.sms_spam import download_sms_spam

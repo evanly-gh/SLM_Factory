@@ -1399,3 +1399,21 @@ Driven by a review of CoNLL/biomedical-NER run 36989405 (`logs/slurm/slm-conll-n
 - **When:** 2026-07-15 (user: "data rebuild should have a variety of data")
 - **What:** Beyond the per-rebuild seed rotation (B125, varies gold sampling + hard-neg source order), the synthetic hard negatives are now generated with a temperature that rotates per rebuild (0.7 → 0.9 → 1.1), so successive `data_rebuild` rounds produce genuinely different negatives instead of a near-identical regeneration. Combined with the gold-cap warning + real-benchmark loaders (B131), this gives the rebuild real variety when the gold pool has surplus; when the corpus is fully consumed the negatives still differ via temperature.
 - **Status:** 🟢 done.
+
+---
+
+## Official-Qwen pool + FastVisionModel + acquisition ladder — 2026-07-15 (B139–B141)
+
+## B139 -- pool restricted to official Qwen (Qwen3 + Qwen3.5); FastVisionModel for multimodal
+- **Where:** `config/android_pool.py`, `training/lora_trainer.py`, `training/slm_helpers.py`, `docs/model_pool.md` (new), `config/android_pool.md` (archived)
+- **When:** 2026-07-15 (user: official Qwen only; make Qwen3.5 work)
+- **What:** Pool is now 6 official Qwen base models (18 variants): text `Qwen/Qwen3-0.6B`, `Qwen/Qwen3-1.7B`, `Qwen/Qwen3-4B-Instruct-2507`; multimodal `Qwen/Qwen3.5-0.8B`, `Qwen/Qwen3.5-2B`, `Qwen/Qwen3.5-4B`. Removed Qwen2.5, DeepSeek-R1-Distill, Qwen3-4B-Thinking-2507 (thinking-only reintroduces the reasoning-model eval failure). Real Qwen3 benchmarks sourced from the Qwen3 report + 4B-2507 card; Qwen3.5 numbers are estimates. New authoritative `docs/model_pool.md`; old `config/android_pool.md` kept but marked ARCHIVED.
+- **Multimodal integration (supersedes B136's text_tokenizer hack):** Qwen3.5 is a "Causal LM with Vision" (confirmed by Unsloth's Qwen3.5 fine-tuning guide). Text-only LoRA now loads via `FastVisionModel.from_pretrained` + `get_peft_model(finetune_vision_layers=False, finetune_language_layers=True, ...)`, selected by `is_multimodal_model()` (pool `multimodal` flag lookup) in both `lora_trainer` and `slm_helpers.infer`. Base transformers repos only (never `-GGUF`, B107).
+- **Status:** 🟡 pool + wiring done and unit-tested; multimodal LoRA is **UNVERIFIED** without a GPU run + model download (follows Unsloth's documented recipe). Text-only Qwen3 models are the reliable path.
+
+## B140 -- data-acquisition ladder (bounded diversified Exa + verified synthesis)
+- **Where:** `data/loaders/web_acquire.py`, `agent/nodes/cold_start/eval_setup.py`
+- **When:** 2026-07-15 (user-approved "recommended" design)
+- **What:** Replaced single-pass Exa scraping with a 3-stage ladder: (1) real benchmark loader (B131/B119); (2) **bounded, diversified** Exa rounds — up to `MAX_ACQUIRE_ROUNDS=3`, each round rephrases queries (`_diversify_query`) so re-runs fetch NEW docs (not duplicates), deduped, stopping at `target_examples`; (3) if still below the viability floor (`target*0.5`), **verified synthesis** (`synthesize_seed_examples`) tops up with orchestrator-generated, deduped, label-validated examples. `target_examples` is an UPPER bound (quality-over-quantity), passed per task type from `eval_setup`. Provenance (web vs synth counts) logged and stored in `state["data_source"]`.
+- **Why not the literal "rerun Exa forever + generate to the cap" plan:** more noisy web docs amplify label noise (B119); identical re-runs return duplicates; unbounded retries risk cost blowup; unfiltered synthesis trains on the teacher's hallucinations. The ladder bounds retries, diversifies queries, and validates/dedups synthetic gold.
+- **Status:** 🟢 implemented (synthesis path needs live API keys to exercise end-to-end).

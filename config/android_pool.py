@@ -21,19 +21,22 @@
 #   it into three real deployment candidates (BF16 / Q8_0 / Q4_K_M) with honest per-variant
 #   size, peak, tier, and decode speed. Weight bytes/param: BF16 2.0, Q8_0 1.0, Q4_K_M 0.55.
 #
-# Pool members (6 Qwen-family base models × 3 quant variants = 18 entries):
-#   Qwen3-0.6B                        — text-only; Tier 0 seed (Q4 peak ~500MB)
-#   Qwen2.5-1.5B-Instruct             — text-only; general 1.5B; Tier 1 seed
-#   DeepSeek-R1-Distill-Qwen-1.5B     — Qwen arch, R1 distilled, math/reasoning; Tier 1 seed
-#   Qwen2.5-3B-Instruct               — text-only; top-capability; Tier 2/3 seed
-#   Qwen3.5-0.8B   (multimodal)       — text-only LoRA via text_tokenizer() (B123)
-#   Qwen3.5-2B     (multimodal)       — base repo, not -GGUF (B107); text-only LoRA via text_tokenizer()
+# Pool members (6 official Qwen base models × 3 quant variants = 18 entries):
+#   Qwen3-0.6B                 (text)       — Tier 0 seed; verified
+#   Qwen3-1.7B                 (text)       — Tier 1 seed; verified
+#   Qwen3-4B-Instruct-2507     (text)       — Tier 3 seed; verified; NON-thinking (best general)
+#   Qwen3.5-0.8B               (multimodal) — Tier 0 seed; text-only LoRA via FastVisionModel
+#   Qwen3.5-2B                 (multimodal) — Tier 2 seed; base repo (not -GGUF, B107)
+#   Qwen3.5-4B                 (multimodal) — Tier 3 seed; top-capability multimodal
 #
-# B123/B107 handling: the multimodal Qwen3.5 models load as a *processor*; text-only LoRA
-# works because lora_trainer/slm_helpers extract the inner text tokenizer (text_tokenizer()).
-# The text-only Qwen models are the RELIABLE path; Qwen3.5 multimodal LoRA is best-effort
-# and unverified without a GPU run. Qwen3.5-2B uses the base transformers repo (Qwen/Qwen3.5-2B),
-# never the -GGUF repo (which has no transformers config and cannot be fine-tuned, B107).
+# No Qwen2.5, no distilled (DeepSeek-R1-Distill), no thinking-only (Qwen3-4B-Thinking-2507)
+# models. See docs/model_pool.md for the per-model capability write-up and "worth using for".
+#
+# Multimodal handling (B123/B136): Qwen3.5 is a "Causal LM with Vision" and is fine-tuned
+# TEXT-ONLY via Unsloth's FastVisionModel with finetune_vision_layers=False (see lora_trainer).
+# Qwen3.5-* use the BASE transformers repos, never the -GGUF repo (no transformers config,
+# cannot be fine-tuned, B107). Qwen3.5 benchmarks are ESTIMATES; multimodal LoRA is best-effort
+# pending a GPU run. The three verified text-only Qwen3 models are the reliable path.
 #
 # Android framework compatibility:
 #   llama.cpp (GGUF): all models — broadest format support, CPU+Vulkan backends
@@ -218,74 +221,64 @@ ANDROID_POOL: list[ModelSpec] = [
     # recomputes tier per variant from peak RAM via _ram_tier(). The "~params" in the
     # section headers just groups seeds by model scale for readability.
     #
-    # QWEN-ONLY POOL (reconciled with B123): restrict the pool to the Qwen model FAMILY
-    # for controlled model-selection ablation, but use only TEXT-ONLY Qwen models that
-    # actually LoRA-train on this Unsloth/transformers 5.5.0 stack. The qwen-only branch
-    # originally seeded the multimodal Qwen3.5-0.8B / Qwen3.5-2B, which route text-only
-    # LoRA through a vision processor and crash ("Incorrect image source ... Got
-    # <|im_start|>user", B123). They are swapped here for Qwen3-0.6B + Qwen2.5-1.5B/3B,
-    # which span the same tiers and load cleanly. Re-add the Qwen3.5 multimodal seeds
-    # only behind a vision-aware trainer.
+    # OFFICIAL QWEN POOL (Qwen3 + Qwen3.5, official Qwen/* repos only).
+    # No Qwen2.5, no distilled models, no thinking-only models. The two families:
+    #   - Qwen3 (text): 0.6B, 1.7B, 4B-Instruct-2507 — verified, reliable.
+    #   - Qwen3.5 (multimodal "Causal LM with Vision"): 0.8B, 2B, 4B — fine-tuned
+    #     TEXT-ONLY via FastVisionModel (finetune_vision_layers=False), see lora_trainer.
+    # Real Qwen3 benchmarks from the Qwen3 Technical Report (arXiv 2505.09388) and the
+    # Qwen3-4B-2507 model card. Qwen3.5 numbers are ESTIMATES (specs not independently
+    # verified) and multimodal LoRA is best-effort pending a GPU run.
 
-    # ── ~0.6B params (Tier 0 seed) ────────────────────────────────────────
-    # Qwen3-0.6B: smallest text-only Qwen that loads on transformers 5.5.0. Q4 peak
-    # ~500MB (tier 0); Q8→tier 1; BF16→tier 2. Source: unsloth/Qwen3-0.6B.
+    # ── Qwen3-0.6B (text) — Tier 0 seed ───────────────────────────────────
+    # Qwen3 Technical Report: MMLU 52.81, GSM8K 59.59. 0.6B (0.44B non-embed), 32K ctx.
     ModelSpec(
-        model_id="unsloth/Qwen3-0.6B",
+        model_id="Qwen/Qwen3-0.6B",
         size_mb=400,
         tier=0,
         tok_s_snapdragon_660=13.0,
         tok_s_snapdragon_778g=21.0,
         tok_s_snapdragon_8gen3=58.0,
         peak_memory_mb=500,
-        gsm8k=0.36,
-        mmlu=0.45,
-        notes="Qwen3-0.6B (Unsloth mirror); text-only; smallest tier-0 fit; loads on transformers 5.5.0",
+        gsm8k=0.596,
+        mmlu=0.528,
+        notes="Qwen3-0.6B (official); text-only; smallest tier-0 fit; dual-mode (use non-thinking for classification/NER)",
     ),
 
-    # ── ~1.5B params (Tier 1 seed) ────────────────────────────────────────
-    # Qwen2.5-1.5B-Instruct: text-only, standard Qwen2.5 arch (loads/trains cleanly).
-    # Q4 peak ~1150MB (tier 1); Q8→tier 2; BF16→tier 3. GSM8K ~62%, MMLU ~60%.
-    # Source: Qwen2.5 Technical Report (arXiv 2412.15115).
+    # ── Qwen3-1.7B (text) — Tier 1 seed ───────────────────────────────────
+    # Qwen3 Technical Report: MMLU 62.63, GSM8K 75.44. 1.7B, 32K ctx.
     ModelSpec(
-        model_id="Qwen/Qwen2.5-1.5B-Instruct",
-        size_mb=825,
+        model_id="Qwen/Qwen3-1.7B",
+        size_mb=1000,
         tier=1,
         tok_s_snapdragon_660=6.0,
         tok_s_snapdragon_778g=11.0,
         tok_s_snapdragon_8gen3=30.0,
-        peak_memory_mb=1150,
-        gsm8k=0.620,
-        mmlu=0.600,
-        notes="Qwen2.5-1.5B text-only; strong general 1.5B; spans tier 1 (Q4) → tier 3 (BF16)",
+        peak_memory_mb=1350,
+        gsm8k=0.754,
+        mmlu=0.626,
+        notes="Qwen3-1.7B (official); text-only; strong general small model; spans tier 1 (Q4) → tier 3 (BF16)",
     ),
 
-    # ── ~1.5B params ──────────────────────────────────────────────────────
-    # DeepSeek-R1-Distill-Qwen-1.5B: Qwen-architecture model distilled from R1 671B.
-    # Specialized reasoning: MATH-500 83.9%, AIME 2024 28.9%.
-    # Source: arXiv 2501.12948 Table 4.
+    # ── Qwen3-4B-Instruct-2507 (text) — Tier 3 seed ───────────────────────
+    # Model card: MMLU-Redux 84.2, MMLU-Pro 69.6, IFEval 83.4, non-thinking (no CoT
+    # preamble → good for classification/NER/generation). 256K ctx. 4B (3.6B non-embed).
     ModelSpec(
-        model_id="deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B",
-        size_mb=958,
-        tier=2,
-        tok_s_snapdragon_660=4.5,
-        tok_s_snapdragon_778g=8.0,
-        tok_s_snapdragon_8gen3=22.0,
-        peak_memory_mb=1270,
-        gsm8k=0.870,
-        mmlu=0.580,
-        notes="Qwen arch, R1 distilled; MATH-500 83.9%, AIME 28.9%; best for math/reasoning tasks",
+        model_id="Qwen/Qwen3-4B-Instruct-2507",
+        size_mb=2200,
+        tier=3,
+        tok_s_snapdragon_660=2.8,
+        tok_s_snapdragon_778g=5.5,
+        tok_s_snapdragon_8gen3=13.0,
+        peak_memory_mb=2900,
+        gsm8k=0.880,
+        mmlu=0.830,
+        notes="Qwen3-4B-Instruct-2507 (official); text-only; NON-thinking (direct answers); best general/instruction model in pool; 256K ctx",
     ),
 
-    # ── Multimodal Qwen3.5 (text-only LoRA via text_tokenizer(), B123) ────
-    # Qwen3.5-0.8B / Qwen3.5-2B: Gated DeltaNet hybrid, natively multimodal
-    # (image-text-to-text), 262K ctx. They load as a *processor*; text-only LoRA works
-    # only because lora_trainer/slm_helpers extract the inner text tokenizer via
-    # text_tokenizer() (otherwise the vision path rejects the text chat template).
-    # IMPORTANT: use the BASE transformers repos (Qwen/Qwen3.5-*), NOT the -GGUF repo
-    # (a GGUF repo has no transformers config and cannot be LoRA-fine-tuned, B107).
-    # NOTE: multimodal LoRA on this stack is best-effort and unverified without a GPU
-    # run + model download; the text-only Qwen models above are the reliable path.
+    # ── Qwen3.5-0.8B (multimodal) — Tier 0 seed ───────────────────────────
+    # Multimodal "Causal LM with Vision"; fine-tuned TEXT-ONLY via FastVisionModel
+    # (finetune_vision_layers=False). Numbers estimated (not independently verified).
     ModelSpec(
         model_id="Qwen/Qwen3.5-0.8B",
         size_mb=500,
@@ -296,39 +289,38 @@ ANDROID_POOL: list[ModelSpec] = [
         peak_memory_mb=670,
         gsm8k=0.610,
         mmlu=0.540,
-        notes="Gated DeltaNet hybrid, multimodal, 262K ctx; text-only LoRA via text_tokenizer()",
+        notes="Qwen3.5-0.8B (official, MULTIMODAL); text-only LoRA via FastVisionModel; 262K ctx; ESTIMATED benchmarks",
         multimodal=True,
     ),
+
+    # ── Qwen3.5-2B (multimodal) — Tier 2 seed ─────────────────────────────
     ModelSpec(
         model_id="Qwen/Qwen3.5-2B",
-        size_mb=1350,
+        size_mb=1100,
         tier=2,
         tok_s_snapdragon_660=4.0,
         tok_s_snapdragon_778g=7.5,
         tok_s_snapdragon_8gen3=20.0,
-        peak_memory_mb=1800,
+        peak_memory_mb=1550,
         gsm8k=0.720,
         mmlu=0.610,
-        notes="Gated DeltaNet hybrid, multimodal, 262K ctx; base transformers repo (not -GGUF, B107); text-only LoRA via text_tokenizer()",
+        notes="Qwen3.5-2B (official, MULTIMODAL); text-only LoRA via FastVisionModel; base repo (not -GGUF, B107); 262K ctx; ESTIMATED benchmarks",
         multimodal=True,
     ),
 
-    # ── ~3B params (Tier 2/3 seed) ────────────────────────────────────────
-    # Qwen2.5-3B-Instruct: text-only, standard Qwen2.5 arch. Q4 peak ~2050MB (tier 2);
-    # Q8/BF16 → tier 3. GSM8K ~79%, MMLU ~66% — the strongest, largest Qwen text model
-    # in this pool, so escalation has a real top tier to reach.
-    # Source: Qwen2.5 Technical Report (arXiv 2412.15115).
+    # ── Qwen3.5-4B (multimodal) — Tier 3 seed ─────────────────────────────
     ModelSpec(
-        model_id="Qwen/Qwen2.5-3B-Instruct",
-        size_mb=1650,
-        tier=2,
+        model_id="Qwen/Qwen3.5-4B",
+        size_mb=2200,
+        tier=3,
         tok_s_snapdragon_660=2.8,
         tok_s_snapdragon_778g=5.5,
         tok_s_snapdragon_8gen3=13.0,
-        peak_memory_mb=2050,
-        gsm8k=0.790,
-        mmlu=0.660,
-        notes="Qwen2.5-3B text-only; top-capability Qwen in this pool; spans tier 2 (Q4) → tier 3 (Q8/BF16)",
+        peak_memory_mb=2900,
+        gsm8k=0.850,
+        mmlu=0.700,
+        notes="Qwen3.5-4B (official, MULTIMODAL); text-only LoRA via FastVisionModel; top-capability multimodal; 262K ctx; ESTIMATED benchmarks",
+        multimodal=True,
     ),
 ]
 

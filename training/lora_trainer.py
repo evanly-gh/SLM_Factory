@@ -8,6 +8,20 @@ TrainingOutput = collections.namedtuple("TrainingOutput", ["weights_ref", "gguf_
 VALID_LORA_RANKS = {4, 8, 16, 32, 64}
 
 
+def is_multimodal_model(model_id: str) -> bool:
+    """True if `model_id` is a multimodal ("Causal LM with Vision") pool entry.
+
+    Looked up from ANDROID_POOL's `multimodal` flag so training/inference can pick the
+    FastVisionModel path without threading a flag through every call site. Falls back to
+    False (plain text load) if the pool can't be imported or the id isn't found.
+    """
+    try:
+        from config.android_pool import ANDROID_POOL
+        return any(m.model_id == model_id and getattr(m, "multimodal", False) for m in ANDROID_POOL)
+    except Exception:
+        return False
+
+
 def text_tokenizer(tok):
     """Return the underlying TEXT tokenizer for a possibly-multimodal load.
 
@@ -93,31 +107,57 @@ def _run_unsloth_training(
 
     max_seq_length = 512
     _ensure_model_cached(config.base_model)
-    model, tokenizer = FastLanguageModel.from_pretrained(
-        model_name=config.base_model,
-        max_seq_length=max_seq_length,
-        load_in_4bit=config.lora_rank is not None,
-        # Many pool models (MiniCPM4/5, Qwen3.5, Gemma3n) ship custom modeling code and
-        # will not load without this — transformers raises and asks for it explicitly.
-        trust_remote_code=True,
-    )
 
-    # Multimodal models load as a processor; use the inner text tokenizer for text-only
-    # LoRA so the vision path is never exercised (B123). No-op for plain text models.
-    tokenizer = text_tokenizer(tokenizer)
-
-    if config.lora_rank is not None:
-        model = FastLanguageModel.get_peft_model(
-            model,
-            r=config.lora_rank,
-            lora_alpha=config.lora_rank * 2,
-            lora_dropout=0.0,
-            # Unsloth expects a LIST of module names, not the string "all-linear"
-            # (a string gets iterated character-by-character by PEFT).
-            target_modules=["q_proj", "k_proj", "v_proj", "o_proj",
-                            "gate_proj", "up_proj", "down_proj"],
-            bias="none",
+    multimodal = is_multimodal_model(config.base_model)
+    if multimodal:
+        # Qwen3.5 etc. are "Causal LM with Vision" — load via FastVisionModel and do
+        # TEXT-ONLY LoRA by freezing the vision layers and tuning only the language
+        # layers (Unsloth Qwen3.5 fine-tuning guide). This is the supported way to
+        # text-only fine-tune a multimodal model; plain FastLanguageModel routes text
+        # through the vision processor and crashes (B123/B136).
+        from unsloth import FastVisionModel
+        model, tokenizer = FastVisionModel.from_pretrained(
+            model_name=config.base_model,
+            max_seq_length=max_seq_length,
+            load_in_4bit=config.lora_rank is not None,
+            trust_remote_code=True,
         )
+        if config.lora_rank is not None:
+            model = FastVisionModel.get_peft_model(
+                model,
+                finetune_vision_layers=False,     # text-only: freeze the vision tower
+                finetune_language_layers=True,
+                finetune_attention_modules=True,
+                finetune_mlp_modules=True,
+                r=config.lora_rank,
+                lora_alpha=config.lora_rank * 2,
+                lora_dropout=0.0,
+                bias="none",
+            )
+    else:
+        model, tokenizer = FastLanguageModel.from_pretrained(
+            model_name=config.base_model,
+            max_seq_length=max_seq_length,
+            load_in_4bit=config.lora_rank is not None,
+            # Some pool models ship custom modeling code and will not load without this.
+            trust_remote_code=True,
+        )
+        if config.lora_rank is not None:
+            model = FastLanguageModel.get_peft_model(
+                model,
+                r=config.lora_rank,
+                lora_alpha=config.lora_rank * 2,
+                lora_dropout=0.0,
+                # Unsloth expects a LIST of module names, not the string "all-linear"
+                # (a string gets iterated character-by-character by PEFT).
+                target_modules=["q_proj", "k_proj", "v_proj", "o_proj",
+                                "gate_proj", "up_proj", "down_proj"],
+                bias="none",
+            )
+
+    # For text formatting/tokenization use the inner text tokenizer (multimodal loads
+    # return a processor; text_tokenizer() unwraps it, no-op for plain tokenizers).
+    tokenizer = text_tokenizer(tokenizer)
 
     # Load dataset
     with open(dataset_path, encoding="utf-8") as f:
