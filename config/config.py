@@ -125,5 +125,14 @@ HW_FALLBACK_CHIP = "snapdragon_778g"
 HW_ONDEVICE_BACKEND = os.environ.get("SLM_HW_BACKEND", "theoretical")
 HW_GATING_ENABLED = os.environ.get("SLM_HW_GATING", "0") == "1"
 HW_VERIFY_ON_DEVICE = os.environ.get("SLM_HW_VERIFY_ON_DEVICE", "0") == "1"
+
+# QUANT_ACCURACY_EVAL — score the ACTUAL quantized GGUF (Q4_K_M / Q8_0) for honest
+# per-quant ACCURACY, WITHOUT any on-device (latency/power) measurement. When True,
+# evaluate_node merges the LoRA adapter, quantizes to the variant's GGUF via llama.cpp,
+# and scores it on-CPU through llama-cpp-python — so Q4_K_M and Q8_0 of a model finally
+# produce DIFFERENT accuracy numbers (in theoretical mode they were identical, B156).
+# Requires: (1) llama.cpp `convert_hf_to_gguf` + `llama-quantize` on PATH, and
+# (2) `pip install llama-cpp-python`. Independent of SLM_HW_BACKEND / on-device eval.
+QUANT_ACCURACY_EVAL = os.environ.get("SLM_QUANT_EVAL", "0") == "1"
 # Nominal Li-ion voltage for mA→W power conversion when live voltage is unreadable.
 HW_BATTERY_VOLTAGE_V = float(os.environ.get("SLM_HW_BATTERY_VOLTAGE_V", "3.85"))

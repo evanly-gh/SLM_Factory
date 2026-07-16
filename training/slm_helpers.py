@@ -247,6 +247,18 @@ def infer_batch_gguf(
     llama = _gguf_cache[gguf_path]
     results = []
     for prompt in prompts:
-        response = llama(prompt, max_tokens=max_new_tokens, echo=False)
-        results.append(response["choices"][0]["text"])
+        # Train/serve parity (B115): training wraps every example with the chat template.
+        # Use create_chat_completion so the GGUF applies its embedded chat template to the
+        # same user-turn prompt — otherwise raw completion sees an out-of-distribution
+        # string and the quantized accuracy is unfairly low. Fall back to raw completion
+        # if the GGUF has no chat template.
+        try:
+            resp = llama.create_chat_completion(
+                messages=[{"role": "user", "content": prompt}],
+                max_tokens=max_new_tokens, temperature=0.0,
+            )
+            results.append(resp["choices"][0]["message"]["content"])
+        except Exception:
+            resp = llama(prompt, max_tokens=max_new_tokens, echo=False)
+            results.append(resp["choices"][0]["text"])
     return results
