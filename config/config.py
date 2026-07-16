@@ -73,6 +73,24 @@ MODEL_SELECTION_STRATEGY = os.environ.get(
     "SLM_MODEL_SELECTION_STRATEGY", "smallest_first"
 )
 
+# --- Target dataset size per task type (single source of truth for curate + eval_setup) ---
+# Total examples the curriculum aims for (gold = 65%, hard = 35%). Grounded in the paper's
+# §4.3 quality-over-quantity guidance (classification/NER 100–200; generation 500–3,000) and
+# its findings that 173 > 348 (HumanEval) and 500 selected > 2,000 random (SAMSum) — i.e.
+# these are UPPER bounds on *curated-quality* data, not counts to fill with noise. Adjusted
+# 2026-07-15 down from a flat 1000 for the generation-family (B155):
+#   NER 300→200, math_reasoning 1000→700, code_generation 1000→300, generation 1000→600.
+DATASET_SIZE_BY_TYPE = {
+    "classification":             150,   # paper: 100–200
+    "multi_label_classification": 300,   # label co-occurrence needs coverage
+    "NER":                        200,   # paper: 100–200 (entity diversity handled by controls)
+    "structured_extraction":      400,   # schema field coverage + negatives
+    "math_reasoning":             700,   # verified verbose CoT quality dominates raw count
+    "code_generation":            300,   # paper: 173 curated > 348 on HumanEval
+    "multilingual":               400,   # language-pair coverage
+    "generation":                 600,   # paper: 500 agent-selected > 2,000 random
+}
+
 MAX_TURNS_MAIN = 1500
 
 DEFAULT_STOP_THRESHOLD = 0.96
