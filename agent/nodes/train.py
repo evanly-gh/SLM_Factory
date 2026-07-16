@@ -5,7 +5,11 @@ from training.slm_helpers import train as slm_train
 
 ARTIFACTS_DIR = "artifacts"
 
-_DEFAULT_CONFIG = {"nr_epochs": 3, "learning_rate": 2e-4, "batch_size": 8, "lora_rank": 8, "label": "LoRA r=8"}
+# Default LoRA config. Rank 16 (α=2r=32) is the research-backed neutral default for
+# reasoning/instruction tasks (r=8 tends to underfit multi-step reasoning; r=32-64 is the
+# capacity "sweet spot" but overfits small datasets). The iterate LLM can raise/lower it
+# via a hyperparameter intervention. See docs (LoRA rank research, Q10/B146).
+_DEFAULT_CONFIG = {"nr_epochs": 3, "learning_rate": 2e-4, "batch_size": 8, "lora_rank": 16, "label": "LoRA r=16"}
 
 _VALID_LORA_RANKS = {4, 8, 16, 32, 64}
 
@@ -79,6 +83,7 @@ def train_node(state: AgentState) -> AgentState:
     if selected is None:
         raise RuntimeError("train_node called before task_analysis selected a model")
     model_id = selected.model_id
+    mlabel = selected.label  # log prefix includes quant
     dataset_path = state["current_dataset_path"]
     if dataset_path is None:
         raise RuntimeError("train_node called before curate_node produced a dataset")
@@ -88,11 +93,11 @@ def train_node(state: AgentState) -> AgentState:
     state["iteration"] += 1
     task_type = state["task_type"]
 
-    _log(model_id, f"Iteration {state['iteration']}")
-    _log(model_id, f"  Config: {cfg['label']}  (batch={cfg['batch_size']})")
-    _log(model_id, f"  Reasoning: {reasoning}")
-    _log(model_id, f"  Dataset: {os.path.basename(dataset_path)}")
-    _log(model_id, f"  Training from base model (no prior adapter)")
+    _log(mlabel, f"Iteration {state['iteration']}")
+    _log(mlabel, f"  Config: {cfg['label']}  (batch={cfg['batch_size']})")
+    _log(mlabel, f"  Reasoning: {reasoning}")
+    _log(mlabel, f"  Dataset: {os.path.basename(dataset_path)}")
+    _log(mlabel, f"  Training from base model (no prior adapter)")
 
     training_output = slm_train(
         dataset_path=dataset_path,
@@ -105,7 +110,7 @@ def train_node(state: AgentState) -> AgentState:
         task_type=task_type,
     )
 
-    _log(model_id, f"  Checkpoint: {training_output.weights_ref}")
+    _log(mlabel, f"  Checkpoint: {training_output.weights_ref}")
 
     state["_pending_weights_refs"] = {cfg["label"]: training_output.weights_ref}
     state["_pending_training_outputs"] = {cfg["label"]: training_output}

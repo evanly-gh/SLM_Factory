@@ -98,6 +98,13 @@ class ModelSpec:
     multimodal: bool = False   # True for image-text-to-text models (Qwen3.5, Gemma-3n).
                                # Handled via text_tokenizer() in lora_trainer/slm_helpers.
 
+    @property
+    def label(self) -> str:
+        """Human-readable id for logs, including the on-device weight format (quant).
+        e.g. 'Qwen/Qwen3-4B-Instruct-2507 [Q4_K_M]'. Used in node log prefixes so the
+        exact variant being trained/evaluated is visible in the progress output."""
+        return f"{self.model_id} [{self.quant or 'bf16'}]"
+
     def est_params_b(self) -> float:
         """Estimate parameter count (billions) from this variant's weight size.
         Uses the quant's bytes/param so all three variants of one model return the

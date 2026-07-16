@@ -52,14 +52,55 @@ os.makedirs(os.path.join(RUN_DIR, "artifacts"), exist_ok=False)
 _LOGF = open(os.path.join(RUN_DIR, "run.log"), "w", buffering=1)
 
 
+# Substrings identifying high-noise library lines (Unsloth load banner, accelerate
+# offload/kernel notices, remote-code prompts) that bury the useful pipeline logs. Any
+# stdout line containing one of these is dropped by _Tee. The periodic training-loss
+# lines and all [node] logs do NOT match and are preserved.
+_NOISE_MARKERS = (
+    "==((====))==",
+    "\\   /|",
+    "O^O/",
+    '"-____-"',
+    "🦥",
+    "Free license: http://github.com/unslothai",
+    "Unsloth: Fast downloading is enabled",
+    "Unsloth: Will load",
+    "Unsloth: Restored added_tokens_decoder",
+    "Unsloth: Will smartly offload gradients",
+    "Unsloth: Double buffering enabled",
+    "Unsloth Zoo will now patch",
+    "will patch your computer",
+    "trust_remote_code` is True",
+    "Are you certain you want to do remote code execution",
+    "Detected kernel version",
+    "Some parameters are on the meta device",
+    "Unsloth: Padding-free",
+    "Please restructure your imports with 'import unsloth'",
+)
+
+
+def _is_noise(line: str) -> bool:
+    return any(m in line for m in _NOISE_MARKERS)
+
+
 class _Tee:
     def __init__(self, *streams):
         self.streams = streams
 
     def write(self, d):
+        # Drop library banner/offload noise line-by-line; keep everything else (loss lines,
+        # node logs). Splitting on newlines handles multi-line writes without losing signal.
+        if d and ("\n" in d or _is_noise(d)):
+            kept = "".join(
+                ln for ln in d.splitlines(keepends=True) if not _is_noise(ln)
+            )
+        else:
+            kept = d
+        if not kept:
+            return
         for s in self.streams:
             if not getattr(s, "closed", False):
-                s.write(d)
+                s.write(kept)
                 s.flush()
 
     def flush(self):
@@ -246,6 +287,7 @@ initial_state = {
     "replay_buffer": None,
     "turn_budget": config.MAX_TURNS_MAIN,
     "_largest_first_phase": None,
+    "escalation_history": [],
     "_pending_weights_refs": None,
     "_pending_training_outputs": None,
     "_pending_configs": None,
@@ -458,7 +500,35 @@ log(f"  model     : {m.model_id if m else None}")
 log(f"  iterations: {last_state.get('iteration', 0)}")
 log(f"  best F1   : {best:.4f}  (threshold {threshold:.4f})  "
     f"{'✓ converged' if converged else '✗ budget exhausted'}")
-log(f"  trajectory: {[f'{x:.3f}' for x in last_state.get('scores', [])]}")
+lifetime_best = last_state.get("lifetime_best_score", 0.0) or 0.0
+log(f"  lifetime best F1 across all tiers: {max(lifetime_best, best):.4f}")
+log(f"  final-model trajectory: {[f'{x:.3f}' for x in last_state.get('scores', [])]}")
+
+# --------------------------------------------------------------------------
+# Full run progression across EVERY model/tier (not just the final one). The DAG and
+# score history reset on each escalation, so escalate_node stashes each completed model
+# in escalation_history; append the current (final) model to show the whole climb.
+# --------------------------------------------------------------------------
+progression = list(last_state.get("escalation_history") or [])
+if m is not None:
+    progression.append({
+        "model_id": m.model_id,
+        "quant": getattr(m, "quant", None),
+        "tier": getattr(m, "tier", "?"),
+        "best_score": best,
+        "iterations": last_state.get("iteration", 0),
+        "scores": list(last_state.get("scores", [])),
+    })
+if len(progression) > 1:
+    log("")
+    log(f"  Full run progression ({len(progression)} models, tier 0→3):")
+    log(f"  {'Tier':>4}  {'Model':<32} {'Quant':<8} {'Iters':>5} {'Best':>7}  Trajectory")
+    log(f"  {'-'*92}")
+    for p in progression:
+        traj = " → ".join(f"{x:.3f}" for x in p.get("scores", [])) or "(reset)"
+        log(f"  {str(p.get('tier','?')):>4}  {p.get('model_id','?'):<32} "
+            f"{str(p.get('quant') or 'bf16'):<8} {p.get('iterations',0):>5} "
+            f"{p.get('best_score',0.0):>7.4f}  {traj}")
 
 # Baseline improvement table
 if baselines:

@@ -23,6 +23,7 @@ def evaluate_node(state: AgentState) -> AgentState:
     """
     task_type = state["task_type"]
     model_id = state["selected_model"].model_id
+    mlabel = state["selected_model"].label  # log prefix includes quant
     eval_set = state["eval_set"]
     if eval_set is None:
         raise RuntimeError("evaluate_node called before eval_setup_node built the eval set")
@@ -30,15 +31,15 @@ def evaluate_node(state: AgentState) -> AgentState:
 
     # --- Baseline measurement (first eval for this model) ---
     if state["iteration"] == 1:
-        _log(model_id, "Measuring zero-shot baseline (base model, no adapter)...")
+        _log(mlabel, "Measuring zero-shot baseline (base model, no adapter)...")
         try:
             baseline_result = run_eval(eval_set, model_id, model_id, task_type=task_type)
             baseline_f1 = baseline_result.f1
         except Exception as e:
-            _log(model_id, f"Baseline measurement failed ({e}); recording 0.0")
+            _log(mlabel, f"Baseline measurement failed ({e}); recording 0.0")
             baseline_f1 = 0.0
 
-        _log(model_id, f"Baseline F1 = {baseline_f1:.4f}")
+        _log(mlabel, f"Baseline F1 = {baseline_f1:.4f}")
         baselines = state.get("model_baselines") or []
         if not any(e["model_id"] == model_id for e in baselines):
             baselines.append({
@@ -51,7 +52,7 @@ def evaluate_node(state: AgentState) -> AgentState:
     # --- Score all trained configs ---
     scored = {}
     for label, weights_ref in pending.items():
-        _log(model_id, f"Evaluating config '{label}' (weights: {weights_ref})")
+        _log(mlabel, f"Evaluating config '{label}' (weights: {weights_ref})")
         quant = state["selected_model"].quant
         iteration = state["iteration"]
         gguf_path = None
@@ -73,7 +74,7 @@ def evaluate_node(state: AgentState) -> AgentState:
             )
         result = run_eval(eval_set, weights_ref, model_id, task_type=task_type, quant=quant, gguf_path=gguf_path)
         scored[label] = (weights_ref, result)
-        _log(model_id, f"  → F1={result.f1:.4f}  failures={len(result.failures)}")
+        _log(mlabel, f"  → F1={result.f1:.4f}  failures={len(result.failures)}")
 
     if not scored:
         raise RuntimeError("evaluate_node: no configs were scored — train_node did not populate _pending_weights_refs")
@@ -99,7 +100,7 @@ def evaluate_node(state: AgentState) -> AgentState:
     state["scores"] = list(state.get("scores") or []) + [current_score]
     state["last_eval"] = best_result
 
-    _log(model_id,
+    _log(mlabel,
          f"Score: {current_score:.4f}  (Δ={delta:+.4f} from best {prev_best:.4f})  "
          f"failures={len(best_result.failures)}  "
          f"trajectory={[f'{s:.3f}' for s in state['scores']]}")

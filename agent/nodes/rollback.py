@@ -26,7 +26,7 @@ def rollback_node(state: AgentState) -> AgentState:
     if not should_rollback(state):
         return state
 
-    model_id = state["selected_model"].model_id if state.get("selected_model") else "?"
+    model_id = state["selected_model"].label if state.get("selected_model") else "?"
     regressed_score = state["scores"][-1]
     previous_score = state["scores"][-2] if len(state["scores"]) >= 2 else 0.0
 

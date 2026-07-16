@@ -62,6 +62,8 @@ class AgentState(TypedDict):
 
     # Model selection strategy state
     _largest_first_phase: Optional[str]   # "probe" | "escalate" | "done" (largest_first strategy only)
+    escalation_history: list[dict]        # per-model {model_id, quant, tier, best_score, iterations, scores}
+                                          # recorded by escalate_node before it resets, for the run summary
 
     # Internal: carry training results between train_node and evaluate_node
     _pending_weights_refs: Optional[dict]  # label -> weights_ref
