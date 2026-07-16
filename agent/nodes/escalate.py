@@ -43,9 +43,12 @@ def _llm_choose_model(
     task_type: str,
     task_plan: dict,
     current_best_score: float,
+    log=print,
 ) -> ModelSpec:
     """Ask the orchestrator LLM to choose a model from `candidates` given the task context.
     Returns the chosen ModelSpec. Falls back to the largest candidate on any failure.
+    The chosen model AND the orchestrator's one-sentence reason are printed via `log`
+    (Q13) so the model-selection rationale is visible in the run log, not just logging.
 
     Direction-neutral: used both for UPWARD escalation (bigger tier) and the DOWNWARD
     probe (smaller tier). The prompt frames the choice as "best task fit", which is
@@ -97,13 +100,20 @@ def _llm_choose_model(
         chosen_id, reason = _parse_choice(raw)
         match = next((m for m in candidates if m.model_id == chosen_id), None)
         if match is not None:
-            logger.info("[escalate] LLM chose %s — %s", chosen_id, reason or "(no reason given)")
+            log(f"  Orchestrator chose {match.model_id} "
+                f"(quant={match.quant or 'bf16'}, {match.size_mb}MB, gsm8k={match.gsm8k:.2f}, "
+                f"mmlu={match.mmlu:.2f})")
+            log(f"    reason: {reason or '(none given)'}")
             return match
-        logger.warning("[escalate] LLM returned unknown model_id %r; falling back to largest", chosen_id)
+        log(f"  Orchestrator returned unknown model_id {chosen_id!r}; falling back to largest candidate")
     except Exception as e:
-        logger.warning("[escalate] LLM model-choice failed (%s); falling back to largest", e)
+        from agent.llm_errors import raise_if_fatal
+        raise_if_fatal(e, "escalate")  # billing/auth → stop the run, don't silently fall back
+        log(f"  Orchestrator model-choice failed ({e}); falling back to largest candidate")
     # Fallback: largest model in the tier (highest size_mb = most capable)
-    return max(candidates, key=lambda m: m.size_mb)
+    fallback = max(candidates, key=lambda m: m.size_mb)
+    log(f"  Fallback choice: {fallback.model_id} (quant={fallback.quant or 'bf16'}, {fallback.size_mb}MB)")
+    return fallback
 
 
 def _parse_choice(raw: str) -> tuple[str, str]:
@@ -151,6 +161,7 @@ def escalate_node(state: AgentState) -> AgentState:
         return state
 
     current_id = current_model.model_id
+    mlabel = current_model.label  # log prefix includes quant
     current_tier = current_model.tier
 
     # Log stagnation context
@@ -158,11 +169,11 @@ def escalate_node(state: AgentState) -> AgentState:
     from agent.nodes.iterate import STAGNATION_WINDOW, STAGNATION_MIN_DELTA
     window = scores[-STAGNATION_WINDOW:] if len(scores) >= STAGNATION_WINDOW else scores
     delta = max(window) - min(window) if window else 0.0
-    _log(current_id, "STAGNATION DETECTED")
-    _log(current_id, f"  Score window (last {len(window)}): {[f'{s:.4f}' for s in window]}")
-    _log(current_id, f"  Window delta: {delta:.4f} < threshold {STAGNATION_MIN_DELTA}")
-    _log(current_id, f"  Best score achieved: {state['best_score']:.4f}")
-    _log(current_id, f"  Current tier: {current_tier}")
+    _log(mlabel, "STAGNATION DETECTED")
+    _log(mlabel, f"  Score window (last {len(window)}): {[f'{s:.4f}' for s in window]}")
+    _log(mlabel, f"  Window delta: {delta:.4f} < threshold {STAGNATION_MIN_DELTA}")
+    _log(mlabel, f"  Best score achieved: {state['best_score']:.4f}")
+    _log(mlabel, f"  Current tier: {current_tier}")
 
     # Record final best for this model in baselines
     baselines = state.get("model_baselines") or []
@@ -179,27 +190,52 @@ def escalate_node(state: AgentState) -> AgentState:
     feasible = filter_pool(state["hardware_constraints"])
     higher = [m for m in feasible if m.tier > current_tier]
     if not higher:
-        _log(current_id, f"  No feasible models above tier {current_tier} — TERMINATING")
+        _log(mlabel, f"  No feasible models above tier {current_tier} — TERMINATING")
         state["next_action"] = "terminate"
         return state
     next_tier = min(m.tier for m in higher)
     next_tier_candidates = [m for m in higher if m.tier == next_tier]
 
-    _log(current_id,
+    _log(mlabel,
          f"  Tier {next_tier} candidates ({len(next_tier_candidates)}): "
          f"{[m.model_id + '/' + str(m.quant) for m in next_tier_candidates]}")
 
-    # LLM picks the best model from the next tier for this task
+    # LLM picks the best model from the next tier for this task (reason logged via _log).
     chosen = _llm_choose_model(
         candidates=next_tier_candidates,
         task_type=state.get("task_type", "classification"),
         task_plan=state.get("task_plan") or {},
         current_best_score=state["best_score"],
+        log=lambda m: _log(mlabel, m),
     )
 
-    _log(current_id,
-         f"  PROMOTING: tier {current_tier} → tier {next_tier} | {current_id} → {chosen.model_id} (quant={chosen.quant})")
-    _log(current_id, f"  Dataset carried forward: {state.get('current_dataset_path')}")
+    _log(mlabel,
+         f"  PROMOTING: tier {current_tier} → tier {next_tier}  |  "
+         f"{current_id} (best {state['best_score']:.4f}) → {chosen.model_id} "
+         f"[{chosen.quant or 'bf16'}, {chosen.size_mb}MB, peak {chosen.peak_memory_mb}MB]")
+    _log(mlabel, f"  Dataset carried forward: {state.get('current_dataset_path')}")
+
+    # Record this model's completed run BEFORE resetting, so the end-of-run summary can
+    # show the FULL trajectory across every tier, not just the final model (Q15/B147).
+    history = list(state.get("escalation_history") or [])
+    history.append({
+        "model_id": current_id,
+        "quant": getattr(current_model, "quant", None),
+        "tier": current_tier,
+        "best_score": state["best_score"],
+        "iterations": state["iteration"],
+        "scores": list(state.get("scores") or []),
+    })
+    state["escalation_history"] = history
+
+    # Free the previous model's VRAM/cache — we've moved on from it for good, so it must
+    # not sit resident competing with the next (usually larger) model (B142).
+    try:
+        from training.slm_helpers import clear_inference_cache
+        clear_inference_cache()
+        _log(mlabel, "  Cleared inference cache (freed the previous model's VRAM)")
+    except Exception:
+        pass
 
     state["selected_model"] = chosen
     state["scores"] = []

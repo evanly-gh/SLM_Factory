@@ -80,4 +80,12 @@ def quiet_ml_logging() -> None:
             pass
     except Exception:
         pass
+    # accelerate emits the "Detected kernel version ... below the recommended minimum"
+    # warning and offload notices — informational only; silence at ERROR.
+    try:
+        import logging
+        for name in ("accelerate", "accelerate.utils.other", "accelerate.big_modeling"):
+            logging.getLogger(name).setLevel(logging.ERROR)
+    except Exception:
+        pass
     _LIBS_QUIETED = True
