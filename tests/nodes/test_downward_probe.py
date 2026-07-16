@@ -78,8 +78,12 @@ def test_no_lower_tier_candidates_skips(mock_fp):
     assert out["next_action"] == "terminate"
 
 
+@patch.dict("os.environ", {"SLM_MODEL_SELECTION_STRATEGY": "interpolation"})
 @patch("agent.nodes.iterate._llm_iterate", side_effect=Exception("skip llm"))
 def test_iterate_routes_to_downward_probe_on_success(_mock):
+    # downward_probe only fires for strategies that don't start at the bottom of the
+    # feasible set (interpolation / orchestrator_choice) — Q3/B?. With smallest_first it
+    # is correctly skipped (already smallest) and the run terminates instead.
     from agent.nodes.iterate import iterate_node
     m = _model(tier=2)
     state = {
@@ -90,6 +94,22 @@ def test_iterate_routes_to_downward_probe_on_success(_mock):
     }
     out = iterate_node(state)
     assert out["next_action"] == "downward_probe"
+
+
+@patch.dict("os.environ", {"SLM_MODEL_SELECTION_STRATEGY": "smallest_first"})
+@patch("agent.nodes.iterate._llm_iterate", side_effect=Exception("skip llm"))
+def test_iterate_skips_downward_probe_for_smallest_first(_mock):
+    # smallest_first already ends at the smallest model → no downward probe → terminate.
+    from agent.nodes.iterate import iterate_node
+    m = _model(tier=2)
+    state = {
+        "selected_model": m, "scores": [0.95], "best_score": 0.95, "iteration": 3,
+        "turn_budget": 1000, "stop_threshold": 0.90, "initial_stop_threshold": 0.90,
+        "task_type": "classification", "last_eval": None, "hw_gating_enabled": False,
+        "downward_probe_done": False,
+    }
+    out = iterate_node(state)
+    assert out["next_action"] == "terminate"
 
 
 @patch("agent.nodes.iterate._llm_iterate", side_effect=Exception("skip llm"))

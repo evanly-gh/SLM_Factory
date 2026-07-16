@@ -11,8 +11,33 @@ ChatAnthropic.bind_tools. It can use them to inspect data, read eval results,
 or check the curation log before making its decision.
 """
 import json
+import re
 from agent.state import AgentState
 from config.android_pool import check_hardware_constraints, all_constraints_pass
+from agent.llm_errors import raise_if_fatal
+
+
+def _parse_decision_json(raw) -> dict:
+    """Robustly parse the orchestrator's decision JSON (B143 fix for JSONDecodeError).
+
+    Tolerates code fences and prose wrapped around the JSON object. Raises ValueError
+    (not JSONDecodeError) with a readable message on an empty/JSON-less response so the
+    caller's fallback path logs something actionable.
+    """
+    text = raw if isinstance(raw, str) else str(raw)
+    text = text.strip()
+    if text.startswith("```"):
+        text = re.sub(r"^```[a-zA-Z]*\n?", "", text)
+        text = re.sub(r"\n?```$", "", text).strip()
+    if not text:
+        raise ValueError("empty LLM response — no decision JSON returned")
+    try:
+        return json.loads(text)
+    except (json.JSONDecodeError, ValueError):
+        m = re.search(r"\{.*\}", text, re.DOTALL)
+        if m:
+            return json.loads(m.group())
+        raise ValueError(f"no JSON object found in LLM response: {text[:160]!r}")
 
 
 _ITERATE_SYSTEM = """\
@@ -201,14 +226,7 @@ then output the decision JSON.
         messages.append(response)
 
         if not response.tool_calls:
-            # Final response — parse JSON from content
-            raw = response.content if isinstance(response.content, str) else str(response.content)
-            raw = raw.strip()
-            if raw.startswith("```"):
-                raw = raw.split("```")[1]
-                if raw.startswith("json"):
-                    raw = raw[4:]
-            return json.loads(raw.strip())
+            return _parse_decision_json(response.content)
 
         # Execute tool calls, feed results back
         for tc in response.tool_calls:
@@ -247,13 +265,7 @@ then output the decision JSON.
             raise RuntimeError(
                 "LLM exhausted tool rounds without producing a final JSON decision"
             )
-    raw = response.content if isinstance(response.content, str) else str(response.content)
-    raw = raw.strip()
-    if raw.startswith("```"):
-        raw = raw.split("```")[1]
-        if raw.startswith("json"):
-            raw = raw[4:]
-    return json.loads(raw.strip())
+    return _parse_decision_json(response.content)
 
 
 def apply_iteration_policy(score: float) -> dict:
@@ -296,7 +308,7 @@ def iterate_node(state: AgentState) -> AgentState:
     Falls back to score-band rules if the LLM call fails.
     """
     selected = state.get("selected_model")
-    model_id = selected.model_id if selected is not None else "?"
+    model_id = selected.label if selected is not None else "?"  # log prefix incl. quant
 
     if not state["scores"]:
         _log(model_id, "No scores yet — routing to train")
@@ -333,7 +345,25 @@ def iterate_node(state: AgentState) -> AgentState:
         _log(model_id, f"  Stall detected: {state.get('consecutive_no_improvement')} consecutive "
              f"evals without beating best {state['best_score']:.4f} (>= {MAX_STALL_EVALS})")
 
-    # Try LLM-driven decision with tool access
+    # Q9: stagnation/stall escalation is a RULE-BASED decision — take it WITHOUT spending an
+    # orchestrator LLM call (the LLM cannot override it anyway). Only applies below the stop
+    # threshold; the converged path below still runs. This saves an API call every time a
+    # model plateaus (which is exactly when the run makes the most iterate calls).
+    if current_score < state["stop_threshold"] and (stagnant or stalled):
+        reason = "stagnation" if stagnant else f"{state.get('consecutive_no_improvement')} stalled evals"
+        if state.get("_largest_first_phase") == "probe":
+            _log(model_id, "  → TERMINATE (largest_first probe stagnated — task infeasible)")
+            state["next_action"] = "terminate"
+            state["_largest_first_phase"] = "done"
+            state["last_hypothesis"] = "largest_first probe could not clear the goal"
+        else:
+            _log(model_id, f"  → ESCALATE ({reason}) — skipped LLM intervention call to save API cost")
+            state["next_action"] = "escalate"
+            state["last_hypothesis"] = f"escalate on {reason}"
+        state["last_intervention"] = "escalate"
+        return state
+
+    # Not escalating → consult the orchestrator LLM for the intervention type.
     llm_decision = None
     hypothesis = ""
     intervention = policy["intervention"]  # initialized to fallback; overwritten by LLM if successful
@@ -356,6 +386,9 @@ def iterate_node(state: AgentState) -> AgentState:
             _log(model_id, f"  Targeted patterns: {llm_decision['targeted_patterns']}")
 
     except Exception as exc:
+        # Billing/auth/quota errors will recur on every call — fail fast with a clear
+        # message instead of silently limping through the rest of the run on fallbacks (B144).
+        raise_if_fatal(exc, "iterate")
         _log(model_id, f"  LLM call failed ({exc!r}), falling back to score-band rules")
         fallback = apply_iteration_policy(current_score)
         intervention = fallback["intervention"]
@@ -411,28 +444,28 @@ def iterate_node(state: AgentState) -> AgentState:
             else:
                 state["next_action"] = "curate"
             return state
-        # Active downward probe: route to the downward_probe node ONCE to try a
-        # smaller model. downward_probe terminates unconditionally, so no loop.
+        # Active downward probe: route to the downward_probe node ONCE to try a smaller
+        # model. Q3: only meaningful for strategies that do NOT already start at the bottom
+        # of the feasible set — interpolation and orchestrator_choice pick a mid/large model
+        # by prediction, so a smaller one might also clear the goal. smallest_first and
+        # largest_first already end up at the smallest model, so a downward probe is redundant.
+        # Read the strategy from the env directly (same source config.py uses) so this
+        # routing decision needs no API-key-bearing config import.
+        import os as _os
+        _strategy = _os.environ.get("SLM_MODEL_SELECTION_STRATEGY", "smallest_first")
+        _probes_down = _strategy in ("interpolation", "orchestrator_choice")
         _current_model = state.get("selected_model")
-        if (not state.get("downward_probe_done")
+        if (_probes_down
+                and not state.get("downward_probe_done")
                 and _current_model is not None
                 and _current_model.tier > 0):
             state["next_action"] = "downward_probe"
             _log(model_id,
-                 f"  → DOWNWARD_PROBE (score {current_score:.4f} >= threshold; trying smaller model)")
+                 f"  → DOWNWARD_PROBE (score {current_score:.4f} >= threshold; strategy="
+                 f"{_strategy} may have over-selected; trying a smaller model)")
             return state
         state["next_action"] = "terminate"
         _log(model_id, f"  → TERMINATE (score {current_score:.4f} >= threshold {state['stop_threshold']:.3f})")
-    elif stagnant or stalled:
-        if state.get("_largest_first_phase") == "probe":
-            # largest_first feasibility probe couldn't clear the goal → task infeasible.
-            _log(model_id, "  → TERMINATE (largest_first probe stagnated — task infeasible)")
-            state["next_action"] = "terminate"
-            state["_largest_first_phase"] = "done"
-        else:
-            state["next_action"] = "escalate"
-            _reason = "stagnation" if stagnant else f"{state.get('consecutive_no_improvement')} stalled evals"
-            _log(model_id, f"  → ESCALATE ({_reason} overrides LLM decision)")
     elif intervention == "hyperparameter":
         state["next_action"] = "train"
         _log(model_id, f"  → TRAIN (hyperparameter intervention, dataset held fixed)")
