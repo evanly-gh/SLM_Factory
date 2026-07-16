@@ -18,15 +18,23 @@ def eval_setup_node(state: AgentState) -> AgentState:
 
     acquire_meta: dict = {}
     if plan is not None:
-        # Autonomous, general path: acquire the dataset from the web per the
-        # orchestrator's plan (works for any task / task_type). The acquisition target
-        # is a realistic UPPER bound for the web/synthesis fallback (real benchmarks
-        # ignore it and use their own caps); quality-over-quantity means we don't chase it.
-        _ACQUIRE_TARGET = {"classification": 150, "NER": 200}.get(task_type, 120)
+        # Autonomous, general path: acquire the dataset from the web per the orchestrator's
+        # plan. Size the acquisition to the task's GOLD TARGET (curate uses N_TOTAL*0.65),
+        # so a real benchmark loads enough train examples for curate to actually reach the
+        # target (previously hard-capped at 300 → gold stuck at 300 for math's 650 target).
+        # A little headroom (×1.15) covers eval-set overlap removal + quality-control drops.
+        # `target_examples` is the web/synthesis-fallback ceiling (real benchmarks ignore it).
+        from config.config import DATASET_SIZE_BY_TYPE
+        _N_TOTAL = DATASET_SIZE_BY_TYPE.get(task_type, 150)
+        _gold_target = int(_N_TOTAL * 0.65)
+        _bench_train = min(int(_gold_target * 1.15) + 40, 1200)   # enough to reach gold target
+        _bench_test = 80                                          # eval cost is ~N×tokens; keep modest
         from data.loaders.web_acquire import acquire_dataset
         train_examples, test_examples = acquire_dataset(
             plan, description=state.get("description", ""),
-            target_examples=_ACQUIRE_TARGET, meta=acquire_meta,
+            target_examples=max(_gold_target, 120),
+            benchmark_max_train=_bench_train, benchmark_max_test=_bench_test,
+            meta=acquire_meta,
         )
     elif task_type == "classification":
         from data.loaders.sms_spam import download_sms_spam

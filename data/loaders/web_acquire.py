@@ -272,8 +272,191 @@ def _exa_round(exa, task_type, plan, description, n_per_label, round_idx,
     return out
 
 
+# ---------------------------------------------------------------------------
+# Agentic HuggingFace-dataset discovery (matches the paper's "web research to LOCATE
+# datasets → download the ACTUAL data", §6.1). Exa finds candidate HF dataset repos, the
+# orchestrator picks the best one and maps its columns to our schema, then we load it with
+# datasets.load_dataset(). This replaces "scrape web pages and call the text a dataset".
+# ---------------------------------------------------------------------------
+
+def _extract_hf_dataset_ids(text: str) -> list[str]:
+    import re as _re
+    return _re.findall(r"huggingface\.co/datasets/([A-Za-z0-9_.\-]+/[A-Za-z0-9_.\-]+)", text or "")
+
+
+def _exa_find_hf_dataset_ids(exa, query: str, log=print, n: int = 6) -> list[str]:
+    """Search Exa for HuggingFace dataset repos matching the task; return candidate ids."""
+    ids: list[str] = []
+    try:
+        r = exa.search_and_contents(
+            f"HuggingFace dataset for {query} site:huggingface.co/datasets",
+            num_results=n, type="auto", text={"max_characters": 400},
+        )
+        for x in r.results:
+            ids += _extract_hf_dataset_ids(x.url or "")
+            ids += _extract_hf_dataset_ids(getattr(x, "text", "") or "")
+    except Exception as e:
+        log(f"      [acquire] Exa HF-dataset search failed: {e}")
+    seen, out = set(), []
+    for i in ids:
+        if i not in seen:
+            seen.add(i)
+            out.append(i)
+    return out
+
+
+def _peek_hf_dataset(hf_id: str, log=print):
+    """Load 2 rows to expose (config, split_names, columns, sample_row). None on failure."""
+    from datasets import load_dataset, get_dataset_config_names, get_dataset_split_names
+    for cfg in [None] + (get_dataset_config_names(hf_id)[:1] if True else []):
+        try:
+            cfgs = None if cfg is None else cfg
+            splits = get_dataset_split_names(hf_id, cfgs) if cfg is not None else get_dataset_split_names(hf_id)
+            train_split = "train" if "train" in splits else splits[0]
+            ds = (load_dataset(hf_id, cfg, split=f"{train_split}[:2]", trust_remote_code=True)
+                  if cfg else load_dataset(hf_id, split=f"{train_split}[:2]", trust_remote_code=True))
+            sample = {k: (str(v)[:200]) for k, v in ds[0].items()}
+            return cfg, list(splits), ds.column_names, sample, ds.features
+        except Exception as e:
+            log(f"      [acquire] peek {hf_id} (config={cfg}) failed: {str(e)[:80]}")
+            continue
+    return None
+
+
+def _llm_map_dataset(hf_id, cfg, splits, columns, sample_row, task_type, plan, log=print):
+    """Ask the orchestrator to map this dataset's columns to our schema. dict or None."""
+    import anthropic
+    from config.config import ANTHROPIC_API_KEY, ORCHESTRATOR_MODEL
+    if task_type == "classification":
+        want = ('{"train_split","test_split","text_col","label_col",'
+                '"label_map": {"<raw>":"<one of the task labels>"} (optional)}')
+    elif task_type == "NER":
+        want = ('{"train_split","test_split","tokens_col" (list of tokens) + "tags_col" '
+                '(list of BIO tag ids) OR "text_col" + "entities_col"}')
+    else:  # math_reasoning / code_generation / generation
+        want = '{"train_split","test_split","question_col","answer_col","cot_col" (optional)}'
+    prompt = (
+        f"We want to fine-tune for task_type={task_type} "
+        f"(name={plan.get('task_name', task_type)}, labels={plan.get('labels', [])}).\n"
+        f"HuggingFace dataset: {hf_id} (config={cfg}); splits={splits}; columns={columns}\n"
+        f"One sample row: {sample_row}\n\n"
+        f"If this dataset is a GOOD fit, reply with STRICT JSON mapping its columns to our "
+        f"schema: {want}. If it is NOT a suitable dataset for this task, reply exactly "
+        f'{{"suitable": false}}. JSON only, no prose.'
+    )
+    try:
+        client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
+        resp = client.messages.create(model=ORCHESTRATOR_MODEL, max_tokens=400,
+                                       messages=[{"role": "user", "content": prompt}])
+        raw = resp.content[0].text.strip()
+        import json as _json, re as _re
+        m = _re.search(r"\{.*\}", raw, _re.DOTALL)
+        obj = _json.loads(m.group()) if m else {}
+        if not isinstance(obj, dict) or obj.get("suitable") is False:
+            return None
+        return obj if (obj.get("text_col") or obj.get("question_col") or obj.get("tokens_col")) else None
+    except Exception as e:
+        from agent.llm_errors import raise_if_fatal
+        raise_if_fatal(e, "acquire")
+        log(f"      [acquire] column-mapping LLM call failed for {hf_id}: {str(e)[:80]}")
+        return None
+
+
+def _materialize_from_mapping(hf_id, cfg, splits, mapping, task_type, max_train, max_test, log=print):
+    """Load train/test with the LLM's column mapping and convert to our example dicts."""
+    from datasets import load_dataset
+    tr = mapping.get("train_split") or ("train" if "train" in splits else splits[0])
+    te = mapping.get("test_split") or ("test" if "test" in splits else
+                                       ("validation" if "validation" in splits else tr))
+
+    def _load(split, n):
+        return (load_dataset(hf_id, cfg, split=f"{split}[:{n}]", trust_remote_code=True)
+                if cfg else load_dataset(hf_id, split=f"{split}[:{n}]", trust_remote_code=True))
+
+    def _convert(ds):
+        out = []
+        if task_type == "classification":
+            tcol, lcol = mapping.get("text_col"), mapping.get("label_col")
+            lmap = mapping.get("label_map") or {}
+            label_names = ds.features[lcol].names if hasattr(ds.features.get(lcol), "names") else None
+            for ex in ds:
+                lab = ex[lcol]
+                if isinstance(lab, int) and label_names:
+                    lab = label_names[lab]
+                lab = lmap.get(str(lab), lab)
+                if ex.get(tcol):
+                    out.append({"text": str(ex[tcol]), "label": str(lab)})
+        elif task_type == "NER":
+            if mapping.get("tokens_col"):
+                tok, tag = mapping["tokens_col"], mapping["tags_col"]
+                names = getattr(getattr(ds.features.get(tag), "feature", None), "names", None)
+                for ex in ds:
+                    text, spans = _bio_to_spans(ex[tok], ex[tag], names)
+                    if text.strip():
+                        out.append({"text": text, "entities": spans})
+            else:
+                tcol, ecol = mapping.get("text_col"), mapping.get("entities_col")
+                for ex in ds:
+                    if ex.get(tcol):
+                        ents = ex.get(ecol) or []
+                        out.append({"text": str(ex[tcol]), "entities": ents if isinstance(ents, list) else []})
+        else:
+            qcol, acol, ccol = mapping.get("question_col"), mapping.get("answer_col"), mapping.get("cot_col")
+            for ex in ds:
+                if ex.get(qcol) and ex.get(acol) is not None:
+                    row = {"text": str(ex[qcol]), "answer": str(ex[acol]), "label": task_type}
+                    if ccol and ex.get(ccol):
+                        row["cot_reasoning"] = str(ex[ccol])
+                    out.append(row)
+        return out
+
+    try:
+        train = _convert(_load(tr, max_train))
+        test = _convert(_load(te, max_test))
+    except Exception as e:
+        log(f"      [acquire] materialize {hf_id} failed: {str(e)[:100]}")
+        return None
+    return (train, test) if train and test else None
+
+
+def discover_and_load_hf_dataset(plan, description, task_type, max_train, max_test,
+                                 log=print, meta=None):
+    """Agentic path: Exa → candidate HF datasets → LLM picks+maps → load_dataset. None on failure."""
+    try:
+        from config.config import EXA_API_KEY
+        from exa_py import Exa
+        exa = Exa(api_key=EXA_API_KEY)
+    except Exception:
+        return None
+    query = plan.get("benchmark") or plan.get("task_name") or description or task_type
+    candidates = _exa_find_hf_dataset_ids(exa, f"{query} {task_type}", log=log)
+    if not candidates:
+        log("      [acquire] no candidate HF datasets found via Exa")
+        return None
+    log(f"      [acquire] Exa-discovered candidate HF datasets: {candidates[:5]}")
+    for hf_id in candidates[:4]:
+        peek = _peek_hf_dataset(hf_id, log=log)
+        if peek is None:
+            continue
+        cfg, splits, columns, sample, _features = peek
+        mapping = _llm_map_dataset(hf_id, cfg, splits, columns, sample, task_type, plan, log=log)
+        if not mapping:
+            log(f"      [acquire] {hf_id}: orchestrator judged it unsuitable / unmappable")
+            continue
+        result = _materialize_from_mapping(hf_id, cfg, splits, mapping, task_type, max_train, max_test, log=log)
+        if result is not None:
+            train, test = result
+            log(f"      [acquire] loaded AGENTIC HF dataset {hf_id!r} (config={cfg}): "
+                f"train={len(train)} test={len(test)}")
+            if meta is not None:
+                meta["source"] = f"agentic HF dataset {hf_id!r} (Exa-discovered, LLM-mapped, load_dataset)"
+            return train, test
+    return None
+
+
 def acquire_dataset(plan: dict, description: str = "", n_per_label: int = DEFAULT_N_PER_LABEL,
                     test_fraction: float = 0.3, target_examples: int = DEFAULT_TARGET_EXAMPLES,
+                    benchmark_max_train: int = 300, benchmark_max_test: int = 80,
                     log=print, meta: dict | None = None):
     """
     Acquire a labeled dataset per the task plan, following the acquisition ladder (B139):
@@ -290,15 +473,30 @@ def acquire_dataset(plan: dict, description: str = "", n_per_label: int = DEFAUL
 
     Returns (train, test). `meta["source"]` records provenance (benchmark / web+synth mix).
     """
-    real = load_benchmark_dataset(plan, log=log, meta=meta)
+    task_type = plan["task_type"]
+
+    # Stage 0: hardcoded known-benchmark fast path (GSM8K/FPB/ARC/BC5CDR/CoNLL).
+    real = load_benchmark_dataset(plan, log=log, meta=meta,
+                                  max_train=benchmark_max_train, max_test=benchmark_max_test)
     if real is not None:
         return real
 
+    # Stage 1 (AGENTIC, paper §6.1): Exa LOCATES a real HuggingFace dataset for this task,
+    # the orchestrator picks the best one + maps its columns, and we download it via
+    # datasets.load_dataset(). This is the primary acquisition path — download REAL data,
+    # don't fabricate a dataset from scraped web text.
+    disc = discover_and_load_hf_dataset(plan, description, task_type,
+                                        benchmark_max_train, benchmark_max_test, log=log, meta=meta)
+    if disc is not None:
+        return disc
+
+    # Stage 2 (LAST-RESORT fallback): only if no real dataset could be located/loaded do we
+    # fall back to the bounded, diversified web-scrape + verified-synthesis ladder below.
+    log("      [acquire] no downloadable dataset found — falling back to web-scrape + synthesis ladder")
     from config.config import EXA_API_KEY
     from exa_py import Exa
 
     exa = Exa(api_key=EXA_API_KEY)
-    task_type = plan["task_type"]
     survey_baseline(exa, description or plan.get("task_name", ""), log=log)
 
     # --- Stage 2: bounded, diversified Exa rounds -------------------------------------
