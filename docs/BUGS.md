@@ -1463,4 +1463,12 @@ Driven by review of the escalation run (job 37110415). Anthropic credits were ex
 ## Data sizing + agentic acquisition — 2026-07-15 (B155–B157)
 - **B155 — dataset-size targets recalibrated + centralized.** Moved the per-task `N_TOTAL` map to `config.DATASET_SIZE_BY_TYPE` (single source for curate + eval_setup) and adjusted toward the paper's §4.3 quality-over-quantity guidance: NER 300→200, math_reasoning 1000→700, code_generation 1000→300 (paper: 173>348 on HumanEval), generation 1000→600 (500 selected > 2000 random). classification 150, multi_label 300, structured 400, multilingual 400 unchanged.
 - **B156 — quant variants are trained/eval'd IDENTICALLY (documented limitation).** A model's Q4_K_M / Q8_0 / bf16 pool entries share benchmark scores and all train the SAME base HF model via LoRA; in the default `theoretical` HW backend, eval scores the HF/LoRA weights (no GGUF), so Q4_K_M and Q8_0 of one model produce identical results — the quant only changes the size/tier/speed the selector sees. Honest per-quant accuracy needs llama.cpp + `SLM_HW_BACKEND!=theoretical` (absent here). Not a code bug; a Phase-2 gap.
+- **B158 — quantized ACCURACY eval decoupled from on-device eval.** New `SLM_QUANT_EVAL=1`
+  (`config.QUANT_ACCURACY_EVAL`) makes `evaluate_node` merge→quantize→score the real GGUF on
+  CPU (via llama-cpp-python) for honest per-quant accuracy, WITHOUT any phone/latency/power
+  measurement — so Q4_K_M vs Q8_0 finally differ (was B156). `infer_batch_gguf` now uses the
+  GGUF's chat template (`create_chat_completion`) for train/serve parity. Added standalone
+  `hardware_eval/quant_accuracy_eval.py` to compare Q4_K_M/Q8_0/bf16 accuracy side-by-side.
+  Requires llama.cpp tools on PATH + `pip install llama-cpp-python` (neither installed yet).
+
 - **B157 — agentic HF-dataset acquisition (paper §6.1).** `acquire_dataset` now: (0) hardcoded known-benchmark fast path → (1) **agentic discovery**: Exa locates candidate HuggingFace dataset repos, the orchestrator picks the best + maps its columns to our schema, and `datasets.load_dataset()` downloads the REAL data (`discover_and_load_hf_dataset`) → (2) web-scrape + verified-synthesis only as last resort. This replaces "scrape web pages and call the text a dataset" with "locate + download the actual dataset," matching the paper. Best-effort/defensive; unverified without API credits + HF network.

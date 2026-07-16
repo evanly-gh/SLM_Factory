@@ -56,12 +56,15 @@ def evaluate_node(state: AgentState) -> AgentState:
         quant = state["selected_model"].quant
         iteration = state["iteration"]
         gguf_path = None
-        # Only build a real GGUF (which requires llama.cpp: convert_hf_to_gguf +
-        # llama-quantize) when we actually measure the quantized model on-device. In
-        # the default "theoretical" backend the run is accuracy-only: score the HF/LoRA
-        # weights via Unsloth (gguf_path=None → eval/harness.py uses infer_batch). This
-        # keeps accuracy-only runs from crashing on a missing llama.cpp toolchain.
-        if quant is not None and config.HW_ONDEVICE_BACKEND != "theoretical":
+        # Build + score the ACTUAL quantized GGUF (honest per-quant accuracy) when EITHER
+        # (a) QUANT_ACCURACY_EVAL is on (accuracy-only, no phone needed), OR (b) a real
+        # on-device backend is selected (latency/power measurement). Both require llama.cpp
+        # (convert_hf_to_gguf + llama-quantize) + llama-cpp-python. In the default
+        # theoretical/accuracy-only mode with the flag OFF, we score the HF/LoRA weights via
+        # Unsloth (gguf_path=None) so runs never depend on the llama.cpp toolchain.
+        want_gguf_eval = config.QUANT_ACCURACY_EVAL or config.HW_ONDEVICE_BACKEND != "theoretical"
+        if quant is not None and want_gguf_eval:
+            _log(mlabel, f"  Quantizing to {quant} GGUF for honest accuracy eval (llama.cpp)...")
             model_id_safe = model_id.replace("/", "_")
             merged_path = merge_for_quantization(
                 weights_ref,
@@ -72,6 +75,7 @@ def evaluate_node(state: AgentState) -> AgentState:
                 os.path.join("artifacts", "gguf", model_id_safe, label, f"iter{iteration}"),
                 quant,
             )
+            _log(mlabel, f"  GGUF built: {gguf_path} — scoring on CPU via llama-cpp-python")
         result = run_eval(eval_set, weights_ref, model_id, task_type=task_type, quant=quant, gguf_path=gguf_path)
         scored[label] = (weights_ref, result)
         _log(mlabel, f"  → F1={result.f1:.4f}  failures={len(result.failures)}")

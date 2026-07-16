@@ -13,6 +13,10 @@ def test_infer_batch_gguf_raises_import_error_when_llama_cpp_missing():
 
 def test_infer_batch_gguf_returns_list_of_strings():
     mock_llama_instance = MagicMock()
+    # Primary path uses create_chat_completion (chat-template parity); raw call is fallback.
+    mock_llama_instance.create_chat_completion.return_value = {
+        "choices": [{"message": {"content": "spam"}}]
+    }
     mock_llama_instance.return_value = {"choices": [{"text": "spam"}]}
     mock_llama_cls = MagicMock(return_value=mock_llama_instance)
 
