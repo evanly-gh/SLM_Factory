@@ -50,12 +50,14 @@ def run_eval(
             f"Must be one of: classification, NER, math_reasoning, code_generation, generation."
         )
 
-    # NER needs room for a full JSON entity list (many spans) and, for reasoning models,
-    # for the <think> preamble before the JSON — 50 tokens truncated both, yielding empty
-    # predictions and F1=0. Give NER the same 256 budget as generation; only single-label
-    # classification (one short label word) stays at 50.
+    # Generation/math/code/NER need room for the FULL chain-of-thought + final answer.
+    # 256 truncated verbose CoT (esp. on the stronger 4B models), cutting off the final
+    # answer before the exact-match extractor sees it → artificially low / collapsing
+    # scores (a contributor to the tier-3 regression, Q8/B145). 512 gives grade-school
+    # math CoT and entity-list JSON enough room. Single-label classification (one short
+    # label word) stays at 50.
     _LONG_OUTPUT_TASKS = {"math_reasoning", "code_generation", "generation", "NER"}
-    max_new_tokens = 256 if task_type in _LONG_OUTPUT_TASKS else 50
+    max_new_tokens = 512 if task_type in _LONG_OUTPUT_TASKS else 50
     prompts = scorer.build_prompts(eval_set)
 
     if gguf_path is not None:
