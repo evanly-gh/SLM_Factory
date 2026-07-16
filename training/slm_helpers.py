@@ -51,6 +51,29 @@ def train(
     return run_lora_training(dataset_path, config, output_dir=output_dir, task_type=task_type)
 
 
+def clear_inference_cache() -> None:
+    """Evict ALL cached inference models and free their VRAM.
+
+    Call this when the pipeline moves on from a model for good (e.g. on escalation) so a
+    stale, no-longer-needed model never sits in VRAM competing with the next (often larger)
+    model — the exact condition that pushed the 4B tier-3 model into CPU/meta offload and
+    crashed generate (B142). This is the explicit "clear what we moved on from" complement
+    to the _MAX_CACHED=1 LRU eviction.
+    """
+    _inference_cache.clear()
+    _cache_order.clear()
+    _gguf_cache.clear()
+    _gguf_cache_order.clear()
+    try:
+        import gc
+        import torch
+        gc.collect()
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+    except Exception:
+        pass
+
+
 def _is_adapter_only_checkpoint(path: str) -> bool:
     """
     Return True if *path* looks like a LoRA adapter-only directory (i.e. it

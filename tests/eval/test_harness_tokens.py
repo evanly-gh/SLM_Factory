@@ -30,10 +30,10 @@ def test_classification_uses_50_tokens(mock_infer):
 
 
 @patch("eval.harness.infer_batch")
-def test_math_uses_256_tokens(mock_infer):
+def test_math_uses_long_token_budget(mock_infer):
     mock_infer.return_value = ["42"]
     with patch("eval.scorers.generation", _mock_scorer()):
         run_eval(_eval_set(), "/w", "m", "math_reasoning")
     _, kwargs = mock_infer.call_args
     max_tok = kwargs.get("max_new_tokens")
-    assert max_tok == 256, f"Expected 256 for math_reasoning, got {max_tok}"
+    assert max_tok == 512, f"Expected 512 for math_reasoning (CoT room), got {max_tok}"
