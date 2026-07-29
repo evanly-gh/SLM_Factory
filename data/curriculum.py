@@ -2,87 +2,90 @@
 import logging
 import random
 from collections import Counter
-from config.config import TEACHER_MODEL_CLAUDE
+from agent.cost import (
+    tracked_anthropic_messages_create,
+    tracked_openai_chat_create,
+)
+from config.config import TEACHER_MODEL_CLAUDE  # legacy hard-negative fallback only; never CoT
 from data.eval_set import EvalSet, _infer_pos_label, _infer_neg_label
+from data.loaders.dataset_integrity import normalize_text
 
 logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
-# Teacher model routing (paper §2.3 quality control #5, §2.5)
-# DeepSeek-R1 for math/science; GPT-4.1 for code/QA; Claude for everything else
+# CoT fallback routing (paper §2.3 quality control #5, §2.5)
+# Primary = local Qwen3.6 (wired in curate). Fallbacks only:
+# DeepSeek V4 Flash thinking mode for math/science first; GPT-4.1 for code/QA/general first.
 # ---------------------------------------------------------------------------
 
-_MATH_SCIENCE_BENCHMARKS = {"gsm8k", "arc-challenge", "arc_challenge", "math", "science_qa", "science"}
+_MATH_SCIENCE_BENCHMARKS = {
+    "gsm8k", "arcchallenge", "arc", "ai2arc", "arcc", "math", "scienceqa", "science",
+}
 _CODE_QA_BENCHMARKS = {"humaneval", "mbpp", "code", "triviaqa", "qa"}
 
 
-def get_teacher_client(task_type: str, benchmark: str | None = None):
-    """Return (client, model_name, client_type) for CoT annotation based on task domain.
+def get_cot_fallbacks(
+    task_type: str, benchmark: str | None = None,
+) -> list[tuple[object, str]]:
+    """Return ordered OpenAI-compatible fallback clients for CoT annotation.
 
-    Paper §2.5: 'DeepSeek-R1 is preferred for mathematical and scientific reasoning
-    (e.g., GSM8K, ARC-Challenge), while GPT-4.1 is preferred for code generation and
-    general-knowledge tasks (e.g., HumanEval, TriviaQA).'
+    Paper §2.5's math/science-first specialist route now uses DeepSeek V4 Flash
+    in thinking mode; GPT-4.1 remains preferred for code and general-knowledge
+    tasks (e.g., HumanEval, TriviaQA).
 
-    FALLBACK: the specialist teachers (DeepSeek-R1, GPT-4.1) are optional and only
-    used when their API key is configured. Whenever a specialist is unavailable —
-    or the domain doesn't call for one — CoT annotation falls back to the SAME
-    orchestrator model that drives the rest of the pipeline (config.ORCHESTRATOR_MODEL,
-    exposed here as TEACHER_MODEL_CLAUDE which defaults to it). So a run with no
-    DeepSeek/OpenAI keys still gets CoT traces, authored by the orchestrator.
+    Qwen3.6 is always the primary backend and is supplied separately as ``generate_fn``.
+    This function contains ONLY cloud fallbacks:
+      - math/science: DeepSeek → OpenAI
+      - code/QA/general generation: OpenAI → DeepSeek
+    Missing keys omit that backend. Claude/the orchestrator is never constructed here.
     """
     from config.config import (
         DEEPSEEK_API_KEY, DEEPSEEK_BASE_URL, TEACHER_MODEL_DEEPSEEK,
         OPENAI_API_KEY, TEACHER_MODEL_GPT,
-        ANTHROPIC_API_KEY, TEACHER_MODEL_CLAUDE, ORCHESTRATOR_MODEL,
     )
+    from openai import OpenAI
 
-    bm = (benchmark or "").lower().replace(" ", "_")
-
-    # math_reasoning prefers DeepSeek-R1 — the distillation source for reasoning
-    # chains — but only if its key is set; otherwise fall through to the orchestrator.
-    if task_type == "math_reasoning" and DEEPSEEK_API_KEY:
-        from openai import OpenAI
-        client = OpenAI(api_key=DEEPSEEK_API_KEY, base_url=DEEPSEEK_BASE_URL)
-        return client, TEACHER_MODEL_DEEPSEEK, "openai"
-
-    # code_generation prefers GPT-4.1 — stronger on syntactically valid, test-passing
-    # code — but only if its key is set; otherwise fall through to the orchestrator.
-    if task_type == "code_generation" and OPENAI_API_KEY:
-        from openai import OpenAI
-        client = OpenAI(api_key=OPENAI_API_KEY)
-        return client, TEACHER_MODEL_GPT, "openai"
-
-    # generation catch-all: route by benchmark domain when the specialist key exists.
-    if task_type == "generation" and bm in _MATH_SCIENCE_BENCHMARKS and DEEPSEEK_API_KEY:
-        from openai import OpenAI
-        client = OpenAI(api_key=DEEPSEEK_API_KEY, base_url=DEEPSEEK_BASE_URL)
-        return client, TEACHER_MODEL_DEEPSEEK, "openai"
-
-    if task_type == "generation" and bm in _CODE_QA_BENCHMARKS and OPENAI_API_KEY:
-        from openai import OpenAI
-        client = OpenAI(api_key=OPENAI_API_KEY)
-        return client, TEACHER_MODEL_GPT, "openai"
-
-    # FALLBACK: no specialist available → use the orchestrator model itself.
-    import anthropic
-    client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
-    teacher = TEACHER_MODEL_CLAUDE or ORCHESTRATOR_MODEL
-    return client, teacher, "anthropic"
+    bm = "".join(ch for ch in (benchmark or "").lower() if ch.isalnum())
+    deepseek = (
+        (OpenAI(api_key=DEEPSEEK_API_KEY, base_url=DEEPSEEK_BASE_URL),
+         TEACHER_MODEL_DEEPSEEK)
+        if DEEPSEEK_API_KEY else None
+    )
+    openai = (
+        (OpenAI(api_key=OPENAI_API_KEY), TEACHER_MODEL_GPT)
+        if OPENAI_API_KEY else None
+    )
+    math_like = task_type == "math_reasoning" or (
+        task_type == "generation" and bm in _MATH_SCIENCE_BENCHMARKS
+    )
+    ordered = [deepseek, openai] if math_like else [openai, deepseek]
+    return [backend for backend in ordered if backend is not None]
 
 
 def annotate_cot(
     examples: list[dict],
-    teacher_client,
-    teacher_model: str,
-    client_type: str = "anthropic",
+    teacher_client=None,
+    teacher_model: str = "",
+    client_type: str = "openai",
     task_type: str = "generation",
+    generate_fn=None,
+    fallback_teachers: list[tuple[object, str]] | None = None,
+    log=print,
 ) -> list[dict]:
-    """Add chain-of-thought reasoning to generation examples via a teacher model.
+    """Add chain-of-thought reasoning to generation examples.
 
     Paper §2.3 quality control #5: 'A teacher model generates step-by-step reasoning
     chains for training examples, teaching the model WHY an answer is correct rather
     than only WHAT the answer is.'
+
+    Backend order is per example: local Qwen3.6 ``generate_fn`` first, then each
+    OpenAI-compatible ``fallback_teachers`` entry in order. Empty output and exceptions
+    advance to the next backend. Claude/the orchestrator is never called. Generation is
+    NON-FATAL: if every backend fails, the original example remains CoT-less.
+
+    ``teacher_client``/``teacher_model`` remain as a compatibility bridge for an explicitly
+    supplied OpenAI-compatible specialist; non-OpenAI clients are ignored.
 
     Returns examples with an added 'cot_reasoning' field. The CoT is prepended to the
     response during training formatting. The prompt is task-aware: code-generation gets
@@ -113,48 +116,94 @@ def annotate_cot(
             f"Reply with only the reasoning steps, not the final answer."
         )
 
-    def _annotate_one(ex: dict) -> dict:
+    fallbacks = list(fallback_teachers or [])
+    if teacher_client is not None and teacher_model and client_type == "openai":
+        fallbacks.insert(0, (teacher_client, teacher_model))
+    from threading import BoundedSemaphore
+    cloud_slots = BoundedSemaphore(16)
+
+    def _present(value) -> bool:
+        return value is not None and bool(str(value).strip())
+
+    def _first_present(ex: dict, *keys: str):
+        for key in keys:
+            if key in ex and _present(ex[key]):
+                return ex[key]
+        return ""
+
+    def _annotate_one(ex: dict) -> tuple[dict, str | None]:
         # Preserve any existing gold CoT (e.g. GSM8K) — do not regenerate.
-        if str(ex.get("cot_reasoning", "")).strip():
-            return ex
-        prompt_text = ex.get("prompt", ex.get("text", ""))
-        gold_answer = ex.get("response", ex.get("label", ex.get("answer", "")))
-        if not prompt_text or not gold_answer:
-            return ex
+        if _present(ex.get("cot_reasoning")):
+            return ex, None
+        prompt_text = _first_present(ex, "prompt", "text")
+        gold_answer = _first_present(ex, "answer", "response", "label")
+        if not _present(prompt_text) or not _present(gold_answer):
+            return ex, None
         cot_prompt = _build_prompt(prompt_text, gold_answer)
-        try:
-            if client_type == "openai":
-                resp = teacher_client.chat.completions.create(
-                    model=teacher_model,
-                    messages=[{"role": "user", "content": cot_prompt}],
-                    max_tokens=500,
-                )
-                cot = resp.choices[0].message.content.strip()
-            else:
-                resp = teacher_client.messages.create(
-                    model=teacher_model,
-                    max_tokens=500,
-                    messages=[{"role": "user", "content": cot_prompt}],
-                )
-                cot = resp.content[0].text.strip()
-            return {**ex, "cot_reasoning": cot}
-        except Exception:
-            return ex
+        if generate_fn is not None:
+            try:
+                # LOCAL synth model (Qwen3.6-35B via vLLM) authors the CoT. Low temperature
+                # for focused reasoning; 512 tokens covers verbose math/code chains.
+                cot = (generate_fn(cot_prompt, 0.3, 512) or "").strip()
+                if cot:
+                    return {**ex, "cot_reasoning": cot}, "Qwen3.6"
+            except Exception:
+                pass
+
+        for client, model in fallbacks:
+            try:
+                # Keep local Qwen at high concurrency while limiting paid cloud fallback
+                # traffic to the conservative 16-call cap.
+                with cloud_slots:
+                    if model.lower().startswith("deepseek-v4"):
+                        resp = tracked_openai_chat_create(
+                            client,
+                            stage="cot_fallback",
+                            model=model,
+                            messages=[{"role": "user", "content": cot_prompt}],
+                            max_tokens=500,
+                            reasoning_effort="high",
+                            extra_body={"thinking": {"type": "enabled"}},
+                        )
+                    else:
+                        resp = tracked_openai_chat_create(
+                            client,
+                            stage="cot_fallback",
+                            model=model,
+                            messages=[{"role": "user", "content": cot_prompt}],
+                            max_tokens=500,
+                        )
+                cot = (resp.choices[0].message.content or "").strip()
+                if cot:
+                    return {**ex, "cot_reasoning": cot}, model
+            except Exception:
+                continue
+        return ex, None
 
     # Only spend API calls on examples that actually need a CoT.
     need_idx = [i for i, ex in enumerate(examples)
-                if not str(ex.get("cot_reasoning", "")).strip()
-                and (ex.get("prompt") or ex.get("text"))
-                and (ex.get("response") or ex.get("label") or ex.get("answer"))]
+                if not _present(ex.get("cot_reasoning"))
+                and _present(_first_present(ex, "prompt", "text"))
+                and _present(_first_present(ex, "answer", "response", "label"))]
     if not need_idx:
         return list(examples)
 
     from concurrent.futures import ThreadPoolExecutor
     annotated = list(examples)
-    max_workers = min(16, len(need_idx))
+    # The local synth server continuous-batches, so match the synth concurrency when using
+    # generate_fn; cloud teachers keep the conservative 16-way cap.
+    max_workers = _synth_concurrency(len(need_idx)) if generate_fn is not None else min(16, len(need_idx))
     with ThreadPoolExecutor(max_workers=max_workers) as pool:
-        for i, result in zip(need_idx, pool.map(lambda i: _annotate_one(examples[i]), need_idx)):
-            annotated[i] = result
+        outcomes = list(pool.map(lambda i: _annotate_one(examples[i]), need_idx))
+
+    backend_counts: Counter = Counter()
+    for i, (result, backend) in zip(need_idx, outcomes):
+        annotated[i] = result
+        if backend:
+            backend_counts[backend] += 1
+    succeeded = sum(backend_counts.values())
+    log(f"      [cot] annotated={succeeded}/{len(need_idx)} "
+        f"by_backend={dict(backend_counts)} failed={len(need_idx) - succeeded}")
     return annotated
 
 
@@ -172,8 +221,16 @@ def build_initial_curriculum(
     Reads task_type from eval_set.task_type internally.
     """
     task_type = eval_set.task_type
-    eval_texts = {e["text"] for e in eval_set.all}
-    available = [e for e in train_examples if e["text"] not in eval_texts]
+    eval_texts = {
+        normalize_text(e.get("text", e.get("prompt", "")))
+        for e in eval_set.all
+    }
+    eval_texts.discard("")
+    available = [
+        e
+        for e in train_examples
+        if normalize_text(e.get("text", e.get("prompt", ""))) not in eval_texts
+    ]
 
     # n_gold is the gold-data portion in a mixed dataset (gold + hard negatives).
     # For the initial curriculum (training data only, no synthetic hard negatives yet),
@@ -293,11 +350,12 @@ def apply_quality_controls(
             e for e in dataset
             if ("prompt" in e and "response" in e) or ("text" in e and "label" in e)
         ]
-        clean = _filter_length_outliers(clean, key="prompt")
+        key = "text" if task_type == "code_generation" else "prompt"
+        clean = _filter_length_outliers(clean, key=key)
         # Dedup on math/code — repeated problem templates inflate the dataset
         # without adding coverage. Generation is diverse enough to skip dedup.
         if task_type in ("math_reasoning", "code_generation"):
-            clean = _dedup_surface_forms(clean, key="prompt")
+            clean = _dedup_surface_forms(clean, key=key)
         return clean
 
     else:
@@ -341,13 +399,32 @@ def _dedup_surface_forms(
     return result
 
 
+def _synth_concurrency(n_tasks: int) -> int:
+    """How many hard-negative generations to run CONCURRENTLY against the synth endpoint.
+
+    Synthesis is I/O-bound on the vLLM server, which continuous-batches concurrent requests
+    (its --max-num-seqs). Firing them one-at-a-time was the single biggest wall-clock cost
+    (~15 min/rebuild in run 37372065); at concurrency W it becomes ~n/W round-trips. Tunable
+    via SLM_SYNTH_CONCURRENCY (default 16); set higher when the server has more GPUs / a
+    larger max-num-seqs. Capped at the number of tasks; 1 restores fully-sequential behavior.
+    """
+    import os
+    try:
+        c = int(os.environ.get("SLM_SYNTH_CONCURRENCY", "16"))
+    except (TypeError, ValueError):
+        c = 16
+    return max(1, min(c, max(1, n_tasks)))
+
+
 def synthesize_hard_negatives(
     examples: list[dict],
     n: int,
-    anthropic_client,
+    anthropic_client=None,
     task_type: str = "classification",
-    targeted_pattern: str = "",
+    pattern_hint: str = "",
     temperature: float = 1.0,
+    generate_fn=None,
+    source_label: str = "synth",
 ) -> list[dict]:
     """
     Generate hard negatives using the 2-for-1 rule (paper §2.3).
@@ -356,15 +433,50 @@ def synthesize_hard_negatives(
     synthetic hard negative — a contrastive pair that teaches the model what
     TO predict and what NOT to predict for similar surface forms.
 
-    Returns up to 2*n examples (n originals + n synthetics).
+    Returns up to 2*n examples (n originals + n synthetics). Each synthetic example is
+    tagged with `_source=source_label` for data-lineage logging (B161).
+
+    Generation backend (B161): if `generate_fn` is provided (a
+    `generate(prompt, temperature, max_tokens) -> str` from the LOCAL vLLM synthesis
+    endpoint), it is used. Otherwise falls back to `anthropic_client` (legacy path / tests).
 
     `temperature` controls generation diversity. curate_node rotates it across
-    successive data_rebuild rounds so a rebuild produces DIFFERENT negatives each
-    time (avoids re-generating an identical dataset that just re-plays the same
-    training signal — see the data_rebuild variety note in curate_node).
-
-    Uses Claude API directly (no teacher model needed for phase 1).
+    successive data_rebuild rounds so a rebuild produces DIFFERENT negatives each time.
     """
+    # Synthesis must be NON-FATAL (B161): a per-call failure (endpoint down, proxy 5xx,
+    # timeout) must SKIP that example, not crash curate. _gen returns None on failure; the
+    # loops skip synthetics when None, and bail early after too many consecutive failures
+    # (endpoint effectively dead) so we degrade to gold-only instead of hammering a dead server.
+    _fail_state = {"consecutive": 0, "aborted": False}
+    _MAX_CONSEC_FAILS = 3
+
+    def _gen(prompt: str, max_tokens: int):
+        if _fail_state["aborted"]:
+            return None
+        try:
+            if generate_fn is not None:
+                out = generate_fn(prompt, temperature, max_tokens)
+            else:
+                response = tracked_anthropic_messages_create(
+                    anthropic_client.messages,
+                    stage="hard_negative_synthesis",
+                    model=TEACHER_MODEL_CLAUDE,
+                    max_tokens=max_tokens,
+                    temperature=temperature,
+                    messages=[{"role": "user", "content": prompt}],
+                )
+                out = response.content[0].text.strip()
+            _fail_state["consecutive"] = 0
+            return out
+        except Exception as e:  # noqa: BLE001
+            _fail_state["consecutive"] += 1
+            if _fail_state["consecutive"] >= _MAX_CONSEC_FAILS:
+                _fail_state["aborted"] = True
+                logger.warning("synthesize_hard_negatives: %d consecutive generation failures "
+                               "(%s) — aborting synthesis, returning gold-only",
+                               _fail_state["consecutive"], str(e)[:80])
+            return None
+
     results = []
 
     if task_type == "classification":
@@ -377,11 +489,12 @@ def synthesize_hard_negatives(
         candidates = examples[:n]
         pattern_hint = (
             f"\nThe example should specifically exercise this failure mode: "
-            f"{targeted_pattern}. Construct text that a model failing in that way "
+            f"{pattern_hint}. Construct text that a model failing in that way "
             f"would misclassify.\n"
-            if targeted_pattern else ""
+            if pattern_hint else ""
         )
-        for ex in candidates:
+
+        def _synth_one(ex):
             src_label = ex.get("label", "unknown")
             # Pick a target label different from the source
             target_labels = [l for l in all_labels if l != src_label]
@@ -396,15 +509,24 @@ def synthesize_hard_negatives(
                 f"Output ONLY the new example text for the '{target_label}' class — no preamble, "
                 f"no explanation, no quotation marks, no label prefix."
             )
-            response = anthropic_client.messages.create(
-                model=TEACHER_MODEL_CLAUDE,
-                max_tokens=200,
-                temperature=temperature,
-                messages=[{"role": "user", "content": prompt}],
-            )
-            generated_text = response.content[0].text.strip()
+            generated_text = _gen(prompt, 200)
+            if generated_text:  # skip the synthetic on generation failure (non-fatal)
+                return ex, {"text": generated_text, "label": target_label, "_source": source_label}
+            return ex, None
+
+        # Run the 2-for-1 generations CONCURRENTLY (vLLM continuous-batches them). Order is
+        # preserved so each gold example stays adjacent to its synthetic counterpart.
+        workers = _synth_concurrency(len(candidates))
+        if workers > 1:
+            from concurrent.futures import ThreadPoolExecutor
+            with ThreadPoolExecutor(max_workers=workers) as pool:
+                pairs = list(pool.map(_synth_one, candidates))
+        else:
+            pairs = [_synth_one(ex) for ex in candidates]
+        for ex, synth in pairs:
             results.append(ex)
-            results.append({"text": generated_text, "label": target_label})
+            if synth is not None:
+                results.append(synth)
 
     elif task_type == "NER":
         # Hard negatives for NER are HARDER-TO-TAG examples with CORRECT labels — a
@@ -415,6 +537,11 @@ def synthesize_hard_negatives(
         candidates = examples[:n]
         for ex in candidates:
             original_entities = ex.get("entities", [])
+            valid_types = {
+                str(entity.get("type")).strip()
+                for entity in original_entities
+                if isinstance(entity, dict) and str(entity.get("type", "")).strip()
+            }
             entity_desc = ", ".join(
                 f'"{e.get("text", "")}" ({e.get("type", "")})' for e in original_entities[:5]
             ) if original_entities else "unknown entities"
@@ -426,71 +553,84 @@ def synthesize_hard_negatives(
                 f"alone — but keep each entity's CORRECT type unchanged.\n\n"
                 f"Original entities (text → correct type): {entity_desc}\n"
                 f"Original passage: {ex.get('text', '')}\n\n"
+                f"Aggregate pattern to emphasize: {pattern_hint or 'general ambiguity'}\n"
                 f"Reply with JSON only: {{\"text\": \"<rewritten passage>\", "
                 f"\"entities\": [{{\"text\": \"<span>\", \"type\": \"<CORRECT_TYPE>\"}}]}}\n"
                 f"The 'entities' list must contain the spans with their TRUE types (what the "
                 f"model SHOULD predict for the rewritten passage). JSON only, no prose."
             )
-            response = anthropic_client.messages.create(
-                model=TEACHER_MODEL_CLAUDE,
-                max_tokens=400,
-                temperature=temperature,
-                messages=[{"role": "user", "content": prompt}],
-            )
-            raw = response.content[0].text.strip()
+            raw = _gen(prompt, 400)
             import json as _json, re as _re
             results.append(ex)
+            if not raw:  # generation failed — keep gold, skip synthetic (non-fatal)
+                continue
             try:
                 match = _re.search(r'\{.*\}', raw, _re.DOTALL)
-                parsed = _json.loads(match.group()) if match else {}
-                results.append({
-                    "text": parsed.get("text", raw),
-                    "entities": parsed.get("entities", []),
-                })
-            except Exception:
-                results.append({"text": raw, "entities": []})
+                parsed = _json.loads(match.group()) if match else None
+            except (TypeError, ValueError):
+                continue
+            if not isinstance(parsed, dict):
+                continue
+            rewritten = parsed.get("text")
+            entities = parsed.get("entities")
+            if (
+                not isinstance(rewritten, str)
+                or not rewritten.strip()
+                or not isinstance(entities, list)
+                or not entities
+                or not valid_types
+            ):
+                continue
+            valid_entities = all(
+                isinstance(entity, dict)
+                and isinstance(entity.get("text"), str)
+                and bool(entity["text"].strip())
+                and entity["text"] in rewritten
+                and isinstance(entity.get("type"), str)
+                and entity["type"].strip() in valid_types
+                for entity in entities
+            )
+            if not valid_entities:
+                continue
+            results.append({
+                "text": rewritten,
+                "entities": entities,
+                "_source": source_label,
+            })
 
     elif task_type == "math_reasoning":
         # SFT on wrong answers actively harms math models — skip wrong-answer negatives.
         # Instead, return the gold examples as-is (CoT annotation in curate_node provides
         # the real augmentation value for math tasks).
-        if targeted_pattern:
+        if pattern_hint:
             logger.warning(
-                "[curriculum] Surgical patterns not supported for math_reasoning hard negatives; "
+                "[curriculum] Pattern-guided positive synthesis is not supported for "
+                "math_reasoning; "
                 "returning gold examples unchanged."
             )
         return list(examples[:n]) if n < len(examples) else list(examples)
 
     elif task_type == "code_generation":
         # Wrong-code SFT examples teach the model to produce bugs — skip.
-        if targeted_pattern:
+        if pattern_hint:
             logger.warning(
-                "[curriculum] Surgical patterns not supported for code_generation hard negatives; "
+                "[curriculum] Pattern-guided positive synthesis is not supported for "
+                "code_generation; "
                 "returning gold examples unchanged."
             )
         return list(examples[:n]) if n < len(examples) else list(examples)
 
     elif task_type == "generation":
-        candidates = examples[:n]
-        for ex in candidates:
-            source_text = ex.get("prompt", ex.get("text", ""))
-            gold_answer = ex.get("response", ex.get("label", ex.get("answer", "")))
-            prompt = (
-                f"Given this question and its correct answer, generate a plausible but "
-                f"INCORRECT answer that could trick a language model. The wrong answer "
-                f"should sound reasonable but contain a subtle error.\n\n"
-                f"Question: {source_text}\n"
-                f"Correct answer: {gold_answer}\n\n"
-                f"Reply with only the plausible wrong answer, no explanation."
+        # Rejected answers require a preference objective. Until one exists, open
+        # generation remains gold/CoT-only and this compatibility API returns anchors
+        # unchanged rather than turning plausible wrong answers into positive SFT targets.
+        if pattern_hint:
+            logger.warning(
+                "[curriculum] Pattern-guided positive synthesis is not supported for "
+                "generation without "
+                "verified-positive synthesis or preference training; returning gold "
+                "examples unchanged."
             )
-            response = anthropic_client.messages.create(
-                model=TEACHER_MODEL_CLAUDE,
-                max_tokens=300,
-                temperature=temperature,
-                messages=[{"role": "user", "content": prompt}],
-            )
-            wrong_answer = response.content[0].text.strip()
-            results.append(ex)
-            results.append({"prompt": source_text, "response": wrong_answer})
+        return list(examples[:n]) if n < len(examples) else list(examples)
 
     return results

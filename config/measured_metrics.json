@@ -1,0 +1,47 @@
+{
+  "_README": [
+    "REAL MEASUREMENTS ONLY. Nothing in this file may be estimated, interpolated,",
+    "extrapolated from another model, or derived from a parameter count. If a number was",
+    "not produced by running or building the actual artifact, it does not belong here —",
+    "leave it absent so consumers correctly report 'unmeasured'.",
+    "",
+    "Written by hardware_eval/measure_model.py; read by config/android_pool.py.",
+    "",
+    "_sizes: on-disk weight bytes of a real build, keyed '<model_id>|<quant|bf16>'.",
+    "  Chip-independent. Overrides the bytes-per-parameter arithmetic in _variant().",
+    "",
+    "measurements: runtime metrics keyed '<model_id>|<quant|bf16>|<chip>'. Chip-specific",
+    "  and never shared across chips or quants. Fields (all optional, omit if not",
+    "  measured): peak_memory_mb (peak RSS), tok_per_s (sustained decode), ttft_ms,",
+    "  avg_watts. Each entry must carry 'source', 'method', and 'measured_at'."
+  ],
+
+  "_sizes": {
+    "Qwen/Qwen3.5-4B|Q4_K_M": 2654.5,
+    "Qwen/Qwen3.5-4B|Q8_0": 4397.0,
+    "Qwen/Qwen3.5-4B|bf16": 8908.0
+  },
+
+  "_size_provenance": {
+    "Qwen/Qwen3.5-4B|Q4_K_M": {
+      "source": "slurm job 37810980",
+      "method": "llama.cpp convert_hf_to_gguf + llama-quantize; os.path.getsize of model-q4_k_m.gguf",
+      "measured_at": "2026-07-27",
+      "note": "Pool arithmetic predicted 2200 MB — 20% low. K-quants are not a uniform 0.55 bytes/param."
+    },
+    "Qwen/Qwen3.5-4B|Q8_0": {
+      "source": "slurm job 37810980",
+      "method": "llama.cpp convert_hf_to_gguf + llama-quantize; os.path.getsize of model-q8_0.gguf",
+      "measured_at": "2026-07-27",
+      "note": "Pool arithmetic predicted 4000 MB."
+    },
+    "Qwen/Qwen3.5-4B|bf16": {
+      "source": "slurm job 37810980",
+      "method": "sum of *.safetensors in the merged HF checkpoint",
+      "measured_at": "2026-07-27",
+      "note": "Merged base+LoRA checkpoint; adapter contribution is negligible vs base weights."
+    }
+  },
+
+  "measurements": {}
+}

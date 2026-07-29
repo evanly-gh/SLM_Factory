@@ -8,8 +8,15 @@ context, then resets score history for a fresh start with the new model.
 Falls back to the largest feasible model in the next tier if the LLM call fails.
 """
 import logging
+from agent.cost import tracked_anthropic_messages_create
 from agent.state import AgentState
-from config.android_pool import filter_pool, ModelSpec
+from config.android_pool import (
+    METRIC_COMPARABILITY_CAVEAT,
+    ModelSpec,
+    filter_pool,
+    format_capability_metrics,
+    resolve_model_selector,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -23,18 +30,19 @@ _CHOOSE_SYSTEM = (
     "You choose which small language model to fine-tune next for a specific task. "
     "All candidates already fit the device's hardware budget, so choose purely on "
     "expected task capability after LoRA fine-tuning — not on size. Prefer the model "
-    "whose architecture and published benchmarks best match the task type. Output STRICT "
-    "JSON only."
+    "whose documented capabilities best match the task type. "
+    f"METRIC COMPARABILITY CONTRACT: {METRIC_COMPARABILITY_CAVEAT} "
+    "Output STRICT JSON only."
 )
 
 # Which published benchmark matters most, per task type. Steers the LLM away from
 # defaulting to GSM8K (a math benchmark) when the task is, e.g., NER or code.
 _BENCHMARK_HINT = {
-    "classification": "MMLU and instruction-following (IFEval) — reasoning/label discrimination.",
-    "NER": "MMLU and instruction-following — structured extraction follows instructions.",
-    "math_reasoning": "GSM8K — arithmetic/word-problem reasoning is the primary signal.",
-    "code_generation": "code benchmarks (HumanEval/MBPP); MMLU as a secondary signal.",
-    "generation": "MMLU and instruction-following (IFEval) — open-ended answer quality.",
+    "classification": "like-for-like knowledge metrics and instruction-following.",
+    "NER": "instruction-following and structured extraction; use only like-for-like metrics.",
+    "math_reasoning": "GSM8K when reported; missing GSM8K is unknown rather than zero.",
+    "code_generation": "APPS introductory pass@1; do not substitute a different code metric.",
+    "generation": "instruction-following and task-specific generation evidence.",
 }
 
 
@@ -44,6 +52,7 @@ def _llm_choose_model(
     task_plan: dict,
     current_best_score: float,
     log=print,
+    direction: str = "up",
 ) -> ModelSpec:
     """Ask the orchestrator LLM to choose a model from `candidates` given the task context.
     Returns the chosen ModelSpec. Falls back to the largest candidate on any failure.
@@ -54,23 +63,32 @@ def _llm_choose_model(
     probe (smaller tier). The prompt frames the choice as "best task fit", which is
     correct in both directions since all candidates already satisfy the hardware budget.
     """
-    from config.config import ORCHESTRATOR_MODEL, ANTHROPIC_API_KEY
+    from config.config import ORCHESTRATOR_MODEL, ANTHROPIC_API_KEY, orchestrator_client_kwargs
     import anthropic
-    import json
 
     if not candidates:
         raise ValueError("No candidates to choose from")
+    if direction not in ("up", "down"):
+        raise ValueError(f"Unknown selection direction: {direction!r}")
 
     candidate_lines = "\n".join(
-        f"  - model_id: {m.model_id}\n"
-        f"    quant: {m.quant or 'none (bf16)'}  size: {m.size_mb}MB  "
-        f"gsm8k: {m.gsm8k:.2f}  mmlu: {m.mmlu:.2f}\n"
+        f"  - selector: {m.selector}\n"
+        f"    model_id: {m.model_id}\n"
+        f"    quant: {m.quant or 'none (bf16)'}  on-disk size: {m.size_mb}MB  "
+        f"capability_metrics: {format_capability_metrics(m)}\n"
         f"    notes: {getattr(m, 'notes', '') or 'n/a'}"
         for m in candidates
     )
     task_name = task_plan.get("task_name", task_type)
     task_labels = task_plan.get("labels", [])
-    benchmark_hint = _BENCHMARK_HINT.get(task_type, "MMLU as a general capability proxy.")
+    benchmark_hint = _BENCHMARK_HINT.get(
+        task_type,
+        "task-specific sourced evidence; compare only like-for-like named metrics.",
+    )
+
+    # Offline capability descriptions plus the named-metric comparability contract (B161).
+    from config.model_capabilities import capability_sections
+    cap_doc = capability_sections([m.model_id for m in candidates])
 
     prompt = (
         f"Task to fine-tune for:\n"
@@ -78,18 +96,25 @@ def _llm_choose_model(
         f"  name: {task_name}\n"
         f"  labels/schema: {task_labels}\n"
         f"  current best F1 (previous model): {current_best_score:.4f}\n\n"
+        f"Selection direction: {'upward escalation' if direction == 'up' else 'downward resource probe'}\n"
+        f"Target peak-RAM tier: {candidates[0].tier}\n\n"
         f"For a {task_type} task, prioritise: {benchmark_hint}\n\n"
+        f"CAPABILITY DESCRIPTIONS (judge task fit from these, not raw numbers):\n{cap_doc}\n\n"
+        f"METRIC COMPARABILITY CONTRACT: {METRIC_COMPARABILITY_CAVEAT}\n\n"
         f"'quant' is the on-device weight format: none/bf16 (highest quality, largest), "
         f"Q8_0 (near-lossless, ~1.9x smaller), Q4_K_M (4-bit, smallest, minor quality loss). "
-        f"All listed candidates already fit the device budget.\n\n"
+        f"All listed candidates already fit the device budget; among candidates expected to reach "
+        f"the goal, prefer the more resource-efficient one (lower peak_ram).\n\n"
         f"Candidates:\n{candidate_lines}\n\n"
         f"Choose the single candidate most likely to reach the highest task accuracy after "
-        f"LoRA fine-tuning. Reply with STRICT JSON only, no prose:\n"
-        f'{{"model_id": "<exact model_id from the list>", "reason": "<one sentence>"}}'
+        f"LoRA fine-tuning (breaking ties toward lower RAM). Reply with STRICT JSON only, no prose:\n"
+        f'{{"selector": "<exact selector from the list>", "reason": "<one sentence>"}}'
     )
     try:
-        client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
-        resp = client.messages.create(
+        client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY, **orchestrator_client_kwargs())
+        resp = tracked_anthropic_messages_create(
+            client.messages,
+            stage="escalate",
             model=ORCHESTRATOR_MODEL,
             max_tokens=256,
             system=_CHOOSE_SYSTEM,
@@ -98,27 +123,35 @@ def _llm_choose_model(
         first_block = resp.content[0]
         raw = first_block.text.strip() if isinstance(first_block, anthropic.types.TextBlock) else ""
         chosen_id, reason = _parse_choice(raw)
-        match = next((m for m in candidates if m.model_id == chosen_id), None)
+        match = resolve_model_selector(candidates, chosen_id)
         if match is not None:
             log(f"  Orchestrator chose {match.model_id} "
-                f"(quant={match.quant or 'bf16'}, {match.size_mb}MB, gsm8k={match.gsm8k:.2f}, "
-                f"mmlu={match.mmlu:.2f})")
+                f"(quant={match.quant or 'bf16'}, {match.size_mb}MB; "
+                f"{format_capability_metrics(match)})")
             log(f"    reason: {reason or '(none given)'}")
             return match
-        log(f"  Orchestrator returned unknown model_id {chosen_id!r}; falling back to largest candidate")
+        log(f"  Orchestrator returned unknown selector {chosen_id!r}; using resource-safe fallback")
     except Exception as e:
         from agent.llm_errors import raise_if_fatal
         raise_if_fatal(e, "escalate")  # billing/auth → stop the run, don't silently fall back
-        log(f"  Orchestrator model-choice failed ({e}); falling back to largest candidate")
-    # Fallback: largest model in the tier (highest size_mb = most capable)
-    fallback = max(candidates, key=lambda m: m.size_mb)
-    log(f"  Fallback choice: {fallback.model_id} (quant={fallback.quant or 'bf16'}, {fallback.size_mb}MB)")
+        log(f"  Orchestrator model-choice failed ({e}); using resource-safe fallback")
+    # Candidates already belong to the direction-appropriate target tier. Choose
+    # its lowest-footprint exact variant, never arbitrary list order or max-BF16.
+    fallback = min(
+        candidates,
+        key=lambda model: (
+            model.size_mb,
+            model.size_mb,
+            model.selector,
+        ),
+    )
+    log(f"  Resource-safe {direction} fallback: {fallback.selector} "
+        f"({fallback.size_mb}MB, size={fallback.size_mb}MB)")
     return fallback
 
 
 def _parse_choice(raw: str) -> tuple[str, str]:
-    """Extract (model_id, reason) from the LLM reply. Tolerates JSON, code fences,
-    or a bare model_id string (back-compat with the old plain-string protocol)."""
+    """Extract (selector-or-legacy-model-id, reason) from the reply."""
     import json
     import re
 
@@ -129,16 +162,18 @@ def _parse_choice(raw: str) -> tuple[str, str]:
     # Try JSON first
     try:
         obj = json.loads(text)
-        if isinstance(obj, dict) and "model_id" in obj:
-            return str(obj["model_id"]).strip().strip('"'), str(obj.get("reason", "")).strip()
+        if isinstance(obj, dict) and ("selector" in obj or "model_id" in obj):
+            choice = obj.get("selector", obj.get("model_id"))
+            return str(choice).strip().strip('"'), str(obj.get("reason", "")).strip()
     except (json.JSONDecodeError, ValueError):
         pass
     m = re.search(r"\{.*\}", text, re.DOTALL)
     if m:
         try:
             obj = json.loads(m.group())
-            if isinstance(obj, dict) and "model_id" in obj:
-                return str(obj["model_id"]).strip().strip('"'), str(obj.get("reason", "")).strip()
+            if isinstance(obj, dict) and ("selector" in obj or "model_id" in obj):
+                choice = obj.get("selector", obj.get("model_id"))
+                return str(choice).strip().strip('"'), str(obj.get("reason", "")).strip()
         except (json.JSONDecodeError, ValueError):
             pass
     # Back-compat: treat the whole reply as a bare model_id string
@@ -161,24 +196,33 @@ def escalate_node(state: AgentState) -> AgentState:
         return state
 
     current_id = current_model.model_id
+    current_selector = current_model.selector
     mlabel = current_model.label  # log prefix includes quant
     current_tier = current_model.tier
 
     # Log stagnation context
     scores = state.get("scores", [])
-    from agent.nodes.iterate import STAGNATION_WINDOW, STAGNATION_MIN_DELTA
+    from agent.nodes.iterate import (
+        STAGNATION_MIN_DELTA,
+        STAGNATION_WINDOW,
+        _stagnation_gain,
+    )
     window = scores[-STAGNATION_WINDOW:] if len(scores) >= STAGNATION_WINDOW else scores
-    delta = max(window) - min(window) if window else 0.0
+    gain = _stagnation_gain(window)
     _log(mlabel, "STAGNATION DETECTED")
     _log(mlabel, f"  Score window (last {len(window)}): {[f'{s:.4f}' for s in window]}")
-    _log(mlabel, f"  Window delta: {delta:.4f} < threshold {STAGNATION_MIN_DELTA}")
+    _log(
+        mlabel,
+        f"  Window chronological gain: {gain:.4f} < threshold "
+        f"{STAGNATION_MIN_DELTA}",
+    )
     _log(mlabel, f"  Best score achieved: {state['best_score']:.4f}")
     _log(mlabel, f"  Current tier: {current_tier}")
 
     # Record final best for this model in baselines
     baselines = state.get("model_baselines") or []
     for entry in baselines:
-        if entry["model_id"] == current_id:
+        if entry.get("selector", entry.get("model_id")) in (current_selector, current_id):
             entry["best_finetuned_f1"] = max(
                 entry.get("best_finetuned_f1", 0.0), state["best_score"]
             )
@@ -207,24 +251,37 @@ def escalate_node(state: AgentState) -> AgentState:
         task_plan=state.get("task_plan") or {},
         current_best_score=state["best_score"],
         log=lambda m: _log(mlabel, m),
+        direction="up",
     )
 
     _log(mlabel,
          f"  PROMOTING: tier {current_tier} → tier {next_tier}  |  "
          f"{current_id} (best {state['best_score']:.4f}) → {chosen.model_id} "
-         f"[{chosen.quant or 'bf16'}, {chosen.size_mb}MB, peak {chosen.peak_memory_mb}MB]")
+         f"[{chosen.quant or 'bf16'}, {chosen.size_mb}MB, size {chosen.size_mb}MB]")
     _log(mlabel, f"  Dataset carried forward: {state.get('current_dataset_path')}")
 
     # Record this model's completed run BEFORE resetting, so the end-of-run summary can
     # show the FULL trajectory across every tier, not just the final model (Q15/B147).
+    # Default to None, never 0.0: a missing or failed baseline must render as "n/a" in
+    # the Model Improvement Report rather than as a real zero-shot score of zero, which
+    # would credit fine-tuning with the entire final F1 as its improvement.
+    _baseline_f1 = next((e.get("baseline_f1") for e in baselines
+                         if e.get("selector", e.get("model_id"))
+                         in (current_selector, current_id)), None)
     history = list(state.get("escalation_history") or [])
     history.append({
+        "selector": current_selector,
         "model_id": current_id,
         "quant": getattr(current_model, "quant", None),
         "tier": current_tier,
+        "baseline_f1": _baseline_f1,
         "best_score": state["best_score"],
         "iterations": state["iteration"],
         "scores": list(state.get("scores") or []),
+        # Full per-iteration DAG for THIS model, so the end-of-run summary can show the
+        # traversal of every model tested — not just the final one (the DAG resets on
+        # escalation). (B161 reporting request.)
+        "dag": list(state.get("dag") or []),
     })
     state["escalation_history"] = history
 
@@ -241,18 +298,24 @@ def escalate_node(state: AgentState) -> AgentState:
     state["scores"] = []
     state["dag"] = []
     state["iteration"] = 0
-    state["dataset_version"] = 0
     state["lifetime_best_score"] = max(
         state.get("lifetime_best_score") or 0.0, state["best_score"]
     )
     state["best_score"] = 0.0
     state["best_weights_ref"] = None
     state["last_eval"] = None
-    state["last_curation"] = None
     state["last_intervention"] = "data_rebuild"
     state["last_hypothesis"] = ""
     state["llm_iterate_decision"] = None
+    state["data_rebuild_plan"] = None
+    state["data_rebuild_plan_identity"] = None
     state["consecutive_no_improvement"] = 0
     state["downward_probe_done"] = False
+    state["downward_tiers_tried"] = []
+    state["converged_model_ref"] = None
+    state["downward_probe_history"] = {
+        "origin": None,
+        "attempts": [],
+    }
     state["next_action"] = "curate"
     return state

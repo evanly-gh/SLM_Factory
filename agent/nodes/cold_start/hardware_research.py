@@ -21,9 +21,13 @@ import json
 import os
 import re
 
-from config.android_pool import CHIP_SCALE_FACTORS, HardwareConstraints
+from agent.cost import tracked_anthropic_messages_create, tracked_exa_call
+from config.android_pool import KNOWN_CHIPS, HardwareConstraints
 
-REFERENCE_CHIPS = list(CHIP_SCALE_FACTORS.keys())
+# Valid chipset vocabulary. Previously derived from CHIP_SCALE_FACTORS, a table of
+# invented per-chip decode multipliers; KNOWN_CHIPS is just the names, no performance
+# claims attached.
+REFERENCE_CHIPS = list(KNOWN_CHIPS)
 
 _DEVICES_CSV = os.path.join(os.path.dirname(__file__), "..", "..", "..", "data", "devices.csv")
 
@@ -171,8 +175,11 @@ def _exa_snippets(description: str, log) -> str:
         from config.config import EXA_API_KEY
         from exa_py import Exa
         exa = Exa(api_key=EXA_API_KEY)
-        r = exa.search_and_contents(
+        r = tracked_exa_call(
+            exa.search_and_contents,
             f"{description} smartphone chipset SoC RAM storage NPU full specifications",
+            stage="hardware_research",
+            model="search-and-contents",
             num_results=3, type="auto", text={"max_characters": 600},
         )
         return "\n".join(f"- {x.title[:80]}: {(x.text or '')[:300]}" for x in r.results)
@@ -188,8 +195,8 @@ def research_device(description: str, anthropic_client=None, log=print):
     """
     if anthropic_client is None:
         import anthropic
-        from config.config import ANTHROPIC_API_KEY
-        anthropic_client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
+        from config.config import ANTHROPIC_API_KEY, orchestrator_client_kwargs
+        anthropic_client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY, **orchestrator_client_kwargs())
 
     from config.config import ORCHESTRATOR_MODEL
 
@@ -209,7 +216,9 @@ def research_device(description: str, anthropic_client=None, log=print):
 
     # Stage 3: LLM resolve — device-specific values only (RAM, storage, chip).
     try:
-        resp = anthropic_client.messages.create(
+        resp = tracked_anthropic_messages_create(
+            anthropic_client.messages,
+            stage="hardware_research",
             model=ORCHESTRATOR_MODEL, max_tokens=700,
             messages=[{"role": "user", "content": _PROMPT.format(
                 chips=REFERENCE_CHIPS, description=description, snippets=snippets)}],
@@ -217,7 +226,15 @@ def research_device(description: str, anthropic_client=None, log=print):
         info = _extract_json(resp.content[0].text)
         info["spec_source"] = source
     except Exception as e:
-        log(f"      [hw] LLM resolve failed ({e}); using conservative defaults.")
+        # An API failure here is fatal: the hardware budget is a HARD gate on which
+        # models the run may even consider. Silently substituting
+        # {usable_ram_mb: 3000, storage: 1500} would quietly change the feasible set and
+        # every downstream selection, while the run still reported itself as
+        # device-targeted. Stop instead.
+        from agent.llm_errors import raise_if_fatal
+
+        raise_if_fatal(e, "hardware_research")
+        log(f"      [hw] LLM resolve returned unusable content ({e}); using conservative defaults.")
         info = {"device": description, "usable_ram_mb": 3000, "storage_budget_mb": 1500,
                 "reference_chip": HW_FALLBACK_CHIP, "rationale": "fallback defaults",
                 "spec_source": "defaults"}
@@ -226,7 +243,7 @@ def research_device(description: str, anthropic_client=None, log=print):
     # the configured anchor only when it cannot be resolved. latency/power/min_tok_s
     # are fixed system constants from config, not device-derived.
     ref = info.get("reference_chip")
-    if ref not in CHIP_SCALE_FACTORS:
+    if ref not in KNOWN_CHIPS:
         ref = HW_FALLBACK_CHIP
     hw = HardwareConstraints(
         storage_mb=int(info.get("storage_budget_mb", 1500)),

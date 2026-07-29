@@ -1,5 +1,8 @@
 # data/curation_log.py
+import hashlib
+import os
 from datetime import datetime
+from agent.checkpoint import atomic_write_text
 from eval.harness import EvalResult
 
 
@@ -12,8 +15,15 @@ class CurationLog:
     hardware constraint PASS/FAIL status (design doc §4.3).
     """
 
-    def __init__(self, path: str = "data-curation.md"):
-        self.path = path
+    def __init__(self, path: str | os.PathLike | None = None):
+        self.path = os.fspath(
+            path
+            if path is not None
+            else os.environ.get(
+                "SLM_CURATION_LOG_PATH",
+                "data-curation.md",
+            )
+        )
 
     def write_iteration(
         self,
@@ -33,12 +43,28 @@ class CurationLog:
         model_id: str,
         size_mb: int,
         tier: int,
+        total_examples: int | None = None,
+        n_hard_source: int = 0,
+        n_hard_generated: int | None = None,
+        replay_count: int = 0,
+        rebuild_plan_identity: str = "",
+        strategy_composition: list[dict] | None = None,
+        source_novelty: dict | None = None,
+        plan_yield: dict | None = None,
+        confusion_pairs: list[dict] | None = None,
         hardware_notes: str = "Phase 1: theoretical",
         hw_constraints: dict | None = None,
         failure_taxonomy: str = "",
+        entry_id: str | None = None,
     ) -> None:
         timestamp = datetime.now().isoformat(timespec="seconds")
-        total = n_gold + n_hard if (n_gold + n_hard) > 0 else 1
+        generated = n_hard if n_hard_generated is None else n_hard_generated
+        actual_total = (
+            total_examples
+            if total_examples is not None
+            else n_gold + n_hard_source + generated + replay_count
+        )
+        ratio_total = actual_total if actual_total > 0 else 1
 
         # Format hardware PASS/FAIL lines (design doc §4.3)
         hw_lines = ""
@@ -59,24 +85,51 @@ class CurationLog:
         taxonomy_section = ""
         if failure_taxonomy:
             taxonomy_section = f"\n### Failure taxonomy\n{failure_taxonomy}\n"
+        elif confusion_pairs:
+            lines = [
+                "  - "
+                f"{pair.get('gold', '?')}→{pair.get('predicted', '?')}: "
+                f"{int(pair.get('count', 0) or 0)} failures"
+                for pair in confusion_pairs[:10]
+                if isinstance(pair, dict)
+            ]
+            taxonomy_section = (
+                "\n### Aggregate confusion counts\n"
+                + "\n".join(lines)
+                + "\n"
+            )
         elif eval_result.failures:
-            from collections import Counter
-            patterns = Counter()
-            for f in eval_result.failures[:50]:
-                key = f"{f.get('label', '?')}→{f.get('predicted', '?')}"
-                patterns[key] += 1
-            lines = [f"  - {pat}: {cnt} failures" for pat, cnt in patterns.most_common(10)]
-            taxonomy_section = "\n### Failure taxonomy (auto-generated)\n" + "\n".join(lines) + "\n"
+            taxonomy_section = (
+                "\n### Aggregate failure report\n"
+                f"  - {len(eval_result.failures)} failure row(s); raw eval "
+                "content omitted by firewall\n"
+            )
 
+        marker = (
+            hashlib.sha256(entry_id.encode("utf-8")).hexdigest()
+            if entry_id
+            else None
+        )
+        marker_text = (
+            f"<!-- slm-curation-entry:{marker} -->"
+            if marker
+            else ""
+        )
         entry = f"""
 ## Iteration {iteration} — {timestamp}
 
 ### Dataset
 - Task type: {task_type}
 - Version: {dataset_version}
-- Total examples: {n_gold + n_hard}
-- Dgold: {n_gold} ({n_gold / total * 100:.0f}%)
-- Dhard: {n_hard} ({n_hard / total * 100:.0f}%)
+- Total examples: {actual_total}
+- Initial gold: {n_gold} ({n_gold / ratio_total * 100:.0f}%)
+- Source anchors: {n_hard_source} ({n_hard_source / ratio_total * 100:.0f}%)
+- Generated hard rows: {generated} ({generated / ratio_total * 100:.0f}%)
+- Replay rows: {replay_count} ({replay_count / ratio_total * 100:.0f}%)
+- Rebuild plan identity: {rebuild_plan_identity or "n/a"}
+- Strategy composition: {strategy_composition or []}
+- Source novelty: {source_novelty or {}}
+- Plan yield: {plan_yield or {}}
 - Distribution: {label_dist}
 
 ### Training config (π_{iteration})
@@ -99,9 +152,16 @@ class CurationLog:
 - Model: {model_id} | Weight size: {size_mb}MB | Tier: {tier}
 {hw_lines if hw_lines else "- (Phase 1: theoretical estimates only)"}
 ---
+{marker_text}
 """
-        with open(self.path, "a", encoding="utf-8") as f:
-            f.write(entry)
+        try:
+            with open(self.path, encoding="utf-8") as source:
+                existing = source.read()
+        except FileNotFoundError:
+            existing = ""
+        if marker_text and marker_text in existing:
+            return
+        atomic_write_text(self.path, existing + entry)
 
     def read_latest(self) -> str:
         """Read the full data-curation.md contents."""

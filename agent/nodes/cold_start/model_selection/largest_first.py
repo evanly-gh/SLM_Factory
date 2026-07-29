@@ -15,8 +15,14 @@ import os
 
 from agent.state import AgentState
 from agent.nodes.cold_start.model_selection.base import select_largest, select_smallest
+from config.android_pool import resolve_model_selector
 
 logger = logging.getLogger(__name__)
+
+
+def _plog(msg: str):
+    """Print so model-selection reasoning reaches run.log (logger.info is suppressed, B161)."""
+    print(f"[model_selection:largest_first] {msg}")
 
 
 def largest_first_node(state: AgentState) -> AgentState:
@@ -32,7 +38,7 @@ def largest_first_node(state: AgentState) -> AgentState:
 
     forced = os.environ.get("SLM_FORCE_MODEL")
     if forced:
-        match = next((m for m in feasible if m.model_id == forced), None)
+        match = resolve_model_selector(feasible, forced)
         if match is None:
             raise RuntimeError(f"SLM_FORCE_MODEL={forced!r} is not in the feasible pool.")
         state["selected_model"] = match
@@ -42,11 +48,9 @@ def largest_first_node(state: AgentState) -> AgentState:
     chosen = select_largest(feasible)
     state["selected_model"] = chosen
     state["_largest_first_phase"] = "probe"
-    logger.info(
-        "[model_selection:largest_first] Probe phase — selected largest: %s "
-        "(tier=%d, quant=%s, peak=%dMB)",
-        chosen.model_id, chosen.tier, chosen.quant, chosen.peak_memory_mb,
-    )
+    _plog(f"Probe phase — selected LARGEST of {len(feasible)} feasible: {chosen.model_id} "
+          f"[{chosen.quant or 'bf16'}] (tier={chosen.tier}, size={chosen.size_mb}MB). "
+          f"If it clears the goal → switch to smallest; if it stalls → task infeasible.")
     return state
 
 
@@ -69,7 +73,7 @@ def check_probe_result(state: AgentState) -> AgentState:
     if current_score >= threshold:
         feasible = state.get("feasible_models", [])
         smallest = select_smallest(feasible)
-        if smallest.model_id == state["selected_model"].model_id:
+        if smallest.selector == state["selected_model"].selector:
             logger.info(
                 "[model_selection:largest_first] Probe succeeded and smallest == largest; done"
             )
@@ -78,29 +82,34 @@ def check_probe_result(state: AgentState) -> AgentState:
 
         logger.info(
             "[model_selection:largest_first] Probe succeeded (%.4f >= %.4f). "
-            "Switching to smallest model: %s (tier=%d, peak=%dMB)",
-            current_score, threshold, smallest.model_id, smallest.tier, smallest.peak_memory_mb,
+            "Switching to smallest model: %s (tier=%d, size=%dMB)",
+            current_score, threshold, smallest.model_id, smallest.tier, smallest.size_mb,
         )
         state["selected_model"] = smallest
         state["scores"] = []
         state["dag"] = []
         state["iteration"] = 0
-        state["dataset_version"] = 0
         state["lifetime_best_score"] = max(
             state.get("lifetime_best_score") or 0.0, state["best_score"]
         )
         state["best_score"] = 0.0
         state["best_weights_ref"] = None
         state["last_eval"] = None
-        state["last_curation"] = None
         state["last_intervention"] = "data_rebuild"
         state["last_hypothesis"] = ""
         state["llm_iterate_decision"] = None
+        state["data_rebuild_plan"] = None
+        state["data_rebuild_plan_identity"] = None
         state["consecutive_no_improvement"] = 0
         state["downward_probe_done"] = False
+        _plog(f"Probe SUCCEEDED ({current_score:.4f} >= {threshold:.4f}) — task is feasible; "
+              f"switching to smallest model {smallest.model_id} [{smallest.quant or 'bf16'}] "
+              f"and escalating from there.")
         state["_largest_first_phase"] = "escalate"
         state["next_action"] = "curate"
     else:
+        _plog(f"Probe did NOT clear the goal ({current_score:.4f} < {threshold:.4f}) — "
+              f"the largest feasible model can't reach it, so no smaller one will either.")
         state["_largest_first_phase"] = "done"
 
     return state

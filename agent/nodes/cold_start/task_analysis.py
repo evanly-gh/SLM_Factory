@@ -12,7 +12,7 @@ from agent.nodes.cold_start.hardware_filter import run_hardware_filter
 # NER             — span extraction, or schema-constrained JSON from unstructured text.
 #                   Flags on task_plan: schema:dict|None, multilingual:bool
 # math_reasoning  — arithmetic, algebra, word problems. CoT mandatory.
-#                   Teacher = DeepSeek-R1. Eval = final-answer exact match.
+#                   Cloud fallback = DeepSeek V4 Flash thinking. Eval = final-answer exact match.
 # code_generation — function synthesis, completion, bug-fix, SQL.
 #                   Eval = execution pass@1.
 # generation      — open-ended summarization, QA, dialogue. Catch-all.
@@ -24,6 +24,42 @@ _VALID_TASK_TYPES = {
     "code_generation",
     "generation",
 }
+
+def _apply_data_targets(state: AgentState, task_type: str) -> None:
+    """Clamp the planner's chosen curriculum/eval sizes to config floors/ceiling and store
+    them in state. Env overrides (SLM_CURRICULUM_SIZE / SLM_EVAL_SET_SIZE) win for testing.
+    Curriculum floor is deliberately high (small on-device models need more data); eval floor
+    keeps macro-F1 statistically stable."""
+    from config.config import (
+        CURRICULUM_SIZE_FLOOR, EVAL_SET_SIZE, DATA_SIZE_CEILING, DATASET_SIZE_BY_TYPE,
+    )
+    plan = state.get("task_plan") or {}
+
+    def _clamp(val, floor):
+        try:
+            v = int(val)
+        except (TypeError, ValueError):
+            v = 0
+        return max(floor, min(v, DATA_SIZE_CEILING))
+
+    _curr_plan = plan.get("curriculum_size")
+    if _curr_plan is None:
+        # Fall back to the per-type default, but never below the floor.
+        _curr_plan = DATASET_SIZE_BY_TYPE.get(task_type, CURRICULUM_SIZE_FLOOR)
+    curriculum = _clamp(_curr_plan, CURRICULUM_SIZE_FLOOR)
+    eval_size = _clamp(plan.get("eval_size", EVAL_SET_SIZE) or EVAL_SET_SIZE, EVAL_SET_SIZE)
+
+    # Explicit env overrides (testing/determinism).
+    if os.environ.get("SLM_CURRICULUM_SIZE"):
+        curriculum = _clamp(os.environ["SLM_CURRICULUM_SIZE"], 1)
+    if os.environ.get("SLM_EVAL_SET_SIZE"):
+        eval_size = _clamp(os.environ["SLM_EVAL_SET_SIZE"], 1)
+
+    state["curriculum_size_target"] = curriculum
+    state["eval_size_target"] = eval_size
+    print(f"      [planner] data targets (clamped): curriculum={curriculum}  eval={eval_size}  "
+          f"(floors {CURRICULUM_SIZE_FLOOR}/{EVAL_SET_SIZE}, ceiling {DATA_SIZE_CEILING})")
+
 
 def task_analysis_node(state: AgentState) -> AgentState:
     """
@@ -50,6 +86,10 @@ def task_analysis_node(state: AgentState) -> AgentState:
             # iterate_node may lower it further at runtime, but never below initial_stop_threshold.
             if state.get("initial_stop_threshold") is None:
                 state["initial_stop_threshold"] = threshold
+
+    # Data-size targets: take the orchestrator's chosen curriculum/eval sizes, clamped to
+    # [floor, ceiling] (B161). Fall back to the per-type default when the planner gave none.
+    _apply_data_targets(state, task_type)
 
     # Testing/validation override: pin the stop threshold from the environment so a run
     # can be steered deterministically (e.g. set it above the pool's best benchmark to

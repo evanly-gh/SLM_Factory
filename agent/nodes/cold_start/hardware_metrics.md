@@ -2,6 +2,26 @@
 
 This document records the research-backed rationale for the 7 hardware metrics used in the meta-learning loop's hardware evaluation step. These metrics gate model selection and promotion in `android_pool.filter_pool` and `check_hardware_constraints`.
 
+> **⚠️ 2026-07-27 — these thresholds now apply ONLY to real measurements.**
+>
+> The pool no longer carries estimated tok/s or estimated peak RAM. It previously held
+> per-model throughput for three reference chips plus a `CHIP_SCALE_FACTORS` table that
+> interpolated a decode rate for any other chipset; those were modelled numbers rendered
+> in the same shape as measurements, and the gates below consumed them as facts. The one
+> modelled number ever checked against reality was 20% off.
+>
+> What changed:
+> - **Throughput, TTFT, power, peak RAM** gate only where a real measurement exists in
+>   `config/measured_metrics.json` for that exact (model, quant, chip). Unmeasured →
+>   reported as `UNMEASURED`, and the gate passes rather than eliminating on a guess.
+> - **Memory** additionally enforces a hard lower bound: real on-disk weight bytes must
+>   fit in RAM. That is arithmetic over the weight files, not an estimate. It is
+>   *necessary but not sufficient* — true peak adds KV cache + runtime.
+> - **Storage** is unchanged; it always used real weight size.
+>
+> The profiling methods in the table below are exactly how to produce the measurements
+> that make these gates active. Record them with `hardware_eval/measure_model.py`.
+
 ## The Three User Questions
 
 The metric set is organized around three distinct user concerns:

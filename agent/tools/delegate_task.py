@@ -5,6 +5,7 @@ Sub-agents share the filesystem. Main agent reads their output files.
 Not a named tool — called programmatically by the orchestrator.
 """
 import anthropic
+from agent.cost import tracked_anthropic_messages_create
 
 
 def delegate_task(task_description: str, output_file: str) -> str:
@@ -30,7 +31,9 @@ def delegate_task(task_description: str, output_file: str) -> str:
     )
     messages = [{"role": "user", "content": task_description}]
 
-    response = client.messages.create(
+    response = tracked_anthropic_messages_create(
+        client.messages,
+        stage="delegate_task",
         model=ORCHESTRATOR_MODEL,
         max_tokens=4096,
         system=system,

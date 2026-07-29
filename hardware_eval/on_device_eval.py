@@ -11,11 +11,12 @@ This module unifies what used to be three disconnected pieces:
 The metric-gathering logic from run_autobench now lives here as an importable
 engine; run_autobench.py is a thin CLI wrapper around it.
 
-Backends (choose via env SLM_HW_BACKEND, default "theoretical"):
-  - "theoretical"  : estimates from ModelSpec benchmarks. No hardware. Always the
-                     fallback when no GGUF is available (e.g. the pre-training
-                     hardware_filter, which screens base models before any GGUF
-                     exists). This keeps the pipeline runnable on a bare GPU node.
+Backends (choose via env SLM_HW_BACKEND, default "unmeasured"):
+  - "unmeasured"   : returns all-None metrics. No hardware, and NO estimates. This is
+                     the honest fallback when no GGUF exists yet (e.g. the pre-training
+                     hardware_filter, which screens base models before any build).
+                     Downstream gating renders these as "UNMEASURED" and declines to
+                     gate, rather than eliminating a candidate on a fabricated number.
   - "llama_cpp"    : local llama-cli timing run against a GGUF (no phone needed).
   - "adb_llama"    : push GGUF + run llama-cli on a connected device via ADB.
   - "smolchat"     : broadcast to the SmolChat app's HeadlessBenchmarkReceiver and
@@ -42,7 +43,7 @@ from pathlib import Path
 # config.py surface the same env vars for central documentation.
 # ---------------------------------------------------------------------------
 
-DEFAULT_BACKEND = os.environ.get("SLM_HW_BACKEND", "theoretical")
+DEFAULT_BACKEND = os.environ.get("SLM_HW_BACKEND", "unmeasured")
 
 # Nominal Li-ion battery voltage used to convert BatteryManager current (mA) to
 # power (W) when the device's live voltage can't be read from dumpsys.
@@ -89,7 +90,7 @@ class HardwareEvalResult:
     peak_memory_mb: int | None = None     # peak RAM during inference
     cold_load_ms: int | None = None       # cold model-load time (first question only)
     thermal: str | None = None            # device thermal state label, if reported
-    eval_method: str = "theoretical"      # theoretical | llama_cpp | adb_llama | smolchat
+    eval_method: str = "unmeasured"       # unmeasured | llama_cpp | adb_llama | smolchat
     device: str | None = None             # device serial/kind the measurement ran on
     error: str | None = None
     raw: dict = field(default_factory=dict)  # backend-specific extras (per-question stats, etc.)
@@ -97,8 +98,9 @@ class HardwareEvalResult:
     def to_measured(self) -> dict:
         """Map to the `measured` dict shape check_hardware_constraints expects.
 
-        Only non-None fields are included so the constraint checker falls back to
-        its theoretical estimate for anything a given backend didn't measure.
+        Only non-None fields are included. Anything a backend did not measure stays
+        absent, so the constraint checker reports it as UNMEASURED instead of
+        substituting a value.
         """
         m: dict = {}
         if self.ttft_ms is not None:
@@ -115,25 +117,26 @@ class HardwareEvalResult:
 
 
 # ---------------------------------------------------------------------------
-# Backend 1 — theoretical (no hardware; ModelSpec-derived estimates)
+# Backend 1 — unmeasured (no hardware, and deliberately no estimates)
 # ---------------------------------------------------------------------------
 
-def theoretical_profile(model, constraints) -> HardwareEvalResult:
-    """Estimate metrics from the ModelSpec's per-chip throughput table.
+def unmeasured_profile(model, constraints) -> HardwareEvalResult:
+    """Return an explicitly EMPTY result when nothing has been measured.
 
-    Power is deliberately left None (we have no credible parametric estimate),
-    which makes the power gate a no-op in theoretical mode rather than a guess.
+    This replaces the old `theoretical_profile`, which derived tok/s from a per-chip
+    table in ModelSpec and TTFT as 1/tok_s — an estimate built on an estimate, returned
+    in the same shape as a real measurement so downstream gating could not tell them
+    apart. Every metric here is None; `check_hardware_constraints` renders that as
+    "UNMEASURED" and declines to gate rather than inventing a value.
     """
-    tok_s = model.tok_s_for_chip(constraints.target_chip)
-    ttft_ms = (1.0 / max(tok_s, 0.1)) * 1000
     return HardwareEvalResult(
         model_id=model.model_id,
         success=True,
-        ttft_ms=round(ttft_ms, 1),
-        tok_per_s=round(tok_s, 1),
+        ttft_ms=None,
+        tok_per_s=None,
         avg_watts=None,
-        peak_memory_mb=model.peak_memory_mb,
-        eval_method="theoretical",
+        peak_memory_mb=None,
+        eval_method="unmeasured",
         device=constraints.target_chip,
     )
 
@@ -155,11 +158,19 @@ def measure_llama_cpp(
     n_tokens: int = 50,
     n_threads: int = 4,
 ) -> HardwareEvalResult:
-    """Proxy measurement using a local llama-cli run against the GGUF.
+    """Real measurement from a local llama-cli run against the GGUF.
 
-    Parses prompt-eval (TTFT) and decode tok/s from llama.cpp timing output.
-    Power/peak-RAM are size-proxied (a local desktop run can't measure phone
-    power), so avg_watts stays an estimate flagged in raw['power_estimated'].
+    Measures, from the actual process:
+      - ttft_ms   : llama.cpp's own prompt-eval timing
+      - tok_per_s : llama.cpp's own decode timing
+      - peak_memory_mb : peak RSS of the child process via getrusage(RUSAGE_CHILDREN)
+
+    avg_watts stays None: a host machine cannot measure phone power draw, and the old
+    `2.0 + size_gb * 1.5` size proxy was a fabricated number. Peak RSS was likewise
+    previously faked as `gguf_size * 1.2`; it is now genuinely measured.
+
+    Caveat this DOES carry: these are host-machine numbers, not phone numbers. They are
+    recorded under the host's own chip key, never under a phone's.
     """
     model_id = getattr(model, "model_id", gguf_path)
     llama_cli = shutil.which("llama-cli") or shutil.which("main")
@@ -174,24 +185,42 @@ def measure_llama_cpp(
             error=f"GGUF not found: {gguf_path}",
         )
     try:
+        import resource
+
+        # Peak RSS is cumulative-max across all reaped children, so snapshot the
+        # pre-existing high-water mark and take the delta this run pushed it to.
+        before_rss = resource.getrusage(resource.RUSAGE_CHILDREN).ru_maxrss
         proc = subprocess.run(
             [llama_cli, "--model", gguf_path, "--prompt", prompt,
              "--n-predict", str(n_tokens), "--threads", str(n_threads),
              "--no-display-prompt"],
             capture_output=True, text=True, timeout=300,
         )
+        after_rss = resource.getrusage(resource.RUSAGE_CHILDREN).ru_maxrss
         out = proc.stderr + proc.stdout
         ttft = _parse_float(r"prompt eval time\s*=\s*([\d.]+)\s*ms", out)
         tok_s = _parse_float(r"eval.*?([\d.]+)\s*tokens per second", out)
         size_mb = os.path.getsize(gguf_path) / (1024 * 1024)
-        est_rss = int(size_mb * 1.2)
-        est_watts = round(2.0 + (size_mb / 1000) * 1.5, 2)  # rough size proxy
+        # ru_maxrss is KB on Linux. Only trust it if this run actually raised the mark;
+        # otherwise a bigger earlier child would be misreported as this model's peak.
+        peak_rss_mb = (
+            int(after_rss / 1024) if after_rss > before_rss else None
+        )
         return HardwareEvalResult(
             model_id=model_id, success=True,
             ttft_ms=ttft, tok_per_s=tok_s,
-            avg_watts=est_watts, peak_memory_mb=est_rss,
+            avg_watts=None,  # not measurable from a host run; never estimated
+            peak_memory_mb=peak_rss_mb,
             eval_method="llama_cpp", device="local",
-            raw={"power_estimated": True, "gguf_size_mb": round(size_mb, 1)},
+            raw={
+                "gguf_size_mb": round(size_mb, 1),
+                "peak_rss_source": (
+                    "getrusage(RUSAGE_CHILDREN).ru_maxrss"
+                    if peak_rss_mb is not None
+                    else "not raised by this run — reported as unmeasured"
+                ),
+                "host_measurement": True,
+            },
         )
     except (subprocess.TimeoutExpired, OSError) as e:
         return HardwareEvalResult(
@@ -594,18 +623,20 @@ def measure_smolchat(
 def run_on_device_eval(model, constraints, *, gguf_path: str | None = None,
                        backend: str | None = None, questions: list | None = None,
                        serial: str = "", timeout: int = 60, log=print) -> HardwareEvalResult:
-    """Measure `model` on the target hardware, or estimate it theoretically.
+    """Measure `model` on the target hardware, or report it as unmeasured.
 
     Backend resolution:
       - explicit `backend` arg wins;
       - else env SLM_HW_BACKEND (DEFAULT_BACKEND);
-      - a real backend needs a GGUF — if gguf_path is None we ALWAYS fall back to
-        theoretical. This is what keeps the pre-training hardware_filter (which has
-        no GGUF yet) on the cheap estimate path and existing tests green.
+      - every real backend needs a GGUF — if gguf_path is None the result is
+        UNMEASURED (all-None), never an estimate. Pre-training screening therefore
+        reports "unknown" for runtime metrics instead of guessing them.
     """
     backend = (backend or DEFAULT_BACKEND).lower()
-    if backend == "theoretical" or gguf_path is None:
-        return theoretical_profile(model, constraints)
+    if backend in ("unmeasured", "theoretical") or gguf_path is None:
+        # "theoretical" accepted as a legacy alias so old env values/configs keep
+        # working; it now yields the same all-None result as "unmeasured".
+        return unmeasured_profile(model, constraints)
     if backend == "llama_cpp":
         return measure_llama_cpp(gguf_path, model, constraints)
     if backend == "adb_llama":
@@ -613,9 +644,9 @@ def run_on_device_eval(model, constraints, *, gguf_path: str | None = None,
     if backend == "smolchat":
         return measure_smolchat(gguf_path, model, constraints, questions=questions,
                                 serial=serial, timeout=timeout, log=log)
-    # Unknown backend name — degrade to theoretical rather than crash the loop.
-    res = theoretical_profile(model, constraints)
-    res.error = f"unknown backend {backend!r}; used theoretical"
+    # Unknown backend name — report unmeasured rather than crash the loop.
+    res = unmeasured_profile(model, constraints)
+    res.error = f"unknown backend {backend!r}; reported unmeasured"
     return res
 
 

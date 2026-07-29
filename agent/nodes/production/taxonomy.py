@@ -7,6 +7,7 @@ Paper: 'The agent partitions T_fail into K failure clusters {C_1,...,C_K}
 such that union(C_k) = T_fail.'
 """
 import json
+from agent.cost import tracked_anthropic_messages_create
 from agent.state import AgentState
 
 
@@ -39,7 +40,9 @@ def taxonomy_construct_node(state: AgentState) -> AgentState:
     unsampled = len(failures) - len(sample)
 
     client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
-    response = client.messages.create(
+    response = tracked_anthropic_messages_create(
+        client.messages,
+        stage="production_taxonomy",
         model=ORCHESTRATOR_MODEL,
         max_tokens=2048,
         system=(

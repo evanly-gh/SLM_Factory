@@ -14,6 +14,11 @@ This replaces hardcoded, task-specific routing so the same code handles ANY task
 """
 import json
 import re
+from agent.cost import tracked_anthropic_messages_create
+from config.android_pool import (
+    METRIC_COMPARABILITY_CAVEAT,
+    format_capability_metrics,
+)
 
 _PLANNER_PROMPT = """You are the task-analysis stage of an autonomous fine-tuning agent that \
 adapts a small on-device language model to a user's task.
@@ -24,6 +29,8 @@ hardware. This size class has known capability ceilings.
 Candidate models available for this run (calibrate stop_threshold against THESE \
 specific models' published benchmark scores, not a generic size bucket):
 {pool_summary}
+
+METRIC COMPARABILITY CONTRACT: {metric_caveat}
 
 TASK TYPE — choose the MOST SPECIFIC type that fits. There are 5 types; \
 use flags to express variants within a type:
@@ -49,7 +56,7 @@ use flags to express variants within a type:
 
 - "math_reasoning"
   Arithmetic, algebra, word problems, step-by-step derivations.
-  Mandatory chain-of-thought; teacher model = DeepSeek-R1.
+  Mandatory chain-of-thought; cloud fallback teacher = DeepSeek V4 Flash (thinking mode).
   Eval: final-answer exact match (NOT LLM-as-judge).
   Stop threshold: anchor to GSM8K/benchmark SOTA at this size (see STOP THRESHOLD section).
   No flags.
@@ -57,7 +64,7 @@ use flags to express variants within a type:
 - "code_generation"
   Function synthesis, completion, bug-fix, SQL generation.
   Eval: execution pass@1 against unit tests.
-  Stop threshold: anchor to HumanEval/MBPP pass@1 SOTA at this size (see STOP THRESHOLD section).
+  Stop threshold: anchor to APPS introductory pass@1 SOTA at this size (see STOP THRESHOLD section).
   No flags.
 
 - "generation"
@@ -78,10 +85,12 @@ PRIMARY RULE: anchor it to the PUBLISHED STATE-OF-THE-ART for this task's benchm
 this model-size class. In other words: "what does a well-fine-tuned model of ~{param_range}
 parameters actually achieve on this benchmark today?" — set stop_threshold at or just below
 that SOTA (roughly SOTA − 2 to 5 points to leave headroom for a task-specific dataset).
-Use the candidate models' published gsm8k/mmlu scores above, the named "benchmark", and
-your knowledge of current small-model leaderboard results to estimate that SOTA. Name the
-SOTA figure you anchored to in "rationale" (e.g. "GSM8K SOTA for ~1.7B fine-tunes ≈ 0.75,
-so target 0.72").
+Use only relevant, explicitly named candidate metrics above; compare scores only when the
+metric name and evaluation mode match. A "not reported" score is unavailable and must not
+be interpreted as numeric zero or estimated from a different benchmark. Use the named
+"benchmark" and current small-model leaderboard evidence to estimate SOTA. Name the SOTA
+figure you anchored to in "rationale" (e.g. "GSM8K SOTA for ~1.7B fine-tunes ≈ 0.75, so
+target 0.72").
 
 Do NOT default to a low, generic number — a too-low target makes the loop stop before the
 model is actually good. The ranges below are only SANITY BOUNDS / fallbacks for when you
@@ -92,9 +101,24 @@ cannot estimate the SOTA; the SOTA anchor takes precedence:
 - NER (span-F1): 0.72–0.88
 - NER with schema (field-F1): 0.78–0.92
 - Math reasoning: anchor to GSM8K/benchmark SOTA at this size (often 0.55–0.80 for ~1.5–3B fine-tunes)
-- Code generation: anchor to HumanEval/MBPP pass@1 SOTA at this size (often 0.55–0.80)
+- Code generation: anchor to APPS introductory pass@1 SOTA at this size
 - Generation / translation: 0.78–0.92
 - Any multilingual task: subtract 5–10pp from the above
+
+DATA SIZE — choose how many examples to build for the CURRICULUM (training) and the
+held-out EVAL set. Ground this in fine-tuning sample-size research and two factors:
+  1. Task complexity / distance from pretraining: obscure, niche, or specialized benchmarks
+     (little public data, unlikely to be well-covered in pretraining) need MORE data to
+     instill the behavior. Widely-known, popular benchmarks (heavily represented in
+     pretraining) need less — the base model already has the capability, so fine-tuning
+     mostly selects the format.
+  2. On-device small models (this pool is sub-4B) sit in the "instillation" regime and need
+     MORE data than an 8B would for the same task.
+Bias UP for obscure/less-popular tasks. Give integer counts:
+- "curriculum_size": total training examples to curate (gold + hard negatives).
+- "eval_size": held-out evaluation examples (bigger = statistically more reliable macro-F1).
+Name your popularity/complexity judgment in "rationale" (e.g. "niche biomedical NER, little
+public data → large curriculum 3000"). The system clamps both to safe floors/ceiling.
 
 EXA_QUERIES — one web-search query per label/field/topic that will retrieve REAL,
 labelled-in-context example documents (not dataset landing pages). Make each query
@@ -111,7 +135,9 @@ Reply with ONLY a JSON object (no prose, no code fences) with these keys:
 - "exa_queries": object mapping each label/field/topic to a web-search query for REAL examples
 - "benchmark": well-known public benchmark name, or null
 - "stop_threshold": float in [0,1] anchored to published SOTA for this benchmark at ~{param_range} scale
-- "rationale": one sentence: task_type + flag choices + the SOTA figure stop_threshold was anchored to
+- "curriculum_size": integer — total training examples to curate (bias up for obscure tasks)
+- "eval_size": integer — held-out eval examples (bigger = more reliable metrics)
+- "rationale": one sentence: task_type + flag choices + the SOTA figure stop_threshold was anchored to + your data-size reasoning
 
 EXAMPLE (task: "detect spam vs legitimate SMS on a Pixel 8"):
 {{
@@ -127,7 +153,9 @@ EXAMPLE (task: "detect spam vs legitimate SMS on a Pixel 8"):
   }},
   "benchmark": "SMS Spam Collection",
   "stop_threshold": 0.95,
-  "rationale": "Binary classification; 0.95 target since SMS spam is near-solved at the ~1B scale."
+  "curriculum_size": 1200,
+  "eval_size": 800,
+  "rationale": "Binary classification; 0.95 target since SMS spam is near-solved at the ~1B scale; popular benchmark so a moderate 1200-example curriculum suffices."
 }}
 
 User task description:
@@ -181,9 +209,7 @@ def _param_range_label(model_pool) -> str:
 
 
 def _pool_summary(model_pool, max_rows: int = 12) -> str:
-    """One line per distinct model with the benchmarks the planner needs to calibrate
-    a realistic stop_threshold against the ACTUAL candidate pool. Deduplicates the
-    three quant variants of each model (benchmarks are shared across variants)."""
+    """One line per model with explicitly named, optional capability measurements."""
     if not model_pool:
         return "  (pool unavailable — calibrate against generic size-class SOTA)"
     seen = {}
@@ -194,8 +220,12 @@ def _pool_summary(model_pool, max_rows: int = 12) -> str:
     reps = sorted(seen.values(), key=_params_b)[:max_rows]
     rows = []
     for m in reps:
+        source = getattr(m, "benchmark_source", None) or "not recorded"
+        gsm8k_source = getattr(m, "gsm8k_source", None) or "not reported"
         rows.append(
-            f"  - {m.model_id} (~{_params_b(m):.1f}B, gsm8k={m.gsm8k:.2f}, mmlu={m.mmlu:.2f})"
+            f"  - {m.model_id} (~{_params_b(m):.1f}B; "
+            f"{format_capability_metrics(m)}; knowledge source: {source}; "
+            f"GSM8K source: {gsm8k_source})"
         )
     return "\n".join(rows) if rows else "  (no base models in pool)"
 
@@ -204,17 +234,22 @@ def plan_task(description: str, anthropic_client=None, log=print, model_pool=Non
     """Call the orchestrator LLM to produce a structured task plan. Returns the parsed dict."""
     if anthropic_client is None:
         import anthropic
-        from config.config import ANTHROPIC_API_KEY
-        anthropic_client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
+        from config.config import ANTHROPIC_API_KEY, orchestrator_client_kwargs
+        anthropic_client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY, **orchestrator_client_kwargs())
 
     from config.config import ORCHESTRATOR_MODEL
     param_range = _param_range_label(model_pool)
     pool_summary = _pool_summary(model_pool)
     prompt = _PLANNER_PROMPT.format(
-        description=description, param_range=param_range, pool_summary=pool_summary
+        description=description,
+        param_range=param_range,
+        pool_summary=pool_summary,
+        metric_caveat=METRIC_COMPARABILITY_CAVEAT,
     )
 
-    resp = anthropic_client.messages.create(
+    resp = tracked_anthropic_messages_create(
+        anthropic_client.messages,
+        stage="task_analysis",
         model=ORCHESTRATOR_MODEL,
         max_tokens=1024,
         messages=[{"role": "user", "content": prompt}],
@@ -232,6 +267,8 @@ def plan_task(description: str, anthropic_client=None, log=print, model_pool=Non
     plan.setdefault("multi_label", False)
     plan.setdefault("schema", None)
     plan.setdefault("multilingual", False)
+    plan.setdefault("curriculum_size", None)   # None → task_analysis falls back to config default
+    plan.setdefault("eval_size", None)
 
     log(
         f"      [planner] task_type={plan['task_type']}  "
@@ -239,5 +276,7 @@ def plan_task(description: str, anthropic_client=None, log=print, model_pool=Non
         f"multilingual={plan['multilingual']}  labels={plan['labels']}  "
         f"benchmark={plan['benchmark']}  stop_threshold={plan['stop_threshold']}"
     )
+    log(f"      [planner] data targets (pre-clamp): curriculum={plan['curriculum_size']}  "
+        f"eval={plan['eval_size']}")
     log(f"      [planner] rationale: {plan.get('rationale', '')}")
     return plan

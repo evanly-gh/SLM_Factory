@@ -1,7 +1,13 @@
 # tests/training/test_quantize.py
+import json
+import sys
+from types import SimpleNamespace
+from unittest.mock import MagicMock, patch
+
 import pytest
-from unittest.mock import patch
-from training.quantize import quantize_from_model_spec, QuantizationResult
+
+import training.quantize as quantize_module
+from training.quantize import QuantizationResult, quantize_from_model_spec
 
 
 def _mock_result(success=True, gguf_path="/out/model-q4_k_m.gguf", error=None, method="q4_k_m"):
@@ -57,3 +63,61 @@ def test_f16_fallback_raises_runtime_error(mock_qc):
     )
     with pytest.raises(RuntimeError, match="Quantization failed"):
         quantize_from_model_spec("/checkpoint", "/out", "Q4_K_M")
+
+
+def test_resolve_hf_snapshot_pins_model_revision_when_available():
+    model_info = MagicMock(return_value=SimpleNamespace(sha="abc123"))
+    snapshot_download = MagicMock(return_value="/cache/snapshots/abc123")
+    hub = SimpleNamespace(
+        model_info=model_info,
+        snapshot_download=snapshot_download,
+    )
+
+    with patch.dict(sys.modules, {"huggingface_hub": hub}):
+        result = quantize_module.resolve_hf_snapshot("Qwen/Qwen3.5-2B")
+
+    assert result == "/cache/snapshots/abc123"
+    model_info.assert_called_once_with("Qwen/Qwen3.5-2B")
+    snapshot_download.assert_called_once()
+    assert snapshot_download.call_args.kwargs["revision"] == "abc123"
+
+
+def test_validation_failure_does_not_write_cache_sidecar(tmp_path):
+    gguf_path = tmp_path / "model-q4_k_m.gguf"
+    gguf_path.write_bytes(b"incomplete-qwen35-gguf")
+    llama = MagicMock()
+    llama.Llama.side_effect = ValueError(
+        "missing tensor blk.24.attn_norm.weight"
+    )
+
+    with patch.dict(sys.modules, {"llama_cpp": llama}):
+        with pytest.raises(
+            RuntimeError, match=r"blk\.24\.attn_norm\.weight"
+        ):
+            quantize_module.validate_and_record_gguf(str(gguf_path))
+
+    assert not (tmp_path / "model-q4_k_m.gguf.validation.json").exists()
+
+
+def test_validated_cache_hit_requires_matching_size_and_hash(tmp_path):
+    gguf_path = tmp_path / "model-q4_k_m.gguf"
+    gguf_path.write_bytes(b"complete-gguf")
+    llama_instance = MagicMock()
+    llama_instance.close = MagicMock()
+    llama = SimpleNamespace(
+        __version__="0.3.test",
+        Llama=MagicMock(return_value=llama_instance),
+    )
+
+    with patch.dict(sys.modules, {"llama_cpp": llama}):
+        quantize_module.validate_and_record_gguf(str(gguf_path))
+
+    sidecar_path = quantize_module.gguf_validation_sidecar_path(str(gguf_path))
+    sidecar = json.loads(open(sidecar_path, encoding="utf-8").read())
+    assert sidecar["file_size"] == len(b"complete-gguf")
+    assert len(sidecar["sha256"]) == 64
+    assert sidecar["tool_versions"]["llama_cpp_python"] == "0.3.test"
+    assert quantize_module.validated_gguf_cache_hit(str(gguf_path)) is True
+
+    gguf_path.write_bytes(b"tampered-gguf")
+    assert quantize_module.validated_gguf_cache_hit(str(gguf_path)) is False

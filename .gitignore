@@ -19,6 +19,9 @@ Thumbs.db
 htmlcov/
 .coverage
 CLAUDE.md
+data/local
+artifacts/
+exports/
 
 logs/
 unsloth_compiled_cache/

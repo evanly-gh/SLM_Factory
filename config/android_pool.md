@@ -14,6 +14,10 @@
 >   1500–2500 / ≥2500 MB), so a model's Q4/Q8/BF16 variants can land in different tiers.
 > - Multimodal Qwen3.5 is fine-tuned **text-only** via `FastVisionModel` (`finetune_vision_layers=False`),
 >   using base transformers repos (never `-GGUF`, B107).
+> - Any Qwen3.5 GSM8K/MMLU estimates in the historical text below are **invalid and
+>   superseded**. Official sourced values and missing-value handling are maintained in
+>   [`model_capabilities.md`](model_capabilities.md) and
+>   [`docs/model_pool.md`](../docs/model_pool.md), effective 2026-07-21.
 
 ---
 

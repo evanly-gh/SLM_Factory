@@ -40,8 +40,8 @@ truncation), B110 (per-job run dir), B111 (`is_torch_fx_available` shim), B112/B
   rebuild or a tier-0 pool-model swap. Per-symbol shims are whack-a-mole.
 - **B113** (blocks NER): compute-node download reliability for the large multimodal
   Qwen3.5-2B — needs a warmed shared cache, the `unsloth/` mirror, or a retry wrapper.
-- **B117**: agentic iterate decision degrades to score-band rules (Haiku exhausts tool rounds);
-  contributed to SMS plateauing without escalation.
+- **B117**: resolved — iterate is now a single bounded tool-free decision with one JSON-only
+  reask, so tool-round exhaustion is impossible.
 - **B104** (`data/devices.csv` missing → all hardware research via Exa; harmless but off-spec).
 - **B111** relies on a runtime shim; **B109** truncates to 512 rather than fixing Unsloth internals.
 
@@ -73,7 +73,7 @@ marked "passed" that wasn't confirmed from its per-job `logs/slurm/*.out` (the s
 | B17 | 🟢 | lora_trainer | mid-training checkpoint save can't pickle Unsloth-patched `SFTConfig` |
 | B18 | 🟢 | train | two trainers in parallel threads → Accelerate `device_map='auto'` distributed-mode error |
 | B19 | 🟢 | iterate/train | `llm_iterate_decision["hyperparams"]` produced but never consumed by `train_node` |
-| B20 | 🟢 | curate | `targeted_patterns` from surgical decision ignored; `synthesize_hard_negatives` got no pattern hint |
+| B20 | 🟢 | curate | legacy fine-grained decision hint ignored by positive synthesis |
 | B21 | ⚪ | delegate_task | sub-agent has no file-writing tool; zero call sites — no parallel sub-agent work |
 | B22 | 🟢 | orchestration | Context Manager not implemented; no turn compaction for long runs |
 | B23 | ⚪ | tools | bash/read_file/edit_file/web_search are `@tool`-decorated but bound to no LLM and never invoked |
@@ -130,7 +130,7 @@ marked "passed" that wasn't confirmed from its per-job `logs/slurm/*.out` (the s
 | B74 | 🟢 | iterate | turn-budget formula `iteration * 2` fires one iteration early; should be `(iteration+1) * 2` |
 | B75 | 🟢 | iterate | `initial_stop_threshold` floor uses `or` instead of `is None` — falsy 0.0 bypasses floor |
 | B76 | 🟢 | iterate | `intervention` variable uninitialized at function scope; `LLM fail` branch could reference unbound var |
-| B77 | 🟢 | escalate | `dataset_version`, `last_intervention`, `last_curation` not reset on escalation |
+| B77 | 🟢 | escalate | escalation mixed stale action state with carried dataset metadata |
 | B78 | 🟢 | evaluate | DAG `intervention` field uses `apply_iteration_policy` fallback even when LLM already decided |
 | B79 | 🟢 | runner | `lifetime_best_score` missing from initial state dict in `tests/pipeline/run.py` |
 | B80 | 🟢 | runner | `last_intervention` initialized to `""` instead of `"data_rebuild"` → first curate no-ops |
@@ -149,7 +149,7 @@ marked "passed" that wasn't confirmed from its per-job `logs/slurm/*.out` (the s
 | B93 | 🟢 | web_search | `r.text[:500]` TypeError when Exa returns `r.text=None` for unscrapable results |
 | B94 | 🟢 | android_pool | `_q4_sibling.peak_memory_mb` = `int4_size_mb + 400` can understate base model's true peak → OOM |
 | B95 | 🟢 | android_pool | power gate `if measured.get('avg_watts')` falsy-checks 0.0, always passing when sensor returns 0 |
-| B96 | 🟢 | curate | surgical path calls `synthesize_hard_negatives([], …)` when `failures` is empty — silent no-op wasting an iteration |
+| B96 | 🟢 | curate | legacy positive-synthesis path silently no-ops when anchors are empty |
 | B97 | 🟢 | curate | `eval_set is None` in production `data_rebuild` raises uninformative `AttributeError` instead of descriptive RuntimeError |
 | B98 | ⚪ | live_confirm | M0 re-inference not implemented; taxonomy label filter (itself broken) used instead |
 | B99 | 🟢 | live_confirm | cluster membership checked via `cluster in str(t)` substring match — produces false positives on trace content |
@@ -174,7 +174,7 @@ marked "passed" that wasn't confirmed from its per-job `logs/slurm/*.out` (the s
   not orchestrator-reasoning calls.
 - **Status:** 🟢 fixed 2026-06-24 — `iterate_node` now calls the orchestrator LLM (Claude Sonnet 4.6)
   with the full `data-curation.md` trajectory + current failures. LLM returns structured JSON with
-  `{intervention, hypothesis, hyperparameter_changes?, targeted_patterns?}`. Score-band rules remain
+  `{intervention, hypothesis, hyperparameter_changes?, data_rebuild?}`. Score-band rules remain
   as fallback if the LLM call fails. `hypothesis` field written to `data-curation.md` via
   `state["last_hypothesis"]` passed through to `evaluate_node`.
 
@@ -330,14 +330,12 @@ marked "passed" that wasn't confirmed from its per-job `logs/slurm/*.out` (the s
   `llm_iterate_decision["hyperparams"]` (`lora_rank`, `lr`, `nr_epochs`, `batch_size`) for Config A and
   derives a contrasting Config B. Default configs used as fallback when no LLM decision is present.
 
-## B20 — `targeted_patterns` from surgical decision ignored in `synthesize_hard_negatives`
-- **Where:** `agent/nodes/curate.py` (surgical branch); `data/curriculum.py` (`synthesize_hard_negatives`)
+## B20 — fine-grained decision hint ignored in positive synthesis
+- **Where:** `agent/nodes/curate.py`; `data/curriculum.py` (`synthesize_hard_negatives`)
 - **When:** 2026-06-26, post-B2 code review
-- **How found:** `iterate_node` populates `llm_iterate_decision["targeted_patterns"]` with the LLM's
-  description of the failure pattern to address, but `curate_node` never extracted it and
-  `synthesize_hard_negatives` had no `targeted_pattern` parameter — the LLM surgical guidance was
-  silently discarded.
-- **Impact:** surgical synthesis was blind to the LLM diagnosis; generated generic hard negatives
+- **How found:** the decision carried a failure-pattern description, but `curate_node` never
+  passed it to `synthesize_hard_negatives`, so the guidance was silently discarded.
+- **Impact:** positive synthesis was blind to the diagnosis; generated generic hard negatives
   instead of targeted ones.
 - **Status:** 🟢 fixed 2026-06-26 — `curate_node` extracts `targeted_pattern` from
   `state["llm_iterate_decision"]`; `synthesize_hard_negatives` accepts a `targeted_pattern: str`
@@ -619,17 +617,22 @@ marked "passed" that wasn't confirmed from its per-job `logs/slurm/*.out` (the s
   close enough to random that this hasn't caused visible problems, but it's technically incorrect.
 - **Status:** ⚪ design gap — shuffle with a fixed seed before splitting.
 
-## B45 — Generation scorer misnames metric and doesn't batch API calls
-- **Where:** `eval/scorers/generation.py`
+## B45 — Generation scorer misnames metric
+- **Where:** `eval/scorers/generation.py`, `eval/judge_client.py`
 - **When:** 2026-06-26, deep codebase audit
 - **How found:** two issues:
   1. The scorer returns the average LLM-judge score (0.0-1.0) in the `f1` field. This is semantically
      wrong — it's a judge score, not an F1 metric. Downstream code treats it as F1.
-  2. Each eval example requires a separate Anthropic API call to the judge model. For 100 examples,
-     that's 100 sequential API calls with no batching or parallelism.
-- **Impact:** (1) misleading metric name; (2) generation eval is very slow and expensive.
-- **Status:** ⚪ design gap — rename field to `judge_score` or `metric` throughout, and batch judge
-  calls using the Anthropic batch API or concurrent requests.
+  2. Originally each eval example required a separate sequential Anthropic API call.
+- **Impact:** the remaining issue is the misleading metric name.
+- **Status:** 🟡 partially fixed — judging now requires local Qwen3.6, deduplicates repeated
+  triples, scores unique requests concurrently in order, and costs `$0`; strict failures abort
+  instead of becoming model scores. Renaming `f1` to `judge_score` or `metric` throughout remains
+  a separate compatibility migration.
+- **Status update 2026-07-22:** The paid/sequential judge defect is superseded by B173's
+  strict local-only judge, durable cache, locality checks, and fail-fast semantics. The
+  metric-field rename remains open; TP4 co-location job 37486488 is runtime validation
+  pending, not a code fix.
 
 ## B46 — Classification `extract_predictions` silently defaults to majority class
 - **Where:** `eval/scorers/classification.py` (`extract_predictions`)
@@ -653,6 +656,10 @@ marked "passed" that wasn't confirmed from its per-job `logs/slurm/*.out` (the s
   this allows ~30 Qwen3-0.6B checkpoints before exhaustion, but fewer for larger models.
 - **Status:** ⚪ design gap — implement LRU eviction (keep only the last 2-3 checkpoints cached) or
   clear the cache between iterations.
+- **Status update 2026-07-22:** 🟢 superseded by B189. LRU eviction and
+  `empty_cache()` were insufficient for hidden Unsloth/Trainer references; disposable CUDA
+  workers now provide the hard cleanup boundary. Job 37430554 returned to 0 MiB after all
+  100 × 4 GiB allocation cycles.
 
 ## B48 — NER web-acquired data lacks entity annotations
 - **Where:** `data/loaders/web_acquire.py` (NER acquisition path)
@@ -919,12 +926,15 @@ marked "passed" that wasn't confirmed from its per-job `logs/slurm/*.out` (the s
 - **Impact:** MEDIUM -- latent risk if except clause is modified.
 - **Status:** 2026-07-09 fixed -- initialized to policy["intervention"] before try block.
 
-## B77 -- escalate: dataset_version, last_intervention, last_curation not reset
+## B77 -- escalate: action state and carried dataset metadata were conflated
 - **Where:** `agent/nodes/escalate.py`
 - **When:** 2026-07-09, full-repo audit
-- **How found:** escalate reset iteration/scores/dag but not dataset_version/last_intervention/last_curation.
-- **Impact:** MEDIUM -- new model gets wrong dataset versioning and stale first-curate strategy.
-- **Status:** 2026-07-09 fixed -- added dataset_version=0, last_intervention="data_rebuild", last_curation=None.
+- **How found:** escalation needs a fresh action decision while retaining the exact carried
+  dataset identity and composition.
+- **Impact:** MEDIUM -- resetting dataset metadata breaks lineage; retaining the prior action
+  plan can repeat a rebuild.
+- **Status:** updated by structured data rebuild -- preserve dataset version/composition,
+  set `last_intervention="data_rebuild"`, and clear only the pending rebuild plan/identity.
 
 ## B78 -- evaluate: DAG intervention field ignores LLM decision
 - **Where:** `agent/nodes/evaluate.py`
@@ -1038,7 +1048,7 @@ marked "passed" that wasn't confirmed from its per-job `logs/slurm/*.out` (the s
 - **Impact:** HIGH -- broken sensor makes all models pass power gate.
 - **Status:** Already fixed -- is not None check.
 
-## B96 -- curate: surgical path wastes iteration when failures is empty
+## B96 -- curate: positive synthesis wastes iteration when anchors are empty
 - **Where:** `agent/nodes/curate.py`
 - **When:** 2026-07-09, full-repo audit
 - **How found:** synthesize_hard_negatives called with empty source; returns empty; dataset unchanged.
@@ -1146,8 +1156,8 @@ marked "passed" that wasn't confirmed from its per-job `logs/slurm/*.out` (the s
   1. **Stale trl API.** The code builds `args = TrainingArguments(...)` and calls `SFTTrainer(..., tokenizer=, dataset_text_field="text", max_seq_length=512, args=args)`. In the installed trl, `SFTTrainer` no longer accepts `tokenizer`/`dataset_text_field`/`max_seq_length`; text field + truncation live in `SFTConfig` (`dataset_text_field` default "text", `max_length` default **1024**, not 512; `max_seq_length` removed), and the tokenizer is `processing_class`. So the intended 512-token truncation is silently dropped and a plain `TrainingArguments` is passed where an `SFTConfig` is expected → SFT-specific fields fall to defaults.
   2. **Unsloth fused-CE mismatch.** Downstream, Unsloth's fused cross-entropy (vmap/Dynamo-compiled) receives logits and labels of different flattened lengths (3072 vs 3390) on long sequences — consistent with a `num_logits_to_keep`/logit-slicing path that diverges from full-length labels. This is inside Unsloth 2026.7.2 + transformers 5.5.0 internals.
 - **Impact:** BLOCKER for math_reasoning tasks (tests 3 GSM8K & 4 ARC). Likely also at risk for NER (long PubMed abstracts) — to be confirmed on rerun. Classification (test 1, short sequences) is unaffected.
-- **Fix:** NOT applied. Migrating the SFTTrainer construction to `SFTConfig(dataset_text_field=..., max_length=512, ...)` + `processing_class=tokenizer` is the correct API alignment, but (a) it may not resolve the Unsloth-internal fused-CE mismatch (which looks like an Unsloth/transformers version bug), and (b) it risks regressing the currently-working classification path — cannot be verified without a GPU rerun. Per campaign guardrails (risky/ambiguous → log, don't guess destructively) this is left for review. Candidate follow-ups for a human: (i) migrate to SFTConfig and pin/patch Unsloth's fused CE, (ii) disable Unsloth fused-CE loss for long-sequence tasks, (iii) pin trl/transformers/unsloth to a mutually-tested set.
-- **Status:** 🟡 needs-review (BLOCKS tests 3 & 4).
+- **Fix:** Applied in the current trainer. It uses `SFTConfig(max_length=...)` and `processing_class`, pre-tokenizes exact non-thinking chat turns, and supplies explicit completion masks through a Trainer-compatible collator: prompt labels are `-100`, assistant/NER/CoT/code labels remain trainable. Overlength rows fail before SFT instead of silently truncating. If the early-stop/checkpoint path throws after optimizer work, only an immutable error summary leaves the `except` suite; the exception/traceback is out of scope before the failed trainer/model references are cleared, GC/CUDA cache cleanup runs, and a fresh base+LoRA stack reloads all original rows. This prevents both partially trained fallback and traceback-held tensors.
+- **Status:** 🟢 code + CPU mask/cleanup ordering tests fixed; a bounded GPU readiness run is still required to verify the third-party fused-CE path on the installed stack.
 
 ## B110 -- run.py: concurrent jobs share one run dir (second-resolution timestamp) → clobber each other
 - **Where:** `tests/pipeline/run.py:38-40`
@@ -1210,12 +1220,13 @@ marked "passed" that wasn't confirmed from its per-job `logs/slurm/*.out` (the s
 - **Finding:** With `export HF_HUB_DISABLE_XET=1` in the slurm script, NER STILL failed: `DownloadStallError: ... returned an incomplete snapshot even with HF_HUB_DISABLE_XET=1 -- missing files`. unsloth_zoo already retries with xet disabled, so the env var is redundant. Llama-3.2-3B downloads fine on the same compute nodes, so this is specific to `Qwen/Qwen3.5-2B` (a large multimodal repo with image/video preprocessors) — a compute-node network/download-reliability issue, not pipeline logic.
 - **Status:** 🔴 open (infra). Options for a human: (a) warm the shared HF cache for this model from a node with reliable network (standard HPC practice — the model weights are infra, distinct from the loop's decisions); (b) switch the B107 pool entry to the `unsloth/Qwen3.5-2B` mirror which may fetch/load more reliably under Unsloth; (c) add a bounded download-with-retry wrapper before training. NER (test 2) is blocked on this. NOT re-pre-staged per user direction to keep the loop autonomous.
 
-## B117 -- iterate: LLM decision "exhausted tool rounds without producing a final JSON decision" → rule fallback
-- **Where:** `agent/nodes/iterate.py` (LLM tool-calling decision loop)
+## B117 -- iterate: legacy tool loop exhausted before producing a decision
+- **Where:** `agent/nodes/iterate.py` (former decision loop)
 - **When:** 2026-07-10, clean round GSM8K 36988857 (after B112 installed langchain-anthropic)
 - **How found:** `[iterate] LLM call failed (RuntimeError('LLM exhausted tool rounds without producing a final JSON decision')), falling back to score-band rules` on every iteration. With langchain-anthropic now installed the LLM call runs, but Haiku doesn't emit a final decision within the allotted tool rounds.
 - **Impact:** MEDIUM — the agentic per-iteration decision still degrades to deterministic score-band rules (as it did under B112, now for a different reason). Not a crash. Likely Haiku being too weak for the tool-calling protocol, or the tool-round cap being too low.
-- **Status:** 🟡 needs-review (agentic decision not exercised; raise tool-round cap or use a stronger orchestrator for the decision node).
+- **Status:** 🟢 superseded by the strict structured-rebuild decision boundary: one
+  tool-free call plus at most one JSON-only reask, with no shell/file/web execution.
 
 ## B118 -- scorer/generation: math_reasoning used full-string exact match → always 0.0 (even baseline)
 - **Where:** `eval/scorers/generation.py` `_exact_match`
@@ -1283,7 +1294,7 @@ Driven by a review of ARC-Challenge run 36989407 (`logs/slurm/slm-arc-challenge-
 - **When:** 2026-07-15, ARC 36989407 + GSM8K 36989406 (user observation)
 - **How found:** On every regression the graph went `evaluate → rollback → train`, re-training the SAME dataset + hyperparameters. Training is (near-)deterministic, so it reproduced the same regressing score and rolled back again. ARC churned ~7 iterations and GSM8K ~23, each pinned at a fixed best score, until the turn/recursion budget ran out. `should_rollback` also pops the regressing score, so the stagnation window never filled and escalation never fired.
 - **Impact:** HIGH — any model that beats its best once then can't again burns the entire budget oscillating; makes no progress and never terminates cleanly.
-- **Fix:** (1) Re-routed `rollback → iterate` so a regression forces a *different* next action (data_rebuild with a rotated seed / hyperparameter / escalate / terminate). (2) Added a stall backstop in `iterate_node`: `MAX_STALL_EVALS = 4` — escalate when `consecutive_no_improvement` (set in evaluate, not popped by rollback) reaches it. Escalation promotes to a bigger model if one fits, else terminates. Updated `PIPELINE.md` invariant #3 and the loop diagram.
+- **Fix:** (1) Re-routed `rollback → iterate` so a regression forces a *different* next action (data_rebuild with a rotated seed / hyperparameter / escalate / terminate). (2) Added a stall backstop in `iterate_node` — escalate when `consecutive_no_improvement` (set in evaluate, not popped by rollback) reaches it. The original fix used 4; the current env-overridable default is `MAX_STALL_EVALS = 50`, matching the 50-score chronological-gain window. Escalation promotes to a bigger model if one fits, else terminates. Updated `PIPELINE.md` invariant #3 and the loop diagram.
 - **Status:** 🟢 fixed.
 
 ## B125 -- data_rebuild regenerated a byte-identical gold slice every iteration
@@ -1315,12 +1326,14 @@ Driven by a review of ARC-Challenge run 36989407 (`logs/slurm/slm-arc-challenge-
 - **Fix:** After loading, set `model.generation_config.max_length = None` so `max_new_tokens` (a cap on NEWLY generated tokens — the correct control for our short answers) is the single length knob. This is a root-cause fix, not just a warning suppression.
 - **Status:** 🟢 fixed.
 
-## B129 (improvement) -- iterate: exhausted-tool-rounds fell straight to score-band rules
+## B129 (improvement) -- iterate: malformed first response fell straight to score-band rules
 - **Where:** `agent/nodes/iterate.py` (`_llm_iterate`)
 - **When:** 2026-07-15 (user question: "what is 'LLM exhausted tool rounds'?")
-- **How found:** The orchestrator gets `MAX_TOOL_ROUNDS = 5` rounds of bash/read_file/edit_file/web_search before it must emit final JSON. When it was still calling tools at round 5, `_llm_iterate` raised `RuntimeError('LLM exhausted tool rounds ...')` and `iterate_node` fell back to pure score-band rules (the frequent log line). NOT the 1500 recursion limit and NOT an API-credit issue — purely the local tool-round budget.
-- **Fix:** On exhaustion, make ONE final call with a non-tool-bound client and an explicit "answer now, no tools" instruction to salvage a real decision before giving up to the fallback.
-- **Status:** 🟢 improved (fallback still exists for genuine failures).
+- **How found:** the former multi-round decision path could consume its local exploration
+  budget without returning JSON.
+- **Fix:** current code makes one tracked tool-free decision and at most one fresh
+  JSON-only reask. Attempted tool blocks are never executed.
+- **Status:** 🟢 fixed; score-band fallback remains only for genuine decision/reask failure.
 
 ---
 
@@ -1368,7 +1381,7 @@ Driven by a review of CoNLL/biomedical-NER run 36989405 (`logs/slurm/slm-conll-n
   - `agent/graph.py`: kept BOTH the branch's `model_selection` wiring AND this session's `rollback → iterate` edge (B124).
   - `config/android_pool.py`: **the branch's pool reintroduced the multimodal `Qwen/Qwen3.5-0.8B` and `unsloth/Qwen3.5-2B-GGUF`, which crash text-only LoRA (B123).** Reconciled by keeping the qwen-only intent but seeding 4 TEXT-ONLY Qwen-family models that load cleanly and span tiers 0-3: `unsloth/Qwen3-0.6B`, `Qwen/Qwen2.5-1.5B-Instruct`, `deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B`, `Qwen/Qwen2.5-3B-Instruct` (12 variants total: tier0×1, tier1×3, tier2×4, tier3×4).
 - **Added testing knob:** `SLM_STOP_THRESHOLD` env override in `task_analysis_node` — pins the stop threshold (and its floor) so a validation run can be steered deterministically (e.g. above the pool's best benchmark to force escalation through every tier).
-- **Validation test:** `tests/pipeline/run_qwen_escalation.slurm` — GSM8K on a 16 GB device with `smallest_first` + `SLM_STOP_THRESHOLD=0.90`, designed to walk tier 0→3 and exercise data_rebuild / hyperparameter / rollback / escalate / terminate. (downward_probe + surgical are mutually exclusive with full-tier escalation and are covered by a documented complementary run.)
+- **Validation test:** `tests/pipeline/run_qwen_escalation.slurm` — GSM8K on a 16 GB device with `smallest_first` + `SLM_STOP_THRESHOLD=0.90`, designed to walk tier 0→3 and exercise data_rebuild / hyperparameter / rollback / escalate / terminate. Downward probing and classification/NER positive synthesis are covered by complementary tests.
 - **Status:** 🟢 merged; all 29 model-selection + iterate + pool tests pass with full deps.
 
 ---
@@ -1386,6 +1399,11 @@ Driven by a review of CoNLL/biomedical-NER run 36989405 (`logs/slurm/slm-conll-n
 - **When:** 2026-07-15 (user: "make the pipeline work for Qwen 3.5")
 - **How addressed:** Qwen3.5 is natively multimodal and loads as a *processor*; text-only LoRA previously crashed ("Incorrect image source ... Got <|im_start|>user", B123) because the vision processor received the text chat template. Added `text_tokenizer()`, which unwraps the processor's inner text tokenizer (gated on the class name ending in "Processor" so plain tokenizers / test mocks are untouched) and is applied in both training and inference. Re-added `Qwen/Qwen3.5-0.8B` and `Qwen/Qwen3.5-2B` to the pool with a `multimodal=True` `ModelSpec` flag, using the BASE transformers repo (not `-GGUF`, B107).
 - **Status:** 🟡 implemented; **UNVERIFIED** without a GPU run + model download. The 4 text-only Qwen models remain the reliable path and `smallest_first` starts on one of them. If the processor still routes text through the vision path, the fallback is a FastVisionModel loader.
+- **Status update 2026-07-22:** 🟢 superseded for Qwen3.5-0.8B by B194.
+  Job 37449798 passed text-only LoRA, separate HF inference, FastVisionModel merge,
+  Q4_K_M build, and deployment eval; job 37483464 additionally passed real four-prompt
+  batched inference and VRAM-return criteria. The 2B/4B siblings still lack their own
+  standalone GPU smoke.
 
 ## B137 -- quantization separated from on-device eval
 - **Where:** new `hardware_eval/quantize_model.py`; `hardware_eval/run_autobench.py`
@@ -1410,6 +1428,10 @@ Driven by a review of CoNLL/biomedical-NER run 36989405 (`logs/slurm/slm-conll-n
 - **What:** Pool is now 6 official Qwen base models (18 variants): text `Qwen/Qwen3-0.6B`, `Qwen/Qwen3-1.7B`, `Qwen/Qwen3-4B-Instruct-2507`; multimodal `Qwen/Qwen3.5-0.8B`, `Qwen/Qwen3.5-2B`, `Qwen/Qwen3.5-4B`. Removed Qwen2.5, DeepSeek-R1-Distill, Qwen3-4B-Thinking-2507 (thinking-only reintroduces the reasoning-model eval failure). Real Qwen3 benchmarks sourced from the Qwen3 report + 4B-2507 card; Qwen3.5 numbers are estimates. New authoritative `docs/model_pool.md`; old `config/android_pool.md` kept but marked ARCHIVED.
 - **Multimodal integration (supersedes B136's text_tokenizer hack):** Qwen3.5 is a "Causal LM with Vision" (confirmed by Unsloth's Qwen3.5 fine-tuning guide). Text-only LoRA now loads via `FastVisionModel.from_pretrained` + `get_peft_model(finetune_vision_layers=False, finetune_language_layers=True, ...)`, selected by `is_multimodal_model()` (pool `multimodal` flag lookup) in both `lora_trainer` and `slm_helpers.infer`. Base transformers repos only (never `-GGUF`, B107).
 - **Status:** 🟡 pool + wiring done and unit-tested; multimodal LoRA is **UNVERIFIED** without a GPU run + model download (follows Unsloth's documented recipe). Text-only Qwen3 models are the reliable path.
+- **Status update 2026-07-22:** Exact-selector and sourced-capability correctness is now
+  covered by B168, and Qwen3.5-0.8B runtime support is verified by B194. The official
+  six-model pool contract is unit-tested, but this does not claim direct runtime coverage
+  for every Qwen3/Qwen3.5 size.
 
 ## B140 -- data-acquisition ladder (bounded diversified Exa + verified synthesis)
 - **Where:** `data/loaders/web_acquire.py`, `agent/nodes/cold_start/eval_setup.py`
@@ -1463,6 +1485,10 @@ Driven by review of the escalation run (job 37110415). Anthropic credits were ex
 ## Data sizing + agentic acquisition — 2026-07-15 (B155–B157)
 - **B155 — dataset-size targets recalibrated + centralized.** Moved the per-task `N_TOTAL` map to `config.DATASET_SIZE_BY_TYPE` (single source for curate + eval_setup) and adjusted toward the paper's §4.3 quality-over-quantity guidance: NER 300→200, math_reasoning 1000→700, code_generation 1000→300 (paper: 173>348 on HumanEval), generation 1000→600 (500 selected > 2000 random). classification 150, multi_label 300, structured 400, multilingual 400 unchanged.
 - **B156 — quant variants are trained/eval'd IDENTICALLY (documented limitation).** A model's Q4_K_M / Q8_0 / bf16 pool entries share benchmark scores and all train the SAME base HF model via LoRA; in the default `theoretical` HW backend, eval scores the HF/LoRA weights (no GGUF), so Q4_K_M and Q8_0 of one model produce identical results — the quant only changes the size/tier/speed the selector sees. Honest per-quant accuracy needs llama.cpp + `SLM_HW_BACKEND!=theoretical` (absent here). Not a code bug; a Phase-2 gap.
+- **Status update 2026-07-22:** 🟢 superseded by B169. Quant identities now receive
+  exact Q4/Q8 zero-shot baselines and exact-GGUF interpolation/downward/fine-tuned
+  evaluation; cache keys include both weights and quant. Jobs 37449798 and 37483464
+  exercised the Qwen3.5 Q4 deployment path.
 - **B158 — quantized ACCURACY eval decoupled from on-device eval.** New `SLM_QUANT_EVAL=1`
   (`config.QUANT_ACCURACY_EVAL`) makes `evaluate_node` merge→quantize→score the real GGUF on
   CPU (via llama-cpp-python) for honest per-quant accuracy, WITHOUT any phone/latency/power
@@ -1472,3 +1498,716 @@ Driven by review of the escalation run (job 37110415). Anthropic credits were ex
   Requires llama.cpp tools on PATH + `pip install llama-cpp-python` (neither installed yet).
 
 - **B157 — agentic HF-dataset acquisition (paper §6.1).** `acquire_dataset` now: (0) hardcoded known-benchmark fast path → (1) **agentic discovery**: Exa locates candidate HuggingFace dataset repos, the orchestrator picks the best + maps its columns to our schema, and `datasets.load_dataset()` downloads the REAL data (`discover_and_load_hf_dataset`) → (2) web-scrape + verified-synthesis only as last resort. This replaces "scrape web pages and call the text a dataset" with "locate + download the actual dataset," matching the paper. Best-effort/defensive; unverified without API credits + HF network.
+
+---
+
+## Multi-day pipeline hardening and runtime readiness — 2026-07-21/22 (B159–B194)
+
+## B159 -- eval-size target was silently capped at 100 instead of the full 800
+- **Where:** `agent/nodes/cold_start/eval_setup.py`, `data/eval_set.py`,
+  `scripts/prepare_shared_dataset.py`.
+- **How found/evidence:** The planner and config requested an 800-row floor, but
+  `build_eval_set()` was called with its fixed defaults `40/40/20`; only 100 acquired rows
+  were scored. Focused tests now assert `320/320/160 = 800`, including code generation and
+  frozen shared bundles; runs 37371493 and 37372065 logged the corrected full 800.
+- **Impact:** Small, noisy evals produced unstable macro-F1, weak rare-class coverage, and
+  misleading rollback/stagnation decisions while claiming an 800-example evaluation.
+- **Root cause:** Acquisition sizing and eval-slice sizing were separate; the caller never
+  translated `eval_size_target` into slice counts.
+- **Fix:** Added `_eval_split_sizes()` and threaded the dynamic 40/40/20 allocation through
+  live and shared-dataset paths. APPS filtering occurs before the 800-row cap.
+- **Status:** 🟢 fixed and structure-tested.
+
+## B160 -- fixed vLLM port collided on shared nodes and a foreign endpoint passed readiness
+- **Where:** `tests/pipeline/run_emotion_orch_full_l40s.slurm`,
+  `tests/pipeline/_l40s_task_body.sh`, `data/synth_client.py`.
+- **How found/evidence:** Job 37371493 launched its server on `localhost:8000`; its vLLM log
+  failed with `OSError: [Errno 98] Address already in use`, while the pipeline reported
+  `/models` reachable and proceeded. It had connected to another tenant/job's listener.
+- **Impact:** A run could generate training data with an unowned model/configuration, charge
+  the wrong service, or kill/reuse another job while its own server had already failed.
+- **Root cause:** All jobs shared the node network namespace and fixed port 8000; readiness
+  checked reachability but not ownership or exact served-model identity.
+- **Fix:** Derive job-unique high ports from `SLURM_JOB_ID`, retain the launched PID for
+  cleanup/liveness checks, and require `/models` to contain the exact configured model.
+- **Status:** 🟢 fixed; job 37372065 used unique port 32065 successfully.
+
+## B161 -- L40S localhost readiness was proxy-sensitive and did not cover first-request JIT
+- **Where:** `data/synth_client.py`, `scripts/setup_vllm_env.sh`,
+  `tests/pipeline/manual_qwen36_cot_smoke_l40s.slurm`, L40S task scripts.
+- **How found/evidence:** Jobs 37449799/37449899 saw repeated localhost HTTP 503s even though
+  vLLM later logged a healthy server (cluster proxy interception). Job 37450415 reached
+  `/models` but the Python smoke did not receive the shell's endpoint/model config. Job
+  37450646 reached readiness, then the first completion triggered Triton MoE/GDN JIT and
+  outlived the old request/server bound. Earlier jobs 37366122/37366249 also exposed missing
+  `ninja` and fragile FlashInfer JIT/host-compiler failures.
+- **Impact:** A healthy local server looked dead, or a shallow `/models` probe passed while
+  the first real synthesis call failed; long jobs then aborted or silently became gold-only.
+- **Root cause:** HTTP clients/curl inherited proxy variables, smoke config was not fully
+  exported, readiness tested only the control plane, and runtime kernels compile lazily.
+- **Fix:** Use `httpx.Client(trust_env=False)` and `curl --noproxy '*'`; export exact
+  `SLM_SYNTH_*` keys; load CUDA/nvcc and install `ninja`; use eager/text-only settings; and
+  independently bound readiness, first completion, and total server lifetime.
+- **Status:** 🟢 fixed and single-L40S verified by final smoke job 37450865, whose first
+  non-thinking local Qwen3.6 completion passed after the expected JIT warnings.
+
+## B162 -- hard-negative ratio and composition accounting counted anchors as negatives
+- **Where:** legacy curriculum assembly in `agent/nodes/curate.py`,
+  `data/curriculum.py`, `data/curation_log.py`.
+- **How found/evidence:** Job 37372065 scaled a hard target to 485, then logged 970
+  “synthesized” because the 2-for-1 API returned 485 source anchors plus 485 generated rows;
+  post-QC reporting guessed composition from the pre-QC count and reported 84% gold/16%
+  hard. Job 37387566 showed the ratio varying again after balance/dedup.
+- **Impact:** The claimed 65:35 curriculum was not auditable; gold could be reported as hard,
+  and iterate decisions reasoned over incorrect composition.
+- **Root cause:** Provenance was implicit and counts were calculated before quality controls;
+  the return cardinality of a contrastive pair was mistaken for generated-row cardinality.
+- **Fix:** Tag source anchors and generated rows separately, count provenance after all QC,
+  record total/source/generated/replay components explicitly, and scale legacy targets from
+  actual available gold. Structured rebuilds now use explicit post-QC budgets instead of
+  promising a ratio that balancing can change.
+- **Status:** 🟢 fixed; composition is now causal/provenance-based.
+
+## B163 -- data rebuilds discarded winning hyperparameters and fallback retries repeated exactly
+- **Where:** `agent/nodes/train.py`, `training/hparams.py`, `agent/nodes/iterate.py`,
+  DAG `pi.H`.
+- **How found/evidence:** In job 37372065, r=32/lr=5e-4/5 epochs reached 0.723, but the next
+  data rebuild silently reverted to r=16. After an iterate parse failure, iterations 4 and
+  5 used the same dataset and r=16 and produced identical loss/eval traces and F1=0.5609.
+- **Impact:** Data interventions were confounded by weaker optimizer settings, and
+  deterministic duplicate trials burned hours without exploring H.
+- **Root cause:** Missing explicit hyperparameters always selected defaults; stale
+  `llm_iterate_decision` could survive a failed call; tried memory omitted complete/pruned
+  `(dataset,H)` identities.
+- **Fix:** Carry every winning optimizer field across data-only changes, clear failed
+  decisions, canonicalize the full bounded H, count losing/pruned candidates as tried, and
+  replace exact repeats with a deterministic untried neighbor.
+- **Status:** 🟢 fixed with complete DAG/checkpoint identity coverage.
+
+## B164 -- ChatAnthropic content blocks and prose responses broke decision JSON parsing
+- **Where:** `agent/nodes/iterate.py` (`_coerce_to_text`,
+  `_parse_decision_json`, `_reask_json_only`).
+- **How found/evidence:** Job 37372065 logged
+  `JSONDecodeError(... line 1 column 2 (char 1))`. LangChain returned
+  `AIMessage.content` as a list of text blocks; `str(list)` produced a single-quoted Python
+  repr. A later live response was prose with no JSON.
+- **Impact:** Valid orchestrator decisions were discarded, causing static/test-agent
+  fallbacks and the identical-training defect in B163.
+- **Root cause:** The parser handled only strings, extracted the transport envelope rather
+  than block text, and left a second `json.loads` unguarded.
+- **Fix:** Flatten text blocks, accept fenced/prose-wrapped JSON but reject Python literals,
+  convert all parse failures to readable `ValueError`, validate the schema, and make one
+  fresh tool-free JSON-only reask.
+- **Status:** 🟢 fixed; content-block, fence, prose, empty, and garbage cases are covered.
+
+## B165 -- cost ledger missed whole processes/providers and priced/cache-bucketed calls incorrectly
+- **Where:** `agent/cost.py`, provider call sites, `training/cuda_worker.py`,
+  `tests/pipeline/run.py`.
+- **How found/evidence:** A long run reported only 3 Claude calls/~$0.03 while its log
+  contained 63 iterate decisions. `ChatAnthropic.invoke`, forked acquisition, CUDA-worker
+  judge calls, and OpenAI/DeepSeek fallbacks bypassed the process-local ledger. All Claude
+  usage was priced as Sonnet, and Anthropic 5-minute/1-hour creation totals could be charged
+  in the wrong or duplicate cache bucket.
+- **Impact:** Spend, provider attribution, latency, failure counts, and resume accounting
+  were materially false; budget decisions could not be trusted.
+- **Root cause:** In-memory counters and partial SDK wrapping did not cross process
+  boundaries or preserve model/provider-specific usage metadata.
+- **Fix:** Use a flock-protected append-only JSONL ledger inherited by fork/CUDA workers;
+  wrap Anthropic SDK, ChatAnthropic, OpenAI-compatible, Exa, and local calls explicitly;
+  classify OpenAI/DeepSeek/local vLLM; and apply a dated model registry with separate cache
+  read, 5-minute write, and 1-hour write rates plus overrides/unknown-pricing warnings.
+- **Status:** 🟢 fixed; local Qwen calls are recorded at `$0`.
+
+## B166 -- offline/shared bundles lacked deterministic order, provenance, checksums, and overlap gates
+- **Where:** `scripts/download_datasets.py`, `scripts/prepare_shared_dataset.py`,
+  `data/loaders/dataset_integrity.py`, `data/loaders/web_acquire.py`, local manifests.
+- **How found/evidence:** Local files could be loaded without hashes or source revision;
+  paid discovery could run before a clean local copy; provenance records were conflated with
+  eval bans; overlap checks after capping could hide contamination outside the selected
+  prefix; shared strategy runs had no integrity-sealed frozen bundle.
+- **Impact:** Runs were non-reproducible, could pay unnecessarily, and could train on held-out
+  rows or silently use a tampered/misattributed bundle.
+- **Root cause:** The local fallback was a convenience directory rather than a versioned
+  artifact contract.
+- **Fix:** Default order is checksum-verified local bundle → deterministic known benchmark
+  → paid agentic discovery (agent-first exists only as an explicit readiness mode).
+  Schema-v2 manifests pin source/config/revision/splits/roles/eval bans/counts; SHA-256
+  sidecars and manifest hashes are verified; complete splits are schema/normalized-overlap
+  checked before caps; APPS also checks URL/solution fingerprints. Shared bundles seal plan,
+  sources, bans, difficulty, and all content.
+- **Status:** 🟢 fixed; explicit schema-v1 bundles remain compatibility-only and are logged
+  as unhashed legacy data.
+
+## B167 -- unrelated local datasets matched solely because the task type agreed
+- **Where:** `data/loaders/web_acquire.py` (`_local_manifest_match`,
+  `load_local_dataset`).
+- **How found/evidence:** An emotion-classification bundle could satisfy an SMS-spam or
+  FinancialPhraseBank request because all were `classification`; focused tests reproduce
+  both wrong-match cases.
+- **Impact:** The pipeline could train/evaluate the wrong task while reporting a successful
+  offline fallback.
+- **Root cause:** Bundle selection treated task-family equality as semantic task identity.
+- **Fix:** Recognized benchmarks require an exact alias/source match. Unknown benchmarks
+  require strong task + label Jaccard/coverage + row-schema agreement; rejected candidates
+  do not abort the remaining acquisition ladder.
+- **Status:** 🟢 fixed.
+
+## B168 -- Qwen3.5 selection was biased to BF16 and capability evidence was ambiguous
+- **Where:** `config/android_pool.py`, `config/model_capabilities.{md,py}`,
+  orchestrator/escalation/downward selection prompts.
+- **How found/evidence:** Job 37372065 logged “LLM chose Qwen3-1.7B [bf16]” while the LLM's
+  reason explicitly selected Q4_K_M/1350 MB. Three siblings shared the same bare model ID,
+  and first-match/list order selected BF16. Prompts also mixed MMLU/MMLU-Pro/Redux, attached
+  base/proxy numbers to post-trained artifacts, and represented missing scores as zero.
+- **Impact:** Selection ignored the model's stated resource choice and could rank models
+  using fabricated or incomparable capability data.
+- **Root cause:** Deployment quant was not part of stable identity, and capability fields
+  lacked artifact/mode/protocol/source provenance.
+- **Fix:** Every variant now uses `model_id@bf16|Q8_0|Q4_K_M`; prompts and histories require
+  exact selectors, while a legacy bare ID deterministically chooses the lowest-RAM feasible
+  sibling. Capability measurements retain named metric, exact artifact, mode, protocol, and
+  official source; unknown remains “not reported,” and unsupported Qwen3 base proxies are
+  not attached.
+- **Status:** 🟢 fixed; supersedes the selector/provenance limitations in B139.
+
+## B169 -- quantized variants received BF16 baselines/probes and could reuse the wrong GGUF
+- **Where:** `agent/nodes/evaluate.py`, interpolation/downward probes,
+  `training/slm_helpers.py`.
+- **How found/evidence:** B156's Q4/Q8 identities were scored through the same HF/BF16 path.
+  Later, tier history showed identical Q4/Q8 results while artifacts contained only
+  `model-q4_k_m.gguf`: the cache key used `weights_ref` alone, so a Q8 request reused an
+  earlier Q4 file when iteration paths collided after escalation.
+- **Impact:** Baseline deltas, interpolation, escalation, downward adoption, and final
+  variant reports attributed accuracy to artifacts that were never evaluated.
+- **Root cause:** Quant was treated as resource metadata, not part of evaluation identity
+  or artifact-cache identity.
+- **Fix:** Q4/Q8 zero-shot baselines and interpolation/downward/fine-tuned probes build and
+  score the exact GGUF. Cache keys use `(weights_ref, quant)` and require the specific
+  `model-<method>.gguf`; required quant paths fail closed rather than labeling BF16 as quant.
+- **Status:** 🟢 fixed; supersedes B156 and is exercised for Q4 by jobs 37449798/37483464.
+
+## B170 -- thinking mode differed across training, HF inference, and GGUF inference
+- **Where:** `training/lora_trainer.py`, `training/slm_helpers.py`, code/task prompt builders.
+- **How found/evidence:** Hybrid Qwen models think by default; prior train/eval templates
+  could therefore mix direct targets with `<think>` continuations, truncating labels/JSON
+  or making HF and GGUF scores incomparable. Installed llama-cpp-python 0.3.34 lacks
+  `chat_template_kwargs`.
+- **Impact:** Classification/NER extraction collapsed, generation budgets were consumed by
+  hidden reasoning, and deployment-format parity was not trustworthy.
+- **Root cause:** “Non-thinking” was an assumption rather than an explicit cross-backend
+  contract.
+- **Fix:** Training and HF serving use the same chat template with
+  `enable_thinking=False`; Qwen tokenizers without a template fail clearly. GGUF uses the
+  kwarg when supported, otherwise the verified Qwen ChatML empty-think prefix; the
+  non-thinking-only 4B-Instruct artifact uses its plain prefix. Unknown unsupported
+  templates fail closed.
+- **Status:** 🟢 fixed and covered by parity tests plus Qwen3.5 runtime smokes.
+
+## B171 -- generation CoT used the wrong backend priority and sometimes the task label as the answer
+- **Where:** `data/curriculum.py` (`get_cot_fallbacks`, `annotate_cot`),
+  `agent/nodes/curate.py`.
+- **How found/evidence:** The old route could construct the Claude orchestrator as teacher,
+  did not make local Qwen3.6 primary, and bundle rows with both `answer` and a generic
+  `label="generation"` could place the task label—not the gold answer—in the CoT prompt.
+- **Impact:** Paid calls replaced available local reasoning, specialist routing was lost,
+  and CoT could explain an incorrect/non-answer target.
+- **Root cause:** Backend choice and answer extraction were legacy single-client fallbacks
+  with inconsistent row-schema precedence.
+- **Fix:** Per example: local non-thinking Qwen3.6 first; math/science falls back
+  DeepSeek→OpenAI, code/QA/general OpenAI→DeepSeek; Claude/orchestrator is excluded.
+  Gold uses first present `answer`→`response`→`label`, existing CoT is preserved, and failed
+  backends advance without dropping the row.
+- **Status:** 🟢 fixed; local Qwen3.6 CoT was runtime-verified in job 37450865.
+
+## B172 -- hard-negative generation ignored the local generator and wrote unsafe SFT targets
+- **Where:** `data/curriculum.py::synthesize_hard_negatives`,
+  `agent/nodes/curate.py`.
+- **How found/evidence:** The generation branch could bypass an injected local
+  `generate_fn` for a paid client, then store a “plausible wrong answer” as the positive
+  SFT response. NER synthesis accepted malformed/empty entity lists, absent spans, or
+  changed entity types.
+- **Impact:** Math/code/open-generation models were trained to answer incorrectly; NER was
+  trained on false spans/types; locality/cost claims were false.
+- **Root cause:** “Hard negative” semantics from discriminative training were copied into
+  positive-likelihood SFT without a preference objective or verifier.
+- **Fix:** Classification and NER synthesis use the supplied local generator. Math, code,
+  and open generation are gold/CoT-only until verified-positive or preference training
+  exists. NER accepts only parseable non-empty JSON whose spans occur in rewritten text and
+  whose types come from the source row; malformed output is discarded non-fatally.
+- **Status:** 🟢 fixed.
+
+## B173 -- paid generation judging lacked locality, cache durability, and fail-fast semantics
+- **Where:** `eval/judge_client.py`, `eval/scorers/generation.py`, cost/timing ledgers.
+- **How found/evidence:** B45's path made one sequential Anthropic call per eval row and
+  could turn endpoint/model/parse failures into ordinary low model scores. A configured
+  “local” endpoint could be a remote/private host or a proxy target.
+- **Impact:** Open-generation evaluation was expensive, slow, non-reproducible, and could
+  train/rollback in response to judge infrastructure rather than model quality.
+- **Root cause:** Judge execution was embedded in the scorer without an explicit local
+  identity, transport, failure, or persistent-cache contract.
+- **Fix:** Require exact Qwen3.6 identity from `/models` and completion responses; allow
+  loopback/localhost/Unix sockets by default and require explicit opt-in for any remote
+  host; ignore proxies; disable thinking; serialize inputs as untrusted JSON; parse exactly
+  one finite `[0,1]` number; dedupe/cache triples in a locked run-local JSONL keyed by model
+  and prompt fingerprint; score misses concurrently in order and abort on first failure.
+- **Status:** 🟢 code fixed; B45's metric-field rename remains open. Full shared-GPU
+  judge-during-eval validation belongs to pending TP4 smoke job 37486488 (B194), not to the
+  correctness fix itself.
+
+## B174 -- raw eval failures leaked into intervention prompts and candidate training data
+- **Where:** `agent/nodes/test_agent.py`, `agent/nodes/iterate.py`,
+  `agent/nodes/curate.py`, `agent/data_rebuild.py`.
+- **How found/evidence:** Review found rebuild hints/anchors could be derived from held-out
+  failure rows and that free-form LLM payloads could quote eval text; this violates the
+  fixed-eval firewall even if exact train/test splits were initially disjoint.
+- **Impact:** The loop could memorize the evaluation set and report artificial gains.
+- **Root cause:** Failure diagnosis, plan generation, and data synthesis shared raw example
+  objects rather than a one-way aggregate boundary.
+- **Fix:** Test-agent output is limited to difficulty scores, diagnoses, and aggregate
+  confusion counts. Decision/rebuild schemas recursively reject held-out text; synthesis
+  anchors come only from normalized train sources; mined/replay/elite/final rows all pass
+  the normalized eval-text gate.
+- **Status:** 🟢 fixed with explicit leakage tests.
+
+## B175 -- iterate could execute unrestricted tools for a declarative routing decision
+- **Where:** former iterate tool loop; current `agent/nodes/iterate.py::_llm_iterate`.
+- **How found/evidence:** B117/B129 showed tool-round exhaustion. Hardening review also found
+  the model could request shell/file/web operations even though the output is only a bounded
+  intervention JSON, opening unnecessary leakage and side-effect paths.
+- **Impact:** A routing call could inspect artifacts/raw eval text, mutate files, spend
+  unbounded rounds, or fail without ever emitting a decision.
+- **Root cause:** A general ReAct loop was used for a fixed declarative schema.
+- **Fix:** One tracked, tool-free ChatAnthropic call receives only bounded trajectory and
+  aggregate reports. A tool-use/prose/malformed reply gets one fresh JSON-only reask from
+  the original context; no tool request is executed or reflected back.
+- **Status:** 🟢 fixed; supersedes the operational mechanism described in B117/B129.
+
+## B176 -- structured data rebuilds lacked enforceable caps, lineage, persistence, and crash-safe spend
+- **Where:** `agent/data_rebuild.py`, `agent/nodes/curate.py`,
+  `data/acquisition_budget.py`, DAG/rollback state.
+- **How found/evidence:** Cross-feature review found unresolved elite references, additive
+  budgets exceeding final size, zero-weight difficulty buckets being backfilled, a
+  no-novelty mining result overwriting novelty from another strategy, mined rows disappearing
+  from future rebuilds, and paid retries being replayable after crash/resume.
+- **Impact:** Plans could exceed cost/data bounds, lose useful real data, misattribute gains,
+  repeat zero-yield work, or preserve rows from the wrong dataset version.
+- **Root cause:** Strategies were loosely composed and only the final JSONL—not the full
+  causal plan/budget/source state—was durable.
+- **Fix:** Strictly normalize one primary + ≤2 support strategies; cap/snap rows,
+  fractions, difficulty weights, query variants, and per-plan/run paid rounds; require
+  positive additive budgets and resolvable elite provenance/version; apply common QC and
+  final `target_rows`; attribute origin/novelty after composition; merge accepted mined rows
+  into durable `train_examples`; reserve paid rounds in a locked ledger before calls and
+  never refund pending/failed reservations; persist full D and restore it on rollback.
+- **Status:** 🟢 fixed.
+
+## B177 -- `surgical` duplicated targeted rebuild behavior and bypassed the new plan contract
+- **Where:** former iterate enum/graph route/state fields and curate surgical branch.
+- **How found/evidence:** Design review found `surgical` and `targeted_patterns` overlapped
+  high-score targeted synthesis but had separate routing, validation, accounting, and
+  rollback semantics; on hard tasks it was also effectively unreachable.
+- **Impact:** Two mechanisms could express the same intervention while only one had bounded
+  budgets, plan identity, repeat prevention, provenance, and dataset rollback.
+- **Root cause:** The legacy score-band action survived after hypothesis-driven rebuilds
+  became first-class.
+- **Fix:** Remove `surgical`/`targeted_patterns` from enum, graph, state, fallback, and docs.
+  High-score refinement is now task-gated `targeted_synth_positive` inside the same validated
+  structured data-rebuild contract.
+- **Status:** 🟢 fixed; redundant path removed.
+
+## B178 -- MBPP “pass@1” was syntax/execution-only and exposed spoofable success signaling
+- **Where:** `eval/scorers/generation.py`, `eval/scorers/code_execution.py`,
+  MBPP local bundle/tests.
+- **How found/evidence:** Audit showed code could compile (or simply `pass`) and receive
+  credit without running each row's `test_list`; earlier worker designs exposed payload/result
+  files or a success descriptor that candidate code could forge.
+- **Impact:** Code-generation scores measured syntax and harness manipulation rather than
+  functional correctness.
+- **Root cause:** The scorer had no trusted controller retaining hidden tests and no
+  isolated request/result protocol.
+- **Fix:** Execute all MBPP assertions and imports in a disposable candidate process;
+  enforce/derive the entry point; keep tests/expected outcomes in the controller; sanitize
+  argv/env/cwd; expose no success FD/file; apply process-group cleanup and rlimits; report
+  timeout/runtime/assertion diagnostics fail-closed.
+- **Status:** 🟢 fixed; MBPP remains the lightweight CI smoke, not the long-run benchmark.
+
+## B179 -- initial APPS migration confused split semantics and silently collapsed the dataset
+- **Where:** `data/loaders/apps.py`, `scripts/download_datasets.py`,
+  `data/loaders/web_acquire.py`, `data/local/apps/manifest.json`.
+- **How found/evidence:** APPS introductory has 2,639 train/1,000 test source rows. Early
+  conversion treated test rows without solutions as unusable and did not preserve all
+  `solutions`, `starter_code`, execution mode, tests, or source revision. Gold validation
+  then shrank train data without explaining why.
+- **Impact:** Valid executable test rows disappeared, training/eval contracts were mixed,
+  and an apparently full benchmark could collapse to a small, unattributable subset.
+- **Root cause:** APPS was forced into an MBPP-like “every split must have one gold body”
+  schema instead of its official train-supervision/test-execution semantics.
+- **Fix:** Pin source revision `21e74d…`; train requires a passing compilable solution while
+  test requires executable `input_output` and may omit gold. Preserve all solutions,
+  starter/interface/difficulty/mode/problem/url metadata; validate supplied golds against
+  the production runner; retain incompatible test rows with explicit status/provenance and
+  skip only those at eval load. The manifest records every removal reason.
+- **Status:** 🟢 fixed as an explicit fail-closed bundle. Current intentional artifact is
+  721 validated train rows and 1,000 retained test rows (976 runner-compatible), not a
+  silent claim that all 2,639 source train rows are usable.
+
+## B180 -- APPS executor mismatched official argument/output semantics and allowed false passes
+- **Where:** `eval/scorers/code_execution.py`, `eval/scorers/generation.py`.
+- **How found/evidence:** Supplied APPS golds failed under the first runner because common
+  imports, NumPy, `fractions.gcd`, ListNode/cycle, wrapped Two Sum arguments, integer dict
+  keys, tuple/list equivalence, and stdin numeric/whitespace conventions were absent.
+  Conversely, a global unordered-set fallback could accept wrong order or multiplicity.
+- **Impact:** The bundle either discarded correct solutions or scored incorrect predictions
+  as passing; candidate code could also inspect expected-output payloads.
+- **Root cause:** A generic subprocess executor did not implement the pinned APPS harness
+  conventions or separate trusted expected outputs from candidate state.
+- **Fix:** Add the pinned compatibility prelude and wire types/adapters; compare structured
+  and stdin output deterministically while preserving order/multiplicity; scope non-unique
+  semantics only to declared Codeforces 1294F; keep one input/expected output at a time in
+  the trusted controller; sanitize environment/argv and remove success channels.
+- **Status:** 🟢 fixed with gold-parity and adversarial/spoof tests.
+
+## B181 -- APPS context, eval sizing, case coverage, and timeout budgets were mutually inconsistent
+- **Where:** `eval/harness.py`, `training/slm_helpers.py`,
+  `eval/scorers/{generation,code_execution}.py`, L40S code script.
+- **How found/evidence:** The code path combined a 512-token context with a 1,024-token
+  completion reserve, the old 100-row eval cap, a legacy `SLM_APPS_MAX_CASES` subsample, and
+  a per-case timeout whose cost multiplied without a per-problem bound.
+- **Impact:** APPS could fail before generation, truncate target-critical code, under-score
+  hidden cases, or make an 800-row evaluation run for hours.
+- **Root cause:** Prompt/output/context sizing and executor runtime limits were added
+  independently.
+- **Fix:** Use 4,096 context with 1,024 output reserve and reject overlength rows/prompts;
+  filter compatibility before selecting the full 800; execute every preserved case; retain
+  an independent per-case bound while enforcing a configurable 6-second default
+  per-problem total wall deadline; report budget exhaustion separately from case timeout.
+- **Status:** 🟢 fixed; `6s × 800 < 90m` is asserted and the TP4 smoke contains a
+  four-prompt 4096/1024 batch-pressure phase.
+
+## B182 -- APPS parity test exercised a one-case compatibility branch, not the full-case path
+- **Where:** old artifact parity assertion; current
+  `scripts/smoke_apps_gold_parity.py`,
+  `tests/eval/test_apps_gold_parity_smoke.py`.
+- **How found/evidence:** The old artifact test passed `max_cases=1`, so a PASS did not prove
+  production executes every preserved case or reaches timeout/accounting branches.
+- **Impact:** Case-cap removal and full-suite timeout regressions could ship behind a green
+  “gold parity” check.
+- **Root cause:** A fast sample-level test was mistaken for production-path verification.
+- **Fix:** Production ignores the legacy `max_cases` argument. The deterministic offline
+  smoke pins one train and one test problem identity, executes every preserved case, checks
+  `cases_executed == cases_total`, reports elapsed time, and fails closed on drift or any
+  incompatible gold; separate tests force per-case and per-problem timeout branches.
+- **Status:** 🟢 fixed (test defect).
+
+## B183 -- batched HF eval lacked overlength atomicity, OOM-safe cleanup, and adapter detection
+- **Where:** `training/slm_helpers.py`, `eval/harness.py`.
+- **How found/evidence:** Sequential eval cost ~5–7 minutes per 1,000 examples. Initial
+  batching risked truncating an overlength row while still generating shorter rows; CUDA OOM
+  tracebacks retained failed-batch tensors during cleanup; adapter-only directories could be
+  loaded as full models.
+- **Impact:** Evaluation was slow and could silently corrupt a mixed batch, leak VRAM, lose
+  output ordering, or fail to apply the trained adapter.
+- **Root cause:** `infer`/`infer_batch` had separate loaders/renderers and no explicit batch,
+  context, retry, or checkpoint-format contract.
+- **Fix:** Share loader/non-thinking renderer; unwrap multimodal text tokenizers; left-pad
+  and generate ordered batches (16 short / 4 long, overrideable); reject every overlength
+  prompt before generation with no truncation; convert OOM to immutable details, exit the
+  exception scope, GC/empty cache, halve and retry to 1 with a diagnostic; detect
+  adapter-only checkpoints, load the base, then apply the adapter.
+- **Status:** 🟢 fixed and real batched Qwen3.5 inference passed job 37483464.
+
+## B184 -- LoRA trained prompt tokens and early-stop fallback reused partially trained state
+- **Where:** `training/lora_trainer.py`, `training/hparams.py`, CUDA training payloads.
+- **How found/evidence:** Review confirmed SFT loss covered the full prompt, especially
+  harmful for long NER/generation/APPS rows. If checkpoint/early stopping failed after
+  optimizer work, fallback reused the mutated model and reduced train split; the active
+  exception traceback could retain its Trainer/CUDA graph.
+- **Impact:** The realized training run differed from recorded H, prompts dominated the
+  objective, examples were dropped, and fallback could OOM or continue corrupt partial
+  weights.
+- **Root cause:** Raw concatenated-text SFT and an in-place retry path were used instead of
+  an explicit assistant-loss/fresh-stack contract.
+- **Fix:** Pretokenize exact user+assistant turns, require the prompt tokenization to be a
+  prefix, and collate labels with prompt/padding=`-100` for every task and text-only
+  FastVisionModel path. On early-stop failure, retain only an immutable error string, leave
+  the exception scope, clear failed trainer/model/tokenizer and CUDA state, reload a fresh
+  base+identical LoRA H, rebuild all original rows, and retry without validation.
+- **Status:** 🟢 fixed; supersedes the functional part of B30.
+
+## B185 -- threshold payloads and stagnation arithmetic could crash or misclassify progress
+- **Where:** `agent/nodes/iterate.py`, `training/hparams.py`.
+- **How found/evidence:** Schema tests found strings, booleans, NaN/inf, extra keys, or a
+  numeric threshold without a reason could reach float conversion. The old stagnation
+  statistic could treat below-origin oscillation as progress, while exact decimal gain
+  `0.12-0.10` is slightly below 0.02 in binary floating point.
+- **Impact:** Malformed LLM output could crash the node; declining/oscillating models could
+  avoid escalation, or a mathematically exact boundary could escalate early.
+- **Root cause:** Prompt instructions were trusted as validation, and stagnation ignored
+  chronology/tolerance.
+- **Fix:** Strict JSON types/allow-lists/finite checks and node-boundary revalidation;
+  threshold changes require a reason and can only lower to the immutable floor. Stagnation
+  uses `max(window)-window[0]`, requires the full window, treats below-origin motion as no
+  gain, and uses a tight tolerance so the exact boundary is non-stagnant. Convergence routes
+  before escalation/API calls.
+- **Status:** 🟢 fixed.
+
+## B186 -- downward adoption lost the winning trajectory and post-convergence API failures failed runs
+- **Where:** `agent/nodes/downward_probe.py`, `agent/pipeline_status.py`,
+  checkpoint state.
+- **How found/evidence:** Review found that replacing `selected_model` after a successful
+  downward probe relabeled the original model's scores/DAG, and a credit/auth/model-choice
+  failure after convergence could turn an already successful run into a failure. Retry also
+  risked repeating paid gate/choice calls.
+- **Impact:** Final reports lied about which model produced which score; optional
+  resource-minimization work could destroy a valid result or spend twice after preemption.
+- **Root cause:** Downward search had no durable origin/attempt/pending state distinct from
+  the normal trajectory.
+- **Fix:** Snapshot the converged exact selector, score, weights, scores, and DAG as
+  `origin`; serialize fixed H and each attempt; checkpoint the selected pending candidate
+  before train/eval; adopt/reject without relabeling origin; record gate/chooser failures as
+  optional termination and preserve the converged model. Reports render each probe as a
+  separate progression entry.
+- **Status:** 🟢 fixed.
+
+## B187 -- iterate read stale project-root `data-curation.md` instead of run-local history
+- **Where:** `data/curation_log.py`, `tests/pipeline/run.py`,
+  `agent/nodes/{evaluate,iterate}.py`.
+- **How found/evidence:** Cross-feature review found evaluate had been redirected to the
+  run artifact path while iterate constructed a default `CurationLog()` and could read old
+  emotion history from the project root.
+- **Impact:** Concurrent runs contaminated one another's reasoning; a resumed task could
+  choose an intervention from an unrelated trajectory.
+- **Root cause:** Artifact directories were monkeypatched, but curation history had an
+  independent implicit global path.
+- **Fix:** Set an absolute run-local `SLM_CURATION_LOG_PATH`, persist
+  `curation_log_path` in state/checkpoints, pass it explicitly to both writer and reader,
+  reject/repair path drift on resume, append logs across segments, and make iteration writes
+  idempotent by stable entry marker.
+- **Status:** 🟢 fixed.
+
+## B188 -- 512-token context plus a 512-token output reserve left zero prompt budget
+- **Where:** `eval/harness.py`, `training/slm_helpers.py`,
+  `training/lora_trainer.py`, L40S task defaults.
+- **How found/evidence:** Final integration review computed
+  `input_budget = max_seq_length - max_new_tokens = 512 - 512 = 0` for NER, math, and open
+  generation; those tasks deterministically raised before meaningful inference.
+- **Impact:** Three long-run task types could not evaluate at all, and changing context only
+  after failure would violate resume compatibility.
+- **Root cause:** Output-token increases were not reconciled with the independent legacy
+  context default.
+- **Fix:** Unify training/HF/GGUF context at 4,096 for long jobs, retain task-specific
+  reserves (50 classification, 512 NER/math/generation, 1,024 APPS), validate
+  `reserve < context` before loading a model, and include the contract in the effective
+  resume configuration.
+- **Status:** 🟢 fixed with explicit zero-budget and 4096-reserve tests.
+
+## B189 -- long-lived Unsloth/Trainer state accumulated 43.71 GiB and OOMed at iteration 64
+- **Where:** GPU ownership across `training/lora_trainer.py`,
+  `training/slm_helpers.py`, `eval/harness.py`; new
+  `training/cuda_{isolation,worker}.py`.
+- **How found/evidence:** Job 37387566 failed evaluating iteration 64: GPU 0 had only
+  35.31 MiB free and PyTorch held 43.71 GiB allocated (only 113.11 MiB unused reserved).
+  This proves live tensors/references, not allocator fragmentation; `empty_cache()` could
+  not reclaim them.
+- **Impact:** Any long 1,500-step run eventually OOMed despite cache eviction and explicit
+  cleanup, losing the active segment.
+- **Root cause:** Unsloth, Accelerate, PEFT, Trainer, compiled graphs, tracebacks, and caches
+  retained hidden live references in one Python/CUDA context.
+- **Fix:** Keep the LangGraph parent model-free and execute train, infer/eval/probes, and
+  GGUF build/merge in one-shot subprocesses. Only paths/serializable results cross IPC;
+  worker exit destroys the CUDA context. Explicit cache cleanup remains defense-in-depth.
+- **Status:** 🟢 fixed. L40S soak job 37430554 completed 100 isolated 4 GiB cycles with
+  `post_exit_used_mib=0` and `peak_delta_mib=0`.
+
+## B190 -- graph exceptions were swallowed and printed `RUN COMPLETE`
+- **Where:** `tests/pipeline/run.py`, `agent/pipeline_status.py`.
+- **How found/evidence:** Immediately after the OOM traceback in job 37387566, the runner
+  printed `RUN COMPLETE — 42203.6s` and exited through the normal summary path.
+- **Impact:** Slurm/automation could mark crashed runs successful, and the summary described
+  exceptions as non-convergence/budget exhaustion.
+- **Root cause:** A broad exception handler logged the error but discarded it before final
+  heading/outcome/exit-code selection.
+- **Fix:** Retain `pipeline_error`, reload the freshest atomic checkpoint for reporting,
+  write summary/DAG/cost/timing artifacts in finalization, render `RUN FAILED` with the
+  exception, then exit nonzero. Successful non-convergence remains distinct.
+- **Status:** 🟢 fixed with status-helper and worker-error tests.
+
+## B191 -- scheduler preemption/requeue restarted in a new run and lost completed graph work
+- **Where:** `agent/checkpoint.py`, `agent/state_codec.py`, `agent/graph.py`,
+  `tests/pipeline/run.py`, weeklong SLURM scripts.
+- **How found/evidence:** Multi-day design review found no stable thread/run identity or
+  node-granular persistence: a new process built a timestamped run and reinvoked the graph
+  from initial state; partial datasets/checkpoints could be mistaken for complete artifacts.
+- **Impact:** Preemption near seven days could discard days of completed acquisition,
+  curation, training, scoring, histories, spend, and remaining-turn accounting.
+- **Root cause:** Files were end-of-run reports, not a transactional graph resume protocol.
+- **Fix:** Stable run directory/thread manifest; SQLite LangGraph checkpointer plus atomic
+  JSON mirror after each committed node; typed state codec for exact selectors and new
+  fields; atomic datasets and manifested training checkpoints; compatibility/effective-config
+  fingerprints; append-only ledgers; resume only the pending node with cumulative graph and
+  wall budgets. USR1 requests checkpoint, verifies durability, then requeues the same job.
+- **Status:** 🟢 fixed. Offline real-SQLite SIGKILL smoke resumes only pending `eval` after
+  committed `prepare→train`, without duplicate worker or ledger events.
+
+## B192 -- JSON/SQLite authority and requeue signal/credential races could resume stale state
+- **Where:** `agent/checkpoint.py`, `tests/pipeline/run.py`,
+  `tests/pipeline/_l40s_task_body.sh`, emotion SLURM script.
+- **How found/evidence:** Review found progressed JSON could be injected as fresh input when
+  SQLite was missing/empty/wrong-thread; the shell durability probe imported credentialed
+  config before `.env`; and TERM could let the shell exit while Python was publishing
+  SQLite/JSON/observability. These were reproduced by authority and credential-free probe
+  tests.
+- **Impact:** Resume could replay completed nodes, overwrite a run, refuse a valid requeue,
+  or kill final checkpoint publication.
+- **Root cause:** The JSON mirror and SQLite journal lacked an explicit authority boundary,
+  and structural scheduler checks were coupled to runtime secrets/finalization timing.
+- **Fix:** Pre-graph JSON is authoritative only before the first SQLite generation;
+  afterwards missing/empty/wrong-thread SQLite fails closed and startup reconciles JSON from
+  the latest SQLite generation. Structural `durable_resume_available` needs no API keys;
+  the runner loads `.env` then performs strict setting-by-setting drift checks. TERM is
+  forwarded once and the shell waits a bounded grace period for finalization (then KILL);
+  TERM wins over requeue, and USR1 requeues only after manifest+JSON+SQLite agree.
+- **Status:** 🟢 fixed; final durability review found no remaining Critical/Important code
+  issue.
+
+## B193 -- fixed 24h/application wall guards conflicted with checkpointed weeklong requeue
+- **Where:** `config/config.py`, `agent/nodes/iterate.py`, weeklong SLURM scripts,
+  `docs/PIPELINE.md`.
+- **How found/evidence:** The original 24h-style process-local guard (and a later 6d20h
+  value) could terminate a healthy run before Slurm's 6d22h USR1 notice, so the checkpoint
+  requeue path never ran. A process-local timer also reset or double-counted across resume
+  segments.
+- **Impact:** “Seven-day resumable” jobs could end cleanly but prematurely, or receive an
+  incorrect remaining wall budget after requeue.
+- **Root cause:** Application termination and scheduler segment rollover were independent
+  clocks with incompatible ownership.
+- **Fix:** Track cumulative wall time in SQLite/JSON across segments. Non-requeue runs retain
+  an optional 14h graceful guard for 16h allocations; checkpoint/requeue weeklong scripts
+  set `SLM_MAX_WALLCLOCK_S=0` and let Slurm USR1 own rollover. Resume compatibility records
+  the effective setting.
+- **Status:** 🟢 fixed and documented.
+
+## B194 -- Qwen3.5/Qwen3.6 runtime support lacked bounded end-to-end evidence
+- **Where:** `tests/pipeline/manual_qwen35_readiness_l40s.slurm`,
+  `manual_qwen36_cot_smoke_l40s.slurm`,
+  `manual_qwen36_tp4_colocation_l40s.slurm`; corresponding SLURM logs.
+- **How found/evidence:** B136/B139 wiring was initially unit-only. Job 37449798 passed
+  Qwen3.5-0.8B text-only LoRA → single HF infer → FastVisionModel merge → Q4_K_M GGUF →
+  deployment eval. Job 37483464 added one real four-prompt variable-length batch and passed
+  VRAM criteria (`3839/46068 MiB` peak, `0 MiB` post-worker delta; total 955.569s). Final
+  Qwen3.6 job 37450865 served FP8 on one L40S and returned one non-thinking local CoT after
+  first-request JIT.
+- **Impact:** Without real smokes, processor unwrapping, adapter load, batching, merge,
+  llama.cpp deployment, vLLM startup, and first-call kernels could all remain falsely green.
+- **Root cause:** CPU mocks do not exercise Unsloth/FastVisionModel, CUDA memory ownership,
+  llama.cpp binaries, or Qwen3.6 vLLM runtime compilation.
+- **Fix:** Added bounded, manually submitted, no-cloud smokes with explicit phase/time/VRAM
+  criteria and non-empty artifact checks.
+- **Status:** 🟢 Qwen3.5-0.8B and standalone one-L40S Qwen3.6 paths verified by the jobs
+  above. 🟡 TP4 shared-GPU judge/train/APPS/GGUF co-location job 37486488 is pending runtime
+  validation; pending is not “fixed” and no result is claimed here.
+
+## B195 -- raw Qwen3.5 baseline merge produced and cached an unloadable GGUF
+- **Where:** `agent/nodes/evaluate.py`, `training/quantize.py`.
+- **How found/evidence:** The zero-shot `Qwen/Qwen3.5-2B` Q4_K_M artifact reported
+  `qwen35.block_count=25`/`n_layer_all=25` but contained only 320 tensors; llama.cpp
+  rejected it with `missing tensor blk.24.attn_norm.weight`. A LoRA-merged artifact from
+  the same architecture contained 335 tensors and loaded.
+- **Impact:** A raw base model passed through `FastVisionModel.save_pretrained_merged`,
+  lost the MTP/final layer, and was then trusted forever based only on its cache filename.
+  Baseline quantization failures could also be converted into an apparent model score of
+  `0.0`, mixing infrastructure failure with evaluator output.
+- **Root cause:** Base HF IDs and adapter checkpoints shared the same Unsloth merge path;
+  cached GGUF files had no load validation, content hash, or validation provenance.
+- **Fix:** Convert raw base IDs directly from a pinned immutable HF snapshot, retain
+  FastVisionModel merge only for adapter/local checkpoints, validate new GGUFs with a real
+  CPU llama.cpp model load, and atomically write a size/SHA-256/tool-version sidecar only
+  after success. Cache reuse now requires a matching sidecar and hash; stale/corrupt
+  artifacts rebuild automatically. Quantization infrastructure failures propagate as hard
+  errors, including across disposable-worker transport, and shared HF snapshots are never
+  deleted.
+- **Status:** 🟢 fixed with regression coverage for raw snapshots, missing-layer cache
+  invalidation, sidecar/hash tampering, adapter merge, and baseline error propagation.
+
+## B196 -- Qwen3.5-4B zero-shot inference bypassed incomplete-snapshot mitigation
+- **Where:** `training/lora_trainer.py`, `training/slm_helpers.py`, and the shared Hugging
+  Face cache snapshot at commit `851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a`.
+- **How found/evidence:** The beginning difficulty probe failed in its eval worker with
+  `DownloadStallError: incomplete snapshot even with HF_HUB_DISABLE_XET=1`. At failure
+  time the cached snapshot contained config/index/tokenizer metadata, but neither of the
+  two shards named by `model.safetensors.index.json` (about 9.32 GB total).
+- **Impact:** The zero-shot probe ran before training, so it entered Unsloth directly and
+  bypassed training's prefetch. Training's prefetch also treated any `snapshot_download`
+  return as success and swallowed all three failures, allowing Unsloth to retry an already
+  known-incomplete cache.
+- **Root cause:** Prefetch was training-only and checked neither immutable revision identity
+  nor indexed shard completeness. The downloader used its default concurrency and failures
+  were downgraded to a log message instead of an infrastructure error.
+- **Fix:** Added a reusable HF snapshot prefetch/verifier used by training and inference.
+  It first resolves and verifies a local-only snapshot without calling `model_info`, so
+  fully warmed compute nodes need no network. An absent or incomplete local snapshot falls
+  through to online resolution, which pins one commit; retries reuse the existing partial
+  shared cache without deletion, back off boundedly, and download with
+  `SLM_HF_DOWNLOAD_WORKERS` (default 1). Every shard named by a weight index must exist and
+  be nonempty. Exhausted retries now raise a clear infrastructure error before Unsloth
+  loads; local checkpoints remain no-ops.
+- **Status:** 🟢 code fixed and unit-tested with mocked downloads/filesystems. No download
+  or cluster job was run as part of this fix. A read-only post-fix check found that the
+  shared cache had separately been warmed before this session: both indexed shards are
+  present and nonempty (5,329,398,688 + 3,990,429,408 bytes). Their combined file size is
+  9,319,828,096 bytes; the index's 9,319,737,856-byte tensor payload excludes 90,240 bytes
+  of safetensors file overhead.
+
+## B197 -- iterate prompt and generic reask produced contradictory branch payloads
+- **Where:** `agent/nodes/iterate.py` (`_ITERATE_SYSTEM`, `_reask_json_only`,
+  `_llm_iterate`).
+- **How found/evidence:** Run `slm-ner-l40s-37531245` repeatedly logged an initial iterate
+  response followed by `iterate_json_reask`, then
+  `ValueError('hyperparams is not allowed for a data_rebuild intervention')`. At log lines
+  662 and 757 the initial response consumed the full 1024-token output allowance; the
+  parseable reask selected `data_rebuild` while still emitting `hyperparams`.
+- **Impact:** Correct strict validation rejected the contradictory decision, after which
+  fallback changed the action to the test-agent's `hyperparameter` recommendation. The
+  intended LLM data intervention was therefore lost.
+- **Root cause:** The system prompt showed both mutually exclusive payloads inside one
+  combined JSON example. The sole retry asked generically for JSON again without reporting
+  the validator error, so it did not tell the model which contradiction to repair. The
+  1024-token ceiling also demonstrably truncated two initial decisions.
+- **Fix:** Describe the decision as a discriminated union and provide separate valid
+  `data_rebuild` and `hyperparameter` examples while retaining all bounded field
+  constraints. The one allowed reask now receives the exact bounded/sanitized validation
+  error without replaying malformed output or raw eval data. Both initial and reask output
+  allowances are 1536 tokens; call count and tracked cost stages remain unchanged.
+- **Status:** 🟢 fixed with regression coverage for branch-separated examples, retained
+  schema bounds, exact-error repair, strict contradictory-payload rejection, the eval
+  firewall, and the one-initial-plus-one-reask limit.
+
+## B198 -- Unsloth assumed every adapter base had tokenizer.model during merge
+- **Where:** `training/hf_cache.py`, `training/lora_trainer.py`; triggered by third-party
+  `unsloth_zoo/saving_utils.py` during `save_pretrained_merged`.
+- **How found/evidence:** Every Qwen3.5-2B adapter merge in run
+  `slm-ner-l40s-37531245` printed `Cache check failed: tokenizer.model not found in local
+  cache` and attempted a filtered Hub download. Official snapshot
+  `15852e8c16360a2fea060d615a32b45270f8a8fc` intentionally has no
+  `tokenizer.model`; it has a valid BPE `tokenizer.json` (12,807,982 bytes),
+  `vocab.json` (6,722,759), and `merges.txt` (3,353,259). Unsloth had already called
+  `tokenizer.save_pretrained`, and every adapter merge, GGUF conversion, and subsequent
+  llama.cpp load validation succeeded.
+- **Impact:** Performance/noise only for this Qwen snapshot: the warning did not indicate
+  tokenizer or model corruption. It caused a redundant local cache miss and could make an
+  unnecessary network request for a file that does not exist. A genuinely absent
+  tokenizer representation still must be fatal.
+- **Root cause:** Unsloth's remote-base merge branch unconditionally probes and downloads
+  `tokenizer.model`, although its own tokenizer loader and saver support BPE tokenizers.
+- **Fix:** Resolve and verify the immutable base snapshot with `local_files_only=True`.
+  Stage the existing adapter with only `base_model_name_or_path` rewritten to that local
+  snapshot, then let Unsloth load the local base plus the real adapter and merge from local
+  shards. No site-package edits or fake tokenizer files are used. Shared snapshot
+  validation now requires complete weights plus one valid tokenizer representation:
+  `tokenizer.json`, `tokenizer.model`, or valid `vocab.json` + `merges.txt`; merged output
+  is revalidated before GGUF conversion. Because Unsloth still owns the merge over the
+  complete indexed local shard, Qwen3.5 MTP tensors remain on the same validated path.
+- **Status:** 🟢 fixed with RED/GREEN coverage for Qwen BPE, SentencePiece, missing
+  tokenizer rejection, local-only adapter resolution/loading, and full local-checkpoint
+  regression. No GPU job, model download, or API call was run. A bounded GPU merge→GGUF
+  load smoke remains advisable to validate this exact installed Unsloth/PEFT runtime path.
