@@ -1,14 +1,23 @@
 """check_hardware_constraints must prefer MEASURED values over theoretical ones
 when a `measured` dict is supplied (post-convergence on-device verification path)."""
-from config.android_pool import ModelSpec, HardwareConstraints, check_hardware_constraints
+from config.android_pool import (
+    CapabilityMeasurement,
+    HardwareConstraints,
+    ModelSpec,
+    check_hardware_constraints,
+)
 
 
 def _model():
-    # Theoretical peak_memory_mb=1100 — comfortably under the 2000MB limit below.
     return ModelSpec(
         model_id="test/M", size_mb=700, tier=1,
-        tok_s_snapdragon_660=8.0, tok_s_snapdragon_778g=14.0, tok_s_snapdragon_8gen3=38.0,
-        peak_memory_mb=1100, gsm8k=0.6, mmlu=0.5, quant="Q4_K_M",
+        capability_measurements=(
+            CapabilityMeasurement(
+                metric="MMLU", value=0.5, artifact="test/M",
+                mode=None, protocol="test", source="https://example.test",
+            ),
+        ),
+        quant="Q4_K_M",
     )
 
 
@@ -40,11 +49,18 @@ def test_measured_memory_within_limit_passes():
     assert check["memory"]["pass"] is True
 
 
-def test_falls_back_to_theoretical_when_unmeasured():
+def test_reports_unmeasured_instead_of_substituting_an_estimate():
+    """Unmeasured peak RAM must read as unknown, not as a modelled stand-in.
+
+    This test used to assert value_mb == 1100, the ModelSpec's *theoretical* peak. That
+    field is gone: an unmeasured metric now reports None and the gate falls back to the
+    weight-size floor (real bytes), which is a physical lower bound rather than a guess.
+    """
     check = check_hardware_constraints(_model(), _constraints(memory_mb=2000))
     assert check["memory"]["measured"] is False
-    assert check["memory"]["value_mb"] == 1100     # ModelSpec theoretical peak
-    assert check["memory"]["pass"] is True
+    assert check["memory"]["value_mb"] is None
+    assert check["memory"]["weight_floor_mb"] == 700   # the real on-disk weight size
+    assert check["memory"]["pass"] is True             # 700MB fits in the 2000MB budget
 
 
 def test_measured_power_gate():

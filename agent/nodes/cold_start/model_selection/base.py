@@ -16,15 +16,15 @@ logger = logging.getLogger(__name__)
 
 
 def select_smallest(models: list[ModelSpec]) -> ModelSpec:
-    """Return the model with the lowest peak_memory_mb."""
-    return min(models, key=lambda m: m.peak_memory_mb)
+    """Return the smallest model by real on-disk weight size."""
+    return min(models, key=lambda m: m.size_mb)
 
 
 def select_largest(models: list[ModelSpec]) -> ModelSpec:
-    """Return the model with the highest peak_memory_mb."""
-    return max(models, key=lambda m: m.peak_memory_mb)
+    """Return the largest model by real on-disk weight size."""
+    return max(models, key=lambda m: m.size_mb)
 
 
 def select_by_ram_target(models: list[ModelSpec], target_mb: int) -> ModelSpec:
-    """Return the model whose peak_memory_mb is closest to target_mb."""
-    return min(models, key=lambda m: abs(m.peak_memory_mb - target_mb))
+    """Return the model whose on-disk weight size is closest to target_mb."""
+    return min(models, key=lambda m: abs(m.size_mb - target_mb))

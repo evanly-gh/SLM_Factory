@@ -1,7 +1,52 @@
 # eval/harness.py
-from dataclasses import dataclass
+import os
+from dataclasses import dataclass, field
 from data.eval_set import EvalSet
 from training.slm_helpers import infer_batch, infer_batch_gguf
+
+
+_EVAL_OUTPUT_TOKEN_SETTINGS = {
+    "classification": ("SLM_EVAL_MAX_NEW_TOKENS_CLASSIFICATION", 50),
+    "NER": ("SLM_EVAL_MAX_NEW_TOKENS_NER", 512),
+    "math_reasoning": ("SLM_EVAL_MAX_NEW_TOKENS_MATH", 512),
+    "generation": ("SLM_EVAL_MAX_NEW_TOKENS_GENERATION", 512),
+    "code_generation": ("SLM_EVAL_MAX_NEW_TOKENS_APPS", 1024),
+}
+
+
+def eval_output_token_reserve(
+    task_type: str,
+    *,
+    max_seq_length: int | None = None,
+) -> int:
+    """Return a positive task reserve that leaves prompt context available."""
+    try:
+        setting, default = _EVAL_OUTPUT_TOKEN_SETTINGS[task_type]
+    except KeyError as exc:
+        raise ValueError(f"Unknown task_type: {task_type!r}") from exc
+    raw_value = os.environ.get(setting, str(default))
+    try:
+        reserve = int(raw_value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(
+            f"{setting} must be a positive integer, got {raw_value!r}."
+        ) from exc
+    if reserve < 1:
+        raise ValueError(
+            f"{setting} must be a positive integer, got {raw_value!r}."
+        )
+    if max_seq_length is None:
+        from training.slm_helpers import _inference_max_seq_length
+
+        max_seq_length = _inference_max_seq_length()
+    if reserve >= max_seq_length:
+        raise ValueError(
+            f"task_type={task_type} reserves {reserve} output tokens, leaving "
+            f"no prompt budget inside max sequence length {max_seq_length}. "
+            "Increase SLM_MAX_SEQ_LENGTH or lower the task-specific output "
+            f"reserve {setting}."
+        )
+    return reserve
 
 
 @dataclass
@@ -12,9 +57,43 @@ class EvalResult:
     neg_score: float
     boundary_score: float
     failures: list[dict]
+    execution_diagnostics: list[dict] = field(default_factory=list)
 
 
 def run_eval(
+    eval_set: EvalSet,
+    weights_ref: str,
+    base_model: str,
+    task_type: str,
+    quant: str | None = None,
+    gguf_path: str | None = None,
+) -> EvalResult:
+    """Run one complete evaluation, isolated in a disposable process when enabled."""
+    from training.cuda_isolation import isolation_enabled, run_isolated
+
+    if isolation_enabled():
+        from training.slm_helpers import clear_inference_cache
+
+        payload = {
+            "eval_set": eval_set,
+            "weights_ref": weights_ref,
+            "base_model": base_model,
+            "task_type": task_type,
+            "quant": quant,
+            "gguf_path": gguf_path,
+        }
+        clear_inference_cache()
+        try:
+            return run_isolated("eval", payload)
+        finally:
+            clear_inference_cache()
+
+    return _run_eval_local(
+        eval_set, weights_ref, base_model, task_type, quant=quant, gguf_path=gguf_path,
+    )
+
+
+def _run_eval_local(
     eval_set: EvalSet,
     weights_ref: str,
     base_model: str,
@@ -50,20 +129,28 @@ def run_eval(
             f"Must be one of: classification, NER, math_reasoning, code_generation, generation."
         )
 
-    # Generation/math/code/NER need room for the FULL chain-of-thought + final answer.
-    # 256 truncated verbose CoT (esp. on the stronger 4B models), cutting off the final
-    # answer before the exact-match extractor sees it → artificially low / collapsing
-    # scores (a contributor to the tier-3 regression, Q8/B145). 512 gives grade-school
-    # math CoT and entity-list JSON enough room. Single-label classification (one short
-    # label word) stays at 50.
-    _LONG_OUTPUT_TASKS = {"math_reasoning", "code_generation", "generation", "NER"}
-    max_new_tokens = 512 if task_type in _LONG_OUTPUT_TASKS else 50
+    # Validate the task reserve against the configured context before loading a
+    # model. This prevents the historical 512-context/512-output zero prompt
+    # budget while retaining task-specific completion room.
+    max_new_tokens = eval_output_token_reserve(task_type)
     prompts = scorer.build_prompts(eval_set)
 
     if gguf_path is not None:
-        raw_outputs = infer_batch_gguf(prompts, gguf_path, max_new_tokens=max_new_tokens)
+        raw_outputs = infer_batch_gguf(
+            prompts,
+            gguf_path,
+            max_new_tokens=max_new_tokens,
+            base_model=base_model,
+        )
     else:
-        raw_outputs = infer_batch(prompts, weights_ref, base_model, max_workers=20, max_new_tokens=max_new_tokens)
+        raw_outputs = infer_batch(
+            prompts,
+            weights_ref,
+            base_model,
+            max_workers=20,
+            max_new_tokens=max_new_tokens,
+            task_type=task_type,
+        )
 
     predictions = scorer.extract_predictions(raw_outputs, eval_set)
     result = scorer.score(eval_set, predictions)
@@ -75,4 +162,5 @@ def run_eval(
         neg_score=result["slices"]["neg"],
         boundary_score=result["slices"]["boundary"],
         failures=result["failures"],
+        execution_diagnostics=result.get("execution_diagnostics", []),
     )

@@ -2,6 +2,7 @@
 import os
 from exa_py import Exa
 from langchain_core.tools import tool
+from agent.cost import tracked_exa_call
 
 _exa_client = None
 
@@ -20,8 +21,11 @@ def web_search(query: str, num_results: int = 5) -> str:
     Returns a formatted string of results.
     """
     exa = _get_exa()
-    results = exa.search_and_contents(
+    results = tracked_exa_call(
+        exa.search_and_contents,
         query,
+        stage="iterate_web_search",
+        model="search-and-contents",
         num_results=num_results,
         use_autoprompt=True,
         text={"max_characters": 1000},

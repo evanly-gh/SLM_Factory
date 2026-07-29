@@ -1,6 +1,6 @@
-import pytest
-from unittest.mock import patch, MagicMock
-from config.android_pool import HardwareConstraints, ANDROID_POOL, ModelSpec
+from unittest.mock import patch
+
+from config.android_pool import ANDROID_POOL, HardwareConstraints
 
 
 def _make_state(current_model):
@@ -17,6 +17,12 @@ def _make_state(current_model):
         "model_baselines": [],
         "current_dataset_path": "/data.jsonl",
         "dataset_version": 1,
+        "last_curation": {
+            "data_rebuild_plan_identity": "prior-plan",
+            "total_examples": 20,
+        },
+        "data_rebuild_plan": {"primary_strategy": "resample_existing"},
+        "data_rebuild_plan_identity": "prior-plan",
         "dag": [{"iteration": 1, "score": 0.71, "model_id": "openbmb/MiniCPM4-0.5B", "pruned": False}],
         "iteration": 3,
         "consecutive_no_improvement": 0,
@@ -31,6 +37,17 @@ def test_escalate_advances_to_higher_tier():
     lowest_tier = min(m.tier for m in ANDROID_POOL)
     start_model = next(m for m in ANDROID_POOL if m.tier == lowest_tier)
     state = _make_state(start_model)
+    state["downward_probe_done"] = True
+    state["downward_tiers_tried"] = [0]
+    state["converged_model_ref"] = {
+        "selector": start_model.selector,
+        "tier": start_model.tier,
+        "score": state["best_score"],
+    }
+    state["downward_probe_history"] = {
+        "origin": {"selector": start_model.selector},
+        "attempts": [{"selector": "test/lower@Q4_K_M"}],
+    }
     # Determine the nearest higher non-empty tier (matches escalate's own logic).
     higher_tiers = sorted({m.tier for m in ANDROID_POOL if m.tier > lowest_tier})
     next_tier = higher_tiers[0]
@@ -41,6 +58,20 @@ def test_escalate_advances_to_higher_tier():
     assert out["selected_model"].tier == next_tier
     assert out["scores"] == []
     assert out["dag"] == []
+    assert out["escalation_history"][0]["selector"] == start_model.selector
+    assert mock_llm.call_args.kwargs["direction"] == "up"
+    assert out["downward_probe_done"] is False
+    assert out["downward_tiers_tried"] == []
+    assert out["converged_model_ref"] is None
+    assert out["downward_probe_history"] == {
+        "origin": None,
+        "attempts": [],
+    }
+    assert out["current_dataset_path"] == "/data.jsonl"
+    assert out["dataset_version"] == 1
+    assert out["last_curation"]["total_examples"] == 20
+    assert out["data_rebuild_plan"] is None
+    assert out["data_rebuild_plan_identity"] is None
 
 
 def test_escalate_terminates_at_top_tier():

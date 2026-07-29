@@ -163,8 +163,10 @@ def build_eval_set(
         examples = list(examples)
         rng.shuffle(examples)
         total = len(examples)
-        p = min(n_pos, total // 3)
-        n = min(n_neg, total // 3)
+        # Honor the caller's requested 40/40/20 budget whenever enough rows exist.
+        # Shared-dataset preparation and live eval setup pass the same dynamic sizes.
+        p = min(n_pos, total)
+        n = min(n_neg, total - p)
         b = min(n_boundary, total - p - n)
         pos = examples[:p]
         neg = examples[p:p + n]

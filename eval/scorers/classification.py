@@ -4,11 +4,29 @@ from eval.metrics import binary_f1, per_slice_scores
 from data.eval_set import EvalSet
 
 CLASSIFY_PROMPT = (
-    'Classify this message. Reply with exactly one word — the label.\n\nMessage: {text}'
+    'Classify this message into exactly one of these labels: {labels}.\n'
+    'Reply with only the label word — nothing else.\n\nMessage: {text}'
 )
 
+
+def _labels_str(labels) -> str:
+    """Deterministic, deduped, sorted label list for the prompt. Sorting makes the string
+    identical between training and eval as long as they see the same label vocabulary
+    (train/serve parity, B161)."""
+    return ", ".join(sorted({str(x) for x in labels if x is not None and str(x).strip()}))
+
+
+def build_classify_prompt(text: str, labels) -> str:
+    """Build the classification prompt WITH the allowed label set enumerated. Listing the
+    labels is what lets a model (especially a strong instruct model like Qwen3-4B) emit an
+    in-vocabulary label instead of a synonym the exact-match extractor can't score — the
+    root cause of the tier-3 100% __EXTRACTION_FAILED__ collapse (B161)."""
+    return CLASSIFY_PROMPT.format(labels=_labels_str(labels), text=text)
+
+
 def build_prompts(eval_set: EvalSet) -> list[str]:
-    return [CLASSIFY_PROMPT.format(text=ex["text"]) for ex in eval_set.all]
+    labels = [e["label"] for e in eval_set.all]
+    return [build_classify_prompt(ex["text"], labels) for ex in eval_set.all]
 
 _UNKNOWN_LABEL = "__EXTRACTION_FAILED__"
 

@@ -1,5 +1,8 @@
 # agent/nodes/rollback.py
+from copy import deepcopy
+
 from agent.state import AgentState
+from eval.harness import EvalResult
 
 
 def _log(model_id: str, msg: str):
@@ -51,9 +54,56 @@ def rollback_node(state: AgentState) -> AgentState:
         best_node = max(non_pruned, key=lambda n: n["score"])
         state["best_weights_ref"] = best_node["weights_ref"]
         state["best_score"] = best_node["score"]
+        dataset = ((best_node.get("pi") or {}).get("D") or {})
+        dataset_path = dataset.get("path")
+        if not isinstance(dataset_path, str) or not dataset_path:
+            raise RuntimeError(
+                "winning rollback DAG node has no dataset artifact path: "
+                f"{dataset_path!r}"
+            )
+        state["current_dataset_path"] = dataset_path
+        state["dataset_version"] = int(dataset.get("version", 0) or 0)
+        state["last_curation"] = deepcopy(dataset.get("composition"))
+        state["data_rebuild_plan"] = deepcopy(dataset.get("plan"))
+        state["data_rebuild_plan_identity"] = dataset.get("plan_identity")
+        evaluation_state = best_node.get("evaluation_state") or {}
+        encoded_eval = evaluation_state.get("last_eval")
+        state["last_eval"] = (
+            EvalResult(**deepcopy(encoded_eval))
+            if isinstance(encoded_eval, dict)
+            else None
+        )
+        state["test_report"] = deepcopy(
+            evaluation_state.get("test_report")
+        )
+        best_label = best_node.get("best_config", "restored best")
+        best_hparams = dict(
+            ((best_node.get("pi") or {}).get("H") or {})
+        )
+        if best_hparams:
+            restored_config = {**best_hparams, "label": best_label}
+            state["_pending_configs"] = {best_label: restored_config}
+            state["_pending_weights_refs"] = {
+                best_label: best_node["weights_ref"]
+            }
+            state["_pending_training_outputs"] = None
         _log(model_id, f"  Restored to: iteration={best_node['iteration']}  "
              f"score={best_node['score']:.4f}  "
              f"weights={best_node['weights_ref']}")
+        if best_hparams.get("lora_rank") is not None:
+            _log(
+                model_id,
+                "  Restored optimizer config: "
+                f"r={best_hparams.get('lora_rank')} "
+                f"alpha={best_hparams.get('lora_alpha')} "
+                f"dropout={best_hparams.get('lora_dropout')} "
+                f"weight_decay={best_hparams.get('weight_decay')} "
+                f"lr={best_hparams.get('learning_rate')} "
+                f"epochs={best_hparams.get('nr_epochs')} "
+                f"micro_batch={best_hparams.get('micro_batch_size', best_hparams.get('batch_size'))} "
+                f"grad_accum={best_hparams.get('gradient_accumulation_steps', 1)} "
+                f"effective_batch={best_hparams.get('effective_batch_size')}",
+            )
     else:
         _log(model_id, "  WARNING: all DAG nodes pruned, no checkpoint to restore")
         raise RuntimeError(

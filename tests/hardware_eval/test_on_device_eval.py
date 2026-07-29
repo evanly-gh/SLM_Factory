@@ -8,20 +8,25 @@ check_hardware_constraints.
 from hardware_eval.on_device_eval import (
     HardwareEvalResult,
     run_on_device_eval,
-    theoretical_profile,
+    unmeasured_profile,
     ma_to_watts,
     parse_run_lines,
     summarize_smolchat,
     _build_metrics,
 )
-from config.android_pool import ModelSpec, HardwareConstraints
+from config.android_pool import CapabilityMeasurement, ModelSpec, HardwareConstraints
 
 
 def _model(quant=None):
     return ModelSpec(
         model_id="test/Model-1B", size_mb=700, tier=1,
-        tok_s_snapdragon_660=8.0, tok_s_snapdragon_778g=14.0, tok_s_snapdragon_8gen3=38.0,
-        peak_memory_mb=1100, gsm8k=0.6, mmlu=0.5, quant=quant,
+        capability_measurements=(
+            CapabilityMeasurement(
+                metric="MMLU", value=0.5, artifact="test/Model-1B",
+                mode=None, protocol="test", source="https://example.test",
+            ),
+        ),
+        quant=quant,
     )
 
 
@@ -34,33 +39,49 @@ def _constraints():
 
 # --- Dispatcher --------------------------------------------------------------
 
-def test_dispatcher_defaults_to_theoretical():
+def test_dispatcher_defaults_to_unmeasured_and_invents_nothing():
+    """Default path must return all-None, not a modelled profile.
+
+    This used to assert tok_per_s == 14.0 and peak_memory_mb == 1100, both read off a
+    ModelSpec estimate table. Those fields are gone; the honest default is "unknown".
+    """
     res = run_on_device_eval(_model(), _constraints())
     assert res.success is True
-    assert res.eval_method == "theoretical"
-    assert res.tok_per_s == 14.0           # 778g throughput from the spec
-    assert res.peak_memory_mb == 1100
-    assert res.avg_watts is None           # theoretical never guesses power
+    assert res.eval_method == "unmeasured"
+    assert res.tok_per_s is None
+    assert res.ttft_ms is None
+    assert res.peak_memory_mb is None
+    assert res.avg_watts is None
 
 
-def test_dispatcher_falls_back_to_theoretical_without_gguf_even_if_backend_set():
-    # A real backend requires a GGUF; without one we must not attempt adb/llama.
+def test_dispatcher_reports_unmeasured_without_gguf_even_if_backend_set():
+    # A real backend requires a GGUF; without one we must not attempt adb/llama, and we
+    # must not substitute an estimate either.
     res = run_on_device_eval(_model(), _constraints(), backend="smolchat", gguf_path=None)
-    assert res.eval_method == "theoretical"
+    assert res.eval_method == "unmeasured"
     assert res.success is True
+    assert res.tok_per_s is None
 
 
 def test_dispatcher_unknown_backend_degrades_gracefully():
     res = run_on_device_eval(_model(), _constraints(), backend="does_not_exist",
                              gguf_path="/tmp/x.gguf")
-    assert res.eval_method == "theoretical"
+    assert res.eval_method == "unmeasured"
     assert "unknown backend" in (res.error or "")
 
 
-def test_theoretical_profile_ttft_is_inverse_throughput():
-    res = theoretical_profile(_model(), _constraints())
-    # 1/14 * 1000 ≈ 71.4 ms
-    assert 70 <= res.ttft_ms <= 73
+def test_legacy_theoretical_backend_name_yields_unmeasured():
+    """Old configs/env values naming "theoretical" must not resurrect estimates."""
+    res = run_on_device_eval(_model(), _constraints(), backend="theoretical")
+    assert res.eval_method == "unmeasured"
+    assert res.tok_per_s is None
+
+
+def test_unmeasured_profile_emits_no_derived_ttft():
+    """TTFT used to be synthesised as 1/tok_s*1000 — an estimate built on an estimate."""
+    res = unmeasured_profile(_model(), _constraints())
+    assert res.ttft_ms is None
+    assert res.tok_per_s is None
 
 
 # --- Power conversion --------------------------------------------------------

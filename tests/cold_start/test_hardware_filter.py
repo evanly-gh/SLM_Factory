@@ -43,7 +43,9 @@ def test_tight_constraints_filters(tight_constraints):
     result = run_hardware_filter(tight_constraints)
     for m in result:
         assert m.size_mb <= tight_constraints.storage_mb
-        assert m.peak_memory_mb <= tight_constraints.memory_mb
+        # peak_memory_mb was a modelled figure and is gone; the memory gate now enforces
+        # the real weight-size floor instead.
+        assert m.size_mb <= tight_constraints.memory_mb
 
 
 def test_order_largest_first(loose_constraints):

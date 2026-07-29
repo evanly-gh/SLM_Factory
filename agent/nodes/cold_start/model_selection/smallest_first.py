@@ -15,29 +15,33 @@ import os
 
 from agent.state import AgentState
 from agent.nodes.cold_start.model_selection.base import select_smallest
+from config.android_pool import resolve_model_selector
 
 logger = logging.getLogger(__name__)
 
 
+def _plog(msg: str):
+    """Print so model-selection reasoning reaches run.log (logger.info is suppressed, B161)."""
+    print(f"[model_selection:smallest_first] {msg}")
+
+
 def smallest_first_node(state: AgentState) -> AgentState:
-    """Select the smallest feasible model (lowest peak RAM)."""
+    """Select the smallest feasible model (lowest on-disk weight size)."""
     feasible = state.get("feasible_models", [])
     if not feasible:
         raise RuntimeError("smallest_first_node: feasible_models is empty.")
 
     forced = os.environ.get("SLM_FORCE_MODEL")
     if forced:
-        match = next((m for m in feasible if m.model_id == forced), None)
+        match = resolve_model_selector(feasible, forced)
         if match is None:
             raise RuntimeError(f"SLM_FORCE_MODEL={forced!r} is not in the feasible pool.")
         state["selected_model"] = match
-        logger.info("[model_selection:smallest_first] SLM_FORCE_MODEL=%s pinned", forced)
+        _plog(f"SLM_FORCE_MODEL={forced} pinned → {match.selector}")
         return state
 
     chosen = select_smallest(feasible)
     state["selected_model"] = chosen
-    logger.info(
-        "[model_selection:smallest_first] Selected %s (tier=%d, quant=%s, peak=%dMB)",
-        chosen.model_id, chosen.tier, chosen.quant, chosen.peak_memory_mb,
-    )
+    _plog(f"Selected smallest of {len(feasible)} feasible: {chosen.model_id} "
+          f"[{chosen.quant or 'bf16'}] (tier={chosen.tier}, size={chosen.size_mb}MB)")
     return state
