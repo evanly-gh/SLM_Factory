@@ -75,6 +75,104 @@ def is_available(timeout: float = 8.0, log=print) -> bool:
         return False
 
 
+class SynthesisUnavailableError(RuntimeError):
+    """The local synthesis endpoint did not come back within the allowed wait.
+
+    Raised instead of degrading to gold-only. A plan that declared
+    ``targeted_synth_positive`` and then silently produced zero synthetic rows is a
+    strategy attribution lie: the DAG records the strategy the orchestrator chose while
+    the dataset contains none of its output. Stopping is the honest outcome — the run
+    checkpoints, the endpoint gets restarted, and the run resumes.
+    """
+
+
+# Mid-run wait. Deliberately shorter than the startup preflight (SLM_SYNTH_WAIT_S, 40 min
+# default): at startup nothing has been spent yet, but mid-run every minute of blocking is
+# charged against the aggregate wall-clock guard that has to leave room to write summaries.
+# 10 minutes covers a vLLM restart or a transient node blip without eating a training slot.
+MIDRUN_WAIT_ENV = "SLM_SYNTH_MIDRUN_WAIT_S"
+DEFAULT_MIDRUN_WAIT_S = 600.0
+DEFAULT_POLL_INTERVAL_S = 15.0
+
+
+def _midrun_wait_s() -> float:
+    import os
+
+    try:
+        return max(0.0, float(os.environ.get(MIDRUN_WAIT_ENV, DEFAULT_MIDRUN_WAIT_S)))
+    except (TypeError, ValueError):
+        return DEFAULT_MIDRUN_WAIT_S
+
+
+def _wallclock_remaining_s() -> float | None:
+    """Seconds left in the run's aggregate wall-clock budget, or None when unbounded."""
+    try:
+        from agent.nodes.iterate import (
+            _WALLCLOCK_BUDGET_S,
+            _wallclock_elapsed_s,
+        )
+    except Exception:  # noqa: BLE001 - never let observability break synthesis
+        return None
+    if not _WALLCLOCK_BUDGET_S or _WALLCLOCK_BUDGET_S <= 0:
+        return None
+    return max(0.0, float(_WALLCLOCK_BUDGET_S) - _wallclock_elapsed_s())
+
+
+def wait_until_available(
+    timeout_s: float | None = None,
+    *,
+    poll_interval_s: float = DEFAULT_POLL_INTERVAL_S,
+    probe_timeout: float = 8.0,
+    log=print,
+    sleep=None,
+) -> bool:
+    """Block until the synthesis endpoint serves the configured model, or the wait expires.
+
+    Returns True as soon as it is reachable. Never raises for an unreachable endpoint —
+    callers decide whether that is fatal.
+
+    The wait is clamped to the remaining aggregate wall-clock budget so blocking here can
+    never consume the reserve the run needs to checkpoint and write its summary. If the
+    budget is already spent, this returns immediately rather than sleeping into a hard kill.
+    """
+    import time as _time
+
+    sleeper = sleep or _time.sleep
+    if timeout_s is None:
+        timeout_s = _midrun_wait_s()
+
+    remaining_budget = _wallclock_remaining_s()
+    if remaining_budget is not None:
+        # Keep a 5-minute reserve for graceful termination.
+        usable = max(0.0, remaining_budget - 300.0)
+        if usable < timeout_s:
+            log(
+                f"      [synth] clamping endpoint wait {timeout_s:.0f}s → {usable:.0f}s "
+                "to preserve the wall-clock reserve for checkpoint/summary"
+            )
+            timeout_s = usable
+
+    if is_available(timeout=probe_timeout, log=log):
+        return True
+    if timeout_s <= 0:
+        return False
+
+    deadline = _time.monotonic() + timeout_s
+    attempt = 1
+    log(
+        f"      [synth] endpoint unavailable — blocking up to {timeout_s / 60:.1f} min "
+        f"for it to return (polling every {poll_interval_s:.0f}s). "
+        "Synthesis is required; the run will stop rather than silently go gold-only."
+    )
+    while _time.monotonic() < deadline:
+        sleeper(min(poll_interval_s, max(0.0, deadline - _time.monotonic())))
+        attempt += 1
+        if is_available(timeout=probe_timeout, log=log):
+            log(f"      [synth] endpoint recovered on attempt {attempt} — continuing")
+            return True
+    return False
+
+
 def get_generate_fn(log=print, request_timeout: float = 120.0):
     """Return a `generate(prompt, temperature=0.7, max_tokens=200) -> str` backed by the
     local vLLM endpoint, or None if unavailable. The fn raises on per-call failure so the

@@ -591,8 +591,12 @@ fresh_initial_state = {
     "task_plan": None,
     "selected_model": None,
     "feasible_models": [],
+    # Both are overwritten by task_analysis._calibrate_stop_threshold before any training:
+    # from the sourced registry, or parked unreachable and calibrated at the first evaluation.
+    # DEFAULT_STOP_THRESHOLD survives only as the pre-graph placeholder.
     "stop_threshold": config.DEFAULT_STOP_THRESHOLD,
     "initial_stop_threshold": config.DEFAULT_STOP_THRESHOLD,
+    "threshold_calibration": None,
     "train_examples": [],
     "eval_set": None,
     "data_source": None,
@@ -620,12 +624,6 @@ fresh_initial_state = {
     "model_baselines": [],
     "quantize_enabled": False,
     "hw_gating_enabled": config.HW_GATING_ENABLED,
-    "mode": "cold_start",
-    "deployed_model_ref": None,
-    "traces": None,
-    "failure_taxonomy": None,
-    "regression_set": None,
-    "replay_buffer": None,
     "turn_budget": config.MAX_TURNS_MAIN,
     "_graph_steps": 0,
     "_wallclock_terminated_before": None,
@@ -958,6 +956,7 @@ if config.HW_VERIFY_ON_DEVICE:
                 "model_id": final_model.model_id,
                 "quant": final_model.quant,
                 "gguf_path": gguf,
+                "weights_ref": best_ref,
                 "measured_success": hw_result.success,
                 "measured_error": hw_result.error,
                 "result": result_to_dict(hw_result),
@@ -974,8 +973,10 @@ if config.HW_VERIFY_ON_DEVICE:
                     f"TTFT={hw_result.ttft_ms}ms  tok/s={hw_result.tok_per_s}  "
                     f"peakRSS={hw_result.peak_memory_mb}MB  power={hw_result.avg_watts}W  "
                     f"→ constraints {'PASS' if passed else 'FAIL'}")
-                if passed:
-                    last_state["deployed_model_ref"] = best_ref
+                # The verified artifact is recorded in hardware_eval.json above
+                # (weights_ref + constraint_check + all_constraints_pass). The former
+                # `deployed_model_ref` state field was production-mode-only and write-only;
+                # it was removed with production mode on 2026-07-29.
             else:
                 log(f"      [hw-verify] measurement failed: {hw_result.error}")
     except Exception as exc:
@@ -1091,6 +1092,18 @@ m = last_state.get("selected_model")
 best = last_state.get("best_score", 0.0)
 threshold = last_state.get("stop_threshold", config.DEFAULT_STOP_THRESHOLD)
 converged = best >= threshold
+# Name the metric explicitly. The comparison scalar is carried in a field called `f1`, but
+# only classification and NER compute an F1 — math is exact match, code is an execution
+# pass-rate, and open generation is a judge mean. Printing the real name keeps a run summary
+# from being quoted as an F1 result for a task that never measured one.
+from eval.harness import TASK_METRIC_NAMES
+
+_metric_name = getattr(
+    last_state.get("last_eval"),
+    "metric",
+    None,
+) or TASK_METRIC_NAMES.get(last_state.get("task_type", ""), "f1")
+log(f"score metric: {_metric_name} (carried in the EvalResult.f1 field)")
 from agent.pipeline_status import (
     build_run_progression,
     format_downward_probe_history,

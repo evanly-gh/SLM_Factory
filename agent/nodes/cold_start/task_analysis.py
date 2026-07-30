@@ -61,6 +61,83 @@ def _apply_data_targets(state: AgentState, task_type: str) -> None:
           f"(floors {CURRICULUM_SIZE_FLOOR}/{EVAL_SET_SIZE}, ceiling {DATA_SIZE_CEILING})")
 
 
+def _calibrate_stop_threshold(state: AgentState, task_type: str) -> None:
+    """Resolve the accuracy target from the sourced registry, or defer to first measurement.
+
+    REPLACES: the planner proposing `stop_threshold` from its recall of published SOTA, with a
+    hardcoded 0.96 default when it declined. See agent/threshold.py for why that was removed.
+
+    Two sources, in order:
+      1. config/benchmark_baselines.md, when a row's metric matches what this pipeline measures
+         for this task type (an `accuracy` row cannot calibrate a `macro_f1` target).
+      2. Deferred. `stop_threshold` is parked at an UNREACHABLE value so nothing can converge
+         before a real score exists, and evaluate_node calibrates from
+         max(zero_shot, first_finetune) + a bounded headroom at the end of iteration 1.
+
+    SLM_STOP_THRESHOLD still overrides everything and disables calibration entirely.
+    """
+    from agent.threshold import (
+        UNREACHABLE_PENDING_THRESHOLD,
+        registry_lookup,
+        snap_headroom,
+        threshold_from_registry,
+    )
+
+    plan = state.get("task_plan") or {}
+    headroom = snap_headroom(plan.get("threshold_headroom"))
+
+    override = os.environ.get("SLM_STOP_THRESHOLD")
+    if override:
+        threshold = float(override)
+        state["stop_threshold"] = threshold
+        state["initial_stop_threshold"] = threshold
+        state["threshold_calibration"] = {
+            "source": "env_override",
+            "threshold": threshold,
+            "headroom": None,
+            "reason": "SLM_STOP_THRESHOLD pinned; calibration disabled",
+            "pending": False,
+        }
+        print(f"      [threshold] SLM_STOP_THRESHOLD={threshold:.4f} pinned "
+              "(registry and measured calibration both skipped)")
+        return
+
+    row = registry_lookup(plan.get("benchmark"), task_type)
+    if row is not None:
+        threshold, reason = threshold_from_registry(row)
+        state["stop_threshold"] = threshold
+        state["initial_stop_threshold"] = threshold
+        state["threshold_calibration"] = {
+            "source": "registry",
+            "threshold": threshold,
+            "headroom": headroom,
+            "reason": reason,
+            "registry_row": row,
+            "pending": False,
+        }
+        print(f"      [threshold] registry hit for benchmark="
+              f"{plan.get('benchmark')!r}: {reason} → {threshold:.4f}")
+        return
+
+    state["stop_threshold"] = UNREACHABLE_PENDING_THRESHOLD
+    state["initial_stop_threshold"] = UNREACHABLE_PENDING_THRESHOLD
+    state["threshold_calibration"] = {
+        "source": "pending_measured_anchor",
+        "threshold": None,
+        "headroom": headroom,
+        "reason": (
+            f"no registry row with metric matching task_type={task_type!r} for "
+            f"benchmark={plan.get('benchmark')!r}; deferring to "
+            "max(zero_shot, first_finetune) + headroom at the end of iteration 1"
+        ),
+        "pending": True,
+    }
+    print(f"      [threshold] no usable registry row for benchmark="
+          f"{plan.get('benchmark')!r} — DEFERRING calibration to the first evaluation "
+          f"(headroom={headroom:+.2f}); target parked at "
+          f"{UNREACHABLE_PENDING_THRESHOLD} so nothing converges early")
+
+
 def task_analysis_node(state: AgentState) -> AgentState:
     """
     Node 1: classify the task, filter hardware pool, set stop threshold.
@@ -79,33 +156,19 @@ def task_analysis_node(state: AgentState) -> AgentState:
         state["task_plan"] = plan
         task_type = plan["task_type"]
         state["task_type"] = task_type
-        if plan.get("stop_threshold"):
-            threshold = float(plan["stop_threshold"])
-            state["stop_threshold"] = threshold
-            # Record the initial threshold as the immutable floor (can never go below this).
-            # iterate_node may lower it further at runtime, but never below initial_stop_threshold.
-            if state.get("initial_stop_threshold") is None:
-                state["initial_stop_threshold"] = threshold
-
-    # Data-size targets: take the orchestrator's chosen curriculum/eval sizes, clamped to
-    # [floor, ceiling] (B161). Fall back to the per-type default when the planner gave none.
-    _apply_data_targets(state, task_type)
-
-    # Testing/validation override: pin the stop threshold from the environment so a run
-    # can be steered deterministically (e.g. set it above the pool's best benchmark to
-    # force escalation through every tier). Takes precedence over the planner and sets
-    # the immutable floor too, so iterate_node cannot lower it below the pinned value.
-    _threshold_override = os.environ.get("SLM_STOP_THRESHOLD")
-    if _threshold_override:
-        threshold = float(_threshold_override)
-        state["stop_threshold"] = threshold
-        state["initial_stop_threshold"] = threshold
 
     if task_type not in _VALID_TASK_TYPES:
         raise ValueError(
             f"task_type must be one of {_VALID_TASK_TYPES!r}, got {task_type!r}. "
             "Set task_type in the initial AgentState, or enable autonomous mode."
         )
+
+    # Accuracy target: sourced registry, else deferred to the first real measurement.
+    _calibrate_stop_threshold(state, task_type)
+
+    # Data-size targets: take the orchestrator's chosen curriculum/eval sizes, clamped to
+    # [floor, ceiling] (B161). Fall back to the per-type default when the planner gave none.
+    _apply_data_targets(state, task_type)
 
     # Stage 1 + 2: hardware filter (inequality + on-device stub)
     feasible = run_hardware_filter(state["hardware_constraints"])
@@ -116,9 +179,6 @@ def task_analysis_node(state: AgentState) -> AgentState:
     # interpolation relies on feasible[0]=largest / feasible[-1]=smallest.
     feasible = sorted(feasible, key=lambda m: m.size_mb, reverse=True)
     state["feasible_models"] = feasible
-
-    if not state.get("stop_threshold"):
-        state["stop_threshold"] = 0.96
 
     # selected_model is intentionally NOT set here — the model_selection node does it.
     return state

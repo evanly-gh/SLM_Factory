@@ -44,12 +44,91 @@ def _configured_max_seq_length() -> int:
     return min(max(value, 128), 32768)
 
 
+# Rows at or above this fraction of the context window are reported individually. A row
+# that clears validation at 0.95 of the window is one prompt-template change away from
+# hard-failing the whole run, and — more importantly — it tells you the task is running
+# out of context before accuracy tells you the model is running out of capacity.
+_LENGTH_WARN_FRACTION = float(
+    os.environ.get("SLM_LENGTH_WARN_FRACTION", "0.90")
+)
+
+
+def _log_sequence_length_report(
+    token_counts: list[int],
+    max_seq_length: int,
+    *,
+    log=print,
+) -> dict:
+    """Emit the formatted-row token-length distribution and near-limit warnings.
+
+    Nothing in this pipeline truncates: training, HF inference, and GGUF inference all
+    tokenize with ``truncation=False`` and RAISE on an over-length row. That is the right
+    behavior — a silently truncated gold completion would be scored as a model failure and
+    then misdiagnosed as insufficient capacity, which escalates to a larger model that is
+    capped identically.
+
+    What was missing is *visibility*: without this report the only signal is a hard crash at
+    100% of the window, with no warning at 95%. Returns the summary so callers can attach it
+    to a timing event.
+    """
+    if not token_counts:
+        return {}
+    ordered = sorted(token_counts)
+    total = len(ordered)
+
+    def percentile(fraction: float) -> int:
+        index = min(total - 1, max(0, int(round(fraction * (total - 1)))))
+        return ordered[index]
+
+    warn_at = int(max_seq_length * _LENGTH_WARN_FRACTION)
+    near_limit = [count for count in ordered if count >= warn_at]
+    summary = {
+        "rows": total,
+        "max_seq_length": max_seq_length,
+        "min": ordered[0],
+        "p50": percentile(0.50),
+        "p95": percentile(0.95),
+        "p99": percentile(0.99),
+        "max": ordered[-1],
+        "mean": round(sum(ordered) / total, 1),
+        "warn_threshold": warn_at,
+        "rows_at_or_above_warn": len(near_limit),
+        "headroom_tokens": max_seq_length - ordered[-1],
+        "truncated": 0,  # structurally always 0 — nothing truncates; see docstring
+    }
+    log(
+        "  Sequence lengths (formatted rows, tokens): "
+        f"min={summary['min']} p50={summary['p50']} p95={summary['p95']} "
+        f"p99={summary['p99']} max={summary['max']} mean={summary['mean']} "
+        f"| context={max_seq_length} headroom={summary['headroom_tokens']} "
+        f"| truncated=0/{total} (truncation is disabled; over-length rows raise)"
+    )
+    if near_limit:
+        log(
+            f"  WARNING — {len(near_limit)}/{total} row(s) are at or above "
+            f"{int(_LENGTH_WARN_FRACTION * 100)}% of the {max_seq_length}-token context "
+            f"(>= {warn_at}). Longest is {ordered[-1]}. These rows are NOT truncated, but a "
+            "prompt-template or CoT-length change would push them past the limit and abort "
+            "training. If accuracy is weak on long inputs, raise SLM_MAX_SEQ_LENGTH before "
+            "concluding the model lacks capacity."
+        )
+    return summary
+
+
 def _validate_training_sequence_lengths(
     formatted_rows: list[dict],
     tokenizer,
     max_seq_length: int,
-) -> None:
-    """Fail before SFT rather than truncating prompt or gold completion."""
+    *,
+    log=print,
+) -> dict:
+    """Fail before SFT rather than truncating prompt or gold completion.
+
+    Also reports the length distribution (see ``_log_sequence_length_report``) so a run
+    approaching the context limit is visible before it becomes a crash. Returns the summary
+    dict, or ``{}`` when no concrete token IDs were available (lightweight test doubles).
+    """
+    token_counts: list[int] = []
     for index, row in enumerate(formatted_rows):
         input_ids = row.get("input_ids")
         if input_ids is None:
@@ -71,12 +150,35 @@ def _validate_training_sequence_lengths(
         if not all(isinstance(token, int) for token in input_ids):
             continue
         token_count = len(input_ids)
+        token_counts.append(token_count)
         if token_count > max_seq_length:
             raise ValueError(
                 f"Formatted training row {index} contains {token_count} tokens, "
                 f"exceeding configured context {max_seq_length}. Refusing to "
                 "silently truncate target-critical prompt or completion content."
             )
+
+    summary = _log_sequence_length_report(
+        token_counts,
+        max_seq_length,
+        log=log,
+    )
+    if summary:
+        try:
+            from agent.timing import TimingEvent, record_timing_event
+
+            record_timing_event(TimingEvent(
+                kind="phase",
+                name="sequence_length_report",
+                duration_ms=0.0,
+                status=(
+                    "warn" if summary["rows_at_or_above_warn"] else "success"
+                ),
+                metadata=summary,
+            ))
+        except Exception:  # noqa: BLE001 - observability must never break training
+            pass
+    return summary
 
 
 class CompletionOnlyDataCollator:
@@ -888,6 +990,7 @@ def _run_unsloth_training(
             fallback_rows,
             tokenizer,
             max_seq_length,
+            log=lambda message: print(f"[retry]{message}"),
         )
         dataset = _DS.from_list(fallback_rows)
         data_collator = _completion_collator_for(tokenizer)

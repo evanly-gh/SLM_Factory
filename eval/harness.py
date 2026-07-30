@@ -49,8 +49,24 @@ def eval_output_token_reserve(
     return reserve
 
 
+# What the comparison scalar actually measures, per task type. Used to label reports so the
+# `f1` field name cannot be mistaken for a real F1 on tasks that do not compute one.
+TASK_METRIC_NAMES = {
+    "classification": "macro_f1",
+    "NER": "span_f1",
+    "math_reasoning": "exact_match",
+    "code_generation": "execution_pass@1",
+    "generation": "judge_mean_0_1",
+}
+
+
 @dataclass
 class EvalResult:
+    # `f1` is the pipeline's universal comparison scalar: it drives best_score, the
+    # stagnation window, rollback, and every DAG node. Its NAME is a historical artifact —
+    # only classification and NER actually compute an F1. `metric` records what the number
+    # really is so reports and papers cannot misattribute it. Never rename `f1` itself;
+    # checkpoints and DAG replay depend on the field name.
     f1: float
     per_class: dict
     pos_score: float
@@ -58,6 +74,7 @@ class EvalResult:
     boundary_score: float
     failures: list[dict]
     execution_diagnostics: list[dict] = field(default_factory=list)
+    metric: str = "f1"
 
 
 def run_eval(
@@ -163,4 +180,5 @@ def _run_eval_local(
         boundary_score=result["slices"]["boundary"],
         failures=result["failures"],
         execution_diagnostics=result.get("execution_diagnostics", []),
+        metric=result.get("metric", TASK_METRIC_NAMES.get(task_type, "f1")),
     )

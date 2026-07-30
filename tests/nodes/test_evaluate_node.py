@@ -371,7 +371,6 @@ def test_evaluate_node_uses_bf16_path_when_quant_none(mock_hw, mock_profile, moc
         "n_hard": 3,
         "n_hard_source": 2,
         "n_hard_generated": 3,
-        "replay_count": 1,
         "label_dist": {"a": 6, "b": 6},
         "data_rebuild_plan": plan,
         "data_rebuild_plan_identity": data_rebuild_plan_identity(plan),
@@ -392,7 +391,6 @@ def test_evaluate_node_uses_bf16_path_when_quant_none(mock_hw, mock_profile, moc
     assert log_kwargs["total_examples"] == 12
     assert log_kwargs["n_hard_source"] == 2
     assert log_kwargs["n_hard_generated"] == 3
-    assert log_kwargs["replay_count"] == 1
     assert out["dag"][-1]["pi"]["H"] == {
         "lora_rank": 8,
         "lora_alpha": 32,

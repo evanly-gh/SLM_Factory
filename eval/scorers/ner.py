@@ -40,4 +40,10 @@ def score(eval_set: EvalSet, predictions: list[list[dict]]) -> dict:
         for ex, pred, g in zip(eval_set.all, predictions, gold)
         if Counter((s['text'], s['type']) for s in pred) != Counter((s['text'], s['type']) for s in g)
     ]
-    return {"f1": f1, "per_class": {"entity_f1": f1}, "slices": slices, "failures": failures}
+    return {
+        "f1": f1,
+        "metric": "span_f1",
+        "per_class": {"entity_f1": f1},
+        "slices": slices,
+        "failures": failures,
+    }

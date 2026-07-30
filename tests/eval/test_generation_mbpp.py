@@ -172,7 +172,10 @@ def test_mbpp_aggregate_score_uses_per_row_tests():
     )
 
     assert result["f1"] == 0.5
-    assert result["per_class"]["judge_score"] == 0.5
+    # per_class is keyed by the REAL metric now, not "judge_score" — code_generation
+    # measures an execution pass-rate, and calling it a judge score was B45.
+    assert result["per_class"]["execution_pass@1"] == 0.5
+    assert result["metric"] == "execution_pass@1"
     assert len(result["failures"]) == 1
     assert result["failures"][0]["text"] == wrong["text"]
 

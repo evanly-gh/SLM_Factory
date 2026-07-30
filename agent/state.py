@@ -15,7 +15,11 @@ class AgentState(TypedDict):
     selected_model: Optional[ModelSpec]
     feasible_models: list[ModelSpec]       # models that passed hardware_filter (Stages 1+2), largest→smallest
     stop_threshold: float             # calibrated target; iterate_node may lower mid-run
-    initial_stop_threshold: float     # set once at plan time; stop_threshold can never go below this
+    initial_stop_threshold: float     # immutable floor; stop_threshold can never go below this
+    # Provenance of the accuracy target (B32): which source set it, the anchor and headroom
+    # used, and whether calibration is still pending the first measurement. Audit trail for
+    # "where did this goal come from" — see agent/threshold.py.
+    threshold_calibration: Optional[dict]
     task_plan: Optional[dict]         # orchestrator's autonomous plan (labels, exa_queries, ...)
     autonomous: bool                  # if True, task_analysis derives task_type/plan via LLM
 
@@ -56,14 +60,8 @@ class AgentState(TypedDict):
     quantize_enabled: bool                # True runs INT4 quantization after eval
     hw_gating_enabled: bool               # True makes latency/power hard gates
 
-    # Production mode (paper §2.6)
-    mode: str                             # "cold_start" | "production"
-    deployed_model_ref: Optional[str]     # M0 — the deployed model being improved
-    traces: Optional[list[dict]]          # T — judged inference traces
-    failure_taxonomy: Optional[dict]      # {category: [trace_ids]}
-    regression_set: Optional[list[dict]]  # R — examples M0 gets right
-    replay_buffer: Optional[list[dict]]   # D_replay ⊂ D_parent (10-20%)
-    turn_budget: int                      # 1500 cold-start, 500 production
+    # Turn budget: charged at ~2 productive turns per iteration (curate + train).
+    turn_budget: int
     _graph_steps: int                     # durable cumulative completed-node count
     _wallclock_terminated_before: Optional[str]  # long node skipped at wall guard
 

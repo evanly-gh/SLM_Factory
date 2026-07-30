@@ -404,7 +404,7 @@ def checkpoint_has_graph_progress(
     ):
         return True
     next_nodes = set(progress.get("next_nodes") or ())
-    pregraph_nodes = {"__pregraph__", "task_analysis", "trace_ingest"}
+    pregraph_nodes = {"__pregraph__", "task_analysis"}
     return bool(next_nodes - pregraph_nodes)
 
 

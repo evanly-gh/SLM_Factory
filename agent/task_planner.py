@@ -9,7 +9,7 @@ Given ONLY a natural-language task description, the orchestrator LLM
   - labels         : class names / entity types / schema fields / [] for generation types
   - exa_queries    : web-search query per label/topic
   - benchmark      : a known public benchmark if one fits, else null
-  - stop_threshold : calibrated target on the held-out eval set
+  - threshold_headroom : bounded rung used by agent/threshold.py to calibrate the target
 This replaces hardcoded, task-specific routing so the same code handles ANY task.
 """
 import json
@@ -26,8 +26,8 @@ adapts a small on-device language model to a user's task.
 The target model is in the {param_range} parameter range, constrained to run on Android \
 hardware. This size class has known capability ceilings.
 
-Candidate models available for this run (calibrate stop_threshold against THESE \
-specific models' published benchmark scores, not a generic size bucket):
+Candidate models available for this run (context for your data-size and headroom \
+choices; you do NOT set an accuracy number from these):
 {pool_summary}
 
 METRIC COMPARABILITY CONTRACT: {metric_caveat}
@@ -80,17 +80,26 @@ LABELS field:
 - NER with schema: list of JSON field names (keys in the output schema).
 - math_reasoning, code_generation, generation: [] (empty).
 
-STOP THRESHOLD — the accuracy target the fine-tuning loop must reach before it stops.
-PRIMARY RULE: anchor it to the PUBLISHED STATE-OF-THE-ART for this task's benchmark at
-this model-size class. In other words: "what does a well-fine-tuned model of ~{param_range}
-parameters actually achieve on this benchmark today?" — set stop_threshold at or just below
-that SOTA (roughly SOTA − 2 to 5 points to leave headroom for a task-specific dataset).
-Use only relevant, explicitly named candidate metrics above; compare scores only when the
-metric name and evaluation mode match. A "not reported" score is unavailable and must not
-be interpreted as numeric zero or estimated from a different benchmark. Use the named
-"benchmark" and current small-model leaderboard evidence to estimate SOTA. Name the SOTA
-figure you anchored to in "rationale" (e.g. "GSM8K SOTA for ~1.7B fine-tunes ≈ 0.75, so
-target 0.72").
+ACCURACY TARGET — you do NOT set a number.
+
+The stop threshold is calibrated by the system, from one of two sources, neither of which is
+your recall of leaderboards:
+  1. config/benchmark_baselines.md — a sourced, human-verified registry, used only when its
+     metric name matches what this pipeline actually measures for the task type.
+  2. Otherwise, the pipeline's OWN first measurement: max(zero-shot baseline, first fine-tune)
+     on the held-out eval set, plus a bounded headroom.
+
+Your job is only to (a) name the "benchmark" accurately so the registry can be searched, and
+(b) choose "threshold_headroom" — how much ABOVE the first measured score the target should sit
+if the registry has no usable row.
+
+"threshold_headroom" must be exactly one of 0.02, 0.05, 0.10, 0.15. Choose it from expected
+headroom, and justify it in "rationale":
+  0.02 — near a known ceiling, or a noisy/small-label task where more is unreachable
+  0.05 — default; ordinary fine-tuning gain over a reasonable first config
+  0.10 — the base model is clearly underfitting this format and should improve a lot
+  0.15 — the task is far outside the base model's behaviour (rare notation, closed vocabulary)
+Do NOT invent a SOTA figure, and do NOT report a remembered leaderboard score as fact.
 
 Do NOT default to a low, generic number — a too-low target makes the loop stop before the
 model is actually good. The ranges below are only SANITY BOUNDS / fallbacks for when you
@@ -134,10 +143,10 @@ Reply with ONLY a JSON object (no prose, no code fences) with these keys:
 - "multilingual": true | false (default false)
 - "exa_queries": object mapping each label/field/topic to a web-search query for REAL examples
 - "benchmark": well-known public benchmark name, or null
-- "stop_threshold": float in [0,1] anchored to published SOTA for this benchmark at ~{param_range} scale
+- "threshold_headroom": one of 0.02 | 0.05 | 0.10 | 0.15 (how far above the first measured score to target)
 - "curriculum_size": integer — total training examples to curate (bias up for obscure tasks)
 - "eval_size": integer — held-out eval examples (bigger = more reliable metrics)
-- "rationale": one sentence: task_type + flag choices + the SOTA figure stop_threshold was anchored to + your data-size reasoning
+- "rationale": one sentence: task_type + flag choices + why that threshold_headroom + your data-size reasoning
 
 EXAMPLE (task: "detect spam vs legitimate SMS on a Pixel 8"):
 {{
@@ -152,10 +161,10 @@ EXAMPLE (task: "detect spam vs legitimate SMS on a Pixel 8"):
     "ham": "examples of normal everyday personal SMS text message conversations"
   }},
   "benchmark": "SMS Spam Collection",
-  "stop_threshold": 0.95,
+  "threshold_headroom": 0.05,
   "curriculum_size": 1200,
   "eval_size": 800,
-  "rationale": "Binary classification; 0.95 target since SMS spam is near-solved at the ~1B scale; popular benchmark so a moderate 1200-example curriculum suffices."
+  "rationale": "Binary classification; 0.05 headroom since SMS spam is near-solved so a first config should already be close; popular benchmark so a moderate 1200-example curriculum suffices."
 }}
 
 User task description:
@@ -262,7 +271,13 @@ def plan_task(description: str, anthropic_client=None, log=print, model_pool=Non
     plan.setdefault("labels", [])
     plan.setdefault("exa_queries", {})
     plan.setdefault("benchmark", None)
-    plan.setdefault("stop_threshold", 0.96)
+    # No stop_threshold default. The planner no longer proposes one — see agent/threshold.py
+    # for why a recalled SOTA number was removed. `threshold_headroom` is snapped to the
+    # bounded rung set; an absent or nonsense value falls back to the middle rung.
+    from agent.threshold import snap_headroom
+
+    plan["threshold_headroom"] = snap_headroom(plan.get("threshold_headroom"))
+    plan.pop("stop_threshold", None)
     plan.setdefault("task_name", "task")
     plan.setdefault("multi_label", False)
     plan.setdefault("schema", None)
@@ -274,7 +289,7 @@ def plan_task(description: str, anthropic_client=None, log=print, model_pool=Non
         f"      [planner] task_type={plan['task_type']}  "
         f"multi_label={plan['multi_label']}  schema={'set' if plan['schema'] else 'null'}  "
         f"multilingual={plan['multilingual']}  labels={plan['labels']}  "
-        f"benchmark={plan['benchmark']}  stop_threshold={plan['stop_threshold']}"
+        f"benchmark={plan['benchmark']}  threshold_headroom={plan['threshold_headroom']}"
     )
     log(f"      [planner] data targets (pre-clamp): curriculum={plan['curriculum_size']}  "
         f"eval={plan['eval_size']}")

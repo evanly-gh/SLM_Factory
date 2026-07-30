@@ -1701,7 +1701,19 @@ def acquire_dataset(plan: dict, description: str = "", n_per_label: int = DEFAUL
     # For NER, acquired documents lack entity annotations — annotate via Claude (B48).
     # (Synthesized NER examples already carry entities and are skipped inside the annotator.)
     if task_type == "NER":
-        examples = _annotate_ner_entities(examples, log=log)
+        # Prefer the task plan's declared entity types over the CoNLL default, so a
+        # domain task (e.g. BC5CDR CHEMICAL/DISEASE) allow-lists its own schema instead of
+        # having every domain span rejected as a bad type.
+        _plan_types = frozenset(
+            str(label).strip().upper()
+            for label in (plan.get("labels") or [])
+            if str(label).strip()
+        ) or None
+        examples = _annotate_ner_entities(
+            examples,
+            log=log,
+            allowed_types=_plan_types,
+        )
 
     import random
     rng = random.Random(42)
@@ -1801,43 +1813,229 @@ def synthesize_seed_examples(plan: dict, task_type: str, n_needed: int,
     return valid
 
 
-def _annotate_ner_entities(examples: list[dict], log=print) -> list[dict]:
-    """Add gold entity annotations to web-acquired NER passages via Claude."""
+# The window that is BOTH annotated and stored. Previously the annotator saw text[:500] while
+# the row kept the FULL passage, so every entity past character 500 became an unlabeled span —
+# i.e. a silent false negative teaching the model that those spans are not entities. The
+# annotated window and the stored text must be the same string; this is that string's length.
+_NER_ANNOTATION_WINDOW_CHARS = int(
+    os.environ.get("SLM_NER_ANNOTATION_WINDOW", "500")
+)
+
+# Standard CoNLL-style types plus the coarse catch-all. Anything outside this set (and outside
+# the task plan's declared types) is dropped rather than admitted as a novel gold type.
+_DEFAULT_NER_TYPES = frozenset({
+    "PER", "PERSON", "ORG", "ORGANIZATION", "LOC", "LOCATION", "GPE", "MISC",
+})
+
+
+def _validate_ner_annotation(
+    raw_entities,
+    annotated_text: str,
+    allowed_types: frozenset[str],
+) -> tuple[list[dict], dict[str, int]]:
+    """Keep only spans that are exact substrings of `annotated_text` with an allowed type.
+
+    Returns (kept, rejection_counts). Rejections are counted by reason so acquisition noise is
+    visible instead of silently shrinking the label set.
+    """
+    rejected = {"malformed": 0, "not_substring": 0, "bad_type": 0, "duplicate": 0}
+    kept: list[dict] = []
+    seen: set[tuple[str, str]] = set()
+    if not isinstance(raw_entities, list):
+        return [], {**rejected, "malformed": 1}
+    for entity in raw_entities:
+        if not isinstance(entity, dict):
+            rejected["malformed"] += 1
+            continue
+        span = entity.get("text")
+        etype = entity.get("type")
+        if not isinstance(span, str) or not span.strip() or not isinstance(etype, str):
+            rejected["malformed"] += 1
+            continue
+        span = span.strip()
+        normalized_type = etype.strip().upper()
+        if span not in annotated_text:
+            # The prompt demands an exact substring. A span that is not present is either a
+            # hallucination or a normalization drift; either way it cannot be a gold span.
+            rejected["not_substring"] += 1
+            continue
+        if allowed_types and normalized_type not in allowed_types:
+            rejected["bad_type"] += 1
+            continue
+        key = (span, normalized_type)
+        if key in seen:
+            rejected["duplicate"] += 1
+            continue
+        seen.add(key)
+        kept.append({"text": span, "type": normalized_type})
+    return kept, rejected
+
+
+def _annotate_ner_entities(
+    examples: list[dict],
+    log=print,
+    allowed_types: frozenset[str] | None = None,
+    max_attempts: int = 2,
+) -> list[dict]:
+    """Add gold entity annotations to web-acquired NER passages via the orchestrator.
+
+    Five defects are fixed here relative to the original implementation, all of which turned
+    acquisition noise into training signal:
+
+    1. **Window mismatch.** The annotator saw ``text[:500]`` while the emitted row kept the
+       FULL passage, so entities beyond char 500 were unlabeled — systematic false negatives
+       on exactly the long passages a NER model finds hardest. The row now stores precisely
+       the window that was annotated.
+    2. **Silent failure became a negative.** ``except Exception: entities = []`` emitted an
+       empty-entity gold row, indistinguishable from a genuine negative. Failed rows are now
+       DROPPED and counted, never emitted as gold.
+    3. **No span validation.** Spans are now required to be exact substrings of the annotated
+       window, and types must be in the allowed set.
+    4. **API errors were swallowed.** ``raise_if_fatal`` now aborts the run on an
+       auth/quota/billing failure, matching every other orchestrator call site. Otherwise a
+       dead API key silently produced an entirely unlabeled NER corpus.
+    5. **No retry.** A malformed reply now gets one bounded retry before the row is dropped.
+    """
     import anthropic, json as _json, re as _re
+    from agent.llm_errors import raise_if_fatal
     from config.config import ANTHROPIC_API_KEY, ORCHESTRATOR_MODEL, orchestrator_client_kwargs
 
+    if allowed_types is None:
+        allowed_types = _DEFAULT_NER_TYPES
+
     client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY, **orchestrator_client_kwargs())
-    annotated = []
-    for i, ex in enumerate(examples):
+    annotated: list[dict] = []
+    stats = {
+        "input": len(examples),
+        "preannotated": 0,
+        "annotated": 0,
+        "dropped_call_error": 0,
+        "dropped_unparseable": 0,
+        "with_entities": 0,
+        "empty_after_validation": 0,
+        "retried": 0,
+    }
+    rejections = {"malformed": 0, "not_substring": 0, "bad_type": 0, "duplicate": 0}
+
+    for ex in examples:
         # Skip examples that already carry entities (e.g. synthesized seeds) — don't
         # re-annotate and clobber known-good gold.
         if ex.get("entities"):
             annotated.append(ex)
+            stats["preannotated"] += 1
             continue
-        try:
-            response = tracked_anthropic_messages_create(
-                client.messages,
-                stage="acquire_ner_annotation",
-                model=ORCHESTRATOR_MODEL,
-                max_tokens=400,
-                messages=[{"role": "user", "content": (
-                    "Extract all named entities from this text. Return a JSON list of "
-                    "objects with \"text\" (the exact span as it appears in the text) and "
-                    "\"type\" (PER, ORG, LOC, MISC, or other standard NER types). "
-                    "Rules for consistency: use the EXACT substring from the text for each "
-                    "span; for overlapping candidates prefer the LONGEST span; do NOT emit "
-                    "nested or duplicated spans; assign each span exactly one type. "
-                    "Return [] if there are no entities.\n\n"
-                    f"Text: {ex['text'][:500]}\n\n"
-                    "Reply with JSON only, no explanation."
-                )}],
-            )
+
+        # The annotated window IS the stored text. Never annotate a prefix and keep the whole.
+        window = str(ex.get("text", ""))[:_NER_ANNOTATION_WINDOW_CHARS]
+        if not window.strip():
+            stats["dropped_unparseable"] += 1
+            continue
+
+        prompt = (
+            "Extract all named entities from this text. Return a JSON list of "
+            "objects with \"text\" (the exact span as it appears in the text) and "
+            f"\"type\" (one of: {', '.join(sorted(allowed_types))}). "
+            "Rules for consistency: use the EXACT substring from the text for each "
+            "span; for overlapping candidates prefer the LONGEST span; do NOT emit "
+            "nested or duplicated spans; assign each span exactly one type. "
+            "Return [] if there are no entities.\n\n"
+            f"Text: {window}\n\n"
+            "Reply with JSON only, no explanation."
+        )
+
+        entities = None
+        for attempt in range(1, max_attempts + 1):
+            try:
+                response = tracked_anthropic_messages_create(
+                    client.messages,
+                    stage="acquire_ner_annotation",
+                    model=ORCHESTRATOR_MODEL,
+                    max_tokens=400,
+                    messages=[{"role": "user", "content": prompt}],
+                )
+            except Exception as exc:  # noqa: BLE001
+                # Auth/quota/billing failures recur on every subsequent call; aborting is the
+                # only honest outcome, and matches iterate/escalate/downward_probe.
+                raise_if_fatal(exc, "acquire_ner_annotation")
+                if attempt >= max_attempts:
+                    log(
+                        f"      [acquire] NER annotation call failed after {attempt} "
+                        f"attempt(s) ({type(exc).__name__}: {str(exc)[:120]}); "
+                        "DROPPING this passage rather than emitting it as a negative"
+                    )
+                    stats["dropped_call_error"] += 1
+                    break
+                stats["retried"] += 1
+                continue
+
             raw = response.content[0].text.strip()
-            match = _re.search(r'\[.*\]', raw, _re.DOTALL)
-            entities = _json.loads(match.group()) if match else []
-            entities = [e for e in entities if "text" in e and "type" in e]
-        except Exception:
-            entities = []
-        annotated.append({"text": ex["text"], "entities": entities})
-    log(f"      [acquire] annotated {len(annotated)} NER passages with entities")
+            match = _re.search(r"\[.*\]", raw, _re.DOTALL)
+            if not match:
+                if attempt >= max_attempts:
+                    log(
+                        "      [acquire] NER annotation returned no JSON list after "
+                        f"{attempt} attempt(s); DROPPING this passage"
+                    )
+                    stats["dropped_unparseable"] += 1
+                    break
+                stats["retried"] += 1
+                continue
+            try:
+                entities = _json.loads(match.group())
+            except _json.JSONDecodeError:
+                if attempt >= max_attempts:
+                    log(
+                        "      [acquire] NER annotation JSON was invalid after "
+                        f"{attempt} attempt(s); DROPPING this passage"
+                    )
+                    stats["dropped_unparseable"] += 1
+                    break
+                stats["retried"] += 1
+                continue
+            break
+
+        if entities is None:
+            continue
+
+        kept, row_rejections = _validate_ner_annotation(
+            entities,
+            window,
+            allowed_types,
+        )
+        for reason, count in row_rejections.items():
+            rejections[reason] += count
+        stats["annotated"] += 1
+        if kept:
+            stats["with_entities"] += 1
+        else:
+            # A validated-empty row IS a legitimate negative: the call succeeded, the reply
+            # parsed, and no span survived validation. That is different from a failure, and
+            # it is kept — negatives are necessary training signal.
+            stats["empty_after_validation"] += 1
+        annotated.append({"text": window, "entities": kept})
+
+    dropped = stats["dropped_call_error"] + stats["dropped_unparseable"]
+    log(
+        f"      [acquire] NER annotation: {stats['annotated']} annotated "
+        f"({stats['with_entities']} with entities, "
+        f"{stats['empty_after_validation']} validated-empty), "
+        f"{stats['preannotated']} pre-annotated, {dropped} DROPPED "
+        f"({stats['dropped_call_error']} call errors, "
+        f"{stats['dropped_unparseable']} unparseable), "
+        f"{stats['retried']} retries — of {stats['input']} input passages"
+    )
+    if any(rejections.values()):
+        log(
+            "      [acquire] NER span rejections: "
+            f"not_substring={rejections['not_substring']} "
+            f"bad_type={rejections['bad_type']} "
+            f"malformed={rejections['malformed']} "
+            f"duplicate={rejections['duplicate']}"
+        )
+    if dropped:
+        log(
+            f"      [acquire] WARNING — {dropped}/{stats['input']} passage(s) were dropped "
+            "rather than emitted as entity-free gold. Previously these became negatives, "
+            "which trains the model to predict 'no entities'."
+        )
     return annotated

@@ -248,12 +248,16 @@ class HardwareConstraints:
 
 
 # ---------------------------------------------------------------------------
-# QWEN-ONLY POOL TIERS (by peak RAM, not param count)
+# QWEN-ONLY POOL TIERS (by ON-DISK WEIGHT SIZE, not param count and not peak RAM)
 #
-# Tier 0 — peak < 750 MB
-# Tier 1 — peak 750–1500 MB
-# Tier 2 — peak 1500–2500 MB
-# Tier 3 — peak >= 2500 MB
+# Tier 0 — size < 750 MB
+# Tier 1 — size 750–1500 MB
+# Tier 2 — size 1500–2500 MB
+# Tier 3 — size >= 2500 MB
+#
+# These buckets used to be cut on a MODELLED peak-inference-RAM figure, which was removed
+# with the rest of the fabricated metrics. Tier is only used to order and group candidates
+# by rough scale, which real weight size serves without inventing a runtime number.
 #
 # A tier belongs to a quantized deployment VARIANT, not to a base model or
 # parameter-count class. The same base model can occupy multiple tiers.

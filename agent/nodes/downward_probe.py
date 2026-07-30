@@ -87,7 +87,16 @@ def _should_reexplore_downward(state, n_lower_tiers: int) -> bool:
         raw = resp.content[0].text.strip()
         m = _re.search(r"\{.*\}", raw, _re.DOTALL)
         obj = _json.loads(m.group()) if m else {}
-        decision = bool(obj.get("reexplore", False))
+        # Require a REAL JSON boolean. `bool(obj.get("reexplore"))` accepted the string
+        # "false" as True, so a model that declined in JSON-string form would still trigger a
+        # full train+eval probe — a decision that contradicted its own logged reason.
+        raw_decision = obj.get("reexplore")
+        if not isinstance(raw_decision, bool):
+            raise ValueError(
+                "reexplore must be a JSON boolean (true/false), got "
+                f"{type(raw_decision).__name__}: {raw_decision!r}"
+            )
+        decision = raw_decision
         _plog(f"orchestrator downward-re-exploration decision: {decision} — {obj.get('reason','')}")
         return decision
     except Exception as e:  # noqa: BLE001

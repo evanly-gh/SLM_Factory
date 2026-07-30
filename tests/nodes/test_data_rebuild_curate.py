@@ -1,4 +1,6 @@
 import json
+
+import pytest
 from collections import Counter
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
@@ -11,6 +13,7 @@ from agent.nodes.curate import curate_node
 from config.android_pool import ANDROID_POOL
 from data.eval_set import EvalSet
 from data.loaders.dataset_integrity import normalize_text
+from data.synth_client import SynthesisUnavailableError
 
 
 EVAL_SECRET = "held out evaluation secret 7319"
@@ -80,8 +83,7 @@ def _state(plan, rows, *, current_path=None, version=2, hypothesis="hard gap"):
         "data_source": "fixture",
         "data_sources": [],
         "eval_source_ban": [],
-        "mode": "cold_start",
-        "replay_buffer": [],
+
         "source_acquire_rounds_used": 0,
         "data_rebuild_plan": plan,
         "data_rebuild_plan_identity": data_rebuild_plan_identity(plan),
@@ -520,11 +522,42 @@ def test_targeted_positive_synthesis_uses_only_train_anchors_and_hypothesis(
     )
 
 
-def test_unavailable_positive_synthesis_is_explicitly_rewritten(
+def test_unavailable_positive_synthesis_stops_the_run_by_default(
     tmp_path,
     monkeypatch,
 ):
+    """A declared targeted_synth_positive that cannot synthesize must STOP the run.
+
+    Degrading to gold-only was a strategy-attribution lie: curate rewrote the strategy to
+    base_fill and continued, so the DAG recorded targeted_synth_positive for a dataset holding
+    zero synthesized rows. With an endpoint that failed 8/9 preflights in the NER run, that
+    made every synthesis claim in the lineage unverifiable.
+    """
     monkeypatch.chdir(tmp_path)
+    monkeypatch.delenv("SLM_REQUIRE_SYNTH", raising=False)
+    monkeypatch.setenv("SLM_SYNTH_MIDRUN_WAIT_S", "0")
+    train = [
+        {
+            "text": f"fallback synthesis anchor {index}",
+            "label": "a" if index % 2 == 0 else "b",
+        }
+        for index in range(20)
+    ]
+    plan = _plan("targeted_synth_positive")
+
+    with patch("data.synth_client.is_available", return_value=False):
+        with pytest.raises(SynthesisUnavailableError, match="did not become reachable"):
+            curate_node(_state(plan, train))
+
+
+def test_unavailable_positive_synthesis_degrades_when_opted_out(
+    tmp_path,
+    monkeypatch,
+):
+    """SLM_REQUIRE_SYNTH=0 keeps the old gold-only behavior, explicitly recorded."""
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("SLM_REQUIRE_SYNTH", "0")
+    monkeypatch.setenv("SLM_SYNTH_MIDRUN_WAIT_S", "0")
     train = [
         {
             "text": f"fallback synthesis anchor {index}",
@@ -550,6 +583,27 @@ def test_unavailable_positive_synthesis_is_explicitly_rewritten(
         "from": "targeted_synth_positive",
         "to": "base_fill",
     }]
+
+
+def test_midrun_wait_is_clamped_to_the_wallclock_reserve(monkeypatch):
+    """Blocking for the endpoint must never eat the reserve needed to checkpoint.
+
+    If the run has 4 minutes left of its aggregate wall-clock budget, a 10-minute endpoint
+    wait would guarantee a hard kill mid-write. The wait is clamped to
+    (remaining budget - 300s reserve), which here is 0.
+    """
+    import data.synth_client as synth_client
+
+    monkeypatch.setattr(synth_client, "_wallclock_remaining_s", lambda: 240.0)
+    monkeypatch.setattr(synth_client, "is_available", lambda **_kwargs: False)
+    slept: list[float] = []
+
+    assert synth_client.wait_until_available(
+        600.0,
+        log=lambda _message: None,
+        sleep=slept.append,
+    ) is False
+    assert slept == [], "clamped-to-zero wait must not sleep at all"
 
 
 def test_final_target_cap_applies_after_elite_synth_and_replay(
@@ -582,14 +636,6 @@ def test_final_target_cap_applies_after_elite_synth_and_replay(
         synth_rows=10,
     )
     state = _state(plan, train, current_path=str(prior))
-    state["mode"] = "production"
-    state["replay_buffer"] = [
-        {
-            "text": f"replay cap row {index}",
-            "label": "a" if index % 2 == 0 else "b",
-        }
-        for index in range(20)
-    ]
 
     def synthesize(anchors, **_kwargs):
         return [
@@ -626,7 +672,6 @@ def test_final_target_cap_applies_after_elite_synth_and_replay(
         16 * plan["preserve_elite_fraction"]
     )
     assert composition.get("targeted_synth_positive", 0) <= plan["synth_rows"]
-    assert composition.get("replay", 0) <= round(16 * 0.20)
 
 
 def test_mining_merges_only_novel_non_eval_real_rows_and_accounts_rounds(

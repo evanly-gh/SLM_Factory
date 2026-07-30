@@ -6,6 +6,11 @@ was discovered, **how** it was found, and current **status**.
 
 Status legend: 🔴 open · 🟢 fixed · 🟡 suspected/unconfirmed · ⚪ design gap (not a crash)
 
+> **Read [Status reconciliation — 2026-07-29](#status-reconciliation--2026-07-29) first.**
+> It is a code-verified sweep of every 🔴/🟡/⚪ entry and is **authoritative where it
+> disagrees with an older entry's inline `Status:` line**. 15 entries moved to fixed, 3 were
+> superseded by deliberate design changes, and B199–B207 were opened.
+
 ---
 
 ## Overnight validation campaign — 2026-07-10 (summary)
@@ -18,11 +23,19 @@ environment, model-loading, training, download, scoring, and data acquisition. S
 | # | Test | Result | Blocking issue |
 |---|------|--------|----------------|
 | 1 | **Financial sentiment (classification)** | 🟢 **pipeline functional, ✗ not converged** — trains/evaluates/iterates with real scores; F1 0.111→**0.697** best, then plateaus ~0.66 and exhausts budget (threshold 0.82). `spec_source="exa"` ✓, `task_type=classification` ✓, Haiku ✓. Mechanics validated; convergence capped by data/curation quality + degraded iterate decision (B117) | data/curation + B117 |
-| 2 | Biomedical NER | 🔴 blocked | **B113** — `Qwen/Qwen3.5-2B` download stalls on compute nodes (infra; `HF_HUB_DISABLE_XET` insufficient) |
-| 3 | GSM8K math | 🔴 blocked (crash+scorer fixed) | **B109** (fused-CE) + **B118** (math scorer) FIXED and training runs, but **B119** blocks meaningful scores: eval/train "data" is Exa-scraped repo metadata with no real questions/answers |
-| 4 | ARC-Challenge (impossible) | 🔴 blocked | **B116** — MiniCPM4-0.5B remote code multiply-incompatible with transformers 5.5.0 (only tier-0 model that fits the 2GB device); also **B119** |
+| 2 | Biomedical NER | 🟢 **superseded — completed** | **B113** was the blocker; NER later ran end-to-end for 44.8 h (`slm-ner-l40s-37531245`, best span-F1 0.8263). B113 remains a live infra risk, not a blocker — see its entry. |
+| 3 | GSM8K math | 🟢 **superseded — completed** | **B119 fix applied** (real benchmark loaders); math later ran end-to-end (`slm-math-l40s-37576194`). |
+| 4 | ARC-Challenge (impossible) | 🟢 **superseded** | **B116 fix applied** — tier-0 pool entry swapped from MiniCPM4-0.5B to Qwen3-0.6B. |
 
-**Bottom line:** the crash chain is fixed and the core loop (research → select → curate → train → eval → iterate) is **proven functional** on classification with a real learning curve. **No test meets its strict PASS criteria**; the remaining blockers are deeper (infra/version/design) and each needs a human decision — most importantly **B119** (data acquisition) and **B116** (model/transformers version).
+> **⚠ This table is a snapshot of 2026-07-10 and is retained as campaign history only.**
+> Rows 2–4 were marked 🔴 blocked at the time; every one of those blockers has since had a fix
+> applied (B116, B119) or been demoted to an infra risk (B113), and both the NER and math
+> pipelines have since completed full multi-day runs. For current status always read
+> [Status reconciliation — 2026-07-29](#status-reconciliation--2026-07-29).
+
+**Bottom line (as of 2026-07-10):** the crash chain was fixed and the core loop
+(research → select → curate → train → eval → iterate) was proven functional on classification
+with a real learning curve. No test met its strict PASS criteria at that date.
 
 **Fixed & committed:** B101 (placeholder .env keys), B102 (A100→L40 partition), B103
 (zombie-venv guards), B105 (log orchestrator model), B106 (`trust_remote_code`), B107
@@ -2211,3 +2224,632 @@ Driven by review of the escalation run (job 37110415). Anthropic credits were ex
   tokenizer rejection, local-only adapter resolution/loading, and full local-checkpoint
   regression. No GPU job, model download, or API call was run. A bounded GPU merge→GGUF
   load smoke remains advisable to validate this exact installed Unsloth/PEFT runtime path.
+
+---
+
+# Status reconciliation — 2026-07-29
+
+A code-verified sweep of every entry still carrying 🔴 / 🟡 / ⚪. Each row below was checked
+against a live symbol; the evidence column names it. This section is authoritative where it
+disagrees with an older entry's inline `Status:` line.
+
+## Now fixed (verified against code)
+
+| ID | Was | Evidence it is now implemented |
+|---|---|---|
+| B22 | ⚪ Context Manager not implemented | `agent/context_manager.py::compact_trajectory` / `should_compact` / `estimate_token_count`; called from `iterate.py::_llm_iterate` |
+| B24 | ⚪ `MAX_TURNS_MAIN` is dead config | `graph.py::guard_graph_node(max_steps=MAX_TURNS_MAIN)` enforces a durable cumulative `_graph_steps` cap **and** `compiled.with_config(recursion_limit=MAX_TURNS_MAIN)` |
+| B25 | ⚪ DAG has no edges; π=(D,H,S) not stored | `evaluate.py::dag_node` writes `parent_iteration` plus `pi.D` (version/path/plan/plan_identity/config/composition), `pi.H` (complete identity), `pi.S` (task_type/supervision/loss_masking/loss_contract_version) |
+| B26 | ⚪ Teacher models never called | `curriculum.py::get_cot_fallbacks` returns task-routed DeepSeek/OpenAI clients; `curate.py::_annotate_generation_cot` wires them; cost stage `cot_fallback` exists |
+| B27 | ⚪ 3 of 5 quality controls missing | `curriculum.py::apply_quality_controls` implements label balancing, >3×-median length filtering, entity-value capping (≤3, NER), and Jaccard>0.9 dedup, task-routed |
+| B28 | ⚪ `quantize.py` does no quantization | `training/quantize.py::quantize_from_model_spec` + `validate_and_record_gguf` + `validated_gguf_cache_hit` produce and load-verify real GGUFs |
+| B30 | ⚪ No `apply_chat_template` / assistant-only masking | `lora_trainer.py::SFT_LOSS_CONTRACT_VERSION = 2` ("explicit assistant/completion-only labels"); `apply_chat_template` used incl. the multimodal inner-tokenizer path; prompt tokens are `-100` |
+| B31 | ⚪ Dataset size hardcoded `N_TOTAL=150` | `task_analysis.py::_apply_data_targets` clamps the planner's `curriculum_size`/`eval_size` into `[floor, DATA_SIZE_CEILING]`; `curate` reads `curriculum_size_target` |
+| B36 | ⚪ 2-for-1 rule not implemented | `curriculum.py::synthesize_hard_negatives` — "Generate hard negatives using the 2-for-1 rule (paper §2.3)"; returns gold anchor + synthetic pair, counted separately as `n_hard_source` / `n_hard_generated` |
+| B43 | ⚪ `escalate_node` doesn't reset state | `escalate.py` resets `scores`/`dag`/`iteration`/`best_score`/`best_weights_ref`/`last_eval`/`consecutive_no_improvement`/rebuild plan/downward state, and preserves `lifetime_best_score` |
+| B46 | ⚪ Classification extraction defaults to majority class | `scorers/classification.py::_UNKNOWN_LABEL = "__EXTRACTION_FAILED__"`; priority is word-boundary → substring → explicit failure |
+| B47 | ⚪ Inference model cache never clears | `slm_helpers.clear_inference_cache()`, called by `escalate_node` on promotion |
+| B48 | ⚪ NER web-acquired data lacks entity annotations | `web_acquire.py::_annotate_ner_entities` exists and runs during acquisition. **Caveat: see B203** — it does not re-validate spans/types |
+| B49 | ⚪ `messages` field populated but never used | Field removed from `AgentState` entirely (`grep -c messages agent/state.py` → 0) |
+| B98 | ⚪ `live_confirm` M0 re-inference not implemented | `production/live_confirm.py` Step 2 loads `deployed_model_ref` and re-runs each candidate. **Caveat: see B207** — it does not replay the serving prompt |
+
+## Superseded by a deliberate design change (not "fixed", but no longer a gap)
+
+| ID | Was | Why it no longer applies |
+|---|---|---|
+| B38 | ⚪ `filter_pool()` ignores `latency_ttft_ms` / `power_watts` | `filter_pool` now **deliberately** gates only on quantities that are known rather than modelled (`size_mb` vs storage/RAM, plus any real recorded measurement). `min_tok_s` is applied only where `config/measured_metrics.json` has a measurement; nothing is eliminated on an estimate. |
+| B53 | ⚪ Tiering by RAM, not params; siblings mis-tiered | `_size_tier` buckets **real on-disk weight size**, replacing `_ram_tier`'s modelled peak-RAM figure. Tiers are explicitly documented as scale buckets, not capability classes; quant siblings occupying different tiers is now intended. See `PIPELINE.md` §9. |
+| B39 / B40 | ⚪ Missing/oversized pool models from the design doc | Obsolete under **B139** (pool restricted to official Qwen). |
+
+## Still open, unchanged
+
+| ID | Status | Note |
+|---|---|---|
+| B21 | 🟢 | Closed by deletion — see **B208**. |
+| B23 | 🟢 | Closed by deletion — see **B208**. |
+| B32 | 🟢 | **Implemented 2026-07-30** — see **B32 (IMPLEMENTED)** below: sourced registry, else measured anchor + bounded headroom. 28 tests. |
+| B45 | 🟢 | Fixed 2026-07-29. `EvalResult.metric` + `TASK_METRIC_NAMES` name the real measurement (`macro_f1` / `span_f1` / `exact_match` / `execution_pass@1` / `judge_mean_0_1`); every scorer returns it and the run summary prints it. The `f1` **field** is retained deliberately — it is the universal comparison scalar and checkpoint/DAG replay depend on the name. |
+| B50 | 🟡 partial | The harness now exists (`hardware_eval/measure_model.py`, `on_device_eval.py::measure_llama_cpp` with real `getrusage` peak RSS). It is **opt-in** (`SLM_HW_VERIFY_ON_DEVICE=1`) and post-convergence only; pre-training screening still uses the all-`None` unmeasured profile. |
+| B113 | ⚫ | **Closed-unreproducible 2026-07-30** — cold-cache test (job 37911562) downloaded and loaded it cleanly alongside two larger controls. See **B113 (cold-cache reproduction test)**. Not 'fixed': no code changed. |
+| B116 / B119 | 🟢 | Both have "(fix applied)" entries; the 2026-07-10 summary table that still called them blockers is now annotated as historical. |
+
+---
+
+## B199 — production graph cannot start: `curate` requires an `eval_set` nothing builds
+
+- **Where:** `agent/nodes/curate.py::curate_node` vs `agent/graph.py::build_graph(mode="production")`
+- **Found:** 2026-07-29, code read while rewriting `PIPELINE.md`.
+- **Symptom:** `curate_node` raises `RuntimeError("curate_node requires a fixed eval_set before
+  rebuilding data")`. The production entry chain (`trace_ingest → taxonomy_construct →
+  live_confirm → parent_awareness`) never constructs one — only the cold-start `eval_setup` node
+  does, and it is not in the production graph.
+- **Impact:** `mode="production"` is unrunnable end-to-end from the graph alone. A caller must
+  pre-populate `state["eval_set"]`, and nothing validates that at graph entry, so the failure
+  surfaces as a mid-graph crash rather than a startup error.
+- **Status:** 🟢 **resolved 2026-07-29 by removing production mode.** The idea was scrapped, so
+  the unrunnable path was deleted rather than completed. Removed: `agent/nodes/production/`
+  (trace_ingest, taxonomy, live_confirm, parent_awareness), the production branch of
+  `build_graph`, the production topology in `graph_topology_descriptor` (which now raises on
+  any mode but `cold_start`), the `mode`/`deployed_model_ref`/`traces`/`failure_taxonomy`/
+  `regression_set`/`replay_buffer` state fields, curate's replay-buffer allocation,
+  `curation_log`'s `replay_count`/`failure_taxonomy` parameters, and `trace_ingest` from
+  checkpoint's pregraph set.
+  **Resume compatibility is preserved:** the `mode` parameter is retained through
+  `checkpoint_compatibility` / `runtime_config_snapshot` / `run-manifest.json`, and the
+  cold-start topology fingerprint is byte-identical because production nodes were never part
+  of the cold-start descriptor. B207 (live-confirm prompt replay) is closed by the same
+  removal.
+
+## B200 — synthesis has never executed at scale; both completed runs were gold-only
+
+- **Where:** `data/synth_client.py`, `agent/nodes/curate.py::_synthesize_positive_rows`
+- **Found:** 2026-07-29, reading `logs/runs/*/cost.json`.
+- **Evidence:** **zero** `hard_negative_synthesis` events in either ledger.
+- **CORRECTED CAUSE (2026-07-30).** I originally attributed this to an unreliable endpoint
+  ("8/9 preflight failures"). That was wrong — those 8 errors are the **startup preflight
+  polling while vLLM boots**, 31 s apart from 15:58:49 to 16:02:28, followed by success. The
+  endpoint came up in **both** runs (NER 1 success; math 25 successes / 18 errors).
+  The real reason synthesis never ran is that the strategy was **never selected**:
+
+  | Run | rebuilds | strategies actually executed | why no synthesis |
+  |---|---|---|---|
+  | NER | 31 | `resample_existing` ×31 | eligible, but all 65 LLM plans were rejected (the `hyperparams` bug) and the fallback keyword-matched to `resample_existing` (the prose-matching bug) |
+  | math | 66 | `difficulty_weighted_sampling` ×40, `mine_new_real_source` ×4, `resample_existing` ×2 | `math_reasoning` is **ineligible** for `targeted_synth_positive` by design — correct behavior, not a bug |
+
+- **Impact:** every claim about synthesis quality, yield, or cost is still untested in
+  production — but the blocker was **selection logic, not infrastructure**. Both NER-side bugs
+  are now fixed, so the next NER-shaped run is the first real test.
+- **Status:** 🟡 unblocked, unverified. The fix for B201 (blocking + raising on a dead endpoint)
+  addresses a real hypothetical risk but was **not** the observed cause here.
+
+## B201 — a mid-run synth endpoint death degrades silently to gold-only
+
+- **Where:** `agent/nodes/curate.py::_synthesize_positive_rows`
+- **Found:** 2026-07-29, code read.
+- **Symptom:** the driver's startup preflight (`tests/pipeline/run.py` phase 7) blocks until the
+  synth server answers and aborts if it never does. But if the endpoint dies *after* that,
+  `_synthesize_positive_rows` logs `Positive synthesis endpoint unavailable; retaining real rows
+  only`, appends an `allocation_fallbacks` entry, and continues.
+- **Impact:** a `targeted_synth_positive` plan silently becomes a `base_fill`. The run keeps its
+  logged strategy attribution, so the DAG says synthesis was chosen while no synthesis occurred.
+- **Status:** 🟢 **fixed 2026-07-29.** `data/synth_client.py::wait_until_available` blocks and
+  polls (default 10 min via `SLM_SYNTH_MIDRUN_WAIT_S`, 15 s interval), then
+  `curate._synthesize_positive_rows` raises `SynthesisUnavailableError` instead of returning
+  gold-only rows. The wait is **clamped to the remaining aggregate wall-clock budget minus a
+  5-minute reserve**, so blocking can never consume the time the run needs to checkpoint and
+  write its summary. `SLM_REQUIRE_SYNTH=0` restores the old gold-only degradation.
+  The mid-run wait is deliberately shorter than the 40-minute startup preflight: at startup
+  nothing has been spent, mid-run every minute is charged against the wall clock.
+
+## B202 — `_should_reexplore_downward` coerces a JSON string to a boolean
+
+- **Where:** `agent/nodes/downward_probe.py::_should_reexplore_downward`
+- **Found:** 2026-07-29, code read (also flagged in `PROMPTS.md` §1.8).
+- **Symptom:** `decision = bool(obj.get("reexplore", False))`. A model replying
+  `{"reexplore": "false"}` yields `bool("false") is True`, so the probe runs when the
+  orchestrator declined.
+- **Impact:** one unnecessary train+eval cycle per occurrence. Not a correctness risk to the
+  final model (the probe is optional and adoption is gated on the real threshold), but it is
+  wasted GPU time and a decision that does not match the log.
+- **Status:** 🟢 **fixed 2026-07-29.** `_should_reexplore_downward` now requires a real JSON
+  boolean and raises `ValueError` otherwise, which routes into the existing `skip_optional_error`
+  path — a malformed reply preserves the converged model instead of triggering a probe the
+  orchestrator declined.
+
+## B203 — `_annotate_ner_entities` does not re-validate spans or types
+
+- **Where:** `data/loaders/web_acquire.py::_annotate_ner_entities`
+- **Found:** 2026-07-29, code read (also flagged in `PROMPTS.md` §1.5).
+- **Symptom:** the prompt demands exact substrings and allowed types, but the parser only checks
+  that each returned object has `text` and `type` keys. Spans are not rechecked as exact
+  substrings of the passage and types are not allow-listed at this call site. Passages are also
+  truncated to the first 500 characters, which can cut entity context.
+- **Impact:** a silent parse or call failure produces an **empty-entity gold example**, which is
+  indistinguishable downstream from a genuine negative — so acquisition noise becomes training
+  signal that teaches the model to predict "no entities."
+- **Never executed in either completed run (verified 2026-07-30).** Both ledgers contain
+  **zero** `acquire_ner_annotation` events. The NER run loaded real gold from
+  `tner/bc5cdr` (train=3403 / test=900) via the B119 benchmark loader, so the Exa-scrape +
+  annotate fallback was never reached. **Every defect below is latent, not observed** — there
+  were no annotation call failures to explain, because there were no annotation calls.
+- **Status:** 🟢 **fixed 2026-07-29**, and the diagnosis grew: the worst defect was a **window
+  mismatch** I had not spotted. The annotator saw `text[:500]` while the emitted row stored the
+  **full** passage, so every entity past character 500 was unlabeled — a systematic
+  false-negative generator on exactly the long passages NER finds hardest.
+
+  Five changes in `_annotate_ner_entities`:
+  1. **The annotated window IS the stored text** (`_NER_ANNOTATION_WINDOW_CHARS`, default 500,
+     `SLM_NER_ANNOTATION_WINDOW`). No more prefix-annotate / whole-store.
+  2. **Failures are dropped, not emitted as negatives.** `except Exception: entities = []`
+     produced an empty-entity gold row indistinguishable from a genuine negative. Call errors
+     and unparseable replies now drop the passage and are counted.
+  3. **Spans are validated** as exact substrings of the annotated window via
+     `_validate_ner_annotation`, with per-reason rejection counts
+     (`not_substring` / `bad_type` / `malformed` / `duplicate`) logged.
+  4. **Types are allow-listed** — from `task_plan["labels"]` when present (so BC5CDR's
+     CHEMICAL/DISEASE are accepted rather than rejected as non-CoNLL), else
+     `_DEFAULT_NER_TYPES`.
+  5. **`raise_if_fatal` is called**, matching every other orchestrator call site. Previously a
+     dead API key silently produced an entirely unlabeled NER corpus; now it aborts. One
+     bounded retry covers a transient malformed reply.
+
+  A **validated-empty** row is still kept — the call succeeded, the reply parsed, and no span
+  survived. That is a legitimate negative and is now distinguishable from a failure in the log.
+
+## B204 — RETRACTED (was: "context length pinned at 512 with no truncation diagnostics")
+
+- **Status:** ⚫ **retracted 2026-07-29 — not a bug. The premise was false.**
+- **What I claimed:** context is 512 tokens, rows are silently truncated, and a truncated row
+  is misdiagnosed as a capacity limit → wrong escalation.
+- **What the code actually does:**
+  - `training/lora_trainer.py::_configured_max_seq_length` → **4096** (`SLM_MAX_SEQ_LENGTH`,
+    clamped to [128, 32768]). The 512 figure was fixed by **B188** and no longer exists.
+  - `_validate_training_sequence_lengths` tokenizes with `truncation=False` and **raises**:
+    *"Refusing to silently truncate target-critical prompt or completion content."*
+  - `slm_helpers.infer` and `infer_batch_gguf` both validate
+    `prompt_length <= max_seq_length - max_new_tokens` and **raise** with
+    *"No truncation was applied, so shorter rows were not generated with a corrupted batch."*
+- **Where the error came from:** `docs/intervention_capability_audit.md` stated "Maximum
+  sequence length: 512". I carried that into the `PIPELINE.md` rewrite without checking it
+  against `lora_trainer.py`, then reasoned a failure mode out of it. The audit line was stale;
+  the inferred failure mode never existed. Both docs are corrected.
+- **What was actually missing, and is now added:** *visibility*. Over-length was a hard crash
+  at 100% of the window with no warning at 95%. `_log_sequence_length_report` now emits the
+  formatted-row token distribution (min/p50/p95/p99/max/mean, headroom) and warns on any row
+  at or above `SLM_LENGTH_WARN_FRACTION` (default 0.90), to stdout and as a
+  `sequence_length_report` timing event. `truncated` is reported as a structural `0`.
+
+## B206 — `iterate_json_reask` fired on 86 of 141 iterate calls in the NER run
+
+- **Where:** `agent/nodes/iterate.py::_reask_json_only`
+- **Found:** 2026-07-29, reading `logs/runs/*/cost.json`.
+- **Evidence:** NER: 141 `iterate` + **86** `iterate_json_reask` (61% reask rate, $4.90).
+  Math: 63 `iterate` + **2** reasks (3%).
+- **Root cause — CONFIRMED from the run log, not inferred.** `logs/runs/slm-ner-l40s-37531245/run.log`:
+
+  ```
+  [cost] stage=iterate            tokens=5454->877
+  [cost] stage=iterate_json_reask tokens=5494->678
+  [iterate] LLM call failed (ValueError('hyperparams is not allowed for a data_rebuild
+            intervention')); using test-agent suggestion: hyperparameter
+  ```
+
+  The full chain: Claude proposed `data_rebuild` **plus** a `hyperparams` block →
+  `_validate_decision_json` raised → reask (paid call #2) → the reask re-attached
+  `hyperparams` and raised again → **both calls wasted** → fell through to the test-agent
+  suggestion. That log has **86 reasks and 72 `intervention=hyperparameter` decisions, and
+  zero `intervention=data_rebuild` decisions** — the same 65/65 rejection pattern behind the
+  data_rebuild flexibility bug.
+
+- **Why math showed only 2/63:** not because it was fixed, but because the task differed. The
+  math run's difficulty profile kept steering the orchestrator to `hyperparameter`, which
+  legitimately carries a `hyperparams` block and validated fine. NER's test agent kept
+  suggesting `data_rebuild`, so NER kept hitting the rejection. The rate was
+  **task-dependent, not run-dependent.**
+- **Status:** 🟢 **fixed** by the `validated.pop("hyperparams")` strip in
+  `_validate_decision_json` (the same change that fixed the data_rebuild flexibility bug). The
+  exact exception in the log above can no longer be raised. Confirm on the next NER-shaped run
+  that `iterate_json_reask` has collapsed toward the math run's ~3%.
+
+## B207 — live confirmation does not replay the original serving prompt
+
+- **Where:** `agent/nodes/production/live_confirm.py`
+- **Found:** 2026-07-29, code read (also flagged in `PROMPTS.md` §5.2).
+- **Symptom:** sends `trace["input"]` directly with no task prompt, then compares
+  `output.strip()` to `corrected_output` by exact string equality.
+- **Impact:** exact string equality is wrong for most classification (label casing/prose), NER
+  (JSON key/entity ordering), and generation outputs, so genuine passes are recorded as confirmed
+  failures and enter the training set as "failures M0 reproduces." Infrastructure errors are also
+  conservatively counted as confirmed failures, compounding it.
+- **Status:** ⚪ design gap. Store the rendered prompt plus task/parser metadata in each trace and
+  replay through the same scorer; distinguish infrastructure errors from real failures.
+
+---
+
+## B113 (analysis) — why only Qwen3.5-2B stalls, and what actually fixes it
+
+Reopened for analysis 2026-07-29. Status: 🟡 **live infra risk, not a blocker.** The model is
+still in the pool (`Qwen/Qwen3.5-2B`, tier 2), so escalation can still land on it with a cold
+cache.
+
+### Why this model and not the other five — MY EARLIER THEORY WAS WRONG
+
+On 2026-07-29 I wrote that the cause was "file count × xet × a partially-warm cache." The
+cache inventory taken 2026-07-30 **falsifies that**:
+
+| Model | weight shards | files | cached size | ever stalled? |
+|---|---|---|---|---|
+| Qwen3-0.6B | 1 | 10 | 1.5 G | no |
+| Qwen3.5-0.8B | 1 | 13 | 1.7 G | no |
+| Qwen3-1.7B | 2 | 12 | 3.9 G | no |
+| **Qwen3.5-2B** | **1** | **13** | **4.3 G** | **yes** |
+| Qwen3-4B-Instruct-2507 | 3 | 13 | 7.6 G | no |
+| Qwen3.5-4B | 2 | 14 | 8.8 G | no |
+
+Qwen3.5-2B has **one** weight shard, not many. Qwen3-4B-Instruct-2507 has the same file count
+and is 1.8× larger; Qwen3.5-4B has more files and is 2× larger. Both download fine. File
+count, total size, and shard count therefore all fail to explain it.
+
+**Honest position: the cause is not determined from available evidence.** What is factual:
+
+- It stalled twice on 2026-07-10, with and without `HF_HUB_DISABLE_XET=1` — and `unsloth_zoo`
+  already retries with xet disabled internally, so the env var was redundant either way.
+- It **completed successfully later that same day**: every blob in
+  `.hf-cache/hub/models--Qwen--Qwen3.5-2B` is timestamped 2026-07-10 11:32–11:33, with **zero**
+  broken symlinks and **zero** `.incomplete` blobs.
+- Nothing has exercised the download path since, because a complete local snapshot
+  short-circuits it.
+
+The most likely remaining explanation is a **transient compute-node network fault during one
+large blob transfer**, which self-resolved on retry the same day. That is consistent with every
+observation and is not a property of the model. It is a guess, and it is labelled as one.
+
+### The three fixes, and why each works
+
+| Fix | Mechanism | Trade-off |
+|---|---|---|
+| **(a) Warm the shared HF cache from a login node** | Removes the download from the critical path entirely — `resolve_hf_snapshot(..., local_files_only=True)` then finds a complete snapshot and never calls the Hub. Login nodes have reliable network; compute nodes do not. | Manual step, and it must be repeated whenever the pool gains a model. This is standard HPC practice: model weights are infra, not part of the loop's decisions. **Recommended.** |
+| **(b) Switch the pool entry to the `unsloth/Qwen3.5-2B` mirror** | A different repo layout with fewer/consolidated files and one that Unsloth's loader is tested against, so the per-file stall surface shrinks. | Changes model identity in the DAG/baselines, and the mirror can lag upstream. Also does not fix the class of problem for the next multimodal repo. |
+| **(c) Bounded download-with-retry wrapper before training** | Re-drives `snapshot_download` with backoff until the snapshot passes the same completeness check the pipeline already runs (`verify_manifest_hashes` style), so a transient partial fetch self-heals instead of failing the iteration. | Adds code on the hot path and can mask a genuinely bad repo; needs a hard attempt cap so a permanently-missing file still fails loudly. |
+
+**Recommendation: (a) now, (c) as the durable fix.** (a) costs one command and eliminates the
+risk for the current pool; (c) is what makes the pipeline autonomous across future pool
+changes. (b) is a workaround that trades one unverified repo for another.
+
+**Note:** the pool-measurement sweep (job 37905779) sequences 3.5-2B **last** and continues
+past a failure, so it doubles as a live test of whether this still reproduces — and whether
+the cache is warm enough that (a) is already effectively satisfied.
+
+---
+
+## B32 (design) — orchestrator-driven leaderboard research
+
+Status: ⚪ **open by design; no code written.** Recorded here because the fix is a real design
+choice, not a patch.
+
+**The problem.** `task_planner.plan_task` asks the orchestrator to calibrate `stop_threshold`
+against "published SOTA at the target model size" using nothing but its own recall. That recall
+is frozen at training time and is systematically wrong in the direction that matters: the
+benchmark research (`docs/Evan's Notes/2026-07-28-task-suite-benchmark-research.md`) found
+BANKING77 SOTA is ~94.8% from a **110M** encoder, and that MedQA is saturating. A threshold set
+from stale recall either (i) sits under a base model's zero-shot, so the run "converges"
+immediately having learned nothing, or (ii) sits above achievable SOTA, so every tier fails and
+the run burns its full budget concluding "infeasible."
+
+**Four implementations, cheapest first.**
+
+**1. Versioned local registry + LLM adjustment only (no tools).**
+A checked-in `config/benchmark_baselines.md` — same pattern as `config/model_capabilities.md`,
+which already solves this problem for model capabilities: sourced, human-readable, cached by
+`capability_sections()`, with a metric-comparability contract. The orchestrator gets the
+registry rows for the matched benchmark and may only propose a *delta* with a cited row. No
+network, no new failure mode, fully reproducible.
+*Cost: ~0. Staleness: whatever you last curated. Best default.*
+
+**2. One bounded Exa search at plan time, results as untrusted data.**
+Re-enable a `web_search` call (the deleted `agent/tools/web_search.py` is the template) inside
+`task_analysis`, restricted to a fixed query template
+(`"{benchmark} state of the art {param_range} 2026 leaderboard"`), capped at N results, with
+snippets injected in a marked-untrusted block — exactly the containment the judge prompt
+already uses. Extract `(metric_name, value, model, params, source_url)` and require the metric
+name to match the eval harness's `TASK_METRIC_NAMES` entry before it can move the threshold.
+*Cost: ~$0.007/run (Exa) + one orchestrator call. Risk: prompt injection from search results,
+which the untrusted-block pattern bounds.*
+
+**3. Structured leaderboard APIs instead of free-text search.**
+Query sources that return typed rows rather than prose: the HF Open LLM Leaderboard dataset,
+`paperswithcode` SOTA endpoints, or BFCL's published JSON. A typed row carries metric name,
+value, and model size natively, so the comparability check is mechanical rather than an LLM
+judgment. This is the only option where "is this number comparable?" has a real answer.
+*Cost: ~0. Risk: coverage — these cover famous benchmarks well and domain benchmarks (BC5CDR)
+poorly, so it needs (1) as a fallback.*
+
+**4. Measure it yourself and skip the literature.**
+You already run every candidate's zero-shot baseline at iteration 1. Set the threshold from
+`max(baseline_f1) across the feasible pool + a required improvement margin`, rather than from
+any external claim. This is self-consistent, needs no network, and cannot go stale.
+*Cost: 0 extra (the baselines already run). Weakness: it answers "did fine-tuning help?" not
+"is this competitive?" — so it is the wrong basis for a paper claim, and right for a stopping
+rule.*
+
+**Recommendation: (1) + (4) together, then (3) for the benchmarks it covers.** Use (4) as the
+stopping rule (it is measured, local, and honest), use (1) to sanity-check that the target is
+not absurd relative to published work, and add (3) only for benchmarks where a typed
+leaderboard exists. Treat (2) as a last resort: free-text search is the highest-variance and
+highest-injection-risk option, and it is the one whose output you can least mechanically verify.
+
+**Wire-in point:** `agent/task_planner.py::plan_task`, before the threshold is written to
+`state["stop_threshold"]` / `initial_stop_threshold`. The immutable-floor mechanism already
+exists, so a researched threshold slots into it without new state.
+
+---
+
+## B208 — dead tool package deleted (closes B21 and B23)
+
+- **Where:** `agent/tools/` (`bash_tool.py`, `file_tools.py`, `web_search.py`,
+  `delegate_task.py`, `query_traces.py`, `__init__.py`)
+- **Found:** 2026-07-29, verified by grep — zero references outside the package itself.
+- **Why it mattered:** not a runtime cost, an audit liability. `web_search` owned the cost stage
+  `iterate_web_search` and `delegate_task` owned `delegate_task`, so the ledger's stage
+  vocabulary implied coverage of paths that could never fire. `query_traces` was
+  production-mode-only.
+- **Status:** 🟢 **deleted 2026-07-29.** Closes **B21** (delegate_task has no call sites) and
+  **B23** (four `@tool`-decorated tools never invoked) by removal rather than by wiring. If
+  tool use returns, `web_search.py` is the template for B32 option 2 — recoverable from git
+  history.
+
+---
+
+## B113 (result) — did NOT reproduce; cache is warm and the model builds fine
+
+- **When:** 2026-07-29, slurm job **37905779** (`tests/pipeline/measure_pool_sizes_l40s.slurm`).
+- **What was run:** the pool-measurement sweep sequenced `Qwen/Qwen3.5-2B` last and continued
+  past failures. I claimed this "doubled as a live reproduction test." **It did not.**
+- **Result:** `Qwen/Qwen3.5-2B` converted and quantized cleanly —
+  `Q4_K_M = 1251.4 MB`, `Q8_0 = 1980.5 MB`, `bf16 = 4337.5 MB` (**one** 4.3 GB safetensors
+  shard; an earlier version of this entry said "13 shards", which was wrong — 13 is the total
+  file count, including tokenizer and preprocessor configs).
+- **Why it is not a reproduction test:** `resolve_hf_snapshot` found the complete local
+  snapshot and **never contacted the Hub**. The download path — the thing that failed — was
+  not executed. A test of B113 requires an empty or evicted cache entry.
+- **Why:** the shared `HF_HOME` cache at
+  `/mmfs1/gscratch/intelligentsystems/evanly/.hf-cache` is now warm for this repo, which is
+  fix **(a)** from the analysis above — already effectively in place. `resolve_hf_snapshot`
+  finds a complete local snapshot and never calls the Hub.
+- **Status:** ⚫ superseded by the cold-cache test below. (Original note retained:) latent, mitigated by a warm cache. The root cause (file count × xet ×
+  partially-warm cache) is unchanged, so a cache eviction or a new multimodal pool entry can
+  bring it back. Fix **(c)** — a bounded download-with-retry that re-drives `snapshot_download`
+  until the snapshot passes a completeness check — remains the durable answer and is still not
+  implemented. Downgraded from 🔴 because it is not blocking anything today.
+
+## B209 — pool size arithmetic verified across all six families (negative result)
+
+- **Where:** `config/android_pool.py::ModelSpec.size_mb`, `config/measured_metrics.json`
+- **When:** 2026-07-29, slurm job 37905779.
+- **Why it was checked:** the pool falls back to bytes-per-parameter arithmetic for any variant
+  without a real measurement, and that arithmetic had been wrong by 20% exactly once before
+  (Qwen3.5-4B Q4_K_M: predicted 2200 MB, measured 2654.5 MB) — enough to move a tier. Only one
+  family had ever been measured, so the other five were gated on an unverified constant.
+- **Result — 15 new measurements, 18/18 variants now real:**
+
+  | Quant | measured vs arithmetic | tier changes |
+  |---|---|---|
+  | Q4_K_M | **+4.7 … +4.9%** (uniform) | 0 |
+  | bf16 | **+4.8 … +4.9%** (uniform) | 0 |
+  | Q8_0 | **−1.1%** (uniform) | 0 |
+
+- **Interpretation:** the original 20% error was real *at the time* and was fixed by raising the
+  Q4_K_M constant to 0.55 GB/1B params. This sweep confirms that correction **generalizes to
+  every family** rather than being specific to the 4B. The residual bias (~4.8% light on
+  Q4_K_M/bf16, ~1.1% heavy on Q8_0) sits well inside the 250–750 MB tier bands, which is why
+  nothing moved. **Every hardware gate and every tier assignment in both completed runs was
+  already correct.**
+- **What is still unmeasured:** runtime metrics (peak RSS, tok/s, TTFT). `llama-cli` is not on
+  the venv PATH — only `llama-quantize` is — so `measure_llama_cpp` could not run. Those
+  fields stay **absent**, which makes consumers correctly report "unmeasured" instead of
+  trusting a guess. To fill them: build `llama-cli` via `scripts/build_llamacpp_cuda.sh` and
+  re-run `python hardware_eval/measure_pool.py --force`.
+- **Status:** 🟢 verified. Recorded in `config/measured_metrics.json::_sweep_findings` so the
+  next person does not have to re-derive it.
+
+---
+
+## B32 (revised design) — local registry, else first-eval baseline + orchestrator headroom
+
+Supersedes the four-option list above. This is the approach Evan proposed on 2026-07-30, with
+the failure modes it has to defend against.
+
+**The proposal.** (1) Keep a local, versioned database of published metrics. (2) If the
+benchmark is in it, calibrate the threshold from there. (3) If not, run the first fine-tuning
+pass, use *that* eval as the baseline, and have the orchestrator set the goal a little higher
+based on how much headroom it judges to exist.
+
+**Assessment: this is the right shape.** It puts a measured number at the centre, keeps the
+literature as a sanity check rather than an oracle, and never blocks on the network. Three
+concrete hazards, each with a cheap guard.
+
+**Hazard 1 — anchoring on a bad first config.** Iteration 1 uses `_DEFAULT_CONFIG`
+(r16/α32/wd 0.01/lr 2e-4/3 epochs). If that config happens to be poor for the task, the
+baseline is artificially low, so `baseline + headroom` sets a goal the run clears immediately
+and terminates having learned almost nothing.
+*Guard:* anchor on `max(zero_shot_baseline, first_finetune_score)`. The zero-shot baseline is
+already measured at iteration 1 for free and is config-independent, so it floors the anchor
+against a bad hyperparameter draw.
+
+**Hazard 2 — the threshold becomes unfalsifiable.** A goal derived from your own first result
+can always be met by lowering it, and `iterate` can already lower `stop_threshold` at runtime.
+Combined, "did we hit the target?" stops being a real question.
+*Guard:* `initial_stop_threshold` already exists as an immutable floor — set it from this
+calibration **once**, and keep the existing rule that runtime adjustment can only move
+`stop_threshold` down toward that floor and never below it. Also log the anchor, the headroom
+the orchestrator asked for, and its stated reason, so the target's provenance is auditable.
+
+**Hazard 3 — "how much headroom" is exactly the judgment an LLM is worst at.** Asking for a
+number invites a confident guess. Asking for a *bounded* choice with evidence does not.
+*Guard:* give it a small ordinal set — e.g. `{+0.02, +0.05, +0.10, +0.15}` — snapped like every
+other bounded field in this repo, and require a one-sentence reason citing the per-difficulty
+report (a large easy/hard gap implies real headroom; uniformly weak buckets imply little).
+
+**Recommended shape:**
+
+```
+1. registry hit?          -> threshold = registry_value adjusted by a bounded, cited delta
+2. no registry entry?     -> anchor = max(zero_shot, first_finetune)
+                             threshold = anchor + orchestrator_headroom  (bounded set)
+3. write once to initial_stop_threshold (immutable floor)
+4. log anchor / headroom / reason / source into the run manifest
+```
+
+**Why this beats free-text web search:** the registry is reviewable and diffable, the anchor is
+measured on *your* eval set with *your* prompt, and neither can be moved by a prompt injection
+in a scraped page. The one thing it gives up is currency — a registry goes stale — which is why
+step 1 keeps a bounded, cited adjustment rather than treating the stored value as fixed.
+
+**Cost:** zero extra API calls (the zero-shot baseline and the first fine-tune already run; the
+headroom choice rides along in the existing `task_analysis` call).
+
+**Wire-in point:** `agent/task_planner.py::plan_task` for step 1; a new post-first-eval
+calibration hook in `evaluate_node` (or `iterate` on `iteration == 1`) for step 2. Note this
+makes the threshold *late-bound* for uncatalogued tasks, so `initial_stop_threshold` must
+tolerate being set on the first evaluation instead of at plan time.
+
+---
+
+## B113 (cold-cache reproduction test) — did NOT reproduce; downgraded to closed-unreproducible
+
+- **When:** 2026-07-30, slurm job **37911562**
+  (`tests/pipeline/b113_cold_download_l40s.slurm`), node g3102.
+- **Why a new job was needed:** job 37905779 built 3.5-2B successfully and I called that a
+  reproduction test. It was not — the shared cache already held a complete snapshot, so
+  `resolve_hf_snapshot` never contacted the Hub. This job points `HF_HOME` at an empty
+  `/tmp` directory, so the download path actually executes. The shared `.hf-cache` is never
+  read or modified.
+- **Design:** the suspect plus **two controls** in the same job on the same node, because the
+  2026-07-30 cache inventory had already falsified the "high file count" theory (3.5-2B has
+  **one** weight shard; the controls have 2 and 3 at up to 1.8× the size). If all three failed
+  it would be the node; if only the suspect failed it would be model-specific.
+
+| Model | role | shards | download | config+tokenizer load | outcome |
+|---|---|---|---|---|---|
+| **Qwen/Qwen3.5-2B** | **suspect** | 1 | **46.6 s** | **63.0 s** | ✅ downloaded + loaded |
+| Qwen/Qwen3-1.7B | control | 2 | 36.6 s | 0.6 s | ✅ downloaded + loaded |
+| Qwen/Qwen3-4B-Instruct-2507 | control | 3 | 68.7 s | 0.5 s | ✅ downloaded + loaded |
+
+Snapshot integrity for all three: **0 broken symlinks, 0 `.incomplete` blobs.** 16 GB fetched
+in total. `HF_HUB_DISABLE_XET=1` was set, matching the 2026-07-10 conditions.
+
+- **One incidental observation:** 3.5-2B's config+tokenizer load took **63 s** versus 0.5–0.6 s
+  for both controls — ~100× slower. That is its 248,077-token multimodal vocabulary and
+  video/image preprocessor configs, not a fault, but it is the one dimension where this model
+  really is an outlier. Worth remembering if a first-iteration timeout ever looks mysterious.
+- **Verdict:** B113 **does not reproduce** on a cold cache on this node. Combined with the
+  2026-07-10 blob timestamps (11:32–11:33, i.e. the download succeeded later the same day as
+  the failure), the evidence points to a **transient compute-node network fault that
+  self-resolved**, not a property of the model or of xet.
+- **Status:** ⚫ **closed — unreproducible.** Not "fixed": no code changed, and a transient
+  network fault can recur. If it does, the durable answer is still fix **(c)** — a bounded
+  download-with-retry gated on a snapshot completeness check — and
+  `tests/pipeline/b113_cold_download_l40s.slurm` is now the harness to confirm it.
+  The earlier "why only this model" theory in **B113 (analysis)** stays retracted; nothing in
+  this test supports a model-specific cause.
+
+---
+
+## B32 (IMPLEMENTED 2026-07-30) — sourced registry, else measured anchor + bounded headroom
+
+Implements the revised design above. **What was replaced is listed first, because the previous
+mechanism was invisible unless you read the planner prompt.**
+
+### What the threshold used to be, and what was deleted
+
+| # | Old mechanism | Where | Fate |
+|---|---|---|---|
+| 1 | Prompt: *"PRIMARY RULE: anchor it to the PUBLISHED STATE-OF-THE-ART for this task's benchmark at this model-size class ... set stop_threshold at or just below that SOTA (roughly SOTA − 2 to 5 points)"* — pure LLM recall, evidence optional | `task_planner.py::_PLANNER_PROMPT` | **DELETED** |
+| 2 | Schema field `"stop_threshold": float in [0,1] anchored to published SOTA` | `_PLANNER_PROMPT` | **DELETED**, replaced by `"threshold_headroom"` |
+| 3 | `plan.setdefault("stop_threshold", 0.96)` — silent 0.96 whenever the LLM declined | `task_planner.py::plan_task` | **DELETED**; `plan.pop("stop_threshold")` now discards any number a model emits anyway |
+| 4 | `if not state.get("stop_threshold"): state["stop_threshold"] = 0.96` | `task_analysis.py` | **DELETED** |
+| 5 | Inline `SLM_STOP_THRESHOLD` override block | `task_analysis.py` | **MOVED** into `_calibrate_stop_threshold`; behavior unchanged (still pins both values and now also disables calibration) |
+| 6 | Prompt preamble: *"calibrate stop_threshold against THESE specific models' published benchmark scores"* | `_PLANNER_PROMPT` | **REWRITTEN** — the pool is now context for data-size and headroom choices only |
+
+`config.DEFAULT_STOP_THRESHOLD` (0.96) survives **only** as the pre-graph placeholder in
+`run.py`'s initial state; `task_analysis` overwrites it before any training happens.
+
+### What replaced it
+
+**New files:** `config/benchmark_baselines.md` (the registry) and `agent/threshold.py` (the
+calibration logic). **New state field:** `threshold_calibration` — the audit trail.
+
+Source 1 — **registry**, `agent/threshold.py::registry_lookup`. A row calibrates only when its
+`metric` matches `eval/harness.py::TASK_METRIC_NAMES[task_type]`. Verified behavior:
+
+| Benchmark | registry metric | our metric | calibrates? |
+|---|---|---|---|
+| GSM8K | `exact_match` | `exact_match` | ✅ → threshold **0.8479** (0.8779 − 0.03) |
+| i2b2-2014 de-id | `span_f1` | `span_f1` | ✅ → threshold **0.9485** |
+| BANKING77 | `accuracy` | `macro_f1` | ❌ informational only |
+| MedQA | `accuracy` | `macro_f1` | ❌ informational only |
+| BC5CDR, SMS Spam | `n/a` | — | ❌ no comparable figure recorded |
+
+Source 2 — **measured anchor**, late-bound. No usable row → `task_analysis` parks
+`stop_threshold` at `UNREACHABLE_PENDING_THRESHOLD = 1.0` (above the 0.99 ceiling, so nothing
+can converge before the anchor exists) and sets `pending: True`. `evaluate_node` then
+calibrates at the end of iteration 1:
+
+```
+anchor    = max(zero_shot_baseline, first_finetune_score)
+threshold = min(0.99, anchor + headroom)
+```
+
+and writes `initial_stop_threshold` **once**.
+
+### The three hazards, and the guard for each
+
+1. **Bad first hyperparameter draw.** Iteration 1 uses `_DEFAULT_CONFIG`; a poor draw would
+   depress the anchor and set a goal the run clears instantly.
+   → `max(zero_shot, first_finetune)`. Zero-shot is config-independent and already measured
+   for free at iteration 1. Verified: `zs=0.82, ft=0.31 → 0.87` (uses zero-shot);
+   `zs=0.82, ft=0.91 → 0.96` (uses the fine-tune).
+2. **An unfalsifiable target.** A goal derived from your own first result can always be met by
+   lowering it, and `iterate` can already lower `stop_threshold`.
+   → Written **once** to the existing immutable floor; every input recorded in
+   `threshold_calibration` (`source`, `threshold`, `headroom`, `zero_shot`, `first_finetune`,
+   `reason`, `registry_row`).
+3. **"How much headroom" is what an LLM is worst at.**
+   → `VALID_HEADROOMS = (0.02, 0.05, 0.10, 0.15)`, snapped like every other bounded field,
+   with per-rung guidance in the prompt and a required justification in `rationale`.
+
+**Edge cases handled:** a failed baseline records `None` (not 0.0) and calibration proceeds on
+the fine-tune alone; if *neither* number exists, calibration stays pending and retries rather
+than inventing a target; the 0.99 ceiling prevents targeting a perfect score, which label noise
+makes unreachable anyway.
+
+**Cost:** zero extra API calls. The zero-shot baseline and first fine-tune already run; the
+headroom rides along in the existing `task_analysis` call.
+
+- **Status:** 🟢 implemented with 28 tests in `tests/test_threshold_calibration.py`; full suite
+  green (792 → 820 passed).
+
+## B210 — the iterate prompt masked the union rule instead of stating it
+
+- **Where:** `agent/nodes/iterate.py::_ITERATE_SYSTEM`, `_validate_decision_json`
+- **Found:** 2026-07-30, from Evan's observation that stripping `hyperparams` hides the problem
+  rather than fixing it.
+- **The problem with the strip alone:** `validated.pop("hyperparams", None)` removes the key
+  from the decision dict. It stops the invariant violation, but the orchestrator is never told
+  it did anything wrong, and the run log said nothing — so a persistently confused orchestrator
+  looked identical to a compliant one. The old prompt only said *"choose exactly one of these
+  two branches and never merge their payloads"* in a single sentence, which demonstrably did
+  not work: **65 of 65 data_rebuild decisions in the NER run carried a `hyperparams` block.**
+- **Fix, two parts:**
+  1. **The prompt now states the contract as its own block** — a `CHOOSE EXACTLY ONE` section
+     naming, per branch, the REQUIRED key and the **FORBIDDEN** key; why one change per
+     iteration is non-negotiable (two simultaneous changes make score movement unattributable);
+     and exactly what the system will do if the rule is broken (discard the field, log the
+     correction, execute the data plan with the current best config).
+  2. **The strip is now visible.** `_validate_decision_json` records
+     `_dropped_fields: ["hyperparams"]`, and `iterate_node` logs
+     `NOTE — dropped hyperparams from this data_rebuild decision: …`. The strip is retained as
+     defense-in-depth — raising is what wasted two paid calls per iteration and discarded 65
+     data plans — but it is no longer silent.
+- **Status:** 🟢 fixed, with prompt-contract and strip-visibility assertions in
+  `tests/test_threshold_calibration.py`.

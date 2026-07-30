@@ -330,6 +330,61 @@ def evaluate_node(state: AgentState) -> AgentState:
          f"failures={len(best_result.failures)}/{len(eval_set.all)}  "
          f"trajectory={[f'{s:.3f}' for s in state['scores']]}")
 
+    # --- Late-bound stop-threshold calibration (B32) ---
+    # When no sourced registry row matched the benchmark, task_analysis parked the target at an
+    # UNREACHABLE value and deferred. Now — and only now — both measured numbers exist: the
+    # config-independent zero-shot baseline and this iteration's best fine-tune. Anchor on the
+    # MAX of the two so a weak first hyperparameter draw cannot depress the goal, add the
+    # bounded headroom the orchestrator chose, and write the immutable floor ONCE.
+    _calibration = state.get("threshold_calibration") or {}
+    if _calibration.get("pending") and state["iteration"] == 1:
+        from agent.threshold import threshold_from_anchor
+
+        _zero_shot = next(
+            (
+                entry.get("baseline_f1")
+                for entry in (state.get("model_baselines") or [])
+                if entry.get("selector", entry.get("model_id")) == selector
+            ),
+            None,
+        )
+        _finetuned = max(
+            (
+                result.f1
+                for label, (_ref, result) in scored.items()
+                if not label.startswith("baseline")
+            ),
+            default=None,
+        )
+        try:
+            threshold, reason = threshold_from_anchor(
+                _zero_shot,
+                _finetuned,
+                _calibration.get("headroom"),
+            )
+        except ValueError as exc:
+            # Neither number is available (e.g. a failed baseline AND no scored fine-tune).
+            # Leave the target pending rather than inventing one; the next iteration retries.
+            _log(mlabel, f"  [threshold] calibration deferred again: {exc}")
+        else:
+            state["stop_threshold"] = threshold
+            state["initial_stop_threshold"] = threshold
+            state["threshold_calibration"] = {
+                **_calibration,
+                "source": "measured_anchor",
+                "threshold": threshold,
+                "zero_shot": _zero_shot,
+                "first_finetune": _finetuned,
+                "reason": reason,
+                "pending": False,
+            }
+            _log(
+                mlabel,
+                f"  [threshold] CALIBRATED to {threshold:.4f} — {reason}. "
+                "This is now the immutable floor; iterate may lower stop_threshold "
+                "toward it but never below.",
+            )
+
     # Test-data agent (B161): report per-difficulty accuracy + a targeted diagnosis. This is
     # the aggregate signal iterate_node uses instead of raw failure rows.
     try:
@@ -465,8 +520,7 @@ def evaluate_node(state: AgentState) -> AgentState:
             "total_examples",
             curation.get("n_gold", 0)
             + curation.get("n_hard_source", 0)
-            + curation.get("n_hard_generated", curation.get("n_hard", 0))
-            + curation.get("replay_count", 0),
+            + curation.get("n_hard_generated", curation.get("n_hard", 0)),
         ),
         n_gold=curation.get("n_gold", 0),
         n_hard=curation.get("n_hard", 0),
@@ -475,7 +529,6 @@ def evaluate_node(state: AgentState) -> AgentState:
             "n_hard_generated",
             curation.get("n_hard", 0),
         ),
-        replay_count=curation.get("replay_count", 0),
         rebuild_plan_identity=curation.get(
             "data_rebuild_plan_identity",
             "",

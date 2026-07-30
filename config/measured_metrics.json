@@ -2,7 +2,7 @@
   "_README": [
     "REAL MEASUREMENTS ONLY. Nothing in this file may be estimated, interpolated,",
     "extrapolated from another model, or derived from a parameter count. If a number was",
-    "not produced by running or building the actual artifact, it does not belong here —",
+    "not produced by running or building the actual artifact, it does not belong here \u2014",
     "leave it absent so consumers correctly report 'unmeasured'.",
     "",
     "Written by hardware_eval/measure_model.py; read by config/android_pool.py.",
@@ -15,19 +15,32 @@
     "  measured): peak_memory_mb (peak RSS), tok_per_s (sustained decode), ttft_ms,",
     "  avg_watts. Each entry must carry 'source', 'method', and 'measured_at'."
   ],
-
   "_sizes": {
     "Qwen/Qwen3.5-4B|Q4_K_M": 2654.5,
     "Qwen/Qwen3.5-4B|Q8_0": 4397.0,
-    "Qwen/Qwen3.5-4B|bf16": 8908.0
+    "Qwen/Qwen3.5-4B|bf16": 8908.0,
+    "Qwen/Qwen3-0.6B|Q4_K_M": 461.8,
+    "Qwen/Qwen3-0.6B|Q8_0": 767.5,
+    "Qwen/Qwen3-0.6B|bf16": 1433.7,
+    "Qwen/Qwen3.5-0.8B|Q4_K_M": 516.8,
+    "Qwen/Qwen3.5-0.8B|Q8_0": 795.0,
+    "Qwen/Qwen3.5-0.8B|bf16": 1666.0,
+    "Qwen/Qwen3-1.7B|Q4_K_M": 1223.0,
+    "Qwen/Qwen3-1.7B|Q8_0": 2064.7,
+    "Qwen/Qwen3-1.7B|bf16": 3875.3,
+    "Qwen/Qwen3.5-2B|Q4_K_M": 1251.4,
+    "Qwen/Qwen3.5-2B|Q8_0": 1980.5,
+    "Qwen/Qwen3.5-2B|bf16": 4337.5,
+    "Qwen/Qwen3-4B-Instruct-2507|Q4_K_M": 2381.6,
+    "Qwen/Qwen3-4B-Instruct-2507|Q8_0": 4082.1,
+    "Qwen/Qwen3-4B-Instruct-2507|bf16": 7672.3
   },
-
   "_size_provenance": {
     "Qwen/Qwen3.5-4B|Q4_K_M": {
       "source": "slurm job 37810980",
       "method": "llama.cpp convert_hf_to_gguf + llama-quantize; os.path.getsize of model-q4_k_m.gguf",
       "measured_at": "2026-07-27",
-      "note": "Pool arithmetic predicted 2200 MB — 20% low. K-quants are not a uniform 0.55 bytes/param."
+      "note": "Pool arithmetic predicted 2200 MB \u2014 20% low. K-quants are not a uniform 0.55 bytes/param."
     },
     "Qwen/Qwen3.5-4B|Q8_0": {
       "source": "slurm job 37810980",
@@ -40,8 +53,92 @@
       "method": "sum of *.safetensors in the merged HF checkpoint",
       "measured_at": "2026-07-27",
       "note": "Merged base+LoRA checkpoint; adapter contribution is negligible vs base weights."
+    },
+    "Qwen/Qwen3-0.6B|Q4_K_M": {
+      "source": "slurm job 37905779",
+      "method": "llama.cpp convert_hf_to_gguf + llama-quantize; os.path.getsize",
+      "measured_at": "2026-07-29"
+    },
+    "Qwen/Qwen3-0.6B|Q8_0": {
+      "source": "slurm job 37905779",
+      "method": "llama.cpp convert_hf_to_gguf + llama-quantize; os.path.getsize",
+      "measured_at": "2026-07-29"
+    },
+    "Qwen/Qwen3-0.6B|bf16": {
+      "source": "slurm job 37905779",
+      "method": "sum of 1 *.safetensors in the immutable HF snapshot",
+      "measured_at": "2026-07-29"
+    },
+    "Qwen/Qwen3.5-0.8B|Q4_K_M": {
+      "source": "slurm job 37905779",
+      "method": "llama.cpp convert_hf_to_gguf + llama-quantize; os.path.getsize",
+      "measured_at": "2026-07-29"
+    },
+    "Qwen/Qwen3.5-0.8B|Q8_0": {
+      "source": "slurm job 37905779",
+      "method": "llama.cpp convert_hf_to_gguf + llama-quantize; os.path.getsize",
+      "measured_at": "2026-07-29"
+    },
+    "Qwen/Qwen3.5-0.8B|bf16": {
+      "source": "slurm job 37905779",
+      "method": "sum of 1 *.safetensors in the immutable HF snapshot",
+      "measured_at": "2026-07-29"
+    },
+    "Qwen/Qwen3-1.7B|Q4_K_M": {
+      "source": "slurm job 37905779",
+      "method": "llama.cpp convert_hf_to_gguf + llama-quantize; os.path.getsize",
+      "measured_at": "2026-07-29"
+    },
+    "Qwen/Qwen3-1.7B|Q8_0": {
+      "source": "slurm job 37905779",
+      "method": "llama.cpp convert_hf_to_gguf + llama-quantize; os.path.getsize",
+      "measured_at": "2026-07-29"
+    },
+    "Qwen/Qwen3-1.7B|bf16": {
+      "source": "slurm job 37905779",
+      "method": "sum of 2 *.safetensors in the immutable HF snapshot",
+      "measured_at": "2026-07-29"
+    },
+    "Qwen/Qwen3.5-2B|Q4_K_M": {
+      "source": "slurm job 37905779",
+      "method": "llama.cpp convert_hf_to_gguf + llama-quantize; os.path.getsize",
+      "measured_at": "2026-07-29"
+    },
+    "Qwen/Qwen3.5-2B|Q8_0": {
+      "source": "slurm job 37905779",
+      "method": "llama.cpp convert_hf_to_gguf + llama-quantize; os.path.getsize",
+      "measured_at": "2026-07-29"
+    },
+    "Qwen/Qwen3.5-2B|bf16": {
+      "source": "slurm job 37905779",
+      "method": "sum of 1 *.safetensors in the immutable HF snapshot",
+      "measured_at": "2026-07-29"
+    },
+    "Qwen/Qwen3-4B-Instruct-2507|Q4_K_M": {
+      "source": "slurm job 37905779",
+      "method": "llama.cpp convert_hf_to_gguf + llama-quantize; os.path.getsize",
+      "measured_at": "2026-07-29"
+    },
+    "Qwen/Qwen3-4B-Instruct-2507|Q8_0": {
+      "source": "slurm job 37905779",
+      "method": "llama.cpp convert_hf_to_gguf + llama-quantize; os.path.getsize",
+      "measured_at": "2026-07-29"
+    },
+    "Qwen/Qwen3-4B-Instruct-2507|bf16": {
+      "source": "slurm job 37905779",
+      "method": "sum of 3 *.safetensors in the immutable HF snapshot",
+      "measured_at": "2026-07-29"
     }
   },
-
-  "measurements": {}
+  "measurements": {},
+  "_sweep_findings": {
+    "2026-07-29 (slurm job 37905779)": {
+      "scope": "all 6 pool families x {Q4_K_M, Q8_0, bf16} = 18 variants; 15 newly measured",
+      "result": "The bytes-per-parameter arithmetic is WELL CALIBRATED after the Qwen3.5-4B correction: measured vs predicted is +4.7..+4.9% for Q4_K_M and bf16, and -1.1% for Q8_0, uniformly across every family.",
+      "tier_changes": 0,
+      "interpretation": "A negative result worth keeping. The earlier '20% low' on Qwen3.5-4B Q4_K_M was real AT THE TIME and was fixed by raising the Q4_K_M constant to 0.55 bytes/param; this sweep confirms that correction generalizes to every other family rather than being specific to the 4B. No variant changes tier, so the pool's ordering and every hardware gate were already correct.",
+      "residual_bias": "Q4_K_M and bf16 run ~4.8% light, Q8_0 ~1.1% heavy. Both are well inside the 250-750 MB tier bands, which is why nothing moved.",
+      "not_measured": "Runtime metrics (peak RSS, tok/s, TTFT) \u2014 llama-cli is not on the venv PATH (only llama-quantize is). These stay absent, so consumers correctly report 'unmeasured' rather than trusting a guess."
+    }
+  }
 }

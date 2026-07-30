@@ -42,16 +42,17 @@ def test_graph_run_config_requires_and_carries_stable_thread_id():
         graph_run_config("", recursion_limit=1490)
 
 
-def test_topology_descriptor_is_stable_and_mode_specific():
+def test_topology_descriptor_is_stable_and_cold_start_only():
     cold = graph_topology_descriptor("cold_start")
-    production = graph_topology_descriptor("production")
 
     assert cold == graph_topology_descriptor("cold_start")
     assert cold["entry_point"] == "task_analysis"
-    assert production["entry_point"] == "trace_ingest"
     assert "task_analysis" in cold["nodes"]
+    # Production mode was removed on 2026-07-29; the descriptor must reject it rather than
+    # silently building a cold-start graph under a production fingerprint.
     assert "trace_ingest" not in cold["nodes"]
-    assert "trace_ingest" in production["nodes"]
+    with pytest.raises(ValueError, match="production mode was removed"):
+        graph_topology_descriptor("production")
     assert cold["conditional_edges"]["downward_probe"] == {
         "downward_probe": "downward_probe",
         "terminate": "__end__",
@@ -108,7 +109,7 @@ def test_node_wall_guard_skips_long_side_effect_and_routes_cleanly(monkeypatch):
     assert result["next_action"] == "terminate"
 
 
-@pytest.mark.parametrize("mode", ("cold_start", "production"))
+@pytest.mark.parametrize("mode", ("cold_start",))
 def test_topology_descriptor_matches_compiled_graph(mode):
     descriptor = graph_topology_descriptor(mode)
     compiled = build_graph(mode).get_graph().to_json()
