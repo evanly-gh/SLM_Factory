@@ -37,7 +37,6 @@ def test_curation_log_persists_complete_dataset_composition(tmp_path):
         n_hard=3,
         n_hard_source=2,
         n_hard_generated=3,
-        replay_count=1,
         rebuild_plan_identity="plan-abc",
         strategy_composition=[
             {"strategy": "resample_existing", "rows": 5},
@@ -74,7 +73,6 @@ def test_curation_log_persists_complete_dataset_composition(tmp_path):
     assert "- Initial gold: 5" in text
     assert "- Source anchors: 2" in text
     assert "- Generated hard rows: 3" in text
-    assert "- Replay rows: 1" in text
     assert "- Rebuild plan identity: plan-abc" in text
     assert "- Strategy composition:" in text
     assert "mine_new_real_source" in text

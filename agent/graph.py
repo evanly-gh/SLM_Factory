@@ -6,9 +6,13 @@ Paper §2.1: 'Pioneer Agent is built on a LangGraph state machine orchestrated b
 Claude Sonnet 4.6.' (In this codebase the orchestrator model is set in ONE place —
 config.config.ORCHESTRATOR_MODEL — and every LLM node resolves it from there.)
 
-Supports two modes (paper §2.5, §2.6):
-  - cold_start: task_analysis → eval_setup → model_selection → curate → train → evaluate → iterate loop
-  - production: trace_ingest → taxonomy → live_confirm → parent_awareness → curate → train loop
+Single mode: cold_start —
+  task_analysis → eval_setup → model_selection → curate → train → evaluate → iterate loop
+
+The `mode` parameter is retained (and accepts only "cold_start") because it is part of the
+checkpoint compatibility fingerprint and the run manifest. A second "production" mode existed
+and was removed on 2026-07-29: it was never runnable end-to-end (curate requires an eval set
+that the production entry chain never built) and the idea was scrapped.
 
 Model selection strategy is configurable via config.config.MODEL_SELECTION_STRATEGY:
   - "smallest_first"      — start smallest, escalate on failure
@@ -85,22 +89,39 @@ def graph_run_config(
 
 
 def graph_topology_descriptor(mode: str = "cold_start") -> dict:
-    """Canonical graph structure used to reject unsafe checkpoint resumes."""
-    if mode not in {"cold_start", "production"}:
-        raise ValueError(f"Unknown graph mode: {mode!r}")
-    common_nodes = {
-        "train",
-        "evaluate",
-        "iterate",
-        "curate",
-        "rollback",
-        "escalate",
-        "downward_probe",
-    }
-    if mode == "cold_start":
-        mode_nodes = {"task_analysis", "eval_setup", "model_selection"}
-        entry_point = "task_analysis"
-        mode_routes = {
+    """Canonical graph structure used to reject unsafe checkpoint resumes.
+
+    Only "cold_start" exists. The parameter is kept so checkpoint fingerprints, run
+    manifests, and their drift checks keep their existing shape — this descriptor is hashed
+    into `graph_topology_fingerprint`, and the cold-start hash is unchanged by the removal of
+    the former production branch (production nodes were never part of it).
+    """
+    if mode != "cold_start":
+        raise ValueError(
+            f"Unknown graph mode: {mode!r} (production mode was removed on 2026-07-29; "
+            "only 'cold_start' is supported)"
+        )
+    return {
+        "mode": mode,
+        "entry_point": "task_analysis",
+        "entry_routes": {
+            "task_analysis": "task_analysis",
+            "terminate": "__end__",
+        },
+        "nodes": sorted({
+            "train",
+            "evaluate",
+            "iterate",
+            "curate",
+            "rollback",
+            "escalate",
+            "downward_probe",
+            "task_analysis",
+            "eval_setup",
+            "model_selection",
+        }),
+        "edges": [],
+        "conditional_edges": {
             "task_analysis": {
                 "eval_setup": "eval_setup",
                 "terminate": "__end__",
@@ -113,44 +134,6 @@ def graph_topology_descriptor(mode: str = "cold_start") -> dict:
                 "curate": "curate",
                 "terminate": "__end__",
             },
-        }
-    else:
-        mode_nodes = {
-            "trace_ingest",
-            "taxonomy_construct",
-            "live_confirm",
-            "parent_awareness",
-        }
-        entry_point = "trace_ingest"
-        mode_routes = {
-            "trace_ingest": {
-                "taxonomy_construct": "taxonomy_construct",
-                "terminate": "__end__",
-            },
-            "taxonomy_construct": {
-                "live_confirm": "live_confirm",
-                "terminate": "__end__",
-            },
-            "live_confirm": {
-                "parent_awareness": "parent_awareness",
-                "terminate": "__end__",
-            },
-            "parent_awareness": {
-                "curate": "curate",
-                "terminate": "__end__",
-            },
-        }
-    return {
-        "mode": mode,
-        "entry_point": entry_point,
-        "entry_routes": {
-            entry_point: entry_point,
-            "terminate": "__end__",
-        },
-        "nodes": sorted(common_nodes | mode_nodes),
-        "edges": [],
-        "conditional_edges": {
-            **mode_routes,
             "curate": {
                 "train": "train",
                 "terminate": "__end__",
@@ -236,17 +219,15 @@ def build_graph(
     """Build the LangGraph state machine.
 
     Args:
-        mode: "cold_start" (paper §2.5) or "production" (paper §2.6).
-              Cold-start starts from a task description; production starts from
-              judged inference traces of a deployed model.
+        mode: only "cold_start" is supported. The parameter is retained because it is part of
+              the checkpoint compatibility fingerprint and the run manifest schema.
     """
-    graph_topology_descriptor(mode)  # validate before importing mode-specific nodes
+    graph_topology_descriptor(mode)  # rejects anything but cold_start
     graph = StateGraph(AgentState)
 
     def durable_node(name, node):
         return guard_graph_node(name, instrument_node(name, node))
 
-    # Common nodes (both modes share the training loop)
     graph.add_node("train", durable_node("train", train_node))
     graph.add_node("evaluate", durable_node("evaluate", evaluate_node))
     graph.add_node("iterate", durable_node("iterate", iterate_node))
@@ -258,84 +239,38 @@ def build_graph(
         durable_node("downward_probe", downward_probe_step_node),
     )
 
-    if mode == "cold_start":
-        model_selection_node = get_model_selection_node(MODEL_SELECTION_STRATEGY)
+    model_selection_node = get_model_selection_node(MODEL_SELECTION_STRATEGY)
 
-        graph.add_node(
-            "task_analysis", durable_node("task_analysis", task_analysis_node)
-        )
-        graph.add_node("eval_setup", durable_node("eval_setup", eval_setup_node))
-        graph.add_node(
-            "model_selection",
-            durable_node("model_selection", model_selection_node),
-        )
+    graph.add_node(
+        "task_analysis", durable_node("task_analysis", task_analysis_node)
+    )
+    graph.add_node("eval_setup", durable_node("eval_setup", eval_setup_node))
+    graph.add_node(
+        "model_selection",
+        durable_node("model_selection", model_selection_node),
+    )
 
-        graph.set_conditional_entry_point(
-            _route_before("task_analysis"),
-            {"task_analysis": "task_analysis", "terminate": END},
-        )
-        graph.add_conditional_edges(
-            "task_analysis",
-            _route_before("eval_setup"),
-            {"eval_setup": "eval_setup", "terminate": END},
-        )
-        graph.add_conditional_edges(
-            "eval_setup",
-            _route_before("model_selection"),
-            {"model_selection": "model_selection", "terminate": END},
-        )
-        graph.add_conditional_edges(
-            "model_selection",
-            _route_before("curate"),
-            {"curate": "curate", "terminate": END},
-        )
-    else:
-        from agent.nodes.production.trace_ingest import trace_ingest_node
-        from agent.nodes.production.taxonomy import taxonomy_construct_node
-        from agent.nodes.production.live_confirm import live_confirm_node
-        from agent.nodes.production.parent_awareness import parent_awareness_node
+    graph.set_conditional_entry_point(
+        _route_before("task_analysis"),
+        {"task_analysis": "task_analysis", "terminate": END},
+    )
+    graph.add_conditional_edges(
+        "task_analysis",
+        _route_before("eval_setup"),
+        {"eval_setup": "eval_setup", "terminate": END},
+    )
+    graph.add_conditional_edges(
+        "eval_setup",
+        _route_before("model_selection"),
+        {"model_selection": "model_selection", "terminate": END},
+    )
+    graph.add_conditional_edges(
+        "model_selection",
+        _route_before("curate"),
+        {"curate": "curate", "terminate": END},
+    )
 
-        graph.add_node(
-            "trace_ingest", durable_node("trace_ingest", trace_ingest_node)
-        )
-        graph.add_node(
-            "taxonomy_construct",
-            durable_node("taxonomy_construct", taxonomy_construct_node),
-        )
-        graph.add_node(
-            "live_confirm", durable_node("live_confirm", live_confirm_node)
-        )
-        graph.add_node(
-            "parent_awareness",
-            durable_node("parent_awareness", parent_awareness_node),
-        )
-
-        graph.set_conditional_entry_point(
-            _route_before("trace_ingest"),
-            {"trace_ingest": "trace_ingest", "terminate": END},
-        )
-        graph.add_conditional_edges(
-            "trace_ingest",
-            _route_before("taxonomy_construct"),
-            {"taxonomy_construct": "taxonomy_construct", "terminate": END},
-        )
-        graph.add_conditional_edges(
-            "taxonomy_construct",
-            _route_before("live_confirm"),
-            {"live_confirm": "live_confirm", "terminate": END},
-        )
-        graph.add_conditional_edges(
-            "live_confirm",
-            _route_before("parent_awareness"),
-            {"parent_awareness": "parent_awareness", "terminate": END},
-        )
-        graph.add_conditional_edges(
-            "parent_awareness",
-            _route_before("curate"),
-            {"curate": "curate", "terminate": END},
-        )
-
-    # Shared loop edges (both modes)
+    # Shared loop edges
     graph.add_conditional_edges(
         "curate",
         _route_before("train"),

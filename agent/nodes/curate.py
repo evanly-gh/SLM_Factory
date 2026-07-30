@@ -375,13 +375,36 @@ def _synthesize_positive_rows(
         _log(model_id, "  Positive synthesis skipped (cheap mode or no anchors)")
         return []
     from config.config import SYNTH_MODEL
-    from data.synth_client import get_generate_fn, is_available
+    from data.synth_client import (
+        SynthesisUnavailableError,
+        get_generate_fn,
+        wait_until_available,
+    )
 
     logger = lambda message: _log(model_id, message)
-    if not is_available(log=logger):
+    # The plan declared targeted_synth_positive, so synthesis is REQUIRED here. Block for a
+    # bounded window (SLM_SYNTH_MIDRUN_WAIT_S, default 10 min, clamped to the wall-clock
+    # reserve) and then STOP the run rather than returning gold-only rows.
+    #
+    # Degrading silently was worse than it looks: curate rewrote the strategy to base_fill
+    # and continued, so the DAG recorded targeted_synth_positive for a dataset containing
+    # zero synthesized rows. Combined with an endpoint that failed 8/9 preflights in the NER
+    # run, that made every synthesis claim in the lineage unverifiable. Opt out of the whole
+    # requirement with SLM_REQUIRE_SYNTH=0, which keeps the old gold-only behavior.
+    require_synth = os.environ.get("SLM_REQUIRE_SYNTH", "1") != "0"
+    if not wait_until_available(log=logger):
+        if require_synth:
+            raise SynthesisUnavailableError(
+                "targeted_synth_positive requires the local synthesis endpoint, which did "
+                "not become reachable within the mid-run wait. Restart "
+                "scripts/serve_synth.slurm and resume this run from its checkpoint; the "
+                "best model and every artifact are preserved. Set SLM_REQUIRE_SYNTH=0 to "
+                "allow gold-only degradation instead."
+            )
         _log(
             model_id,
-            "  Positive synthesis endpoint unavailable; retaining real rows only",
+            "  Positive synthesis endpoint unavailable and SLM_REQUIRE_SYNTH=0 — "
+            "retaining real rows only",
         )
         return []
     generate = get_generate_fn(log=logger)
@@ -649,28 +672,6 @@ def curate_node(state: AgentState) -> AgentState:
                 "from": "targeted_synth_positive",
                 "to": "base_fill",
             })
-    replay_rows = []
-    replay = state.get("replay_buffer") or []
-    if state.get("mode") == "production" and replay:
-        replay_rows = [
-            {
-                **row,
-                "_provenance": "replay",
-                "_strategy_origin": "replay",
-            }
-            for row in replay
-            if isinstance(row, dict)
-        ]
-        replay_rows, removed_replay = _exclude_eval_rows(
-            replay_rows,
-            eval_set,
-        )
-        if removed_replay:
-            _log(
-                model_id,
-                f"  Replay eval firewall removed {removed_replay} row(s)",
-            )
-
     component_rows = {
         "preserve_elite_resample": elite_rows,
         "mine_new_real_source": mined_rows,
@@ -705,13 +706,6 @@ def curate_node(state: AgentState) -> AgentState:
                 component_rows[strategy],
                 min(component_budgets[strategy], target_rows),
             )
-
-    replay_budget = min(
-        len(replay_rows),
-        max(0, round(target_rows * 0.20)),
-        target_rows - len(selected_rows),
-    )
-    allocate(replay_rows, replay_budget)
 
     working_budget = max(0, target_rows - len(selected_rows))
     sample_count = min(
@@ -825,7 +819,6 @@ def curate_node(state: AgentState) -> AgentState:
     source_composition = Counter(
         _source_key(row, default_source)
         for row in dataset
-        if row.get("_provenance") != "replay"
     )
     difficulty_composition = Counter(
         str(row.get("_difficulty") or "unassigned")
@@ -894,7 +887,6 @@ def curate_node(state: AgentState) -> AgentState:
             0,
         ),
         "n_hard_source": provenance.get("mined_real", 0),
-        "replay_count": provenance.get("replay", 0),
         "label_dist": dict(label_dist),
         "data_rebuild_plan": plan,
         "data_rebuild_plan_identity": identity,

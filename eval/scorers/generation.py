@@ -588,9 +588,18 @@ def score(eval_set: EvalSet, predictions: list[str]) -> dict:
         for execution in code_results
         if execution is not None
     ]
+    # This scorer serves three task types with three genuinely different measurements, none
+    # of which is an F1. `f1` stays as the pipeline's universal comparison scalar (renaming
+    # it would break checkpoints and DAG replay), and `metric` says what it really is so a
+    # report cannot present a judge mean or an execution pass-rate as an F1.
+    metric_name = {
+        "math_reasoning": "exact_match",
+        "code_generation": "execution_pass@1",
+    }.get(task_type, "judge_mean_0_1")
     return {
         "f1": average,
-        "per_class": {"judge_score": average},
+        "metric": metric_name,
+        "per_class": {metric_name: average},
         "slices": slices,
         "failures": failures,
         "execution_diagnostics": execution_diagnostics,

@@ -755,9 +755,8 @@ def test_remote_judge_opt_in_is_explicit_config_only():
 def test_banner_and_docs_describe_required_local_judge():
     runner = (ROOT / "tests" / "pipeline" / "run.py").read_text(encoding="utf-8")
     pipeline_docs = (ROOT / "docs" / "PIPELINE.md").read_text(encoding="utf-8")
-    audit = (ROOT / "docs" / "long_run_prompt_audit.md").read_text(
-        encoding="utf-8"
-    )
+    # Renamed from long_run_prompt_audit.md to PROMPTS.md.
+    audit = (ROOT / "docs" / "PROMPTS.md").read_text(encoding="utf-8")
 
     assert "judge endpoint:" in runner
     assert "config.JUDGE_ENDPOINT" in runner

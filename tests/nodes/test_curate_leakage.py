@@ -56,8 +56,7 @@ def test_data_rebuild_never_seeds_or_saves_normalized_eval_text(
         "current_dataset_path": None,
         "curriculum_size_target": 6,
         "dataset_version": 0,
-        "mode": "cold_start",
-        "replay_buffer": [],
+
     }
 
     def synthesize(seeds, **_kwargs):

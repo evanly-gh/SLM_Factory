@@ -69,4 +69,10 @@ def score(eval_set: EvalSet, predictions: list[str]) -> dict:
         for ex, pred, lbl in zip(eval_set.all, predictions, labels)
         if pred != lbl
     ]
-    return {"f1": f1, "per_class": per_class, "slices": slices, "failures": failures}
+    return {
+        "f1": f1,
+        "metric": "macro_f1",
+        "per_class": per_class,
+        "slices": slices,
+        "failures": failures,
+    }

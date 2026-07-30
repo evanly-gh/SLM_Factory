@@ -46,7 +46,6 @@ class CurationLog:
         total_examples: int | None = None,
         n_hard_source: int = 0,
         n_hard_generated: int | None = None,
-        replay_count: int = 0,
         rebuild_plan_identity: str = "",
         strategy_composition: list[dict] | None = None,
         source_novelty: dict | None = None,
@@ -54,7 +53,6 @@ class CurationLog:
         confusion_pairs: list[dict] | None = None,
         hardware_notes: str = "Phase 1: theoretical",
         hw_constraints: dict | None = None,
-        failure_taxonomy: str = "",
         entry_id: str | None = None,
     ) -> None:
         timestamp = datetime.now().isoformat(timespec="seconds")
@@ -62,7 +60,7 @@ class CurationLog:
         actual_total = (
             total_examples
             if total_examples is not None
-            else n_gold + n_hard_source + generated + replay_count
+            else n_gold + n_hard_source + generated
         )
         ratio_total = actual_total if actual_total > 0 else 1
 
@@ -81,11 +79,9 @@ class CurationLog:
                 elif key == "power":
                     hw_lines += f"- Power: {c.get('note', 'not measured')} — {status}\n"
 
-        # Format failure taxonomy (top failure patterns)
+        # Aggregate confusion (top failure patterns)
         taxonomy_section = ""
-        if failure_taxonomy:
-            taxonomy_section = f"\n### Failure taxonomy\n{failure_taxonomy}\n"
-        elif confusion_pairs:
+        if confusion_pairs:
             lines = [
                 "  - "
                 f"{pair.get('gold', '?')}→{pair.get('predicted', '?')}: "
@@ -125,7 +121,6 @@ class CurationLog:
 - Initial gold: {n_gold} ({n_gold / ratio_total * 100:.0f}%)
 - Source anchors: {n_hard_source} ({n_hard_source / ratio_total * 100:.0f}%)
 - Generated hard rows: {generated} ({generated / ratio_total * 100:.0f}%)
-- Replay rows: {replay_count} ({replay_count / ratio_total * 100:.0f}%)
 - Rebuild plan identity: {rebuild_plan_identity or "n/a"}
 - Strategy composition: {strategy_composition or []}
 - Source novelty: {source_novelty or {}}

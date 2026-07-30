@@ -41,6 +41,9 @@ _INTERNAL_DECISION_FIELDS = frozenset({
     "data_rebuild_plan_identity",
     "data_rebuild_trial_counts",
     "hyperparam_rationale",
+    # Names of fields the validator removed because they belong to the other branch of the
+    # union. Recorded so iterate_node can LOG the correction rather than silently masking it.
+    "_dropped_fields",
 })
 _THRESHOLD_FIELDS = frozenset({"new_threshold", "reason"})
 _ITERATE_MAX_TOKENS = 1536
@@ -263,8 +266,12 @@ def _validate_decision_json(
         # every data_rebuild it proposes, so the NER run rejected 65 of them and
         # executed ZERO orchestrator-authored data plans across 142 iterations, while
         # its logs still attributed each rebuild to the orchestrator.
-        for field in ("hyperparams", "hyperparam_rationale"):
-            validated.pop(field, None)
+        dropped = [
+            field for field in ("hyperparams", "hyperparam_rationale")
+            if validated.pop(field, None) is not None
+        ]
+        if dropped:
+            validated["_dropped_fields"] = dropped
         plan = normalize_data_rebuild_plan(
             validated.get("data_rebuild"),
             task_type=task_type,
@@ -485,8 +492,31 @@ text. Use only aggregate difficulty scores and aggregate confusion counts suppli
 in the prompt. Dataset plans are declarative JSON; never emit executable code.
 
 Return the decision directly as JSON. You cannot call tools, access files, or request
-additional context. The JSON schema is a discriminated union: choose exactly one of
-these two branches and never merge their payloads.
+additional context.
+
+=============================== CHOOSE EXACTLY ONE ===============================
+There are TWO possible interventions and you must pick ONE. They are mutually exclusive.
+
+  A) "intervention": "data_rebuild"    -> change the TRAINING DATA.
+       REQUIRED key: "data_rebuild"
+       FORBIDDEN key: "hyperparams"    <-- do not include it, not even unchanged values
+       The hyperparameters are held automatically at the current best config.
+
+  B) "intervention": "hyperparameter"  -> change the LEARNING SETTINGS.
+       REQUIRED key: "hyperparams"
+       FORBIDDEN key: "data_rebuild"   <-- do not include it
+       The dataset is held automatically at the current version.
+
+WHY THIS IS STRICT: exactly one thing may change per iteration. If the data and the
+hyperparameters both changed and the score moved, it is impossible to tell which change
+caused it, and the whole trajectory becomes uninterpretable. This is the single most
+important rule in this prompt.
+
+If you emit "hyperparams" alongside a "data_rebuild", the system will DISCARD those
+hyperparameters, log the correction, and execute your data plan with the current best
+config. Your data plan is not lost — but you have wasted the field, and the log will show
+that you ignored this instruction. Do not do it.
+==================================================================================
 
 Valid data_rebuild JSON example:
 {
@@ -577,9 +607,7 @@ Rules:
 
 Score band guidance (reason about the trajectory, not just mechanical rules):
 - Score < 0.80: usually a data problem (data_rebuild)
-- 0.80–0.95: usually an optimization problem (hyperparameter)
-- >= 0.95: refine remaining aggregate confusion with a data_rebuild using
-  targeted_synth_positive when eligible, otherwise difficulty-weighted real data
+- 0.80–1.0: usually an optimization problem (hyperparameter)
 
 If the trajectory shows stagnation, escalate the intervention type.
 
@@ -599,14 +627,14 @@ The floor is enforced by the system — you cannot set it below the initial cali
 # below STAGNATION_MIN_DELTA. This treats declines/below-origin oscillation as
 # no progress while allowing a genuine new high to keep the current model active.
 #
-# Raised to 50 (from 3/4) so each model gets far more exploration before escalating —
+# Raised to 20 (from 3/4) so each model gets far more exploration before escalating —
 # earlier runs escalated too eagerly on noisy small-eval scores. With the larger, balanced
 # eval set + best-checkpoint early stopping, scores are steadier, so a long window mostly
 # lets genuine slow progress continue; the wall-clock guard (config.MAX_WALLCLOCK_S) is the
 # real backstop against a run that never plateaus. All three are env-overridable.
 import os as _os
 import time as _time
-STAGNATION_WINDOW = int(_os.environ.get("SLM_STAGNATION_WINDOW", "50"))   # recent evals examined
+STAGNATION_WINDOW = int(_os.environ.get("SLM_STAGNATION_WINDOW", "20"))   # recent evals examined
 STAGNATION_MIN_DELTA = float(_os.environ.get("SLM_STAGNATION_MIN_DELTA", "0.02"))
 
 # Wall-clock guard budget (seconds). 0 disables. Read lazily so config import stays cheap.
@@ -646,7 +674,7 @@ def _wallclock_exceeded() -> bool:
 # `consecutive_no_improvement` (set in evaluate_node) grows every non-improving eval and
 # is NOT popped. Once this many evals in a row fail to beat the best score, stop churning
 # and escalate — which promotes to a bigger model if one fits, else terminates cleanly.
-MAX_STALL_EVALS = int(_os.environ.get("SLM_MAX_STALL_EVALS", "50"))
+MAX_STALL_EVALS = int(_os.environ.get("SLM_MAX_STALL_EVALS", "30"))
 
 
 def _tried_hparam_configs(state) -> list[dict]:
@@ -1180,6 +1208,18 @@ def iterate_node(state: AgentState) -> AgentState:
 
         _log(model_id, f"  LLM decision: intervention={intervention}")
         _log(model_id, f"  Hypothesis: {hypothesis}")
+        _dropped = llm_decision.get("_dropped_fields") or []
+        if _dropped:
+            # Visible, not silent. The orchestrator emitted fields belonging to the OTHER
+            # branch of the union; they are discarded so the intervention stays isolated.
+            # Logging it means a persistently confused orchestrator shows up in the run log
+            # instead of being masked (the NER run rejected 65 such decisions outright).
+            _log(
+                model_id,
+                f"  NOTE — dropped {', '.join(_dropped)} from this data_rebuild decision: "
+                "a data_rebuild must not also change hyperparameters, or the score movement "
+                "cannot be attributed. The data plan was kept and executed.",
+            )
         if intervention == "hyperparameter" and llm_decision.get("hyperparams"):
             hp = llm_decision["hyperparams"]
             _log(
