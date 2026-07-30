@@ -22,6 +22,7 @@ The following sections describe how to build with different backends and options
 * [HIP](#hip)
 * [Vulkan](#vulkan)
 * [CANN](#cann)
+* [ZenDNN](#zendnn)
 * [Arm® KleidiAI™](#arm-kleidiai)
 * [OpenCL](#opencl)
 * [Android](#android-1)
@@ -269,17 +270,20 @@ The environment variable [`CUDA_SCALE_LAUNCH_QUEUES`](https://docs.nvidia.com/cu
 
 Consider setting `CUDA_SCALE_LAUNCH_QUEUES=4x`, which increases the CUDA command buffer to 4 times its default size. This optimization is particularly beneficial for **Multi-GPU setups with pipeline parallelism**, where it significantly improves prompt processing throughput by allowing more operations to be enqueued across GPUs.
 
-#### GGML_CUDA_FORCE_CUBLAS_COMPUTE_32F
+#### GGML_CUDA_CUBLAS_COMPUTE_TYPE
 
-Use `GGML_CUDA_FORCE_CUBLAS_COMPUTE_32F` environment variable to use FP32 compute type on all GPUs in FP16 cuBLAS for preventing possible numerical overflows in exchange for slower prompt processing (small impact on RTX PRO/Datacenter products and significant on GeForce products).
-
-#### GGML_CUDA_FORCE_CUBLAS_COMPUTE_16F
-
-Use `GGML_CUDA_FORCE_CUBLAS_COMPUTE_16F` environment variable to force use FP16 compute type (instead of default FP32) in FP16 cuBLAS for V100, CDNA and RDNA4.
+Override default, speed-optimized compute types for cuBLAS matrix multiplications.
+Legal values: `auto`, `f16`, `fp16`, `bf16`, `f32`, `fp32`.
 
 ### Unified Memory
 
 The environment variable `GGML_CUDA_ENABLE_UNIFIED_MEMORY=1` can be used to enable unified memory in Linux. This allows swapping to system RAM instead of crashing when the GPU VRAM is exhausted. In Windows this setting is available in the NVIDIA control panel as `System Memory Fallback`.
+
+### Peer Access
+
+The environment variable `GGML_CUDA_P2P` can be set to enable peer-to-peer access between multiple GPUs, allowing them to transfer data directly rather than to go through system memory.
+Requires driver support (usually restricted to workstation/datacenter GPUs).
+May cause crashes or corrupted outputs for some motherboards and BIOS settings (e.g. IOMMU).
 
 ### Performance Tuning
 
@@ -356,12 +360,6 @@ You can download it from your Linux distro's package manager or from here: [ROCm
   ```
 
   Note: `GPU_TARGETS` is optional, omitting it will build the code for all GPUs in the current system.
-
-  To enhance flash attention performance on RDNA3+ or CDNA architectures, you can utilize the rocWMMA library by enabling the `-DGGML_HIP_ROCWMMA_FATTN=ON` option. This requires rocWMMA headers to be installed on the build system.
-
-  The rocWMMA library is included by default when installing the ROCm SDK using the `rocm` meta package provided by AMD. Alternatively, if you are not using the meta package, you can install the library using the `rocwmma-dev` or `rocwmma-devel` package, depending on your system's package manager.
-
-  As an alternative, you can manually install the library by cloning it from the official [GitHub repository](https://github.com/ROCm/rocWMMA), checkout the corresponding version tag (e.g. `rocm-6.2.4`) and set `-DCMAKE_CXX_FLAGS="-I<path/to/rocwmma>/library/include/"` in CMake. This also works under Windows despite not officially supported by AMD.
 
   Note that if you get the following error:
   ```
@@ -456,7 +454,8 @@ pacman -S git \
     mingw-w64-ucrt-x86_64-gcc \
     mingw-w64-ucrt-x86_64-cmake \
     mingw-w64-ucrt-x86_64-vulkan-devel \
-    mingw-w64-ucrt-x86_64-shaderc
+    mingw-w64-ucrt-x86_64-shaderc \
+    mingw-w64-ucrt-x86_64-spirv-headers
 ```
 
 Switch into the `llama.cpp` directory and build using CMake.
@@ -490,8 +489,10 @@ First, follow the official LunarG instructions for the installation and setup of
 
 On Debian / Ubuntu, you can install the required dependencies using:
 ```sh
-sudo apt-get install libvulkan-dev glslc
+sudo apt-get install libvulkan-dev glslc spirv-headers
 ```
+
+SPIRV-Headers (`spirv/unified1/spirv.hpp`) are required for the Vulkan backend and are **not** always pulled in by the Vulkan loader dev package alone. Other distros use names such as `spirv-headers` (Ubuntu / Debian / Arch), or `spirv-headers-devel` (Fedora / openSUSE). On Windows, the LunarG Vulkan SDK’s `Include` directory already contains these headers.
 
 #### Common steps
 
@@ -726,7 +727,7 @@ ninja
 
 To read documentation for how to build on Android, [click here](./android.md)
 
-## WebGPU [In Progress]
+## WebGPU
 
 The WebGPU backend relies on [Dawn](https://dawn.googlesource.com/dawn). Follow the instructions [here](https://dawn.googlesource.com/dawn/+/refs/heads/main/docs/quickstart-cmake.md) to install Dawn locally so that llama.cpp can find it using CMake. The current implementation is up-to-date with Dawn commit `18eb229`.
 
@@ -741,7 +742,7 @@ cmake --build build --config Release
 
 WebGPU allows cross-platform access to the GPU from supported browsers. We utilize [Emscripten](https://emscripten.org/) to compile ggml's WebGPU backend to WebAssembly. Emscripten does not officially support WebGPU bindings yet, but Dawn currently maintains its own WebGPU bindings called emdawnwebgpu.
 
-Follow the instructions [here](https://dawn.googlesource.com/dawn/+/refs/heads/main/src/emdawnwebgpu/) to download or build the emdawnwebgpu package (Note that it might be safer to build the emdawbwebgpu package locally, so that it stays in sync with the version of Dawn you have installed above). When building using CMake, the path to the emdawnwebgpu port file needs to be set with the flag `EMDAWNWEBGPU_DIR`.
+Follow the instructions [here](https://dawn.googlesource.com/dawn/+/refs/heads/main/src/emdawnwebgpu/) to download or build the emdawnwebgpu package (Note that it might be safer to build the emdawnwebgpu package locally, so that it stays in sync with the version of Dawn you have installed above). When building using CMake, the path to the emdawnwebgpu port file needs to be set with the flag `EMDAWNWEBGPU_DIR`.
 
 ## IBM Z & LinuxONE
 
