@@ -192,8 +192,7 @@ def test_stray_hyperparams_on_a_data_rebuild_is_recorded_for_logging():
         "hypothesis": "hard bucket is weak",
         "hyperparams": {"lora_rank": 32},
         "data_rebuild": {
-            "primary_strategy": "resample_existing",
-            "support_strategies": [],
+            "strategy": "resample",
             "target_rows": 128,
         },
     }
@@ -204,4 +203,4 @@ def test_stray_hyperparams_on_a_data_rebuild_is_recorded_for_logging():
     )
     assert "hyperparams" not in validated, "must not reach the trainer"
     assert validated["_dropped_fields"] == ["hyperparams"]
-    assert validated["data_rebuild"]["primary_strategy"] == "resample_existing"
+    assert validated["data_rebuild"]["strategy"] == "resample"

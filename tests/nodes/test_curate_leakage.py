@@ -36,6 +36,7 @@ def test_data_rebuild_never_seeds_or_saves_normalized_eval_text(
     monkeypatch,
 ):
     from agent.nodes.curate import curate_node
+    from agent.data_rebuild import normalize_data_rebuild_plan
 
     monkeypatch.chdir(tmp_path)
     captured_seeds = []
@@ -56,7 +57,13 @@ def test_data_rebuild_never_seeds_or_saves_normalized_eval_text(
         "current_dataset_path": None,
         "curriculum_size_target": 6,
         "dataset_version": 0,
-
+        # Force the synthesize strategy so the eval firewall on synthesis seeds is exercised
+        # (the fallback strategy is now non-deterministic).
+        "data_rebuild_plan": normalize_data_rebuild_plan(
+            {"strategy": "synthesize", "synth_rows": 5, "target_rows": 6},
+            task_type="classification",
+            hypothesis="firewall check",
+        ),
     }
 
     def synthesize(seeds, **_kwargs):
@@ -65,9 +72,10 @@ def test_data_rebuild_never_seeds_or_saves_normalized_eval_text(
 
     with (
         patch(
-            "agent.nodes.curate.synthesize_hard_negatives",
+            "agent.nodes.curate.synthesize_examples",
             side_effect=synthesize,
         ),
+        patch("data.synth_client.wait_until_available", return_value=True),
         patch("data.synth_client.is_available", return_value=True),
         patch("data.synth_client.get_generate_fn", return_value=MagicMock()),
     ):

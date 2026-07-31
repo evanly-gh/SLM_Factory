@@ -15,7 +15,7 @@ from agent.nodes.train import _best_prior_config, _build_config, _config_diff, _
 _VALID_DATA_REBUILD = (
     '{"intervention":"data_rebuild",'
     '"hypothesis":"rebalance aggregate training coverage",'
-    '"data_rebuild":{"primary_strategy":"resample_existing"}}'
+    '"data_rebuild":{"strategy":"resample"}}'
 )
 
 
@@ -46,7 +46,7 @@ def test_parse_content_block_list_multiple_blocks():
         {"type": "text", "text": (
             '{"intervention": "data_rebuild", '
             '"hypothesis": "remaining classes are imbalanced", '
-            '"data_rebuild": {"primary_strategy": "resample_existing"}}'
+            '"data_rebuild": {"strategy": "resample"}}'
         )},
     ]
     assert _parse_decision_json(raw)["intervention"] == "data_rebuild"
