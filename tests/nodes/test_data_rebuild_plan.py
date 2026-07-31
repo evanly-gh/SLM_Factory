@@ -9,15 +9,33 @@ def test_only_three_strategies():
 
 def test_normalize_accepts_synthesize_for_math():
     plan = dr.normalize_data_rebuild_plan(
-        {"strategy": "synthesize", "synth_rows": 50},
+        {"strategy": "synthesize", "synth_rows": 250},
         task_type="math_reasoning",
         hypothesis="weak on hard bucket",
     )
     assert plan["strategy"] == "synthesize"
-    assert plan["synth_rows"] == 50
+    assert plan["synth_rows"] == 250  # honored as-is inside the 100–500 band
     assert "primary_strategy" not in plan
     assert "query_variant" not in plan
     assert "support_strategies" not in plan
+
+
+def test_synth_rows_snapped_into_100_500_band():
+    low = dr.normalize_data_rebuild_plan(
+        {"strategy": "synthesize", "synth_rows": 40},
+        task_type="classification", hypothesis="x",
+    )
+    assert low["synth_rows"] == 100  # below-range request snaps up to the floor
+    high = dr.normalize_data_rebuild_plan(
+        {"strategy": "synthesize", "synth_rows": 9999},
+        task_type="classification", hypothesis="x",
+    )
+    assert high["synth_rows"] == 500  # above-range request snaps down to the cap
+    unset = dr.normalize_data_rebuild_plan(
+        {"strategy": "synthesize"},
+        task_type="classification", hypothesis="x",
+    )
+    assert 100 <= unset["synth_rows"] <= 500  # unset defaults inside the band
 
 
 def test_normalize_rejects_removed_strategy():

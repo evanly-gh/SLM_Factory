@@ -548,7 +548,8 @@ Data-rebuild payload constraints:
 - target_rows: integer [16, ceiling], step 8
 - resample_fraction: float [0.10,1.00], step 0.05
 - new_real_rows: integer [0,500], step 5 (used by "acquire")
-- synth_rows: integer [0,2000], step 5 (used by "synthesize")
+- synth_rows: integer [100,500], step 5 (used by "synthesize" — choose how many new
+  synthetic rows to generate, at your discretion, anywhere in 100–500)
 - max_acquire_rounds: integer [0,3], further limited by remaining budget
 - difficulty_buckets: numeric weights for easy, medium, and hard
 - confusion_pairs and pattern_hint: aggregate categories only, never raw eval text

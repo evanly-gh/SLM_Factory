@@ -295,9 +295,9 @@ def normalize_data_rebuild_plan(
         "synth_rows": _integer(
             raw.get("synth_rows"),
             field="data_rebuild.synth_rows",
-            default=20,
+            default=300,
             lower=0,
-            upper=2000,
+            upper=500,
             step=5,
         ),
         "max_acquire_rounds": _integer(
@@ -313,10 +313,13 @@ def normalize_data_rebuild_plan(
     }
 
     # A material strategy must carry a positive budget; auto-fill a sensible one so
-    # the orchestrator declaring a strategy without a budget still produces a valid
-    # plan (bounded by target_rows) rather than being rejected.
-    if strategy == "synthesize" and plan["synth_rows"] <= 0:
-        plan["synth_rows"] = min(plan["target_rows"], 50)
+    # the orchestrator declaring a strategy without a budget still produces a valid plan.
+    if strategy == "synthesize":
+        # The synthesize strategy generates 100–500 new synthetic rows at the model's
+        # discretion: the orchestrator's requested count is snapped into that band (an
+        # unset/zero request defaults to the mid of the range).
+        requested = plan["synth_rows"] or 300
+        plan["synth_rows"] = min(500, max(100, requested))
     if strategy == "acquire" and plan["new_real_rows"] <= 0:
         plan["new_real_rows"] = min(plan["target_rows"], 40)
     return plan
@@ -412,7 +415,9 @@ def fallback_data_rebuild_plan(
 
     remaining_rounds = remaining_paid_acquire_rounds(state)
     new_real_rows = min(200, max(20, target_rows // 4)) if strategy == "acquire" else 0
-    synth_rows = min(200, max(20, target_rows // 4)) if strategy == "synthesize" else 0
+    # synthesize generates 100–500 rows (see normalize_data_rebuild_plan); the fallback
+    # requests a target-scaled count that the validator snaps into that band.
+    synth_rows = min(500, max(100, target_rows // 10)) if strategy == "synthesize" else 0
 
     # Weight difficulty buckets toward whichever buckets are ACTUALLY failing.
     buckets = report.get("by_difficulty") or {}
