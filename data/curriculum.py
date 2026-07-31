@@ -634,3 +634,112 @@ def synthesize_hard_negatives(
         return list(examples[:n]) if n < len(examples) else list(examples)
 
     return results
+
+
+# Task families for which "synthesis" means generating NEW CORRECT in-distribution
+# examples (verified where a verifier exists) rather than contrastive hard negatives.
+# Wrong-answer SFT harms these families, so they never receive contrastive negatives.
+_GENERATION_FAMILY = frozenset({
+    "math_reasoning",
+    "code_generation",
+    "generation",
+    "multilingual",
+    "structured_extraction",
+})
+
+
+def _new_example_prompt(anchor: dict, task_type: str) -> str:
+    """Prompt to generate ONE new, correct example in the anchor's exact schema."""
+    import json
+
+    schema = {k: anchor.get(k) for k in anchor if not str(k).startswith("_")}
+    return (
+        f"Generate ONE new, correct {task_type} example in EXACTLY this JSON schema "
+        f"(same keys, same value types): {json.dumps(schema, ensure_ascii=False)}. "
+        "It must be a genuinely new, diverse, and CORRECT instance — not a copy or a "
+        "paraphrase of the reference, and never a wrong answer. Return only the JSON "
+        "object, no preamble or code fences."
+    )
+
+
+def _synthesize_new_correct(
+    examples: list[dict],
+    *,
+    task_type: str,
+    n: int,
+    generate_fn,
+    verify_fn=None,
+    log=None,
+) -> list[dict]:
+    """Generate ``n`` new CORRECT in-distribution examples (never wrong-answer pairs).
+
+    Each candidate is parsed as JSON in the anchor's schema and, when ``verify_fn`` is
+    supplied (e.g. a math answer-checker or code test-runner), kept only if it verifies.
+    Failures are non-fatal — a bad generation is skipped, bounded by ``n * 4`` attempts.
+    """
+    import json
+
+    out: list[dict] = []
+    anchors = list(examples)
+    random.shuffle(anchors)
+    attempts = 0
+    max_attempts = max(1, n) * 4
+    while len(out) < n and attempts < max_attempts and anchors:
+        anchor = anchors[attempts % len(anchors)]
+        attempts += 1
+        prompt = _new_example_prompt(anchor, task_type)
+        try:
+            raw = generate_fn(prompt, temperature=0.7, max_tokens=512)
+            row = json.loads(raw)
+        except Exception:
+            continue
+        if not isinstance(row, dict) or not row.get("text"):
+            continue
+        if verify_fn is not None and not verify_fn(row):
+            continue
+        row["_source"] = f"synth:{task_type}"
+        row["_provenance"] = "synthetic_positive"
+        out.append(row)
+    if log:
+        log(f"  new-correct synthesis: {len(out)}/{n} kept ({attempts} attempts)")
+    return out
+
+
+def synthesize_examples(
+    examples: list[dict],
+    *,
+    task_type: str,
+    n: int,
+    generate_fn,
+    verify_fn=None,
+    fallback_teachers=(),
+    log=None,
+) -> list[dict]:
+    """Unified, task-adaptive synthesis entry (redesign 2026-07-31).
+
+    - classification / NER: contrastive hard negatives (2-for-1), ungated.
+    - generation-family (math/code/generation/multilingual/structured): NEW CORRECT
+      in-distribution examples, verified when a ``verify_fn`` is supplied.
+
+    Returns synthetic (and, for hard negatives, anchor) rows in the same format as the
+    real data. Non-fatal: an unavailable/failing backend yields fewer rows, never raises.
+    """
+    if n <= 0 or not examples:
+        return []
+    if task_type in ("classification", "NER"):
+        return synthesize_hard_negatives(
+            examples,
+            n,
+            task_type=task_type,
+            generate_fn=generate_fn,
+        )
+    if task_type in _GENERATION_FAMILY:
+        return _synthesize_new_correct(
+            examples,
+            task_type=task_type,
+            n=n,
+            generate_fn=generate_fn,
+            verify_fn=verify_fn,
+            log=log,
+        )
+    return []
