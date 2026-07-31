@@ -674,7 +674,9 @@ def _wallclock_exceeded() -> bool:
 # `consecutive_no_improvement` (set in evaluate_node) grows every non-improving eval and
 # is NOT popped. Once this many evals in a row fail to beat the best score, stop churning
 # and escalate — which promotes to a bigger model if one fits, else terminates cleanly.
-MAX_STALL_EVALS = int(_os.environ.get("SLM_MAX_STALL_EVALS", "30"))
+# Set to 20: with non-deterministic curation the run should escalate promptly once 20
+# consecutive evals fail to improve (the sole stuck-run backstop besides the wall clock).
+MAX_STALL_EVALS = int(_os.environ.get("SLM_MAX_STALL_EVALS", "20"))
 
 
 def _tried_hparam_configs(state) -> list[dict]:

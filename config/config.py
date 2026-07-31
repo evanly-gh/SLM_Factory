@@ -138,15 +138,17 @@ DATASET_SIZE_BY_TYPE = {
 # needed to instill, per the fine-tuning sample-size research). Whatever it picks is clamped
 # to [floor, ceiling]:
 #   - CURRICULUM_SIZE_FLOOR: never train on fewer than this (small on-device models need
-#     more data than 8B models — selection→instillation regime shift).
+#     more data than 8B models — selection→instillation regime shift). Set to 3000 as the
+#     per-task floor: curricula are synth-filled up to this size when real data + synthesis
+#     fall short, so every task trains on ≥3000 rows regardless of DATASET_SIZE_BY_TYPE.
 #   - EVAL_SET_SIZE: held-out eval floor. Larger eval sets give statistically reliable
 #     metrics — F1 CIs under-cover below n≈100; per-class macro-F1 needs ≥30–50/class or a
 #     3-example rare class swings it wildly (the main source of the earlier score oscillation).
 #   - DATA_SIZE_CEILING: hard cap so an over-eager target can't blow the wall clock.
 # DATASET_SIZE_BY_TYPE (above) is now only the FALLBACK when the planner gives no number.
-CURRICULUM_SIZE_FLOOR = int(os.environ.get("SLM_CURRICULUM_FLOOR", "1000"))
+CURRICULUM_SIZE_FLOOR = int(os.environ.get("SLM_CURRICULUM_FLOOR", "5000"))
 EVAL_SET_SIZE = int(os.environ.get("SLM_EVAL_SET_SIZE", "800"))
-DATA_SIZE_CEILING = int(os.environ.get("SLM_DATA_CEILING", "10000"))
+DATA_SIZE_CEILING = int(os.environ.get("SLM_DATA_CEILING", "25000"))
 
 # --- Local hard-negative / balancing synthesis model (contamination-safe, no Claude) ---
 # Served by a local vLLM OpenAI-compatible endpoint (see scripts/serve_synth.slurm). The
