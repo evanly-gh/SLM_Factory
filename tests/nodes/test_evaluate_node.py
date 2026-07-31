@@ -5,10 +5,7 @@ from unittest.mock import patch, MagicMock
 from config.android_pool import CapabilityMeasurement, ModelSpec, HardwareConstraints
 from training.lora_trainer import TrainingOutput
 from eval.harness import EvalResult
-from agent.data_rebuild import (
-    data_rebuild_plan_identity,
-    normalize_data_rebuild_plan,
-)
+from agent.data_rebuild import normalize_data_rebuild_plan
 
 os.environ.setdefault("ANTHROPIC_API_KEY", "test-key")
 os.environ.setdefault("EXA_API_KEY", "test-key")
@@ -357,14 +354,13 @@ def test_evaluate_node_uses_bf16_path_when_quant_none(mock_hw, mock_profile, moc
     state = _make_state(quant=None)
     plan = normalize_data_rebuild_plan(
         {
-            "primary_strategy": "resample_existing",
+            "strategy": "resample",
             "target_rows": 64,
         },
         task_type="classification",
         hypothesis="rebalance aggregate classes",
     )
     state["data_rebuild_plan"] = plan
-    state["data_rebuild_plan_identity"] = data_rebuild_plan_identity(plan)
     state["last_curation"] = {
         "total_examples": 12,
         "n_gold": 5,
@@ -373,10 +369,9 @@ def test_evaluate_node_uses_bf16_path_when_quant_none(mock_hw, mock_profile, moc
         "n_hard_generated": 3,
         "label_dist": {"a": 6, "b": 6},
         "data_rebuild_plan": plan,
-        "data_rebuild_plan_identity": data_rebuild_plan_identity(plan),
         "rebuild_config": {"target_rows": 64, "seed": 17},
         "strategy_composition": [{
-            "strategy": "resample_existing",
+            "strategy": "resample",
             "rows": 12,
         }],
         "plan_yield": {"status": "novel", "novel_rows": 12},
@@ -409,10 +404,6 @@ def test_evaluate_node_uses_bf16_path_when_quant_none(mock_hw, mock_profile, moc
     assert dataset_identity["path"] == "/data.jsonl"
     assert dataset_identity["version"] == 1
     assert dataset_identity["plan"] == plan
-    assert (
-        dataset_identity["plan_identity"]
-        == data_rebuild_plan_identity(plan)
-    )
     assert dataset_identity["config"] == {"target_rows": 64, "seed": 17}
     assert dataset_identity["composition"] == state["last_curation"]
     assert out["dag"][-1]["evaluation_state"]["last_eval"]["f1"] == 0.85

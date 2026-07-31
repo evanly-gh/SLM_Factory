@@ -20,10 +20,11 @@ from agent.checkpoint import (
     write_artifact_manifest,
 )
 from agent.state_codec import StateCodecError, decode_state, encode_state
-from agent.data_rebuild import (
-    data_rebuild_plan_identity,
-    normalize_data_rebuild_plan,
-)
+from agent.data_rebuild import normalize_data_rebuild_plan
+
+# Opaque plan-identity string: identity is no longer computed by the pipeline (the
+# redesign dropped plan dedup), but the state field still round-trips through the codec.
+_PLAN_ID = "plan-hash-test"
 
 
 def _state(tmp_path: Path) -> dict:
@@ -57,12 +58,8 @@ def _state(tmp_path: Path) -> dict:
     )
     rebuild_plan = normalize_data_rebuild_plan(
         {
-            "primary_strategy": "preserve_elite_resample",
+            "strategy": "resample",
             "target_rows": 64,
-            "elite": {
-                "provenance": "current_dataset",
-                "dataset_version": 3,
-            },
         },
         task_type="classification",
         hypothesis="preserve the winning rows while resampling",
@@ -70,10 +67,10 @@ def _state(tmp_path: Path) -> dict:
     curation = {
         "total_examples": 1,
         "data_rebuild_plan": rebuild_plan,
-        "data_rebuild_plan_identity": data_rebuild_plan_identity(rebuild_plan),
+        "data_rebuild_plan_identity": _PLAN_ID,
         "rebuild_config": {"target_rows": 64, "seed": 19},
         "strategy_composition": [{
-            "strategy": "preserve_elite_resample",
+            "strategy": "resample",
             "rows": 1,
         }],
         "plan_yield": {"status": "novel", "novel_rows": 1},
@@ -97,9 +94,7 @@ def _state(tmp_path: Path) -> dict:
         "dataset_version": 3,
         "last_curation": curation,
         "data_rebuild_plan": rebuild_plan,
-        "data_rebuild_plan_identity": data_rebuild_plan_identity(
-            rebuild_plan
-        ),
+        "data_rebuild_plan_identity": _PLAN_ID,
         "source_acquire_rounds_used": 2,
         "curation_log_path": str(tmp_path / "data-curation.md"),
         "test_report": {
@@ -130,9 +125,7 @@ def _state(tmp_path: Path) -> dict:
                     "version": 3,
                     "path": str(dataset),
                     "plan": rebuild_plan,
-                    "plan_identity": data_rebuild_plan_identity(
-                        rebuild_plan
-                    ),
+                    "plan_identity": _PLAN_ID,
                     "config": curation["rebuild_config"],
                     "composition": curation,
                 },

@@ -78,11 +78,10 @@ def is_available(timeout: float = 8.0, log=print) -> bool:
 class SynthesisUnavailableError(RuntimeError):
     """The local synthesis endpoint did not come back within the allowed wait.
 
-    Raised instead of degrading to gold-only. A plan that declared
-    ``targeted_synth_positive`` and then silently produced zero synthetic rows is a
-    strategy attribution lie: the DAG records the strategy the orchestrator chose while
-    the dataset contains none of its output. Stopping is the honest outcome — the run
-    checkpoints, the endpoint gets restarted, and the run resumes.
+    Retained for compatibility. As of the 2026-07-31 redesign, curate no longer raises this
+    on a missing endpoint: the ``synthesize`` strategy and synth-fill now degrade GRACEFULLY
+    (fewer rows, an honest ``allocation_fallbacks`` entry, resample-fill for the remainder)
+    rather than stopping the run. Synthesis is ungated across task types and score bands.
     """
 
 
