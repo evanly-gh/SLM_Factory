@@ -297,7 +297,7 @@ def normalize_data_rebuild_plan(
             field="data_rebuild.synth_rows",
             default=300,
             lower=0,
-            upper=500,
+            upper=2000,
             step=5,
         ),
         "max_acquire_rounds": _integer(
