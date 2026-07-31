@@ -540,28 +540,50 @@ Valid hyperparameter JSON example:
 }
 End hyperparameter example.
 
-Data-rebuild payload constraints:
-- strategy: EXACTLY ONE of:
-    "resample"   -> reshuffle / re-draw rows from the existing pool
-    "acquire"    -> add new rows from the same or a new provenance (real-source mining)
-    "synthesize" -> generate new synthetic rows (task-adaptive; see below)
-- target_rows: integer [16, ceiling], step 8
-- resample_fraction: float [0.10,1.00], step 0.05
-- new_real_rows: integer [0,500], step 5 (used by "acquire")
-- synth_rows: integer [100,500], step 5 (used by "synthesize" — choose how many new
-  synthetic rows to generate, at your discretion, anywhere in 100–500)
-- max_acquire_rounds: integer [0,3], further limited by remaining budget
-- difficulty_buckets: numeric weights for easy, medium, and hard
-- confusion_pairs and pattern_hint: aggregate categories only, never raw eval text
+DRIVE EVERY DATA-REBUILD FIELD FROM THE FAILURE ANALYSIS. The report gives you
+per-difficulty accuracy (easy/medium/hard), aggregate confusion counts, a diagnosis, a
+suggested intervention, and prior source novelty/yield. Every field below MUST be a
+reasoned function of THAT evidence — not a fixed default and not a guess. In your
+"hypothesis", name the specific failure evidence (which buckets, which confusion pairs)
+that each non-trivial field value is responding to.
+
+Data-rebuild payload constraints (how to set each from the failure analysis):
+- strategy: EXACTLY ONE of — pick by WHERE the failure is:
+    "resample"   -> buckets are roughly balanced / the pool is adequate and only needs
+                    rebalancing or a fresh draw (no strong single failing region).
+    "acquire"    -> the DATA is wrong or too thin: the EASY bucket is failing, or prior
+                    source novelty/yield was low — bring in new real rows.
+    "synthesize" -> a specific hard/confusable region is failing: MEDIUM/HARD buckets are
+                    weak or confusion pairs dominate — generate targeted new rows there.
+- target_rows: integer [16, ceiling], step 8. Scale to failure BREADTH: broad/low overall
+  accuracy across buckets -> larger target; a thin near-converged failure tail -> smaller.
+- resample_fraction: float [0.10,1.00], step 0.05. HIGHER when the existing pool is sound
+  and you are mainly rebalancing; LOWER when the pool is implicated in the failures (leave
+  room for new/synthetic rows).
+- new_real_rows: integer [0,500], step 5 (used by "acquire"). Scale to the size of the
+  failing region and remaining acquire budget; more when the easy bucket fails or novelty
+  was low.
+- synth_rows: integer [100,500], step 5 (used by "synthesize"). Scale to failure SEVERITY:
+  toward 500 when MANY difficulty tiers or confusion pairs are failing; toward 100 when the
+  failing region is small/narrow.
+- max_acquire_rounds: integer [0,3], further limited by remaining budget. Higher when prior
+  source novelty/yield was low (you must search harder for genuinely new data).
+- difficulty_buckets: numeric weights for easy/medium/hard. Weight INVERSELY to measured
+  per-difficulty accuracy — put the most weight on the worst-scoring bucket(s).
+- confusion_pairs: echo the dominant aggregate confusion counts you were given for the
+  failing categories (aggregate only).
+- pattern_hint: describe the dominant failure mode from the diagnosis/confusion (aggregate
+  categories only, never raw eval text).
 
 Rules:
-- "hypothesis" is REQUIRED and must causally justify the action
+- "hypothesis" is REQUIRED and must causally justify the action AND tie each non-trivial
+  field to the failure evidence it responds to.
 - "data_rebuild" is REQUIRED when intervention is "data_rebuild"
 - "hyperparams" is REQUIRED when intervention is "hyperparameter"
 - emit no keys outside this schema and never include the other intervention's payload
 - There is NO restriction on which strategy you may choose: any strategy is valid for any
-  task type and at any score. Choose from the trajectory and your estimate of what is
-  failing (per-difficulty accuracy + confusion pairs), not from mechanical eligibility.
+  task type and at any score. Choose ONLY from the failure analysis (per-difficulty
+  accuracy + confusion pairs + diagnosis), not from mechanical eligibility.
 - "synthesize" is task-adaptive: contrastive hard negatives for classification/NER, and
   new CORRECT in-distribution examples for math/code/generation (never wrong-answer data).
 - Regardless of strategy, the curriculum is synth-filled up to target_rows when real data
@@ -880,7 +902,7 @@ def _llm_iterate(state: AgentState) -> dict:
 
 ## {tried_block}
 
-## Prior declarative data-rebuild plan identities
+## Data-rebuild plan notes
 {rebuild_trials_block}
 
 ## Source novelty and prior plan yield
@@ -888,13 +910,13 @@ def _llm_iterate(state: AgentState) -> dict:
 
 Diagnose WHY the score is where it is from aggregate per-difficulty and confusion patterns,
 source novelty/yield, remaining budget, prior hypotheses, and the trajectory,
-then decide the next intervention. If you choose "hyperparameter", you MUST propose a config
-whose complete (dataset, hyperparameter) identity is NOT in the already-tried list above
-(training is deterministic — an exact repeat cannot help). If the
-useful hyperparameter space is exhausted (all sensible configs tried), choose "data_rebuild"
-or expect the system to escalate to a larger model. A data_rebuild MUST include a bounded
-declarative plan whose exact identity is not in the tried list. Never inspect raw eval rows.
-Return only the decision JSON.
+then decide the next intervention. If you choose "data_rebuild", set EVERY field of the plan
+as a reasoned function of that failure analysis (see the per-field guidance above), and name
+the driving evidence in your hypothesis. If you choose "hyperparameter", you MUST propose a
+config whose complete (dataset, hyperparameter) identity is NOT in the already-tried list
+above (training is deterministic — an exact repeat cannot help). If the useful hyperparameter
+space is exhausted (all sensible configs tried), choose "data_rebuild" or expect the system to
+escalate to a larger model. Never inspect raw eval rows. Return only the decision JSON.
 """
 
     messages = [SystemMessage(content=_ITERATE_SYSTEM), HumanMessage(content=user_content)]
