@@ -192,12 +192,14 @@ the run** rather than falling back — see [`PIPELINE.md` §2](PIPELINE.md#2-glo
     the batch-shape exclusion and its reason explicitly.
   - A stray `hyperparams` block on a `data_rebuild` is **stripped, not rejected** — see
     [`PIPELINE.md` §7.1](PIPELINE.md#71-data_rebuild) for why.
-  - Six rebuild strategies with per-field bounded/stepped ranges; `targeted_synth_positive` is
-    eligible only for `classification` and `NER`.
+  - **Three** rebuild strategies (`resample`, `acquire`, `synthesize`) with per-field
+    bounded/stepped ranges. No task-type or score gating — any strategy is valid for any task
+    (redesign 2026-07-31); `synthesize` is task-adaptive (hard negatives for classification/NER,
+    new correct examples for generation-family).
 - **Validation:** `_parse_decision_json` handles content-block lists, code fences, and prose
   wrapping, and **always** raises `ValueError` (never a bare `JSONDecodeError`).
   `_validate_decision_json` enforces field allow-lists, branch exclusivity, integer-vs-numeric
-  JSON types, finite threshold values, deterministic plan identities, and **recursive rejection
+  JSON types, finite threshold values, and **recursive rejection
   of any held-out eval text** in any string. It is re-applied to the result with
   `allow_internal=True` as defense in depth, so mock/alternate provider paths cannot bypass the
   contract.
@@ -291,18 +293,20 @@ negatives.** CoT may fall back to task-routed DeepSeek/OpenAI.
 - **Critique:** span/type integrity is enforced, but nothing confirms the rewrite preserved the
   intended difficulty.
 
-### 2.4 Open generation, math, and code: no synthesis prompt is sent
+### 2.4 Open generation, math, and code: task-adaptive *new-correct* synthesis (redesign 2026-07-31)
 
-- **Code:** `data/curriculum.py::synthesize_hard_negatives`, generation / math / code branches.
-- **Behavior:** **no backend is contacted.** Generation returns gold anchors unchanged; math and
-  code warn and return the originals. Schema validation rejects `targeted_synth_positive` for
-  these task types before any call.
-- **Safety property (deliberate):** an intentionally wrong answer or non-working program is never
-  written as a positive SFT target.
-- **Consequence:** these three families have **no augmentation strategy at all** — only real-data
-  sampling/mining plus optional CoT.
-- **Improve:** a preference/ranking objective with explicit chosen/rejected fields, or verified
-  new-problem generation gated on exact-answer/execution checks.
+- **Code:** `data/curriculum.py::synthesize_examples` → `_synthesize_new_correct` for the
+  generation family; `synthesize_hard_negatives` still serves classification/NER.
+- **Behavior:** synthesis is **ungated** for all task types. For math/code/generation it generates
+  **new, correct, in-distribution** examples in the same schema as the anchors (via
+  `_new_example_prompt`), verified by a `verify_fn` where one exists (math answer / code tests),
+  and kept only if they pass. It never writes a wrong answer as a positive SFT target.
+- **Safety property (preserved):** contrastive *wrong-answer* pairs are still confined to
+  classification/NER; generation-family synthesis is correct-only.
+- **Consequence:** every family now has a synthesis path and curricula are synth-filled to the
+  target size; unverifiable generation rows fall back to standard quality controls.
+- **Improve:** stronger verifiers (full execution harness for code, symbolic checks for math)
+  and a preference/ranking objective for open generation.
 
 ---
 

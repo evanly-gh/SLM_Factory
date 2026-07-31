@@ -138,16 +138,15 @@ consulted by every router — so termination is checked on both sides of every e
 | `MAX_TURNS_MAIN` | 1500 | `config/config.py` | Cumulative node executions; also the LangGraph `recursion_limit` |
 | `MAX_WALLCLOCK_S` | `14*3600` | `config/config.py` | 0 disables. Requeue scripts set 0 and let Slurm `USR1` drive rollover |
 | `turn_budget` | 1500 cold / 500 prod | `AgentState` | Charged at 2 turns per iteration (`curate` + `train`) |
-| `STAGNATION_WINDOW` | 50 | `agent/nodes/iterate.py` | Evals examined by the stagnation test |
+| `STAGNATION_WINDOW` | 20 | `agent/nodes/iterate.py` | Evals examined by the stagnation test |
 | `STAGNATION_MIN_DELTA` | 0.02 | `agent/nodes/iterate.py` | Minimum window gain that counts as progress |
-| `MAX_STALL_EVALS` | 50 | `agent/nodes/iterate.py` | Consecutive non-improving evals before escalation |
-| `CURRICULUM_SIZE_FLOOR` | 1000 | `config/config.py` | Planner's curriculum target is clamped **up** to this |
+| `MAX_STALL_EVALS` | 20 | `agent/nodes/iterate.py` | Consecutive non-improving evals before escalation (sole stuck-run backstop) |
+| `CURRICULUM_SIZE_FLOOR` | 3000 | `config/config.py` | Per-task floor; curricula are synth-filled up to this |
 | `EVAL_SET_SIZE` | 800 | `config/config.py` | Eval floor; below n≈100 F1 CIs under-cover |
-| `DATA_SIZE_CEILING` | 10000 | `config/config.py` | Hard cap on both targets |
+| `DATA_SIZE_CEILING` | 10000 | `config/config.py` | Hard cap on both targets (also the `target_rows` upper clamp) |
 | `DEFAULT_STOP_THRESHOLD` | 0.96 | `config/config.py` | Used only if the planner supplies none |
 | `MAX_PAID_ACQUIRE_ROUNDS_PER_RUN` | 9 | `agent/data_rebuild.py` | Exa spend ceiling for the whole run |
 | `MAX_PAID_ACQUIRE_ROUNDS_PER_PLAN` | 3 | `agent/data_rebuild.py` | Per data-rebuild plan |
-| `QUERY_VARIANTS` | 8 | `agent/data_rebuild.py` | Plan-identity rotation space |
 
 `STAGNATION_*`, `MAX_STALL_EVALS`, and both size targets are env-overridable
 (`SLM_STAGNATION_WINDOW`, `SLM_MAX_STALL_EVALS`, `SLM_CURRICULUM_SIZE`, `SLM_EVAL_SET_SIZE`, …).
@@ -346,32 +345,27 @@ Requires `eval_set`; raises `RuntimeError` if absent (see [§10](#10-production-
 
 1. **Eval firewall (layer 2)** — `_exclude_eval_rows` over `train_examples`.
 2. **Resolve the plan** — `state["data_rebuild_plan"]` if present, else
-   `fallback_data_rebuild_plan`; then `normalize_data_rebuild_plan` and
-   `ensure_untried_data_rebuild_plan`.
-3. **Exhaustion** — `DataRebuildPlanSpaceExhausted` is caught here and converted to
-   `next_action = "terminate"` + `termination_reason = "data_rebuild_plan_space_exhausted"`,
-   preserving the best model. It previously propagated as an uncaught `ValueError` and killed a
-   44.8-hour run whose best checkpoint had already been found at iteration 46.
-4. **Seed** — `int(identity[:8],16) + dataset_version*1009 + query_variant`. Fully
-   deterministic per plan identity.
-5. **Execute strategies** — one primary plus up to two support, in declared causal order.
-6. **Allocate to `target_rows`**, in this order:
-   - material strategies (elite → mined → synthesized), each capped at its own budget
-   - replay buffer (production only, ≤20% of `target_rows`)
-   - the working sample (`resample_existing` / `source_diversification` /
-     `difficulty_weighted_sampling`)
-7. **CoT annotation** for math/code/generation (`_annotate_generation_cot`); skipped under
+   `fallback_data_rebuild_plan`; then `normalize_data_rebuild_plan`. No dedup/rotation:
+   the plan is used as-is (redesign 2026-07-31).
+3. **Seed** — `_entropy_seed()` (fresh OS entropy per sampler call). **Non-deterministic** by
+   design; there is no reproducible per-plan seed.
+4. **Execute the one strategy** — `acquire` mines new real rows, `synthesize` generates
+   task-adaptive rows, `resample` reshuffles; then resample-fill covers the remainder to
+   `target_rows`.
+5. **Synth-fill to `target_rows`** — `_synth_fill_to_target` tops up any shortfall with
+   task-adaptive synthesis (covers the initial curriculum and every rebuild); degrades
+   gracefully if the endpoint is down.
+6. **CoT annotation** for math/code/generation (`_annotate_generation_cot`); skipped under
    `SLM_CHEAP=1`.
-8. `apply_quality_controls` → truncate to `target_rows` → **eval firewall (layer 3)**.
-9. Atomic write to `artifacts/dataset_v{N}.jsonl`; every row stamped `_dataset_version`.
-10. Record `last_curation`: provenance/source/difficulty composition, per-strategy
-    `rows`/`novel_rows`, `plan_yield`, `source_novelty`, and `allocation_fallbacks`.
+7. `apply_quality_controls` → truncate to `target_rows` → **eval firewall (layer 3)**.
+8. Atomic write to `artifacts/dataset_v{N}.jsonl`; every row stamped `_dataset_version`.
+9. Record `last_curation`: provenance/source/difficulty composition, per-origin
+   `rows`/`novel_rows`, `plan_yield`, `source_novelty`, and `allocation_fallbacks`.
 
-**Allocation fallbacks are recorded, not silent.** When mining yields no novel rows, positive
-synthesis yields no verified rows, or `source_diversification` has fewer than two sources, the
-strategy is rewritten to `base_fill` / `resample_existing_fallback` and an entry is appended to
-`allocation_fallbacks`. Zero-weight difficulty buckets never backfill; unfilled rows are
-reported as `nonzero_buckets_only`.
+**Allocation fallbacks are recorded, not silent.** When `acquire` mining yields no novel rows,
+or `synthesize` produces nothing (endpoint down / cheap mode), the shortfall is covered by
+resample-fill and an honest entry (`base_fill` / `synth_unavailable_degrade`) is appended to
+`allocation_fallbacks` — never a crash and never a misattributed strategy.
 
 `apply_quality_controls` (`data/curriculum.py`) implements four controls, task-routed:
 label balancing, context-length outlier removal (>3× median), entity-value capping (≤3
@@ -561,8 +555,8 @@ identities with yield status, source novelty, and remaining budgets.
 - **Failure ladder:** `raise_if_fatal` → test-agent `suggested_intervention` → score bands.
 
 **Score bands are fallback only**, not enforced boundaries on a valid LLM decision:
-`<0.80` → `data_rebuild` / `resample_existing`; `0.80–0.95` → `hyperparameter`;
-`≥0.95` → `data_rebuild` / `targeted_synth_positive`.
+`<0.80` → `data_rebuild` / `acquire`; `0.80–0.95` → `hyperparameter`;
+`≥0.95` → `data_rebuild` / `synthesize`.
 
 **Threshold adjustment.** `new_threshold` is clamped to `max(value, initial_stop_threshold)` and
 applied only if it *lowers* the current threshold. The LLM is told the floor is system-enforced.
@@ -658,70 +652,50 @@ rejected.
 Routes to `curate`; hyperparameters are held at the current best so the data change is isolated
 and comparable.
 
-`agent/data_rebuild.py` defines six strategies:
+`agent/data_rebuild.py` defines **three** strategies (redesign 2026-07-31), chosen singly with
+no task-type or score gating:
 
-| Strategy | What it does | Eligibility |
-|---|---|---|
-| `resample_existing` | Redraw from the current pool | primary-only |
-| `preserve_elite_resample` | Keep top-quality rows from an elite dataset version, redraw the rest | needs a resolvable elite source |
-| `mine_new_real_source` | Bounded real-source acquisition (local → deterministic benchmark → paid Exa) | budget-gated |
-| `source_diversification` | Round-robin across distinct sources | needs ≥2 sources |
-| `difficulty_weighted_sampling` | Quota rows by easy/medium/hard weights | always |
-| `targeted_synth_positive` | Local-Qwen contrastive generation | **`classification` and `NER` only** |
+| Strategy | What it does |
+|---|---|
+| `resample` | Reshuffle / re-draw rows from the existing pool (entropy-seeded) |
+| `acquire` | Add new rows from the same or a new provenance (bounded real-source mining: local → deterministic benchmark → paid Exa) |
+| `synthesize` | Task-adaptive synthetic generation — hard negatives for classification/NER, new *correct* in-distribution examples for math/code/generation |
+
+Regardless of strategy, the curriculum is **synth-filled up to `target_rows`** when real data
+falls short (covers the initial curriculum and every rebuild); if synthesis is unavailable it
+degrades gracefully (resample-fill + a logged `allocation_fallbacks` entry, never a crash).
 
 **Plan schema** (`normalize_data_rebuild_plan`) — every field is snapped to a bounded, stepped
-range, so a plan identity is a stable hash:
+range:
 
-`primary_strategy` · `support_strategies` (≤2) · `target_rows` [16,2000] step 8 ·
-`resample_fraction` [0.10,1.00] step 0.05 · `preserve_elite_fraction` [0,0.80] step 0.05 ·
-`new_real_rows` [0,500] step 5 · `synth_rows` [0,200] step 5 · `max_acquire_rounds` [0,3] ·
-`query_variant` [0,7] · `difficulty_buckets` · `confusion_pairs` (≤8) · `pattern_hint` ·
-`elite.{provenance, dataset_version}`
+`strategy` (one of the three) · `target_rows` [16, `DATA_SIZE_CEILING`] step 8 ·
+`resample_fraction` [0.10,1.00] step 0.05 · `new_real_rows` [0,500] step 5 ·
+`synth_rows` [0,2000] step 5 · `max_acquire_rounds` [0,3] · `difficulty_buckets` ·
+`confusion_pairs` (≤8) · `pattern_hint`
 
-Validation rejects: duplicate primary/support, more than one sampling strategy,
-`resample_existing` in supports, material strategies with zero budget, material budgets summing
-above `target_rows`, `targeted_synth_positive` for an ineligible task type, and any raw
-held-out text anywhere in the plan.
+Validation rejects: an unknown `strategy`, and any raw held-out text anywhere in the plan. A
+material strategy (`acquire`/`synthesize`) with a zero budget has a sensible positive budget
+auto-filled rather than being rejected.
 
-**Real-source mining** tries local and deterministic benchmark sources before process-isolated
-paid discovery. Local candidates require an explicit benchmark match or strong
-task+label+schema agreement — a task-type match alone is not enough. Paid rounds use a locked
-append-only reservation ledger under the stable run directory: reservation precedes the call and
-remains spent after completion, failure, or crash.
+**Non-determinism.** There is no plan-identity dedup, no untried-plan rotation, and no
+`DataRebuildPlanSpaceExhausted`. Sampling and synthesis draw fresh OS entropy each call, so
+repeated rebuilds genuinely vary. The orchestrator freely re-picks any strategy each turn;
+**escalation after `MAX_STALL_EVALS` (20) non-improving evals** is the sole stuck-run backstop
+(plus the wall-clock guard). Exact checkpoint-resume reproducibility is intentionally dropped.
 
-**Plan-space exhaustion** (`ensure_untried_data_rebuild_plan`) rotates in three stages before
-giving up:
+**Real-source mining** (for `acquire`) tries local and deterministic benchmark sources before
+process-isolated paid discovery. Local candidates require an explicit benchmark match or strong
+task+label+schema agreement. Paid rounds use a locked append-only reservation ledger under the
+stable run directory: reservation precedes the call and remains spent after completion, failure,
+or crash.
 
-1. `query_variant` (8 values — also part of every sampling seed, so each rotation genuinely
-   changes execution)
-2. `resample_fraction` (0.50, 0.75, 0.90, 1.0, 0.35)
-3. **`primary_strategy`** — added because holding it fixed bounded the space at roughly
-   1 × 8 × 5 = 40 plans, which the NER run burned through in 31 rebuilds. A different strategy
-   changes *what data is assembled*; a different seed only reshuffles it.
-
-Then raises `DataRebuildPlanSpaceExhausted` — a `ValueError` subclass, so existing handlers
-still catch it, but a distinct type so `curate` can terminate cleanly.
-
-**Fallback plan** (`fallback_data_rebuild_plan` → `_fallback_strategy_from_signal`) reasons from
-**measured signal**, not prose:
-
-1. `score >= 0.95` and task eligible → `targeted_synth_positive` (near-ceiling refinement)
-2. `easy < 0.6` → `mine_new_real_source` / `source_diversification` — the *data* is wrong
-3. `medium`/`hard < 0.6` → `targeted_synth_positive` if eligible and confusion exists, else
-   `difficulty_weighted_sampling`
-4. below goal with no single failing bucket → broaden with new real material
-5. everything tried → `resample_existing`
-
-Each branch prefers a strategy not already tried this run. Difficulty weights are computed
-**inversely to measured accuracy** (`0.1 + 0.7 × deficit/total_deficit`, floored at 0.1 so no
-bucket is dropped entirely). Material budgets are derived from the chosen strategies rather than
-hard-zero.
-
-> This replaced a keyword match over the hypothesis string (`"hard" in hypothesis` →
-> `difficulty_weighted_sampling`, …). On the fallback path the hypothesis *is* the test-agent
-> diagnosis, and the only two diagnoses that suggest `data_rebuild` contain none of the matched
-> keywords — so every fallback rebuild fell through to `resample_existing`, 31 of 31 in the NER
-> run, which exhausted the single-strategy plan space and crashed the run.
+**Fallback plan** (`fallback_data_rebuild_plan` → `_fallback_strategy_from_signal`) is
+**non-deterministic and signal-weighted**: it draws a weighted-random strategy biased by the
+measured failure signal — failing easy bucket biases toward `acquire`; weak medium/hard (or
+confusion pairs) biases toward `synthesize`; otherwise all three are roughly equal. Difficulty
+weights are computed **inversely to measured accuracy** (`0.1 + 0.7 × deficit/total_deficit`,
+floored at 0.1). This replaced the old deterministic keyword/rotation chooser that sent every
+NER fallback to `resample_existing` and exhausted the (then-bounded) plan space.
 
 **A stray `hyperparams` block on a `data_rebuild` is stripped, not rejected.** The rule being
 enforced is "a data rebuild must not also change hyperparameters"; dropping the field enforces

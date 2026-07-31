@@ -1,5 +1,16 @@
 # Data Curation, Failure Analysis & Token Caps
 
+> **Redesign 2026-07-31.** The data-curation subsystem was reworked (see
+> [spec](superpowers/specs/2026-07-31-data-curation-redesign-design.md)). The six rebuild
+> strategies collapsed to **three** — `resample`, `acquire`, `synthesize` — chosen freely by
+> the orchestrator with no task/score gating. Curation is now **non-deterministic**
+> (entropy-seeded sampling; the plan-identity dedup, untried-plan rotation, and
+> `DataRebuildPlanSpaceExhausted` were removed). Synthesis is **ungated** and **task-adaptive**
+> (hard negatives for classification/NER; new *correct* examples for math/code/generation) and
+> **synth-fills** every curriculum up to the target size. Per-task floor is ≥3000; escalation
+> fires after 20 non-improving evals. Sections below marked *(pre-redesign)* describe the old
+> model and are retained for history.
+
 A walkthrough of three tightly-related parts of the pipeline:
 
 1. How the `data_rebuild` intervention works, including synthetic data generation.
