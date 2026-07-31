@@ -9,21 +9,16 @@ from collections.abc import Callable
 
 from agent.checkpoint import atomic_write_jsonl
 from agent.data_rebuild import (
-    TARGETED_SYNTH_TASK_TYPES,
-    DataRebuildPlanSpaceExhausted,
-    ensure_untried_data_rebuild_plan,
     fallback_data_rebuild_plan,
     normalize_data_rebuild_plan,
     remaining_paid_acquire_rounds,
-    require_resolvable_elite_source,
-    resolve_elite_source_path,
 )
 from agent.state import AgentState
 from data.curriculum import (
     annotate_cot,
     apply_quality_controls,
     get_cot_fallbacks,
-    synthesize_hard_negatives,
+    synthesize_examples,
 )
 from data.loaders.dataset_integrity import normalize_text
 from data.loaders.web_acquire import mine_additional_real_rows
@@ -35,6 +30,26 @@ _DIFFICULTY_BUCKETS = ("easy", "medium", "hard")
 
 def _log(model_id: str, message: str) -> None:
     print(f"[curate][{model_id}] {message}")
+
+
+def _entropy_seed() -> int:
+    """A fresh, non-deterministic seed per sampler call (redesign 2026-07-31).
+
+    Curation is deliberately NON-deterministic: each reshuffle/synthesis draw uses real
+    OS entropy so repeated rebuilds genuinely vary run to run. There is no plan-identity
+    seed and no reproducibility guarantee across checkpoint resumes.
+    """
+    return int.from_bytes(os.urandom(8), "big")
+
+
+def _verifier_for(task_type: str, state: AgentState):
+    """Return a correctness verifier for synthetic rows, or None if none applies.
+
+    Enhanced in Task 5 with real math/code verifiers; for now generation-family rows
+    are kept after standard quality controls (verify_fn=None) and classification/NER use
+    the contrastive path which needs no verifier.
+    """
+    return None
 
 
 def _cot_benchmark(plan: dict) -> str:
@@ -251,65 +266,6 @@ def _difficulty_sample(
     return selected, max(0, count - len(selected))
 
 
-def _elite_dataset_path(state: AgentState, elite: dict) -> str | None:
-    return resolve_elite_source_path(state, elite)
-
-
-def _select_elite_rows(
-    state: AgentState,
-    plan: dict,
-    eval_set,
-) -> list[dict]:
-    if "preserve_elite_resample" not in {
-        plan["primary_strategy"],
-        *plan["support_strategies"],
-    }:
-        return []
-    reference = plan["elite"]
-    rows, _ = _exclude_eval_rows(
-        _read_jsonl(_elite_dataset_path(state, reference)),
-        eval_set,
-    )
-    version = int(reference["dataset_version"])
-    rows = [
-        row
-        for row in rows
-        if row.get("_dataset_version") in (None, version)
-    ]
-    def quality_key(row: dict):
-        raw_score = row.get("_quality_score", row.get("quality_score", 0.0))
-        try:
-            score = float(raw_score)
-        except (TypeError, ValueError):
-            score = 0.0
-        return (
-            -score,
-            normalize_text(_row_text(row)),
-            json.dumps(row, sort_keys=True, ensure_ascii=False),
-        )
-
-    rows.sort(key=quality_key)
-    rows = apply_quality_controls(
-        rows,
-        task_type=state["task_type"],
-    )
-    rows.sort(key=quality_key)
-    count = min(
-        len(rows),
-        round(plan["target_rows"] * plan["preserve_elite_fraction"]),
-    )
-    return [
-        {
-            **row,
-            "_provenance": "elite",
-            "_strategy_origin": "preserve_elite_resample",
-            "_elite_provenance": reference["provenance"],
-            "_elite_dataset_version": version,
-        }
-        for row in rows[:count]
-    ]
-
-
 def _tag_train_rows(
     rows: list[dict],
     *,
@@ -367,44 +323,20 @@ def _synthesize_positive_rows(
     seed: int,
 ) -> list[dict]:
     task_type = state["task_type"]
-    if task_type not in TARGETED_SYNTH_TASK_TYPES:
-        raise ValueError(
-            f"targeted_synth_positive is not eligible for {task_type}"
-        )
+    # Ungated (redesign 2026-07-31): synthesis is available for EVERY task type and score.
     if os.environ.get("SLM_CHEAP") == "1" or not train_rows:
-        _log(model_id, "  Positive synthesis skipped (cheap mode or no anchors)")
+        _log(model_id, "  Synthesis skipped (cheap mode or no anchors)")
         return []
-    from config.config import SYNTH_MODEL
-    from data.synth_client import (
-        SynthesisUnavailableError,
-        get_generate_fn,
-        wait_until_available,
-    )
+    from data.synth_client import get_generate_fn, wait_until_available
 
     logger = lambda message: _log(model_id, message)
-    # The plan declared targeted_synth_positive, so synthesis is REQUIRED here. Block for a
-    # bounded window (SLM_SYNTH_MIDRUN_WAIT_S, default 10 min, clamped to the wall-clock
-    # reserve) and then STOP the run rather than returning gold-only rows.
-    #
-    # Degrading silently was worse than it looks: curate rewrote the strategy to base_fill
-    # and continued, so the DAG recorded targeted_synth_positive for a dataset containing
-    # zero synthesized rows. Combined with an endpoint that failed 8/9 preflights in the NER
-    # run, that made every synthesis claim in the lineage unverifiable. Opt out of the whole
-    # requirement with SLM_REQUIRE_SYNTH=0, which keeps the old gold-only behavior.
-    require_synth = os.environ.get("SLM_REQUIRE_SYNTH", "1") != "0"
+    # Synthesis is no longer a hard requirement. If the endpoint does not become reachable
+    # within the bounded wait, degrade GRACEFULLY (return no synthetic rows). The caller
+    # records an allocation fallback and resample-fill covers the remainder — never a crash.
     if not wait_until_available(log=logger):
-        if require_synth:
-            raise SynthesisUnavailableError(
-                "targeted_synth_positive requires the local synthesis endpoint, which did "
-                "not become reachable within the mid-run wait. Restart "
-                "scripts/serve_synth.slurm and resume this run from its checkpoint; the "
-                "best model and every artifact are preserved. Set SLM_REQUIRE_SYNTH=0 to "
-                "allow gold-only degradation instead."
-            )
         _log(
             model_id,
-            "  Positive synthesis endpoint unavailable and SLM_REQUIRE_SYNTH=0 — "
-            "retaining real rows only",
+            "  Synthesis endpoint unavailable — degrading (no synthetic rows this pass)",
         )
         return []
     generate = get_generate_fn(log=logger)
@@ -414,27 +346,30 @@ def _synthesize_positive_rows(
         task_type=task_type,
         seed=seed,
     )
-    candidates = synthesize_hard_negatives(
+    candidates = synthesize_examples(
         anchors,
-        n=len(anchors),
         task_type=task_type,
-        pattern_hint=plan["pattern_hint"],
+        n=len(anchors),
         generate_fn=generate,
-        source_label=f"synth:{SYNTH_MODEL}",
+        verify_fn=_verifier_for(task_type, state),
+        log=logger,
     )
     generated = [
         {
             **row,
-            "_provenance": "targeted_synth_positive",
-            "_strategy_origin": "targeted_synth_positive",
+            "_provenance": "synthetic",
+            "_strategy_origin": "synthesize",
         }
         for row in candidates
         if isinstance(row, dict)
-        and str(row.get("_source", "")).startswith("synth:")
+        and (
+            str(row.get("_source", "")).startswith("synth")
+            or row.get("_provenance") == "synthetic_positive"
+        )
     ]
     generated, removed = _exclude_eval_rows(generated, state.get("eval_set"))
     if removed:
-        _log(model_id, f"  Positive synthesis eval firewall removed {removed} row(s)")
+        _log(model_id, f"  Synthesis eval firewall removed {removed} row(s)")
     return generated[:plan["synth_rows"]]
 
 
@@ -536,7 +471,7 @@ def curate_node(state: AgentState) -> AgentState:
             task_type=task_type,
             hypothesis=hypothesis,
             target_rows=int(
-                state.get("curriculum_size_target", 150) or 150
+                state.get("curriculum_size_target", 3000) or 3000
             ),
             default_dataset_version=int(
                 state.get("dataset_version", 0) or 0
@@ -544,47 +479,20 @@ def curate_node(state: AgentState) -> AgentState:
             remaining_acquire_rounds=remaining_paid_acquire_rounds(state),
             forbidden_eval_texts=_normalized_eval_texts(eval_set),
         )
-    try:
-        plan, identity, _ = ensure_untried_data_rebuild_plan(plan, state)
-    except DataRebuildPlanSpaceExhausted as exc:
-        # Running out of untried data plans means "no further data intervention is
-        # available", not "the pipeline is broken". Terminate cleanly with the best
-        # model intact. Previously this propagated as an uncaught ValueError out of
-        # this node and killed the LangGraph stream — that is how the 44.8-hour NER
-        # run ended, after its best checkpoint had already been found at iteration 46.
-        _mlabel = getattr(state.get("selected_model"), "label", "curate")
-        _log(_mlabel, f"  data rebuild exhausted: {exc}")
-        _log(_mlabel, "  → TERMINATE (no untried data plan remains; best model preserved)")
-        state["next_action"] = "terminate"
-        state["termination_reason"] = "data_rebuild_plan_space_exhausted"
-        return state
-    require_resolvable_elite_source(plan, state)
+    # Non-deterministic redesign (2026-07-31): no plan-identity dedup, no untried-plan
+    # rotation, no plan-space exhaustion. The orchestrator freely re-picks a strategy each
+    # turn; escalation-on-no-improvement is the sole stuck-run backstop.
     state["data_rebuild_plan"] = plan
-    state["data_rebuild_plan_identity"] = identity
 
-    strategies = [
-        plan["primary_strategy"],
-        *plan["support_strategies"],
-    ]
-    seed = (
-        int(identity[:8], 16)
-        + int(state.get("dataset_version", 0) or 0) * 1009
-        + int(plan["query_variant"])
-    )
+    strategy = plan["strategy"]
+    seed = _entropy_seed()
     _log(
         model_id,
-        "DATA REBUILD: "
-        f"identity={identity} primary={strategies[0]} "
-        f"support={strategies[1:]} seed={seed}",
+        f"DATA REBUILD: strategy={strategy} target_rows={plan['target_rows']} seed={seed}",
     )
 
     previous_rows = _read_jsonl(state.get("current_dataset_path"))
     previous_texts = _normalized_texts(previous_rows)
-    elite_rows = _select_elite_rows(
-        state,
-        plan,
-        eval_set,
-    )
 
     mining_report = {
         "requested": 0,
@@ -601,7 +509,7 @@ def curate_node(state: AgentState) -> AgentState:
         "rejected_sources": 0,
     }
     mined_rows: list[dict] = []
-    if "mine_new_real_source" in strategies:
+    if strategy == "acquire":
         eval_rows = getattr(eval_set, "all", [])
         if not isinstance(eval_rows, (list, tuple)):
             eval_rows = []
@@ -617,8 +525,8 @@ def curate_node(state: AgentState) -> AgentState:
             eval_source_ban=list(state.get("eval_source_ban") or []),
             requested_rows=plan["new_real_rows"],
             max_paid_rounds=plan["max_acquire_rounds"],
-            query_variant=plan["query_variant"],
-            plan_identity=identity,
+            query_variant=seed % 8,  # entropy-driven search variance (no plan seed anymore)
+            plan_identity="",
             log=lambda message: _log(model_id, message),
         )
         mined_rows, removed = _exclude_eval_rows(mined_rows, eval_set)
@@ -649,41 +557,30 @@ def curate_node(state: AgentState) -> AgentState:
     )
     target_rows = int(plan["target_rows"])
     allocation_fallbacks: list[dict] = []
-    if "mine_new_real_source" in strategies and not mined_rows:
+    if strategy == "acquire" and not mined_rows:
         allocation_fallbacks.append({
             "policy": "rewrite_noop_strategy",
             "reason": "source mining produced no novel rows",
-            "from": "mine_new_real_source",
+            "from": "acquire",
             "to": "base_fill",
         })
     generated_rows: list[dict] = []
-    if "targeted_synth_positive" in strategies:
+    if strategy == "synthesize":
         generated_rows = _synthesize_positive_rows(
             state,
             plan,
             train_rows,
             model_id=model_id,
-            seed=seed + 5,
+            seed=seed,
         )
         if not generated_rows:
             allocation_fallbacks.append({
                 "policy": "rewrite_noop_strategy",
-                "reason": "positive synthesis produced no verified rows",
-                "from": "targeted_synth_positive",
+                "reason": "synthesis produced no rows (endpoint unavailable or cheap mode)",
+                "from": "synthesize",
                 "to": "base_fill",
             })
-    component_rows = {
-        "preserve_elite_resample": elite_rows,
-        "mine_new_real_source": mined_rows,
-        "targeted_synth_positive": generated_rows,
-    }
-    component_budgets = {
-        "preserve_elite_resample": round(
-            target_rows * plan["preserve_elite_fraction"]
-        ),
-        "mine_new_real_source": plan["new_real_rows"],
-        "targeted_synth_positive": plan["synth_rows"],
-    }
+
     selected_rows: list[dict] = []
     selected_texts: set[str] = set()
 
@@ -699,88 +596,23 @@ def curate_node(state: AgentState) -> AgentState:
                 selected_texts.add(text)
             budget -= 1
 
-    # Fixed material strategy budgets are reserved in declared causal order.
-    for strategy in strategies:
-        if strategy in component_rows:
-            allocate(
-                component_rows[strategy],
-                min(component_budgets[strategy], target_rows),
-            )
+    # Reserve the chosen material strategy's rows first (acquire/synthesize), then
+    # resample-fill the remainder from the existing pool (the universal filler for all
+    # three strategies). Each sampler draws its own entropy seed — no reproducibility.
+    if strategy == "acquire":
+        allocate(mined_rows, min(plan["new_real_rows"], target_rows))
+    elif strategy == "synthesize":
+        allocate(generated_rows, min(plan["synth_rows"], target_rows))
 
     working_budget = max(0, target_rows - len(selected_rows))
-    sample_count = min(
-        working_budget,
-        max(
-            1 if tagged_train and working_budget else 0,
-            round(len(tagged_train) * float(plan["resample_fraction"])),
-        ),
+    working = _balanced_sample(
+        list(tagged_train),
+        count=min(working_budget, len(tagged_train)),
+        task_type=task_type,
+        seed=_entropy_seed(),
     )
-    sampling_strategy = next(
-        (
-            strategy for strategy in strategies
-            if strategy in {
-                "resample_existing",
-                "source_diversification",
-                "difficulty_weighted_sampling",
-            }
-        ),
-        None,
-    )
-    effective_sampling_strategy = sampling_strategy
-    if (
-        sampling_strategy == "source_diversification"
-        and len({
-            _source_key(row, default_source)
-            for row in tagged_train
-        }) < 2
-    ):
-        effective_sampling_strategy = "resample_existing_fallback"
-        allocation_fallbacks.append({
-            "policy": "rewrite_noop_strategy",
-            "reason": "source diversification requires at least two sources",
-            "from": "source_diversification",
-            "to": effective_sampling_strategy,
-        })
-        _log(
-            model_id,
-            "  Source diversification has fewer than two sources; "
-            "rewriting to deterministic resampling",
-        )
-    if effective_sampling_strategy == "source_diversification":
-        working = _round_robin_sample(
-            list(tagged_train),
-            count=min(sample_count, len(tagged_train)),
-            key=lambda row: _source_key(row, default_source),
-            seed=seed + 2,
-        )
-    elif effective_sampling_strategy == "difficulty_weighted_sampling":
-        working, unfilled = _difficulty_sample(
-            list(tagged_train),
-            count=min(sample_count, len(tagged_train)),
-            weights=plan["difficulty_buckets"],
-            seed=seed + 3,
-        )
-        if unfilled:
-            allocation_fallbacks.append({
-                "policy": "nonzero_buckets_only",
-                "reason": "difficulty quota unavailable",
-                "unfilled_rows": unfilled,
-            })
-            _log(
-                model_id,
-                "  Difficulty allocation left "
-                f"{unfilled} row(s) unfilled; zero-weight buckets were not used",
-            )
-    else:
-        working = _balanced_sample(
-            list(tagged_train),
-            count=min(sample_count, len(tagged_train)),
-            task_type=task_type,
-            seed=seed + 4,
-        )
-    working_origin = effective_sampling_strategy or "base_fill"
     working = [
-        {**row, "_strategy_origin": working_origin}
+        {**row, "_strategy_origin": "resample"}
         for row in working
     ]
     allocate(working, working_budget)
@@ -828,13 +660,12 @@ def curate_node(state: AgentState) -> AgentState:
     novel_rows = len(final_texts - previous_texts)
     yield_status = "novel" if novel_rows else "no_novelty"
     if (
-        "mine_new_real_source" in strategies
+        strategy == "acquire"
         and mining_report.get("status") == "no_novelty"
     ):
         _log(
             model_id,
-            "  Source mining produced no novelty; overall plan yield still "
-            "depends on every composed strategy",
+            "  Source mining produced no novelty; resample-fill covered the remainder",
         )
     plan_yield = {
         "status": yield_status,
@@ -859,41 +690,29 @@ def curate_node(state: AgentState) -> AgentState:
     )
     strategy_composition = [
         {
-            "strategy": strategy,
-            "rows": origin_composition.get(strategy, 0),
-            "novel_rows": origin_novelty.get(strategy, 0),
+            "strategy": origin,
+            "rows": origin_composition.get(origin, 0),
+            "novel_rows": origin_novelty.get(origin, 0),
         }
-        for strategy in strategies
+        for origin in sorted(origin_composition)
+        if origin_composition.get(origin, 0)
     ]
-    for system_origin in sorted(
-        set(origin_composition) - set(strategies)
-    ):
-        if origin_composition.get(system_origin, 0):
-            strategy_composition.append({
-                "strategy": system_origin,
-                "rows": origin_composition[system_origin],
-                "novel_rows": origin_novelty.get(system_origin, 0),
-            })
     label_dist = Counter(_label_key(row, task_type) for row in dataset)
     state["last_curation"] = {
         "total_examples": len(dataset),
         "n_gold": (
             provenance.get("train_anchor", 0)
-            + provenance.get("elite", 0)
+            + provenance.get("resample", 0)
         ),
-        "n_hard": provenance.get("targeted_synth_positive", 0),
-        "n_hard_generated": provenance.get(
-            "targeted_synth_positive",
-            0,
-        ),
+        "n_hard": provenance.get("synthetic", 0),
+        "n_hard_generated": provenance.get("synthetic", 0),
         "n_hard_source": provenance.get("mined_real", 0),
         "label_dist": dict(label_dist),
+        "strategy": strategy,
         "data_rebuild_plan": plan,
-        "data_rebuild_plan_identity": identity,
         "rebuild_config": {
             "target_rows": plan["target_rows"],
             "resample_fraction": plan["resample_fraction"],
-            "query_variant": plan["query_variant"],
             "seed": seed,
         },
         "strategy_composition": strategy_composition,
