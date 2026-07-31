@@ -373,6 +373,75 @@ def _synthesize_positive_rows(
     return generated[:plan["synth_rows"]]
 
 
+def _synth_fill_to_target(
+    dataset: list[dict],
+    *,
+    target_rows: int,
+    task_type: str,
+    generate_fn,
+    state: AgentState,
+    model_id: str,
+    fallbacks: list[dict] | None = None,
+) -> list[dict]:
+    """Top up the dataset with task-adaptive synthesis up to ``target_rows``.
+
+    Covers the initial curriculum (the first curate pass) and every later rebuild: when
+    real data + the chosen strategy fall short of the target, synthesize the remainder in
+    the same format (task-adaptive — hard negatives for classification/NER, new-correct
+    examples for generation-family). Non-fatal: if synthesis is unavailable (no endpoint
+    or cheap mode) the dataset is left as-is and an honest fallback is recorded — never a
+    crash.
+    """
+    deficit = target_rows - len(dataset)
+    if deficit <= 0:
+        return dataset
+    if os.environ.get("SLM_CHEAP") == "1" or generate_fn is None:
+        if fallbacks is not None:
+            fallbacks.append({
+                "policy": "synth_unavailable_degrade",
+                "reason": "synthesis endpoint unavailable or cheap mode",
+                "from": "synthesize",
+                "to": "base_fill",
+                "unfilled_rows": deficit,
+            })
+        _log(
+            model_id,
+            f"  Synth-fill unavailable; leaving {len(dataset)} rows "
+            f"({deficit} short of {target_rows})",
+        )
+        return dataset
+    extra = synthesize_examples(
+        dataset,
+        task_type=task_type,
+        n=deficit,
+        generate_fn=generate_fn,
+        verify_fn=_verifier_for(task_type, state),
+        log=lambda message: _log(model_id, message),
+    )
+    # Keep only genuinely synthetic rows — the classification/NER hard-negative path also
+    # echoes anchor rows (2-for-1), which are already in the dataset.
+    extra = [
+        row
+        for row in extra
+        if isinstance(row, dict)
+        and (
+            str(row.get("_source", "")).startswith("synth")
+            or row.get("_provenance") == "synthetic_positive"
+        )
+    ]
+    extra, _ = _exclude_eval_rows(extra, state.get("eval_set"))
+    if not extra and fallbacks is not None:
+        fallbacks.append({
+            "policy": "synth_fill_empty",
+            "reason": "synthesis produced no usable rows",
+            "from": "synthesize",
+            "to": "base_fill",
+            "unfilled_rows": deficit,
+        })
+    _log(model_id, f"  Synth-fill added {len(extra)} row(s) toward {target_rows}")
+    return dataset + extra[:deficit]
+
+
 def _annotate_generation_cot(
     rows: list[dict],
     state: AgentState,
@@ -618,6 +687,27 @@ def curate_node(state: AgentState) -> AgentState:
     allocate(working, working_budget)
 
     dataset = selected_rows
+
+    # Synth-fill to target: when real data + the chosen strategy fall short, top up with
+    # task-adaptive synthesis (initial curriculum and every rebuild). Uses the local synth
+    # endpoint when reachable; degrades gracefully otherwise (recorded in fallbacks).
+    _fill_generate = None
+    if os.environ.get("SLM_CHEAP") != "1" and len(dataset) < target_rows:
+        from data.synth_client import get_generate_fn, is_available
+
+        _fill_logger = lambda message: _log(model_id, message)
+        if is_available(log=_fill_logger):
+            _fill_generate = get_generate_fn(log=_fill_logger)
+    dataset = _synth_fill_to_target(
+        dataset,
+        target_rows=target_rows,
+        task_type=task_type,
+        generate_fn=_fill_generate,
+        state=state,
+        model_id=model_id,
+        fallbacks=allocation_fallbacks,
+    )
+
     dataset = _annotate_generation_cot(
         dataset,
         state,
