@@ -523,7 +523,7 @@ def test_resume_config_fingerprint_covers_state_affecting_runtime_settings(
     assert snapshot["LORA_SEARCH_SPACE_VERSION"] >= 1
     assert snapshot["LORA_MAX_EFFECTIVE_BATCH_SIZE"] == 64
     assert snapshot["SFT_LOSS_CONTRACT_VERSION"] >= 2
-    assert snapshot["DATA_REBUILD_SCHEMA_VERSION"] == 1
+    assert snapshot["DATA_REBUILD_SCHEMA_VERSION"] == 2
     assert snapshot["DATA_REBUILD_MAX_PAID_ROUNDS_PER_RUN"] == 9
     assert snapshot["ACQUISITION_BUDGET_SCHEMA_VERSION"] == 1
 

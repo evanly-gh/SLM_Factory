@@ -35,8 +35,7 @@ def _state():
         "intervention": "data_rebuild",
         "hypothesis": "hard train-only examples are underrepresented",
         "data_rebuild": {
-            "primary_strategy": "difficulty_weighted_sampling",
-            "support_strategies": [],
+            "strategy": "synthesize",
             "target_rows": 64,
         },
     },
@@ -46,15 +45,7 @@ def test_data_rebuild_decision_stores_plan_and_routes_to_curate(_decision):
 
     assert out["next_action"] == "curate"
     assert out["last_intervention"] == "data_rebuild"
-    assert (
-        out["data_rebuild_plan"]["primary_strategy"]
-        == "difficulty_weighted_sampling"
-    )
-    assert out["data_rebuild_plan_identity"]
-    assert (
-        out["llm_iterate_decision"]["data_rebuild_plan_identity"]
-        == out["data_rebuild_plan_identity"]
-    )
+    assert out["data_rebuild_plan"]["strategy"] == "synthesize"
 
 
 def test_graph_iterate_routes_only_supported_actions():

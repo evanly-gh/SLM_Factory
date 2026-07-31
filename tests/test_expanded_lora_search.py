@@ -238,7 +238,7 @@ def test_iterate_rejects_malformed_threshold_adjustment(adjustment, message):
             "intervention": "data_rebuild",
             "hypothesis": "validate threshold payload",
             "data_rebuild": {
-                "primary_strategy": "resample_existing",
+                "strategy": "resample",
             },
             "threshold_adjustment": adjustment,
         })
@@ -249,7 +249,7 @@ def test_iterate_accepts_null_or_reasoned_finite_threshold_adjustment():
         "intervention": "data_rebuild",
         "hypothesis": "no threshold adjustment needed",
         "data_rebuild": {
-            "primary_strategy": "resample_existing",
+            "strategy": "resample",
         },
         "threshold_adjustment": {"new_threshold": None},
     })["threshold_adjustment"]["new_threshold"] is None
@@ -257,7 +257,7 @@ def test_iterate_accepts_null_or_reasoned_finite_threshold_adjustment():
         "intervention": "data_rebuild",
         "hypothesis": "capacity bounds the remaining score",
         "data_rebuild": {
-            "primary_strategy": "resample_existing",
+            "strategy": "resample",
         },
         "threshold_adjustment": {
             "new_threshold": 0.85,
@@ -293,15 +293,12 @@ def test_iterate_normalizes_bounded_declarative_data_rebuild_plan():
         "intervention": "data_rebuild",
         "hypothesis": "hard examples and a→b confusion are underrepresented",
         "data_rebuild": {
-            "primary_strategy": "difficulty_weighted_sampling",
-            "support_strategies": ["targeted_synth_positive"],
+            "strategy": "synthesize",
             "target_rows": 99999,
             "resample_fraction": 0.63,
-            "preserve_elite_fraction": -1,
             "new_real_rows": 37,
             "synth_rows": 19,
             "max_acquire_rounds": 99,
-            "query_variant": -4,
             "difficulty_buckets": {
                 "easy": 0.1,
                 "medium": 0.2,
@@ -311,29 +308,25 @@ def test_iterate_normalizes_bounded_declarative_data_rebuild_plan():
                 {"gold": "a", "predicted": "b", "count": 1_000_000},
             ],
             "pattern_hint": "aggregate a→b confusion",
-            "elite": {
-                "provenance": "best_non_pruned_dataset",
-                "dataset_version": 4,
-            },
         },
     }, task_type="classification")
 
+    from config.config import DATA_SIZE_CEILING
+
     plan = decision["data_rebuild"]
-    assert plan["primary_strategy"] == "difficulty_weighted_sampling"
-    assert plan["support_strategies"] == ["targeted_synth_positive"]
-    assert plan["target_rows"] == 2000
+    assert plan["strategy"] == "synthesize"
+    # target_rows now clamps to DATA_SIZE_CEILING, not the old 2000 cap.
+    assert plan["target_rows"] == DATA_SIZE_CEILING
     assert plan["resample_fraction"] == pytest.approx(0.65)
-    assert plan["preserve_elite_fraction"] == 0.0
     assert plan["new_real_rows"] == 35
     assert plan["synth_rows"] == 20
     assert plan["max_acquire_rounds"] == 3
-    assert plan["query_variant"] == 0
     assert sum(plan["difficulty_buckets"].values()) == pytest.approx(1.0)
     assert plan["confusion_pairs"] == [
         {"gold": "a", "predicted": "b", "count": 10_000},
     ]
     assert "hypothesis" in plan["pattern_hint"]
-    assert decision["data_rebuild_plan_identity"]
+    assert "data_rebuild_plan_identity" not in decision
 
 
 def test_iterate_schema_documents_the_five_tunable_axes():
