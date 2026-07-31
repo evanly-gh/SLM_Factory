@@ -319,7 +319,8 @@ def test_iterate_normalizes_bounded_declarative_data_rebuild_plan():
     assert plan["target_rows"] == DATA_SIZE_CEILING
     assert plan["resample_fraction"] == pytest.approx(0.65)
     assert plan["new_real_rows"] == 35
-    assert plan["synth_rows"] == 20
+    # synthesize snaps synth_rows into the 100–500 band (19 -> 100).
+    assert plan["synth_rows"] == 100
     assert plan["max_acquire_rounds"] == 3
     assert sum(plan["difficulty_buckets"].values()) == pytest.approx(1.0)
     assert plan["confusion_pairs"] == [

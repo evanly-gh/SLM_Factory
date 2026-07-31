@@ -670,7 +670,8 @@ range:
 
 `strategy` (one of the three) · `target_rows` [16, `DATA_SIZE_CEILING`] step 8 ·
 `resample_fraction` [0.10,1.00] step 0.05 · `new_real_rows` [0,500] step 5 ·
-`synth_rows` [0,2000] step 5 · `max_acquire_rounds` [0,3] · `difficulty_buckets` ·
+`synth_rows` [100,500] step 5 (the `synthesize` count, model's discretion) ·
+`max_acquire_rounds` [0,3] · `difficulty_buckets` ·
 `confusion_pairs` (≤8) · `pattern_hint`
 
 Validation rejects: an unknown `strategy`, and any raw held-out text anywhere in the plan. A
