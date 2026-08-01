@@ -6,6 +6,7 @@ from agent.checkpoint import atomic_write_json
 from agent.timing import TimingEvent, record_timing_event
 from agent.state import AgentState
 from data.eval_set import build_eval_set
+from eval.endpoint_eval import measure_endpoint_baseline
 from data.loaders.dataset_integrity import (
     normalize_text,
     normalized_text_overlap,
@@ -21,6 +22,56 @@ SHARED_CONTENT_FILES = (
     "eval_ban.json", "plan.json",
 )
 SHARED_CHECKSUM_FILES = SHARED_CONTENT_FILES + ("manifest.json",)
+
+
+def _calibrate_qwen_goal_if_pending(state: AgentState, eval_set) -> None:
+    """Complete the Qwen-3.6-baseline accuracy goal once the frozen E exists.
+
+    task_analysis parks the goal as ``pending_qwen_baseline`` because E is not built until this
+    node. Here we score the hosted reference model zero-shot on E and set the goal to
+    ``min(0.99, max(measured, floor))`` via agent.threshold.threshold_from_endpoint_baseline.
+    ``initial_stop_threshold`` (the immutable floor) is written ONCE, here.
+
+    Degrades honestly: if the endpoint is unreachable (e.g. a dev box with no SYNTH_ENDPOINT),
+    the goal is set to the floor with an explicit ``endpoint='unreachable'`` provenance rather
+    than crashing or silently using a bogus high target.
+    """
+    calibration = state.get("threshold_calibration") or {}
+    if calibration.get("source") != "pending_qwen_baseline":
+        return
+
+    from agent.threshold import threshold_from_endpoint_baseline
+
+    floor = float(calibration.get("floor", 0.8))
+    task_type = state["task_type"]
+    baseline = None
+    try:
+        baseline = measure_endpoint_baseline(eval_set, task_type, log=print)
+    except Exception as error:  # noqa: BLE001 - a measurement failure must not kill the run
+        print(f"      [threshold] Qwen baseline measurement failed ({str(error)[:120]}); "
+              "falling back to the floor")
+
+    if baseline is None:
+        threshold, reason = threshold_from_endpoint_baseline(0.0, floor=floor)
+        provenance = {"measured_qwen": None, "endpoint": "unreachable"}
+        print(f"      [threshold] Qwen endpoint unavailable — goal set to floor {threshold:.4f}")
+    else:
+        threshold, reason = threshold_from_endpoint_baseline(baseline.f1, floor=floor)
+        provenance = {"measured_qwen": round(float(baseline.f1), 4),
+                      "measured_metric": baseline.metric, "endpoint": "reachable"}
+        print(f"      [threshold] Qwen baseline {baseline.f1:.4f} → goal {threshold:.4f} "
+              f"(floor {floor:.2f})")
+
+    state["stop_threshold"] = threshold
+    state["initial_stop_threshold"] = threshold
+    state["threshold_calibration"] = {
+        "source": "qwen_baseline",
+        "threshold": threshold,
+        "floor": floor,
+        "reason": reason,
+        "pending": False,
+        **provenance,
+    }
 
 
 def _eval_split_sizes(target: int) -> dict:
@@ -145,6 +196,7 @@ def eval_setup_node(state: AgentState) -> AgentState:
                 "difficulty": _shared_diff or {},
             },
         )
+        _calibrate_qwen_goal_if_pending(state, eval_set)
         return state
 
     acquire_meta: dict = {}
@@ -264,4 +316,5 @@ def eval_setup_node(state: AgentState) -> AgentState:
             "difficulty": difficulty or {},
         },
     )
+    _calibrate_qwen_goal_if_pending(state, eval_set)
     return state
