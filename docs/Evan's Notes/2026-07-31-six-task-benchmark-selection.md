@@ -165,6 +165,64 @@ frozen outcome table — zero inference).
 
 ---
 
+## 4b. Implementation log — 2026-08-01 (build)
+
+Built the Qwen-3.6 accuracy goal, the two new format verifiers, and the six dataset loaders.
+Design spec: [../superpowers/specs/2026-08-01-qwen-goal-and-format-verifiers-design.md](../superpowers/specs/2026-08-01-qwen-goal-and-format-verifiers-design.md).
+Three commits, one per component (A → B → C).
+
+### What changed vs. the plan above
+- The **verifier registry / `TaskContract`** (§4) was intentionally NOT built. Instead, two
+  lightweight scorer modules + two new `task_type`s (`function_call`, `diff`) were added — same
+  two-column `format_valid` vs `content_correct` contract, but `content_correct` rides in
+  `EvalResult.f1` and `format_valid` in `per_class`, so `EvalResult` is unchanged. Function
+  calling is now its own `function_call` type (not `code_generation`), and prose-diff its own
+  `diff` type (not `generation`).
+- The **accuracy goal** is no longer a leaderboard number. It is the separately-hosted Qwen-3.6
+  reference model's own zero-shot score on THIS run's frozen `E`, floored at 0.8 and capped at
+  0.99: `min(0.99, max(measured_qwen, 0.8))`. `task_analysis` parks it PENDING (E not built yet);
+  `eval_setup` measures it after building E and degrades to the 0.8 floor if the endpoint is
+  unreachable. Default-on via `SLM_GOAL_FROM_QWEN=1`; `SLM_STOP_THRESHOLD` still overrides.
+
+### Component A — `function_call` + `diff` task types + verifiers
+**New:** `eval/scorers/function_call.py` (BFCL-style AST arg-match), `eval/scorers/diff.py`
+(`git apply --check` + applied-result match).
+**Changed (registration):** `data/eval_set.py`, `agent/nodes/cold_start/task_analysis.py`
+(`_VALID_TASK_TYPES`), `eval/harness.py` (`TASK_METRIC_NAMES` → `ast_arg_match`/`apply_match`,
+token reserves, dispatch), `data/loaders/dataset_integrity.py` (`TASK_REQUIRED_FIELDS`),
+`agent/task_planner.py` (`_VALID` + prompt: "5 types" → "7 types").
+**Tests:** `tests/eval/test_scorer_function_call.py` (8), `tests/eval/test_scorer_diff.py` (5,
+git-skipped), `tests/eval/test_new_task_type_registration.py` (parametrized).
+
+### Component B — Qwen-3.6 baseline goal
+**New:** `eval/endpoint_eval.py` (`measure_endpoint_baseline` — scores the reference model on E
+with the task's own scorer; returns None when the endpoint is unreachable).
+**Changed:** `agent/threshold.py` (`threshold_from_endpoint_baseline` floor/cap math),
+`agent/nodes/cold_start/task_analysis.py` (`SLM_GOAL_FROM_QWEN` park branch + `_qwen_goal_floor`),
+`agent/nodes/cold_start/eval_setup.py` (`_calibrate_qwen_goal_if_pending`, wired into both
+returns; hoisted the `measure_endpoint_baseline` import to module level for testability).
+**Tests:** `tests/test_qwen_baseline_goal.py` (14 — floor/cap, mocked-endpoint measurement,
+unreachable degradation, task_analysis park, eval_setup complete).
+
+### Component C — six dataset loaders + eval_setup dispatch
+**New loaders** (each: a pure `convert_*` tested on in-memory fixtures + a `load_*` that pulls
+from HF on the cluster): `data/loaders/clinc150.py` (classification), `dialogsum_samsum.py`
+(generation), `xlam_bfcl.py` (function_call), `coedit.py` (diff; gold = `difflib` unified diff),
+`routerbench.py` (classification; local/route label), `medqa.py` (classification; A/B/C/D).
+**Changed:** `agent/nodes/cold_start/eval_setup.py` — `SLM_BENCHMARK_TASK` selects a loader on
+the non-autonomous path (default sms_spam preserved), feeding the existing `build_eval_set` +
+train/test overlap firewall.
+**Tests:** `tests/test_benchmark_loaders.py` (12, incl. two end-to-end checks that the loader's
+gold — an xLAM call and a CoEdIT diff — scores 1.0 through its own verifier).
+
+### Verified here vs. on the cluster
+55 targeted tests pass on this Windows dev box (converters, scorers, threshold math, wiring,
+mocked measurement). The **live** Qwen-3.6 number and live HF dataset pulls run where the vLLM
+endpoint and HF are reachable — the code paths are exercised here with mocks/fixtures. On this
+box the goal degrades honestly to the 0.8 floor (endpoint unreachable).
+
+---
+
 ## 5. Sources
 
 CLINC150 [HF](https://huggingface.co/datasets/DeepPavlov/clinc150) ·
