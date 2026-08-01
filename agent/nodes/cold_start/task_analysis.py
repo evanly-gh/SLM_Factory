@@ -29,6 +29,19 @@ _VALID_TASK_TYPES = {
     "diff",
 }
 
+# Floor for the Qwen-3.6-baseline accuracy goal. The user requested a hard 0.8 floor so a weak
+# reference score (or an unreachable endpoint measured as 0.0) cannot set a trivial target.
+_QWEN_GOAL_FLOOR_DEFAULT = 0.8
+
+
+def _qwen_goal_floor() -> float:
+    try:
+        return max(0.0, min(1.0, float(os.environ.get("SLM_QWEN_GOAL_FLOOR",
+                                                       _QWEN_GOAL_FLOOR_DEFAULT))))
+    except (TypeError, ValueError):
+        return _QWEN_GOAL_FLOOR_DEFAULT
+
+
 def _apply_data_targets(state: AgentState, task_type: str) -> None:
     """Clamp the planner's chosen curriculum/eval sizes to config floors/ceiling and store
     them in state. Env overrides (SLM_CURRICULUM_SIZE / SLM_EVAL_SET_SIZE) win for testing.
@@ -71,11 +84,15 @@ def _calibrate_stop_threshold(state: AgentState, task_type: str) -> None:
     REPLACES: the planner proposing `stop_threshold` from its recall of published SOTA, with a
     hardcoded 0.96 default when it declined. See agent/threshold.py for why that was removed.
 
-    Two sources, in order:
+    Sources, in order:
+      0. Qwen-3.6 baseline (default; SLM_GOAL_FROM_QWEN != "0"). The goal is the separately-
+         hosted reference model's own zero-shot score on THIS run's frozen E, floored at 0.8.
+         E does not exist yet here, so the goal is parked PENDING and eval_setup_node measures
+         it right after building E.
       1. config/benchmark_baselines.md, when a row's metric matches what this pipeline measures
          for this task type (an `accuracy` row cannot calibrate a `macro_f1` target).
-      2. Deferred. `stop_threshold` is parked at an UNREACHABLE value so nothing can converge
-         before a real score exists, and evaluate_node calibrates from
+      2. Deferred measured anchor. `stop_threshold` is parked at an UNREACHABLE value so nothing
+         can converge before a real score exists, and evaluate_node calibrates from
          max(zero_shot, first_finetune) + a bounded headroom at the end of iteration 1.
 
     SLM_STOP_THRESHOLD still overrides everything and disables calibration entirely.
@@ -104,6 +121,28 @@ def _calibrate_stop_threshold(state: AgentState, task_type: str) -> None:
         }
         print(f"      [threshold] SLM_STOP_THRESHOLD={threshold:.4f} pinned "
               "(registry and measured calibration both skipped)")
+        return
+
+    # Source 0 (default): the goal is the hosted Qwen-3.6 baseline on E, floored at 0.8.
+    # E is built later (eval_setup), so park PENDING here and measure there.
+    if os.environ.get("SLM_GOAL_FROM_QWEN", "1") != "0":
+        floor = _qwen_goal_floor()
+        state["stop_threshold"] = UNREACHABLE_PENDING_THRESHOLD
+        state["initial_stop_threshold"] = UNREACHABLE_PENDING_THRESHOLD
+        state["threshold_calibration"] = {
+            "source": "pending_qwen_baseline",
+            "threshold": None,
+            "headroom": None,
+            "floor": floor,
+            "reason": (
+                "goal = Qwen-3.6 zero-shot score on E, floored at "
+                f"{floor:.2f}; measured in eval_setup after E is built"
+            ),
+            "pending": True,
+        }
+        print(f"      [threshold] goal from Qwen-3.6 baseline (floor {floor:.2f}) — "
+              f"DEFERRING to eval_setup; target parked at {UNREACHABLE_PENDING_THRESHOLD} "
+              "so nothing converges early")
         return
 
     row = registry_lookup(plan.get("benchmark"), task_type)

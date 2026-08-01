@@ -169,6 +169,30 @@ def threshold_from_registry(row: dict) -> tuple[float, str]:
     return round(value, 4), reason
 
 
+def threshold_from_endpoint_baseline(
+    measured: float, floor: float = 0.8
+) -> tuple[float, str]:
+    """Goal = the separately-hosted Qwen-3.6 base score on THIS run's eval set, floored.
+
+    The accuracy target a run must beat is the strong reference model's own zero-shot
+    performance on the identical frozen E, scored by the identical metric — so "good enough"
+    means "matches the reference," not a recalled leaderboard number. Floored so a weak
+    reference (or an unreachable endpoint measured as 0.0) cannot set a trivially-low goal,
+    and capped at THRESHOLD_CEILING because label noise makes 1.0 unreachable.
+    """
+    try:
+        measured_value = float(measured)
+    except (TypeError, ValueError):
+        measured_value = 0.0
+    floor_value = min(max(float(floor), 0.0), THRESHOLD_CEILING)
+    value = min(THRESHOLD_CEILING, max(measured_value, floor_value))
+    reason = (
+        f"Qwen-3.6 baseline {measured_value:.4f} on E, floored at {floor_value:.2f}, "
+        f"capped at {THRESHOLD_CEILING}"
+    )
+    return round(value, 4), reason
+
+
 def threshold_from_anchor(
     zero_shot: float | None,
     first_finetune: float | None,
