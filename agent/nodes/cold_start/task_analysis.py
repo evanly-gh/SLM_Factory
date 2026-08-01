@@ -17,12 +17,16 @@ from agent.nodes.cold_start.hardware_filter import run_hardware_filter
 #                   Eval = execution pass@1.
 # generation      — open-ended summarization, QA, dialogue. Catch-all.
 #                   Eval = LLM-as-judge [0,1]. Flag: multilingual:bool
+# function_call — intent→app-action calls; eval = AST argument match (ast_arg_match).
+# diff          — prose edit as a unified diff; eval = git-apply + result match (apply_match).
 _VALID_TASK_TYPES = {
     "classification",
     "NER",
     "math_reasoning",
     "code_generation",
     "generation",
+    "function_call",
+    "diff",
 }
 
 def _apply_data_targets(state: AgentState, task_type: str) -> None:
