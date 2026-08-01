@@ -11,6 +11,10 @@ _EVAL_OUTPUT_TOKEN_SETTINGS = {
     "math_reasoning": ("SLM_EVAL_MAX_NEW_TOKENS_MATH", 512),
     "generation": ("SLM_EVAL_MAX_NEW_TOKENS_GENERATION", 512),
     "code_generation": ("SLM_EVAL_MAX_NEW_TOKENS_APPS", 1024),
+    # Format-bound types (2026-08-01). A single tool call is short; a unified diff needs
+    # room for a few hunks.
+    "function_call": ("SLM_EVAL_MAX_NEW_TOKENS_FUNCTION_CALL", 256),
+    "diff": ("SLM_EVAL_MAX_NEW_TOKENS_DIFF", 512),
 }
 
 
@@ -57,6 +61,10 @@ TASK_METRIC_NAMES = {
     "math_reasoning": "exact_match",
     "code_generation": "execution_pass@1",
     "generation": "judge_mean_0_1",
+    # Format-bound: the comparison scalar is content-correctness; format_valid rides
+    # alongside in per_class (see eval/scorers/function_call.py, eval/scorers/diff.py).
+    "function_call": "ast_arg_match",
+    "diff": "apply_match",
 }
 
 
@@ -140,10 +148,14 @@ def _run_eval_local(
         from eval.scorers import ner as scorer
     elif task_type in ("math_reasoning", "code_generation", "generation"):
         from eval.scorers import generation as scorer
+    elif task_type == "function_call":
+        from eval.scorers import function_call as scorer
+    elif task_type == "diff":
+        from eval.scorers import diff as scorer
     else:
         raise ValueError(
-            f"Unknown task_type: {task_type!r}. "
-            f"Must be one of: classification, NER, math_reasoning, code_generation, generation."
+            f"Unknown task_type: {task_type!r}. Must be one of: classification, NER, "
+            "math_reasoning, code_generation, generation, function_call, diff."
         )
 
     # Validate the task reserve against the configured context before loading a

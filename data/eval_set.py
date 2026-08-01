@@ -5,7 +5,13 @@ from dataclasses import dataclass, field
 # Canonical task types. See task_analysis.py for the full rationale behind each.
 # multi_label is a flag on classification, not a separate type here —
 # the eval split logic is the same; only the scorer and metric differ.
-TASK_TYPES = {"classification", "NER", "math_reasoning", "code_generation", "generation"}
+TASK_TYPES = {
+    "classification", "NER", "math_reasoning", "code_generation", "generation",
+    # Format-bound types (2026-08-01): executable, judge-free verifiers.
+    #   function_call — BFCL-style AST argument match ({text, answer=gold call JSON}).
+    #   diff          — prose edit as a unified diff, verified with `git apply --check`.
+    "function_call", "diff",
+}
 
 # Types that map to the classification eval split (label-based partitioning).
 _CLASSIFICATION_FAMILY = {"classification"}
@@ -14,7 +20,10 @@ _CLASSIFICATION_FAMILY = {"classification"}
 _NER_FAMILY = {"NER"}
 
 # Types that map to the generation eval split (prompt/response partitioning).
-_GENERATION_FAMILY = {"math_reasoning", "code_generation", "generation"}
+# function_call/diff carry a {text, answer} schema, so they partition like generation.
+_GENERATION_FAMILY = {
+    "math_reasoning", "code_generation", "generation", "function_call", "diff",
+}
 
 # Flags that travel alongside task_type as separate state fields:
 #   multi_label: bool  — set by planner; changes scorer from argmax to per-label threshold

@@ -4,7 +4,7 @@ Autonomous task-analysis stage (Pioneer Agent cold-start, arXiv:2604.09791v1 §2
 
 Given ONLY a natural-language task description, the orchestrator LLM
 (config.config.ORCHESTRATOR_MODEL) decides:
-  - task_type      : classification | NER | math_reasoning | code_generation | generation
+  - task_type      : classification | NER | math_reasoning | code_generation | generation | function_call | diff
   - flags          : multi_label, schema, multilingual (on task_plan dict)
   - labels         : class names / entity types / schema fields / [] for generation types
   - exa_queries    : web-search query per label/topic
@@ -32,7 +32,7 @@ choices; you do NOT set an accuracy number from these):
 
 METRIC COMPARABILITY CONTRACT: {metric_caveat}
 
-TASK TYPE — choose the MOST SPECIFIC type that fits. There are 5 types; \
+TASK TYPE — choose the MOST SPECIFIC type that fits. There are 7 types; \
 use flags to express variants within a type:
 
 - "classification"
@@ -69,16 +69,29 @@ use flags to express variants within a type:
 
 - "generation"
   Open-ended summarization, open-domain QA, dialogue, translation, instruction following.
-  Use this when none of the above types fit.
+  Use this when none of the format-bound types below fit and none of the above fit.
   Eval: LLM-as-judge [0,1].
   Stop threshold: anchor to SOTA (see STOP THRESHOLD section).
   Set "multilingual": true for translation or non-English generation tasks.
+
+- "function_call"
+  Map a natural-language request to a structured tool/API call (name + arguments).
+  Examples: intent → app action, assistant function calling, API-call synthesis.
+  Eval: BFCL-style AST argument match (right function name from the allowed set, all
+  required args present, values equal gold with type coercion). Judge-free.
+  No flags.
+
+- "diff"
+  Edit a given source text and express the change as a UNIFIED DIFF (not the full rewrite).
+  Examples: prose copy-editing, grammar/style fixes, config patches.
+  Eval: `git apply --check` for format validity + exact match of the applied result. Judge-free.
+  No flags.
 
 LABELS field:
 - classification: list of class names (2–30). Empty list [] is invalid for classification.
 - NER: list of entity type names. Empty list [] is invalid for NER.
 - NER with schema: list of JSON field names (keys in the output schema).
-- math_reasoning, code_generation, generation: [] (empty).
+- math_reasoning, code_generation, generation, function_call, diff: [] (empty).
 
 ACCURACY TARGET — you do NOT set a number.
 
@@ -135,7 +148,7 @@ specific enough that the top results ARE examples of that label. Good queries na
 the phenomenon and the medium; weak queries just repeat the label word.
 
 Reply with ONLY a JSON object (no prose, no code fences) with these keys:
-- "task_type": one of "classification", "NER", "math_reasoning", "code_generation", "generation"
+- "task_type": one of "classification", "NER", "math_reasoning", "code_generation", "generation", "function_call", "diff"
 - "task_name": short slug
 - "labels": list as described above
 - "multi_label": true | false (default false; classification only)
@@ -193,6 +206,8 @@ _VALID = {
     "math_reasoning",
     "code_generation",
     "generation",
+    "function_call",
+    "diff",
 }
 
 

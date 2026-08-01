@@ -17,6 +17,9 @@ TASK_REQUIRED_FIELDS = {
     # Split-aware validation below requires gold only for training rows.
     "code_generation": ("text",),
     "generation": ("text", "answer"),
+    # Format-bound (2026-08-01): answer holds the gold call JSON / gold unified diff.
+    "function_call": ("text", "answer"),
+    "diff": ("text", "answer"),
 }
 
 
