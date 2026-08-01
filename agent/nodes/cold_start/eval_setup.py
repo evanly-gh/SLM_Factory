@@ -24,6 +24,57 @@ SHARED_CONTENT_FILES = (
 SHARED_CHECKSUM_FILES = SHARED_CONTENT_FILES + ("manifest.json",)
 
 
+def _named_benchmark_loaders() -> dict:
+    """Registry of the six curated benchmark loaders, selectable via SLM_BENCHMARK_TASK on the
+    non-autonomous path. Each entry is (loader_callable, task_type, source_label). Imports are
+    lazy so a missing optional dependency only breaks the benchmark that needs it."""
+    from data.loaders.clinc150 import load_clinc150
+    from data.loaders.dialogsum_samsum import load_dialogsum_samsum
+    from data.loaders.xlam_bfcl import load_xlam_bfcl
+    from data.loaders.coedit import load_coedit
+    from data.loaders.routerbench import load_routerbench
+    from data.loaders.medqa import load_medqa
+    return {
+        "clinc150": (load_clinc150, "classification", "CLINC150 (clinc_oos/plus)"),
+        "dialogsum_samsum": (load_dialogsum_samsum, "generation", "DialogSum + SAMSum"),
+        "xlam_bfcl": (load_xlam_bfcl, "function_call", "xLAM-60k / BFCL"),
+        "coedit": (load_coedit, "diff", "CoEdIT (grammarly/coedit)"),
+        "routerbench": (load_routerbench, "classification", "RouterBench"),
+        "medqa": (load_medqa, "classification", "MedQA-USMLE-4-options"),
+    }
+
+
+def _load_named_benchmark(name: str, state: AgentState, acquire_meta: dict):
+    """Load one of the six curated benchmarks by SLM_BENCHMARK_TASK key, sized to the run's
+    curriculum/eval targets. Raises ValueError on an unknown key or a task_type mismatch."""
+    registry = _named_benchmark_loaders()
+    key = str(name).strip().lower()
+    if key not in registry:
+        raise ValueError(
+            f"SLM_BENCHMARK_TASK={name!r} is not a known benchmark; choose one of "
+            f"{sorted(registry)}"
+        )
+    loader, expected_task, source_label = registry[key]
+    task_type = state["task_type"]
+    if task_type != expected_task:
+        raise ValueError(
+            f"SLM_BENCHMARK_TASK={key!r} produces task_type={expected_task!r} but the run's "
+            f"task_type is {task_type!r}; set them consistently"
+        )
+    max_train = int(int(state.get("curriculum_size_target") or 1000) * 0.65)
+    max_test = int(state.get("eval_size_target") or 800)
+    print(f"      [eval_setup] loading named benchmark {key!r} ({source_label}): "
+          f"train≤{max_train} test≤{max_test}")
+    train_examples, test_examples = loader(max_train=max(max_train, 60), max_test=max(max_test, 60))
+    acquire_meta["source"] = source_label
+    acquire_meta["source_records"] = [
+        {"kind": "hf", "id": key, "split": "train", "role": "curriculum"},
+        {"kind": "hf", "id": key, "split": "test", "role": "eval"},
+    ]
+    acquire_meta["eval_ban"] = [{"kind": "hf", "id": key, "split": "test", "role": "eval"}]
+    return train_examples, test_examples
+
+
 def _calibrate_qwen_goal_if_pending(state: AgentState, eval_set) -> None:
     """Complete the Qwen-3.6-baseline accuracy goal once the frozen E exists.
 
@@ -219,6 +270,11 @@ def eval_setup_node(state: AgentState) -> AgentState:
             benchmark_max_train=_bench_train, benchmark_max_test=_bench_test,
             meta=acquire_meta,
         )
+    elif os.environ.get("SLM_BENCHMARK_TASK"):
+        # Curated non-autonomous path: load one of the six benchmark loaders by env key. This
+        # feeds the same build_eval_set + overlap-firewall path the classification branch uses.
+        train_examples, test_examples = _load_named_benchmark(
+            os.environ["SLM_BENCHMARK_TASK"], state, acquire_meta)
     elif task_type == "classification":
         from data.loaders.sms_spam import download_sms_spam
         train_examples, test_examples = download_sms_spam()
