@@ -128,11 +128,10 @@ def test_official_pricing_accounts_for_anthropic_cache_tokens():
     assert haiku == pytest.approx(1 + 5 + 0.10 + 1.25)
     registry = pricing_registry()
     assert registry["effective_date"] == "2026-07-21"
-    assert registry["models"]["gpt-4.1"]["cached_input_per_mtok"] == 0.50
-    assert (
-        registry["models"]["deepseek-v4-flash"]["cached_input_per_mtok"]
-        == 0.0028
-    )
+    # Cloud non-Anthropic teachers (gpt-4.1 / deepseek-v4-flash) were removed — the only
+    # priced models are Anthropic tiers; the local Qwen synth endpoint is charged $0.
+    assert "gpt-4.1" not in registry["models"]
+    assert "deepseek-v4-flash" not in registry["models"]
     assert registry["models"]["claude-sonnet-5"]["input_per_mtok"] == 2.0
     assert registry["models"]["claude-sonnet-5"]["output_per_mtok"] == 10.0
     assert registry["models"]["claude-sonnet-5"]["valid_through"] == "2026-08-31"
@@ -219,7 +218,7 @@ def test_pricing_registry_accepts_environment_overrides(monkeypatch):
         json.dumps(
             {
                 "models": {
-                    "gpt-4.1": {
+                    "claude-opus-4-8": {
                         "input_per_mtok": 4.0,
                         "output_per_mtok": 10.0,
                     }
@@ -228,7 +227,7 @@ def test_pricing_registry_accepts_environment_overrides(monkeypatch):
         ),
     )
     assert estimate_cost_usd(
-        "openai", "gpt-4.1", input_tokens=1_000_000, output_tokens=1_000_000
+        "anthropic", "claude-opus-4-8", input_tokens=1_000_000, output_tokens=1_000_000
     ) == pytest.approx(14.0)
 
 
@@ -352,51 +351,6 @@ def test_chat_anthropic_invoke_is_recorded_exactly_once(tmp_path):
     assert events[0]["stage"] == "iterate"
     assert events[0]["input_tokens"] == 80
     assert events[0]["cache_read_tokens"] == 20
-
-
-def test_openai_wrapper_prices_gpt_and_deepseek_usage(tmp_path):
-    from agent.cost import CostLedger, tracked_openai_chat_create
-
-    event_path = tmp_path / "events.jsonl"
-    gpt_client = _FakeOpenAI(
-        "https://api.openai.com/v1",
-        response=_openai_response(cached_tokens=40),
-    )
-    tracked_openai_chat_create(
-        gpt_client,
-        stage="cot_fallback",
-        event_path=event_path,
-        model="gpt-4.1",
-        messages=[],
-    )
-
-    deepseek_client = _FakeOpenAI(
-        "https://api.deepseek.com",
-        response=_openai_response(
-            cache_hit_tokens=25,
-            cache_miss_tokens=75,
-        ),
-    )
-    tracked_openai_chat_create(
-        deepseek_client,
-        stage="cot_fallback",
-        event_path=event_path,
-        model="deepseek-v4-flash",
-        messages=[],
-    )
-
-    gpt, deepseek = CostLedger(event_path).events()
-    assert gpt["provider"] == "openai"
-    assert gpt["cache_read_tokens"] == 40
-    assert gpt["estimated_usd"] == pytest.approx(
-        (60 * 2 + 40 * 0.50 + 20 * 8) / 1_000_000
-    )
-    assert deepseek["provider"] == "deepseek"
-    assert deepseek["input_tokens"] == 75
-    assert deepseek["cache_read_tokens"] == 25
-    assert deepseek["estimated_usd"] == pytest.approx(
-        (75 * 0.14 + 25 * 0.0028 + 20 * 0.28) / 1_000_000
-    )
 
 
 def test_local_vllm_openai_endpoint_is_never_charged(tmp_path):
@@ -774,12 +728,15 @@ def test_paid_callsites_use_central_tracking_wrappers():
     assert iterate.count("tracked_chat_anthropic_invoke(") == 2
 
 
-def test_deepseek_default_uses_v4_flash_thinking_mode():
+def test_no_cloud_cot_teacher_config_or_curriculum_residue():
+    """The CoT teacher is the local Qwen3.6 synth model only — no DeepSeek/OpenAI cloud
+    teacher constants or thinking-mode plumbing may remain in config or curriculum."""
     root = Path(__file__).parents[1]
     config_source = (root / "config" / "config.py").read_text()
     curriculum_source = (root / "data" / "curriculum.py").read_text()
 
-    assert '"deepseek-v4-flash"' in config_source
-    assert '"deepseek-reasoner"' not in config_source
-    assert '"thinking": {"type": "enabled"}' in curriculum_source
-    assert 'reasoning_effort="high"' in curriculum_source
+    assert "deepseek" not in config_source.lower()
+    assert "TEACHER_MODEL_GPT" not in config_source
+    assert "TEACHER_MODEL_DEEPSEEK" not in config_source
+    assert "get_cot_fallbacks" not in curriculum_source
+    assert 'reasoning_effort="high"' not in curriculum_source

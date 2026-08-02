@@ -2,10 +2,7 @@
 import logging
 import random
 from collections import Counter
-from agent.cost import (
-    tracked_anthropic_messages_create,
-    tracked_openai_chat_create,
-)
+from agent.cost import tracked_anthropic_messages_create
 from config.config import TEACHER_MODEL_CLAUDE  # legacy hard-negative fallback only; never CoT
 from data.eval_set import EvalSet, _infer_pos_label, _infer_neg_label
 from data.loaders.dataset_integrity import normalize_text
@@ -14,63 +11,16 @@ logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
-# CoT fallback routing (paper §2.3 quality control #5, §2.5)
-# Primary = local Qwen3.6 (wired in curate). Fallbacks only:
-# DeepSeek V4 Flash thinking mode for math/science first; GPT-4.1 for code/QA/general first.
+# CoT annotation (paper §2.3 quality control #5, §2.5)
+# The CoT teacher is the local Qwen3.6 synth model, supplied as ``generate_fn`` — and only
+# that model. There is no cloud CoT fallback.
 # ---------------------------------------------------------------------------
-
-_MATH_SCIENCE_BENCHMARKS = {
-    "gsm8k", "arcchallenge", "arc", "ai2arc", "arcc", "math", "scienceqa", "science",
-}
-_CODE_QA_BENCHMARKS = {"humaneval", "mbpp", "code", "triviaqa", "qa"}
-
-
-def get_cot_fallbacks(
-    task_type: str, benchmark: str | None = None,
-) -> list[tuple[object, str]]:
-    """Return ordered OpenAI-compatible fallback clients for CoT annotation.
-
-    Paper §2.5's math/science-first specialist route now uses DeepSeek V4 Flash
-    in thinking mode; GPT-4.1 remains preferred for code and general-knowledge
-    tasks (e.g., HumanEval, TriviaQA).
-
-    Qwen3.6 is always the primary backend and is supplied separately as ``generate_fn``.
-    This function contains ONLY cloud fallbacks:
-      - math/science: DeepSeek → OpenAI
-      - code/QA/general generation: OpenAI → DeepSeek
-    Missing keys omit that backend. Claude/the orchestrator is never constructed here.
-    """
-    from config.config import (
-        DEEPSEEK_API_KEY, DEEPSEEK_BASE_URL, TEACHER_MODEL_DEEPSEEK,
-        OPENAI_API_KEY, TEACHER_MODEL_GPT,
-    )
-    from openai import OpenAI
-
-    bm = "".join(ch for ch in (benchmark or "").lower() if ch.isalnum())
-    deepseek = (
-        (OpenAI(api_key=DEEPSEEK_API_KEY, base_url=DEEPSEEK_BASE_URL),
-         TEACHER_MODEL_DEEPSEEK)
-        if DEEPSEEK_API_KEY else None
-    )
-    openai = (
-        (OpenAI(api_key=OPENAI_API_KEY), TEACHER_MODEL_GPT)
-        if OPENAI_API_KEY else None
-    )
-    math_like = task_type == "math_reasoning" or (
-        task_type == "generation" and bm in _MATH_SCIENCE_BENCHMARKS
-    )
-    ordered = [deepseek, openai] if math_like else [openai, deepseek]
-    return [backend for backend in ordered if backend is not None]
 
 
 def annotate_cot(
     examples: list[dict],
-    teacher_client=None,
-    teacher_model: str = "",
-    client_type: str = "openai",
     task_type: str = "generation",
     generate_fn=None,
-    fallback_teachers: list[tuple[object, str]] | None = None,
     log=print,
 ) -> list[dict]:
     """Add chain-of-thought reasoning to generation examples.
@@ -79,13 +29,9 @@ def annotate_cot(
     chains for training examples, teaching the model WHY an answer is correct rather
     than only WHAT the answer is.'
 
-    Backend order is per example: local Qwen3.6 ``generate_fn`` first, then each
-    OpenAI-compatible ``fallback_teachers`` entry in order. Empty output and exceptions
-    advance to the next backend. Claude/the orchestrator is never called. Generation is
-    NON-FATAL: if every backend fails, the original example remains CoT-less.
-
-    ``teacher_client``/``teacher_model`` remain as a compatibility bridge for an explicitly
-    supplied OpenAI-compatible specialist; non-OpenAI clients are ignored.
+    The CoT teacher is the local Qwen3.6 synth model, supplied as ``generate_fn`` — the sole
+    backend, with no cloud fallback. Generation is NON-FATAL: if ``generate_fn`` is absent
+    (endpoint unavailable) or every call fails, the original example remains CoT-less.
 
     Returns examples with an added 'cot_reasoning' field. The CoT is prepended to the
     response during training formatting. The prompt is task-aware: code-generation gets
@@ -116,12 +62,6 @@ def annotate_cot(
             f"Reply with only the reasoning steps, not the final answer."
         )
 
-    fallbacks = list(fallback_teachers or [])
-    if teacher_client is not None and teacher_model and client_type == "openai":
-        fallbacks.insert(0, (teacher_client, teacher_model))
-    from threading import BoundedSemaphore
-    cloud_slots = BoundedSemaphore(16)
-
     def _present(value) -> bool:
         return value is not None and bool(str(value).strip())
 
@@ -149,50 +89,21 @@ def annotate_cot(
                     return {**ex, "cot_reasoning": cot}, "Qwen3.6"
             except Exception:
                 pass
-
-        for client, model in fallbacks:
-            try:
-                # Keep local Qwen at high concurrency while limiting paid cloud fallback
-                # traffic to the conservative 16-call cap.
-                with cloud_slots:
-                    if model.lower().startswith("deepseek-v4"):
-                        resp = tracked_openai_chat_create(
-                            client,
-                            stage="cot_fallback",
-                            model=model,
-                            messages=[{"role": "user", "content": cot_prompt}],
-                            max_tokens=500,
-                            reasoning_effort="high",
-                            extra_body={"thinking": {"type": "enabled"}},
-                        )
-                    else:
-                        resp = tracked_openai_chat_create(
-                            client,
-                            stage="cot_fallback",
-                            model=model,
-                            messages=[{"role": "user", "content": cot_prompt}],
-                            max_tokens=500,
-                        )
-                cot = (resp.choices[0].message.content or "").strip()
-                if cot:
-                    return {**ex, "cot_reasoning": cot}, model
-            except Exception:
-                continue
         return ex, None
 
-    # Only spend API calls on examples that actually need a CoT.
+    # Only spend calls on examples that actually need a CoT.
     need_idx = [i for i, ex in enumerate(examples)
                 if not _present(ex.get("cot_reasoning"))
                 and _present(_first_present(ex, "prompt", "text"))
                 and _present(_first_present(ex, "answer", "response", "label"))]
-    if not need_idx:
+    # Without a local synth endpoint there is no CoT teacher; leave examples untouched.
+    if not need_idx or generate_fn is None:
         return list(examples)
 
     from concurrent.futures import ThreadPoolExecutor
     annotated = list(examples)
-    # The local synth server continuous-batches, so match the synth concurrency when using
-    # generate_fn; cloud teachers keep the conservative 16-way cap.
-    max_workers = _synth_concurrency(len(need_idx)) if generate_fn is not None else min(16, len(need_idx))
+    # The local synth server continuous-batches, so match the synth concurrency.
+    max_workers = _synth_concurrency(len(need_idx))
     with ThreadPoolExecutor(max_workers=max_workers) as pool:
         outcomes = list(pool.map(lambda i: _annotate_one(examples[i]), need_idx))
 
@@ -712,7 +623,6 @@ def synthesize_examples(
     n: int,
     generate_fn,
     verify_fn=None,
-    fallback_teachers=(),
     log=None,
 ) -> list[dict]:
     """Unified, task-adaptive synthesis entry (redesign 2026-07-31).

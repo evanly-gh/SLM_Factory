@@ -201,9 +201,9 @@ it via the table above.
 
 - **Local synth default 200 tokens** (`data/synth_client.py:177,188`) — hard negatives are
   short texts; 200 keeps them tight and fast under continuous batching.
-- **CoT authoring 512 tokens** (`data/curriculum.py:147`) — reasoning chains need room.
-- **Cloud CoT fallback 500 tokens** (`data/curriculum.py:164,174`) — DeepSeek/GPT fallback
-  when local Qwen fails.
+- **CoT authoring 512 tokens** (`data/curriculum.py:147`) — reasoning chains need room. This is
+  the only CoT path: the local Qwen3.6 synth endpoint. There is no cloud CoT fallback; if it is
+  unreachable the example is left CoT-less.
 
 ### Judge and orchestrator caps
 

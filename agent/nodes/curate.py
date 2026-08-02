@@ -17,7 +17,6 @@ from agent.state import AgentState
 from data.curriculum import (
     annotate_cot,
     apply_quality_controls,
-    get_cot_fallbacks,
     synthesize_examples,
 )
 from data.loaders.dataset_integrity import normalize_text
@@ -50,10 +49,6 @@ def _verifier_for(task_type: str, state: AgentState):
     the contrastive path which needs no verifier.
     """
     return None
-
-
-def _cot_benchmark(plan: dict) -> str:
-    return plan.get("benchmark") or plan.get("task_name", "")
 
 
 def _row_text(row: dict) -> object:
@@ -454,8 +449,6 @@ def _annotate_generation_cot(
     if os.environ.get("SLM_CHEAP") == "1":
         _log(model_id, "  CHEAP MODE: skipping CoT annotation")
         return rows
-    task_plan = state.get("task_plan") or {}
-    fallbacks = get_cot_fallbacks(task_type, _cot_benchmark(task_plan))
     from config.config import SYNTH_MODEL
     from data.synth_client import get_generate_fn, is_available
 
@@ -463,14 +456,13 @@ def _annotate_generation_cot(
     generate = get_generate_fn(log=logger) if is_available(log=logger) else None
     _log(
         model_id,
-        f"  CoT annotation: primary=LOCAL {SYNTH_MODEL}; "
-        f"fallbacks={[model for _, model in fallbacks] or ['none']}",
+        f"  CoT annotation: teacher=LOCAL {SYNTH_MODEL} "
+        f"({'available' if generate is not None else 'unavailable — skipping CoT'})",
     )
     return annotate_cot(
         rows,
         task_type=task_type,
         generate_fn=generate,
-        fallback_teachers=fallbacks,
         log=logger,
     )
 

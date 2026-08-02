@@ -11,8 +11,8 @@ from agent.nodes.cold_start.hardware_filter import run_hardware_filter
 #                   Flags on task_plan: multi_label:bool, multilingual:bool
 # NER             — span extraction, or schema-constrained JSON from unstructured text.
 #                   Flags on task_plan: schema:dict|None, multilingual:bool
-# math_reasoning  — arithmetic, algebra, word problems. CoT mandatory.
-#                   Cloud fallback = DeepSeek V4 Flash thinking. Eval = final-answer exact match.
+# math_reasoning  — arithmetic, algebra, word problems. CoT mandatory (local Qwen3.6 teacher).
+#                   Eval = final-answer exact match.
 # code_generation — function synthesis, completion, bug-fix, SQL.
 #                   Eval = execution pass@1.
 # generation      — open-ended summarization, QA, dialogue. Catch-all.
@@ -79,33 +79,17 @@ def _apply_data_targets(state: AgentState, task_type: str) -> None:
 
 
 def _calibrate_stop_threshold(state: AgentState, task_type: str) -> None:
-    """Resolve the accuracy target from the sourced registry, or defer to first measurement.
+    """Park the accuracy target on the Qwen-3.6 baseline, measured later in eval_setup.
 
-    REPLACES: the planner proposing `stop_threshold` from its recall of published SOTA, with a
-    hardcoded 0.96 default when it declined. See agent/threshold.py for why that was removed.
+    There is ONE automatic calibration method: the goal is the separately-hosted Qwen-3.6
+    reference model's own zero-shot score on THIS run's frozen E, floored at 0.8 (see
+    agent/threshold.py). E does not exist yet at task-analysis time, so the goal is parked
+    PENDING here and eval_setup_node measures it right after building E — and RAISES, breaking
+    the loop, if the endpoint is unreachable.
 
-    Sources, in order:
-      0. Qwen-3.6 baseline (default; SLM_GOAL_FROM_QWEN != "0"). The goal is the separately-
-         hosted reference model's own zero-shot score on THIS run's frozen E, floored at 0.8.
-         E does not exist yet here, so the goal is parked PENDING and eval_setup_node measures
-         it right after building E.
-      1. config/benchmark_baselines.md, when a row's metric matches what this pipeline measures
-         for this task type (an `accuracy` row cannot calibrate a `macro_f1` target).
-      2. Deferred measured anchor. `stop_threshold` is parked at an UNREACHABLE value so nothing
-         can converge before a real score exists, and evaluate_node calibrates from
-         max(zero_shot, first_finetune) + a bounded headroom at the end of iteration 1.
-
-    SLM_STOP_THRESHOLD still overrides everything and disables calibration entirely.
+    SLM_STOP_THRESHOLD remains as an explicit manual/test pin that overrides calibration.
     """
-    from agent.threshold import (
-        UNREACHABLE_PENDING_THRESHOLD,
-        registry_lookup,
-        snap_headroom,
-        threshold_from_registry,
-    )
-
-    plan = state.get("task_plan") or {}
-    headroom = snap_headroom(plan.get("threshold_headroom"))
+    from agent.threshold import UNREACHABLE_PENDING_THRESHOLD
 
     override = os.environ.get("SLM_STOP_THRESHOLD")
     if override:
@@ -115,70 +99,31 @@ def _calibrate_stop_threshold(state: AgentState, task_type: str) -> None:
         state["threshold_calibration"] = {
             "source": "env_override",
             "threshold": threshold,
-            "headroom": None,
-            "reason": "SLM_STOP_THRESHOLD pinned; calibration disabled",
+            "reason": "SLM_STOP_THRESHOLD pinned; Qwen-baseline calibration skipped",
             "pending": False,
         }
         print(f"      [threshold] SLM_STOP_THRESHOLD={threshold:.4f} pinned "
-              "(registry and measured calibration both skipped)")
+              "(Qwen-baseline calibration skipped)")
         return
 
-    # Source 0 (default): the goal is the hosted Qwen-3.6 baseline on E, floored at 0.8.
-    # E is built later (eval_setup), so park PENDING here and measure there.
-    if os.environ.get("SLM_GOAL_FROM_QWEN", "1") != "0":
-        floor = _qwen_goal_floor()
-        state["stop_threshold"] = UNREACHABLE_PENDING_THRESHOLD
-        state["initial_stop_threshold"] = UNREACHABLE_PENDING_THRESHOLD
-        state["threshold_calibration"] = {
-            "source": "pending_qwen_baseline",
-            "threshold": None,
-            "headroom": None,
-            "floor": floor,
-            "reason": (
-                "goal = Qwen-3.6 zero-shot score on E, floored at "
-                f"{floor:.2f}; measured in eval_setup after E is built"
-            ),
-            "pending": True,
-        }
-        print(f"      [threshold] goal from Qwen-3.6 baseline (floor {floor:.2f}) — "
-              f"DEFERRING to eval_setup; target parked at {UNREACHABLE_PENDING_THRESHOLD} "
-              "so nothing converges early")
-        return
-
-    row = registry_lookup(plan.get("benchmark"), task_type)
-    if row is not None:
-        threshold, reason = threshold_from_registry(row)
-        state["stop_threshold"] = threshold
-        state["initial_stop_threshold"] = threshold
-        state["threshold_calibration"] = {
-            "source": "registry",
-            "threshold": threshold,
-            "headroom": headroom,
-            "reason": reason,
-            "registry_row": row,
-            "pending": False,
-        }
-        print(f"      [threshold] registry hit for benchmark="
-              f"{plan.get('benchmark')!r}: {reason} → {threshold:.4f}")
-        return
-
+    # The goal is the hosted Qwen-3.6 baseline on E, floored at 0.8. E is built later
+    # (eval_setup), so park PENDING here and measure it there.
+    floor = _qwen_goal_floor()
     state["stop_threshold"] = UNREACHABLE_PENDING_THRESHOLD
     state["initial_stop_threshold"] = UNREACHABLE_PENDING_THRESHOLD
     state["threshold_calibration"] = {
-        "source": "pending_measured_anchor",
+        "source": "pending_qwen_baseline",
         "threshold": None,
-        "headroom": headroom,
+        "floor": floor,
         "reason": (
-            f"no registry row with metric matching task_type={task_type!r} for "
-            f"benchmark={plan.get('benchmark')!r}; deferring to "
-            "max(zero_shot, first_finetune) + headroom at the end of iteration 1"
+            "goal = Qwen-3.6 zero-shot score on E, floored at "
+            f"{floor:.2f}; measured in eval_setup after E is built"
         ),
         "pending": True,
     }
-    print(f"      [threshold] no usable registry row for benchmark="
-          f"{plan.get('benchmark')!r} — DEFERRING calibration to the first evaluation "
-          f"(headroom={headroom:+.2f}); target parked at "
-          f"{UNREACHABLE_PENDING_THRESHOLD} so nothing converges early")
+    print(f"      [threshold] goal from Qwen-3.6 baseline (floor {floor:.2f}) — "
+          f"DEFERRING to eval_setup; target parked at {UNREACHABLE_PENDING_THRESHOLD} "
+          "so nothing converges early")
 
 
 def task_analysis_node(state: AgentState) -> AgentState:
@@ -206,7 +151,7 @@ def task_analysis_node(state: AgentState) -> AgentState:
             "Set task_type in the initial AgentState, or enable autonomous mode."
         )
 
-    # Accuracy target: sourced registry, else deferred to the first real measurement.
+    # Accuracy target: the Qwen-3.6 baseline on E, measured in eval_setup (parked pending here).
     _calibrate_stop_threshold(state, task_type)
 
     # Data-size targets: take the orchestrator's chosen curriculum/eval sizes, clamped to

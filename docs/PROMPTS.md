@@ -235,7 +235,8 @@ stages: `synth_preflight` (reachability) and `local_synthesis` (generation); bot
 $0 as local-provider cost events.
 
 `agent/nodes/curate.py` uses local `SYNTH_MODEL` first and **never falls back to Claude for hard
-negatives.** CoT may fall back to task-routed DeepSeek/OpenAI.
+negatives.** CoT is authored **only** by the local Qwen3.6 synth endpoint — there is no cloud CoT
+teacher; if the endpoint is unavailable the example is left CoT-less.
 
 > **Neither completed run produced a single synthetic row.** The ledgers contain only
 > `synth_preflight` events (8/9 failed in NER, 18/43 in math) and zero
@@ -251,8 +252,8 @@ negatives.** CoT may fall back to task-routed DeepSeek/OpenAI.
 - **Out:** reasoning steps only. Code tasks request an implementation plan *without code*; other
   tasks request step-by-step reasoning *without the final answer*.
 - **Validation:** any non-empty stripped text is accepted verbatim as `cot_reasoning`. Existing
-  CoT is preserved. Backend ladder: local Qwen3.6 → DeepSeek (math/science) or GPT-first
-  (code/general); total failure leaves the example unchanged.
+  CoT is preserved. Sole backend: local Qwen3.6 (no cloud teacher); if it is unreachable the
+  example is left unchanged.
 - **Critique:** no check that the reasoning is consistent with the supplied gold, does not leak
   the final answer, or fits the training context after formatting.
 - **Improve:** verify answer consistency, reject leakage when the prompt forbade it, and record

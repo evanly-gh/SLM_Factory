@@ -3,8 +3,8 @@
 The accuracy target a run must beat is the separately-hosted Qwen-3.6 reference model's own
 zero-shot score on THIS run's frozen E, floored at 0.8. task_analysis parks the goal PENDING
 (E does not exist yet); eval_setup measures it once E is built. These tests pin the floor/cap
-math, the measurement path (mocked endpoint), the unreachable-endpoint degradation, and the
-park/complete handoff.
+math, the measurement path (mocked endpoint), the unreachable-endpoint HARD FAILURE (there is
+no fallback — the run raises and stops), and the park/complete handoff.
 """
 import os
 
@@ -104,7 +104,6 @@ def test_task_analysis_parks_pending_qwen_baseline(monkeypatch):
     from agent.threshold import UNREACHABLE_PENDING_THRESHOLD
 
     monkeypatch.delenv("SLM_STOP_THRESHOLD", raising=False)
-    monkeypatch.setenv("SLM_GOAL_FROM_QWEN", "1")
     state = {"task_plan": {"benchmark": "CLINC150"}}
     _calibrate_stop_threshold(state, "classification")
 
@@ -116,22 +115,10 @@ def test_task_analysis_parks_pending_qwen_baseline(monkeypatch):
     assert state["initial_stop_threshold"] == UNREACHABLE_PENDING_THRESHOLD
 
 
-def test_goal_from_qwen_can_be_disabled_to_use_registry(monkeypatch):
-    """SLM_GOAL_FROM_QWEN=0 restores the registry/deferred behavior."""
-    from agent.nodes.cold_start.task_analysis import _calibrate_stop_threshold
-
-    monkeypatch.delenv("SLM_STOP_THRESHOLD", raising=False)
-    monkeypatch.setenv("SLM_GOAL_FROM_QWEN", "0")
-    state = {"task_plan": {"benchmark": "GSM8K"}}
-    _calibrate_stop_threshold(state, "math_reasoning")
-    assert state["threshold_calibration"]["source"] in ("registry", "pending_measured_anchor")
-
-
 def test_env_override_still_wins_over_qwen(monkeypatch):
     from agent.nodes.cold_start.task_analysis import _calibrate_stop_threshold
 
     monkeypatch.setenv("SLM_STOP_THRESHOLD", "0.5")
-    monkeypatch.setenv("SLM_GOAL_FROM_QWEN", "1")
     state = {"task_plan": {}}
     _calibrate_stop_threshold(state, "classification")
     assert state["stop_threshold"] == pytest.approx(0.5)
@@ -167,17 +154,31 @@ def test_eval_setup_completes_goal_from_measured_baseline(monkeypatch):
     assert state["initial_stop_threshold"] == pytest.approx(0.88)
 
 
-def test_eval_setup_falls_back_to_floor_when_endpoint_unreachable(monkeypatch):
+def test_eval_setup_raises_when_endpoint_unreachable(monkeypatch):
+    """The Qwen baseline is the SOLE accuracy target — an unreachable endpoint has no honest
+    fallback, so eval_setup raises and breaks the loop instead of degrading to the floor."""
     import agent.nodes.cold_start.eval_setup as eval_setup
+    from agent.nodes.cold_start.eval_setup import QwenBaselineUnavailableError
 
     monkeypatch.setattr(eval_setup, "measure_endpoint_baseline",
                         lambda *a, **k: None, raising=False)
     state = _pending_state()
-    eval_setup._calibrate_qwen_goal_if_pending(state, _classification_eval_set())
+    with pytest.raises(QwenBaselineUnavailableError):
+        eval_setup._calibrate_qwen_goal_if_pending(state, _classification_eval_set())
 
-    assert state["threshold_calibration"]["source"] == "qwen_baseline"
-    assert state["threshold_calibration"]["endpoint"] == "unreachable"
-    assert state["stop_threshold"] == pytest.approx(0.8)
+
+def test_eval_setup_raises_when_measurement_errors(monkeypatch):
+    """A measurement exception is also fatal — wrapped as QwenBaselineUnavailableError."""
+    import agent.nodes.cold_start.eval_setup as eval_setup
+    from agent.nodes.cold_start.eval_setup import QwenBaselineUnavailableError
+
+    def boom(*a, **k):
+        raise RuntimeError("endpoint refused connection")
+
+    monkeypatch.setattr(eval_setup, "measure_endpoint_baseline", boom, raising=False)
+    state = _pending_state()
+    with pytest.raises(QwenBaselineUnavailableError):
+        eval_setup._calibrate_qwen_goal_if_pending(state, _classification_eval_set())
 
 
 def test_eval_setup_ignores_non_qwen_calibration(monkeypatch):

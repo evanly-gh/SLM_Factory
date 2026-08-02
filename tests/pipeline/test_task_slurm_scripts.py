@@ -131,7 +131,9 @@ def test_math_l40s_comments_match_current_cot_and_token_routing():
     source = (PIPELINE_DIR / "run_math_l40s.slurm").read_text(encoding="utf-8")
 
     assert "Qwen3.6-primary CoT" in source
-    assert "DeepSeek then OpenAI" in source
+    assert "no cloud fallback" in source
+    assert "DeepSeek" not in source
+    assert "OpenAI" not in source
     assert "512-token" in source
     assert "Sonnet teacher" not in source
     assert "256-token" not in source

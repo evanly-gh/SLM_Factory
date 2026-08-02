@@ -104,8 +104,6 @@ def runtime_config_snapshot(mode: str) -> dict[str, Any]:
         "HW_VERIFY_ON_DEVICE",
         "HW_ONDEVICE_BACKEND",
         "ORCHESTRATOR_MODEL",
-        "TEACHER_MODEL_DEEPSEEK",
-        "TEACHER_MODEL_GPT",
         "TEACHER_MODEL_CLAUDE",
         "CHEAP_MODE",
         "ORCHESTRATOR_1M",

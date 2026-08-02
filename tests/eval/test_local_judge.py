@@ -515,7 +515,7 @@ def test_preflight_rejects_a_non_qwen36_model_even_when_exactly_served(tmp_path)
 @pytest.mark.parametrize(
     "endpoint",
     [
-        "https://api.openai.com/v1",
+        "https://api.remote-cloud.example.com/v1",
         "http://10.23.4.5:8000/v1",
         "http://192.168.1.20:8000/v1",
         "http://gpu-worker.internal:8000/v1",
