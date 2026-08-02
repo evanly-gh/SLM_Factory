@@ -351,13 +351,17 @@ Requires `eval_set`; raises `RuntimeError` if absent (see [§10](#10-production-
    design; there is no reproducible per-plan seed.
 4. **Execute the one strategy** — `acquire` mines new real rows, `synthesize` generates
    task-adaptive rows, `resample` reshuffles; then resample-fill covers the remainder to
-   `target_rows`.
+   `target_rows`. **`resample` is gated**: when the whole train pool is already in the
+   curriculum (`resample_pool_exhausted`), `normalize_data_rebuild_plan`/the fallback planner
+   redirect it to `synthesize` (a reshuffle there adds no novelty).
 5. **Synth-fill to `target_rows`** — `_synth_fill_to_target` tops up any shortfall with
    task-adaptive synthesis (covers the initial curriculum and every rebuild); degrades
    gracefully if the endpoint is down.
 6. **CoT annotation** for math/code/generation (`_annotate_generation_cot`); skipped under
    `SLM_CHEAP=1`.
-7. `apply_quality_controls` → truncate to `target_rows` → **eval firewall (layer 3)**.
+7. `apply_quality_controls` → **eval firewall (layer 3)**. `target_rows` is a floor for
+   synth-fill, **not an upper cap** — there is no truncation step, so an `acquire`/`synthesize`
+   overshoot keeps its extra rows (change 2026-08-02).
 8. Atomic write to `artifacts/dataset_v{N}.jsonl`; every row stamped `_dataset_version`.
 9. Record `last_curation`: provenance/source/difficulty composition, per-origin
    `rows`/`novel_rows`, `plan_yield`, `source_novelty`, and `allocation_fallbacks`.
@@ -657,7 +661,7 @@ no task-type or score gating:
 
 | Strategy | What it does |
 |---|---|
-| `resample` | Reshuffle / re-draw rows from the existing pool (entropy-seeded) |
+| `resample` | Reshuffle / re-draw rows from the existing pool (entropy-seeded). **Gated:** redirected to `synthesize` when the whole pool is already in the curriculum (`resample_pool_exhausted`) — a reshuffle there adds no novelty. |
 | `acquire` | Add new rows from the same or a new provenance (bounded real-source mining: local → deterministic benchmark → paid Exa) |
 | `synthesize` | Task-adaptive synthetic generation — hard negatives for classification/NER, new *correct* in-distribution examples for math/code/generation |
 
@@ -1012,9 +1016,12 @@ recommendations, not behavior.** No code was changed to produce this list.
    failures.
 3. **Preference optimization** — store generation negatives as explicit chosen/rejected pairs
    and train with a preference loss. Never as positive SFT.
-4. **Class weighting and confusion-pair oversampling** — `difficulty_weighted_sampling` is
-   implemented and `confusion_pairs` reach the `pattern_hint`, but explicit class weights and
-   confusion-pair oversampling are not.
+4. **Class weighting and confusion-pair oversampling** — none of this touches row sampling.
+   `difficulty_weighted_sampling` does not exist (the dead `_difficulty_sample` helper was
+   deleted 2026-08-02), and `curate_node` never reads `difficulty_buckets`, `confusion_pairs`,
+   or `pattern_hint`. They steer *which strategy* runs (via the fallback planner) and populate
+   the orchestrator prompt, but explicit class weights and confusion-pair oversampling of rows
+   are not implemented.
 5. **LoRA target-module search** — target sets are fixed; a model-aware choice is possible.
 6. **Optimizer schedule intervention** — warmup and scheduler are fixed. (Weight decay *is* now
    a bounded intervention; effective batch deliberately is not — see

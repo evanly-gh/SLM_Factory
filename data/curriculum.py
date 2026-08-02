@@ -4,8 +4,6 @@ import random
 from collections import Counter
 from agent.cost import tracked_anthropic_messages_create
 from config.config import TEACHER_MODEL_CLAUDE  # legacy hard-negative fallback only; never CoT
-from data.eval_set import EvalSet, _infer_pos_label, _infer_neg_label
-from data.loaders.dataset_integrity import normalize_text
 
 logger = logging.getLogger(__name__)
 
@@ -116,73 +114,6 @@ def annotate_cot(
     log(f"      [cot] annotated={succeeded}/{len(need_idx)} "
         f"by_backend={dict(backend_counts)} failed={len(need_idx) - succeeded}")
     return annotated
-
-
-def build_initial_curriculum(
-    train_examples: list[dict],
-    eval_set: EvalSet,
-    n_total: int = 150,
-    gold_fraction: float = 0.65,
-    seed: int = 42,
-) -> list[dict]:
-    """
-    Build Dcold = Dgold ∪ Dhard at 65:35 from train_examples.
-    Excludes any example that appears in eval_set.
-    Applies label balancing (no label > 3x any other).
-    Reads task_type from eval_set.task_type internally.
-    """
-    task_type = eval_set.task_type
-    eval_texts = {
-        normalize_text(e.get("text", e.get("prompt", "")))
-        for e in eval_set.all
-    }
-    eval_texts.discard("")
-    available = [
-        e
-        for e in train_examples
-        if normalize_text(e.get("text", e.get("prompt", ""))) not in eval_texts
-    ]
-
-    # n_gold is the gold-data portion in a mixed dataset (gold + hard negatives).
-    # For the initial curriculum (training data only, no synthetic hard negatives yet),
-    # we target n_total examples from the gold pool.
-    n_gold = int(n_total * gold_fraction)
-    # Use n_total as the selection budget so the initial dataset is large enough.
-    selection_budget = n_total
-
-    rng = random.Random(seed)
-
-    if task_type == "classification":
-        # Balance by label — same for binary and multi-class.
-        # multi_label tasks also land here; individual label balance is enforced
-        # in apply_quality_controls via per-label counting.
-        by_label: dict[str, list[dict]] = {}
-        for ex in available:
-            lbl = ex.get("label", "unknown")
-            by_label.setdefault(lbl, []).append(ex)
-
-        for lbl in by_label:
-            rng.shuffle(by_label[lbl])
-
-        labels = list(by_label.keys())
-        per_label = selection_budget // max(len(labels), 1)
-        gold = []
-        for lbl in labels:
-            gold.extend(by_label[lbl][:per_label])
-
-        selected_texts = {e["text"] for e in gold}
-        remainder = [e for e in available if e["text"] not in selected_texts]
-        rng.shuffle(remainder)
-        gold.extend(remainder[: selection_budget - len(gold)])
-
-    else:
-        # NER, math_reasoning, code_generation, generation:
-        # shuffle and take — quality controls and CoT annotation handle diversity downstream.
-        shuffled = list(available)
-        rng.shuffle(shuffled)
-        gold = shuffled[:selection_budget]
-
-    return apply_quality_controls(gold, task_type=task_type)
 
 
 def apply_quality_controls(

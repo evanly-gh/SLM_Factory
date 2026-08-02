@@ -83,6 +83,62 @@ def test_curation_log_persists_complete_dataset_composition(tmp_path):
     assert "raw held-out prediction secret" not in text
 
 
+def _base_kwargs(result):
+    return {
+        "iteration": 4,
+        "task_type": "classification",
+        "dataset_version": "v4",
+        "n_gold": 5,
+        "n_hard": 0,
+        "label_dist": {"a": 5},
+        "config_a": "a",
+        "config_b": "b",
+        "best_config": "a",
+        "eval_result": result,
+        "score_band": "0.80-0.95",
+        "next_intervention": "data_rebuild",
+        "hypothesis": "test",
+        "model_id": "test/model",
+        "size_mb": 100,
+        "tier": 0,
+    }
+
+
+def test_curation_log_renders_data_sources_section_with_links_and_counts(tmp_path):
+    path = tmp_path / "data-curation.md"
+    log = CurationLog(str(path))
+    result = EvalResult(0.8, {}, 0.8, 0.8, 0.8, [])
+    log.write_iteration(
+        **_base_kwargs(result),
+        source_usage=[
+            {"source": "hf:Salesforce/xlam/train",
+             "url": "https://huggingface.co/datasets/Salesforce/xlam",
+             "rows": 240, "novel_rows": 210},
+            {"source": "web:site.example",
+             "url": "https://site.example/faq", "rows": 8, "novel_rows": 8},
+            {"source": "existing pool", "url": None, "rows": 2752, "novel_rows": 0},
+        ],
+    )
+    text = path.read_text(encoding="utf-8")
+    assert "### Data sources" in text
+    assert "https://huggingface.co/datasets/Salesforce/xlam" in text
+    assert "240 rows" in text
+    assert "https://site.example/faq" in text
+    assert "existing pool" in text
+
+
+def test_curation_log_omits_data_sources_section_when_no_external_source(tmp_path):
+    path = tmp_path / "data-curation.md"
+    log = CurationLog(str(path))
+    result = EvalResult(0.8, {}, 0.8, 0.8, 0.8, [])
+    log.write_iteration(
+        **_base_kwargs(result),
+        source_usage=[{"source": "existing pool", "url": None, "rows": 3000, "novel_rows": 0}],
+    )
+    text = path.read_text(encoding="utf-8")
+    assert "### Data sources" not in text
+
+
 def test_curation_log_iteration_is_retry_idempotent(tmp_path):
     path = tmp_path / "data-curation.md"
     log = CurationLog(str(path))

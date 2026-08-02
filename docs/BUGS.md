@@ -2853,3 +2853,34 @@ headroom rides along in the existing `task_analysis` call.
      data plans — but it is no longer silent.
 - **Status:** 🟢 fixed, with prompt-contract and strip-visibility assertions in
   `tests/test_threshold_calibration.py`.
+
+## B211 — curate design cleanups: no upper truncation, resample gating, dead-code removal
+
+- **Where:** `agent/nodes/curate.py`, `agent/data_rebuild.py`, `agent/nodes/iterate.py`,
+  `data/curriculum.py`, `agent/state.py`
+- **Found:** 2026-08-02, from Evan's review of the data-curation redesign (see
+  [Evan's Notes 2026-08-01](Evan's%20Notes/2026-08-01-firewall-filtering-rebuild-and-escalation.md)).
+- **Three changes:**
+  1. **`target_rows` is now a floor, not a cap.** curate previously ended with
+     `dataset = dataset[:target_rows]`, hard-truncating the curriculum. That line is removed:
+     `target_rows` only drives `_synth_fill_to_target` (top up when short). The allocation loop
+     still stops at `target_rows` in the common case, but a legitimate `acquire`/`synthesize`
+     overshoot now keeps its extra rows rather than discarding real signal to hit an exact count.
+     Rationale: never train on *too few* rows; too many is fine.
+  2. **`resample` is gated when the pool is exhausted.** New
+     `resample_pool_exhausted(pool_texts, curriculum_texts)` (subset test) +
+     `resample_available_for_state(state)` in `data_rebuild.py`. curate computes
+     `resample_available` from the eval-decontaminated pool vs the previous artifact **before**
+     plan resolution and threads it into `normalize_data_rebuild_plan` (redirects
+     `resample → synthesize`) and the fallback planner (drops the `resample` weight). iterate
+     sets `state["resample_available"]` and threads it into the validator, fallback, system
+     prompt, and a per-turn "resample unavailable" note. Reshuffling a pool that is already
+     wholly in the curriculum adds no novelty, so it is taken off the menu.
+  3. **Dead code deleted.** `_difficulty_sample`, `_with_train_difficulty`, and the
+     curate-local `_DIFFICULTY_BUCKETS` (zero call sites since the 2026-07-31 redesign) removed
+     from `curate.py`; `build_initial_curriculum` (no live callers — it predates the declarative
+     `curate_node` path; historical refs in B34/B502/B684/B1314/B1316 describe its *former*
+     behavior) removed from `curriculum.py` along with its now-unused `EvalSet`/`normalize_text`/
+     `_infer_pos_label`/`_infer_neg_label` imports.
+- **Status:** 🟢 implemented; all five edited modules parse; `resample_available` added to
+  `AgentState`.

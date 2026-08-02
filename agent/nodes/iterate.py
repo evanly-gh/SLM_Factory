@@ -17,6 +17,7 @@ from agent.data_rebuild import (
     fallback_data_rebuild_plan,
     normalize_data_rebuild_plan,
     remaining_paid_acquire_rounds,
+    resample_available_for_state,
 )
 from agent.state import AgentState
 from config.android_pool import check_hardware_constraints, all_constraints_pass
@@ -275,8 +276,11 @@ def _validate_decision_json(
             ),
             remaining_acquire_rounds=remaining_paid_acquire_rounds(state),
             forbidden_eval_texts=forbidden_eval_texts,
+            resample_available=bool(state.get("resample_available", True)),
         )
         # Non-deterministic redesign: no elite resolution, no untried-plan dedup/rotation.
+        # resample_available is False when the whole pool is already in the curriculum, in
+        # which case a resample plan is redirected to synthesize (reshuffling adds nothing).
         validated["data_rebuild"] = plan
 
     if intervention == "hyperparameter":
@@ -551,6 +555,10 @@ Data-rebuild payload constraints (how to set each from the failure analysis):
 - strategy: EXACTLY ONE of — pick by WHERE the failure is:
     "resample"   -> buckets are roughly balanced / the pool is adequate and only needs
                     rebalancing or a fresh draw (no strong single failing region).
+                    NOTE: resample only reshuffles the EXISTING pool. When the whole pool
+                    is already in the curriculum a reshuffle adds nothing, so if the prompt
+                    tells you resample is unavailable this turn, pick acquire or synthesize
+                    (a resample plan would be auto-redirected to synthesize anyway).
     "acquire"    -> the DATA is wrong or too thin: the EASY bucket is failing, or prior
                     source novelty/yield was low — bring in new real rows.
     "synthesize" -> a specific hard/confusable region is failing: MEDIUM/HARD buckets are
@@ -817,6 +825,13 @@ def _llm_iterate(state: AgentState) -> dict:
         "Data-rebuild plans are not deduplicated — you may repeat or vary any strategy "
         "freely; judge from the trajectory and prior-plan yield below."
     )
+    resample_available = bool(state.get("resample_available", True))
+    if not resample_available:
+        rebuild_trials_block += (
+            "\nRESAMPLE IS UNAVAILABLE THIS TURN: the entire training pool is already in the "
+            "curriculum, so a reshuffle would produce the identical set. Choose acquire or "
+            "synthesize (a resample plan would be auto-redirected to synthesize)."
+        )
 
     last_curation = state.get("last_curation") or {}
     source_novelty = last_curation.get("source_novelty") or {}
@@ -1186,6 +1201,12 @@ def iterate_node(state: AgentState) -> AgentState:
         state["last_intervention"] = "escalate"
         return state
 
+    # Resample availability for THIS turn: if the whole train pool is already in the
+    # curriculum, a reshuffle adds nothing, so resample is taken off the menu (the plan
+    # validator/fallback redirect it to synthesize, and the prompt tells the orchestrator).
+    # Advisory here; curate re-derives it precisely from the decontaminated pool at execution.
+    state["resample_available"] = resample_available_for_state(state)
+
     # Not escalating → consult the orchestrator LLM for the intervention type.
     # NOTE: this runs in cheap mode too — cheap mode keeps the agent's bounded,
     # tool-free intervention reasoning, just on the Haiku tier.
@@ -1282,6 +1303,7 @@ def iterate_node(state: AgentState) -> AgentState:
                 state,
                 hypothesis=hypothesis or "safe aggregate data refresh",
                 score=current_score,
+                resample_available=bool(state.get("resample_available", True)),
             )
         state["data_rebuild_plan"] = rebuild_plan
 

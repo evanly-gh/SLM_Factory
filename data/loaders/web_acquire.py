@@ -786,9 +786,24 @@ def mine_additional_real_rows(
     return novel[:requested], report
 
 
+def _web_source_id(url: str) -> str:
+    """Registrable-ish source id for a scraped page: its host, else the raw url."""
+    from urllib.parse import urlparse
+
+    try:
+        host = urlparse(url).netloc
+    except Exception:
+        host = ""
+    return host or (url or "web")
+
+
 def _exa_round(exa, task_type, plan, description, n_per_label, round_idx,
                seen_texts: set, log=print) -> list[dict]:
-    """One Exa acquisition round across all labels/topics; dedups against seen_texts."""
+    """One Exa acquisition round across all labels/topics; dedups against seen_texts.
+
+    Each accepted doc is tagged with its source URL (`_source`/`_source_record`) so the
+    provenance logger can report where web-scraped rows came from and how many per page.
+    """
     queries: dict = plan.get("exa_queries") or {}
     out: list[dict] = []
     if task_type == "classification":
@@ -809,7 +824,19 @@ def _exa_round(exa, task_type, plan, description, n_per_label, round_idx,
                 if doc in seen_texts:
                     continue
                 seen_texts.add(doc)
-                out.append({"text": doc, "label": label})
+                host = _web_source_id(x.url)
+                out.append({
+                    "text": doc,
+                    "label": label,
+                    "_source": f"web:{host}",
+                    "_source_record": {
+                        "kind": "web",
+                        "id": host,
+                        "url": x.url,
+                        "split": "web",
+                        "role": "curriculum",
+                    },
+                })
                 kept += 1
             log(f"      [acquire] round {round_idx} {label!r} q={query!r}: kept {kept} new")
         except Exception as e:

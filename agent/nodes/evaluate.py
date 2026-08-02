@@ -485,6 +485,7 @@ def evaluate_node(state: AgentState) -> AgentState:
         strategy_composition=curation.get("strategy_composition", []),
         source_novelty=curation.get("source_novelty", {}),
         plan_yield=curation.get("plan_yield", {}),
+        source_usage=curation.get("source_usage", []),
         confusion_pairs=(
             (state.get("test_report") or {}).get("confusion_pairs") or []
         ),

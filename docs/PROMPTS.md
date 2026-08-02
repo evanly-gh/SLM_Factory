@@ -195,7 +195,10 @@ the run** rather than falling back — see [`PIPELINE.md` §2](PIPELINE.md#2-glo
   - **Three** rebuild strategies (`resample`, `acquire`, `synthesize`) with per-field
     bounded/stepped ranges. No task-type or score gating — any strategy is valid for any task
     (redesign 2026-07-31); `synthesize` is task-adaptive (hard negatives for classification/NER,
-    new correct examples for generation-family).
+    new correct examples for generation-family). **One availability gate:** when the whole train
+    pool is already in the curriculum, `resample` is removed from the menu — the validator/fallback
+    redirect it to `synthesize` and the prompt carries a "resample unavailable this turn" note,
+    since a reshuffle there adds no novelty.
 - **Validation:** `_parse_decision_json` handles content-block lists, code fences, and prose
   wrapping, and **always** raises `ValueError` (never a bare `JSONDecodeError`).
   `_validate_decision_json` enforces field allow-lists, branch exclusivity, integer-vs-numeric

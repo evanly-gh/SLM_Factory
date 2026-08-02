@@ -2,10 +2,10 @@
 Test-data agent (B161 change 9).
 
 Owns the held-out eval set and reports, to the orchestrator, ONLY per-difficulty accuracy
-numbers plus a targeted diagnosis — never the raw examples (a contamination firewall). It
-rather than clustering or exposing individual failures, it
-runs the eval bucketed by difficulty (easy/medium/hard) and turns the per-bucket score
-pattern into an actionable improvement suggestion (data / hyperparameters / escalate).
+numbers plus a targeted diagnosis — never the raw examples (a contamination firewall).
+Rather than clustering or exposing individual failures, it runs the eval bucketed by
+difficulty (easy/medium/hard) and turns the per-bucket score pattern into an actionable
+improvement suggestion (data / hyperparameters / escalate).
 
 Difficulty is labeled by the base-model zero-shot capability gradient (B161): run the
 SMALLEST and LARGEST feasible base models zero-shot once at setup —

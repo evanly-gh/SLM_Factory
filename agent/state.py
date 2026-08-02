@@ -31,6 +31,7 @@ class AgentState(TypedDict):
     dataset_version: int              # incremented each curate call
     data_rebuild_plan: Optional[dict]  # validated declarative rebuild plan
     data_rebuild_plan_identity: Optional[str]  # canonical plan hash
+    resample_available: bool           # False when whole train pool already in curriculum (resample→synthesize)
     source_acquire_rounds_used: int    # bounded paid source-mining rounds consumed
     curation_log_path: str            # run-local durable trajectory path
 
@@ -85,7 +86,8 @@ class AgentState(TypedDict):
     # decision metadata for acquisition code; eval_setup separately enforces normalized
     # text disjointness for the train/test rows it receives.
     eval_source_ban: list[dict]            # [{"kind":"hf|url|split","id":...}, ...]
-    data_sources: list[dict]               # running lineage: every source used, with counts
+    data_sources: list[dict]               # running lineage: every source used (unique records, with url)
+    data_source_usage: list[dict]          # per-build provenance: [{iteration,dataset_version,strategy,sources:[...]}]
 
     # --- Difficulty-stratified eval + test-data agent ---
     # eval example ids/texts bucketed by difficulty (base-model zero-shot gradient), and the
