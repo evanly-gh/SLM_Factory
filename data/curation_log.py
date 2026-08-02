@@ -50,6 +50,7 @@ class CurationLog:
         strategy_composition: list[dict] | None = None,
         source_novelty: dict | None = None,
         plan_yield: dict | None = None,
+        source_usage: list[dict] | None = None,
         confusion_pairs: list[dict] | None = None,
         hardware_notes: str = "Phase 1: theoretical",
         hw_constraints: dict | None = None,
@@ -78,6 +79,24 @@ class CurationLog:
                     hw_lines += f"- Latency: {c.get('estimated_ttft_ms', '?')}ms vs L_max={c.get('limit_ms', '?')}ms ({c.get('tok_s', '?')} tok/s on {c.get('chip', '?')}) — {status}\n"
                 elif key == "power":
                     hw_lines += f"- Power: {c.get('note', 'not measured')} — {status}\n"
+
+        # Data sources used this build — only when NEW external data was fetched (an entry
+        # carries a url). Pure resample/synthesize builds have no linked source and omit it.
+        data_sources_section = ""
+        if source_usage and any(entry.get("url") for entry in source_usage if isinstance(entry, dict)):
+            source_lines = []
+            for entry in source_usage:
+                if not isinstance(entry, dict):
+                    continue
+                where = entry.get("url") or entry.get("source", "?")
+                novel = int(entry.get("novel_rows", 0) or 0)
+                novel_text = f" (novel: {novel})" if novel else ""
+                source_lines.append(
+                    f"- {where} — {int(entry.get('rows', 0) or 0)} rows{novel_text}"
+                )
+            data_sources_section = (
+                "\n### Data sources\n" + "\n".join(source_lines) + "\n"
+            )
 
         # Aggregate confusion (top failure patterns)
         taxonomy_section = ""
@@ -126,7 +145,7 @@ class CurationLog:
 - Source novelty: {source_novelty or {}}
 - Plan yield: {plan_yield or {}}
 - Distribution: {label_dist}
-
+{data_sources_section}
 ### Training config (π_{iteration})
 - Config A: {config_a}
 - Config B: {config_b}

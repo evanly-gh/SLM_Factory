@@ -65,3 +65,32 @@ def test_resample_produces_dataset(monkeypatch, tmp_path):
     # Eval firewall: the held-out secret never appears in training data.
     assert all(EVAL_SECRET not in r.get("text", "") for r in written)
     assert out["last_curation"]["strategy"] == "resample"
+
+
+def test_curate_records_source_usage_and_run_accumulator(monkeypatch, tmp_path):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("SLM_CHEAP", "1")
+    url = "https://huggingface.co/datasets/fixture/set"
+    rows = [
+        {
+            "text": f"row {i}",
+            "label": "a" if i % 2 else "b",
+            "_source": "hf:fixture/set/train",
+            "_source_record": {"kind": "hf", "id": "fixture/set", "split": "train",
+                               "url": url, "role": "curriculum"},
+        }
+        for i in range(30)
+    ]
+    plan = _plan("resample")
+    out = curate_node(_state(plan, rows))
+
+    usage = out["last_curation"]["source_usage"]
+    hf_entry = next(e for e in usage if e["source"] == "hf:fixture/set/train")
+    assert hf_entry["url"] == url
+    assert hf_entry["rows"] > 0
+    # counts sum to the dataset size
+    assert sum(e["rows"] for e in usage) == out["last_curation"]["total_examples"]
+    # run-wide accumulator appended this build
+    accum = out["data_source_usage"]
+    assert accum[-1]["dataset_version"] == "v1"
+    assert accum[-1]["sources"] == usage

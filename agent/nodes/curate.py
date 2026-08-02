@@ -12,6 +12,7 @@ from agent.data_rebuild import (
     fallback_data_rebuild_plan,
     normalize_data_rebuild_plan,
     remaining_paid_acquire_rounds,
+    resample_pool_exhausted,
 )
 from agent.state import AgentState
 from data.curriculum import (
@@ -21,10 +22,10 @@ from data.curriculum import (
 )
 from data.loaders.dataset_integrity import normalize_text
 from data.loaders.web_acquire import mine_additional_real_rows
+from data.provenance import build_source_usage, source_key
 
 
 ARTIFACTS_DIR = "artifacts"
-_DIFFICULTY_BUCKETS = ("easy", "medium", "hard")
 
 
 def _log(model_id: str, message: str) -> None:
@@ -175,90 +176,6 @@ def _balanced_sample(
     shuffled = list(rows)
     random.Random(seed).shuffle(shuffled)
     return shuffled[:count]
-
-
-def _with_train_difficulty(rows: list[dict]) -> list[dict]:
-    """Attach train-only length-tercile difficulty where metadata is absent."""
-    copied = [dict(row) for row in rows]
-    missing = [
-        index
-        for index, row in enumerate(copied)
-        if row.get("_difficulty") not in _DIFFICULTY_BUCKETS
-    ]
-    ordered = sorted(
-        missing,
-        key=lambda index: (len(str(_row_text(copied[index]))), index),
-    )
-    size = len(ordered)
-    for rank, index in enumerate(ordered):
-        if rank < size // 3:
-            bucket = "easy"
-        elif rank < (2 * size) // 3:
-            bucket = "medium"
-        else:
-            bucket = "hard"
-        copied[index]["_difficulty"] = bucket
-    return copied
-
-
-def _difficulty_sample(
-    rows: list[dict],
-    *,
-    count: int,
-    weights: dict[str, float],
-    seed: int,
-) -> tuple[list[dict], int]:
-    candidates = _with_train_difficulty(rows)
-    groups = {
-        bucket: [
-            row
-            for row in candidates
-            if row.get("_difficulty") == bucket
-        ]
-        for bucket in _DIFFICULTY_BUCKETS
-    }
-    rng = random.Random(seed)
-    for values in groups.values():
-        rng.shuffle(values)
-
-    raw_quotas = {
-        bucket: count * float(weights.get(bucket, 0.0))
-        for bucket in _DIFFICULTY_BUCKETS
-    }
-    quotas = {
-        bucket: min(len(groups[bucket]), int(raw_quotas[bucket]))
-        for bucket in _DIFFICULTY_BUCKETS
-    }
-    remaining = count - sum(quotas.values())
-    order = sorted(
-        [
-            bucket for bucket in _DIFFICULTY_BUCKETS
-            if float(weights.get(bucket, 0.0)) > 0
-        ],
-        key=lambda bucket: (
-            -(raw_quotas[bucket] - int(raw_quotas[bucket])),
-            _DIFFICULTY_BUCKETS.index(bucket),
-        ),
-    )
-    while remaining > 0:
-        progressed = False
-        for bucket in order:
-            if quotas[bucket] < len(groups[bucket]):
-                quotas[bucket] += 1
-                remaining -= 1
-                progressed = True
-                if remaining == 0:
-                    break
-        if not progressed:
-            break
-    selected = [
-        row
-        for bucket in _DIFFICULTY_BUCKETS
-        for row in groups[bucket][:quotas[bucket]]
-    ]
-    rng.shuffle(selected)
-    selected = selected[:count]
-    return selected, max(0, count - len(selected))
 
 
 def _tag_train_rows(
@@ -519,12 +436,32 @@ def curate_node(state: AgentState) -> AgentState:
         state.get("last_hypothesis")
         or "initial balanced train-only data rebuild"
     )
+
+    # The current curriculum (previous artifact) and the decontaminated pool decide whether
+    # `resample` can still add novel rows this turn. If the entire pool is already in the
+    # curriculum, reshuffling is a no-op — so resample is taken off the menu here (the plan
+    # normalizer/fallback redirect it to synthesize). Computed BEFORE plan resolution so the
+    # gate applies to both the orchestrator's plan and the fallback plan.
+    previous_rows = _read_jsonl(state.get("current_dataset_path"))
+    previous_texts = _normalized_texts(previous_rows)
+    resample_available = not resample_pool_exhausted(
+        _normalized_texts(train_rows),
+        previous_texts,
+    )
+    if not resample_available:
+        _log(
+            model_id,
+            "  resample unavailable (whole train pool already in the curriculum) — "
+            "any resample plan is redirected to synthesize",
+        )
+
     plan = state.get("data_rebuild_plan")
     if not isinstance(plan, dict):
         plan = fallback_data_rebuild_plan(
             state,
             hypothesis=hypothesis,
             score=(state.get("scores") or [0.0])[-1],
+            resample_available=resample_available,
         )
     else:
         plan = normalize_data_rebuild_plan(
@@ -539,6 +476,7 @@ def curate_node(state: AgentState) -> AgentState:
             ),
             remaining_acquire_rounds=remaining_paid_acquire_rounds(state),
             forbidden_eval_texts=_normalized_eval_texts(eval_set),
+            resample_available=resample_available,
         )
     # Non-deterministic redesign (2026-07-31): no plan-identity dedup, no untried-plan
     # rotation, no plan-space exhaustion. The orchestrator freely re-picks a strategy each
@@ -551,9 +489,6 @@ def curate_node(state: AgentState) -> AgentState:
         model_id,
         f"DATA REBUILD: strategy={strategy} target_rows={plan['target_rows']} seed={seed}",
     )
-
-    previous_rows = _read_jsonl(state.get("current_dataset_path"))
-    previous_texts = _normalized_texts(previous_rows)
 
     mining_report = {
         "requested": 0,
@@ -709,7 +644,9 @@ def curate_node(state: AgentState) -> AgentState:
         dataset,
         task_type=task_type,
     )
-    dataset = dataset[:target_rows]
+    # No upper truncation: target_rows is a floor for synth-fill, not a cap. Extra rows
+    # above target (e.g. acquire/synthesize overshoot) are kept — we only guard against
+    # too FEW rows, never too many.
     dataset, removed_final = _exclude_eval_rows(dataset, eval_set)
     if removed_final:
         _log(
@@ -779,6 +716,24 @@ def curate_node(state: AgentState) -> AgentState:
         for origin in sorted(origin_composition)
         if origin_composition.get(origin, 0)
     ]
+    # Per-source usage for provenance logging: join per-row source tags (counts) with the
+    # url-bearing records (this build's mining records + the run-wide lineage). Web-scraped
+    # rows carry their url on the row itself, so they are covered too.
+    novel_by_source = Counter(
+        source_key(row, default_source)
+        for row in dataset
+        if normalize_text(_row_text(row)) not in previous_texts
+    )
+    source_usage = build_source_usage(
+        dataset,
+        source_records=(
+            list(mining_report.get("source_records") or [])
+            + list(state.get("data_sources") or [])
+        ),
+        novel_by_source=dict(novel_by_source),
+        default=default_source,
+    )
+
     label_dist = Counter(_label_key(row, task_type) for row in dataset)
     state["last_curation"] = {
         "total_examples": len(dataset),
@@ -802,9 +757,18 @@ def curate_node(state: AgentState) -> AgentState:
         "source_composition": dict(source_composition),
         "difficulty_composition": dict(difficulty_composition),
         "source_novelty": dict(mining_report),
+        "source_usage": source_usage,
         "plan_yield": plan_yield,
         "allocation_fallbacks": allocation_fallbacks,
     }
+    # Run-wide provenance accumulator (survives across iterations/checkpoints). Assigned as a
+    # NEW list, never mutated in place, so it persists to the LangGraph channel (cf. B122).
+    state["data_source_usage"] = list(state.get("data_source_usage") or []) + [{
+        "iteration": int(state.get("iteration", 0) or 0),
+        "dataset_version": f"v{next_version}",
+        "strategy": strategy,
+        "sources": source_usage,
+    }]
     _log_dataset_report(
         model_id,
         dataset,

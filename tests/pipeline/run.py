@@ -637,6 +637,7 @@ fresh_initial_state = {
     "eval_size_target": config.EVAL_SET_SIZE,
     "eval_source_ban": [],
     "data_sources": [],
+    "data_source_usage": [],
     "eval_difficulty": None,
     "test_report": None,
     "downward_tiers_tried": [],
@@ -1047,6 +1048,22 @@ if last_state.get("task_plan"):
     )
 
 # --------------------------------------------------------------------------
+# Data-source provenance across the whole run (links + row counts). Aggregated
+# from the per-build usage log, seeded with the initial eval_setup lineage so the
+# first curriculum's sources are represented even though its rows predate tagging.
+# --------------------------------------------------------------------------
+from data.provenance import aggregate_data_sources, format_run_data_sources
+
+_data_sources_agg = aggregate_data_sources(
+    last_state.get("data_source_usage") or [],
+    base_records=last_state.get("data_sources") or [],
+)
+atomic_write_json(
+    os.path.join(RUN_DIR, "data_sources.json"),
+    _data_sources_agg,
+)
+
+# --------------------------------------------------------------------------
 # DAG summary (what was tried and how well it worked)
 # --------------------------------------------------------------------------
 dag = last_state.get("dag", [])
@@ -1238,6 +1255,9 @@ for _provider, _summary in cost["by_provider"].items():
         f"failures={_summary['failures']} latency={_summary['latency_ms'] / 1000:.1f}s "
         f"usd=${_summary['estimated_usd']:.6f}"
     )
+log("")
+log(format_run_data_sources(_data_sources_agg))
+log(f"  (full provenance: {os.path.join(RUN_DIR, 'data_sources.json')})")
 log(f"  logs: {RUN_DIR}")
 
 _RUN_EXIT_CODE = process_exit_code(pipeline_error)

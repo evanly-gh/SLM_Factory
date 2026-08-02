@@ -14,7 +14,9 @@ Redesigned 2026-07-31 (see docs/superpowers/specs/2026-07-31-data-curation-redes
 from __future__ import annotations
 
 import hashlib
+import json
 import math
+import os
 import random
 import re
 from collections import defaultdict
@@ -41,6 +43,73 @@ _PLAN_FIELDS = frozenset({
     "pattern_hint",
 })
 _DIFFICULTY_BUCKETS = ("easy", "medium", "hard")
+
+
+def _row_text(row: Any) -> str:
+    if not isinstance(row, Mapping):
+        return ""
+    return str(row.get("text", row.get("prompt", "")) or "")
+
+
+def _normalized_row_texts(rows: Any) -> set[str]:
+    """Normalized surface texts for a row list, sharing curate's normalizer."""
+    try:
+        from data.loaders.dataset_integrity import normalize_text
+    except Exception:  # pragma: no cover - normalizer always present in practice
+        def normalize_text(value: Any) -> str:  # type: ignore[misc]
+            return re.sub(r"\s+", " ", str(value or "")).strip().lower()
+    values = {
+        normalize_text(_row_text(row))
+        for row in (rows or [])
+        if isinstance(row, Mapping)
+    }
+    values.discard("")
+    return values
+
+
+def resample_pool_exhausted(
+    pool_texts: set[str] | frozenset[str],
+    curriculum_texts: set[str] | frozenset[str],
+) -> bool:
+    """True when every row in the training pool is already in the curriculum.
+
+    When this holds the ``resample`` strategy can add no novel rows — reshuffling the same
+    pool that already fills the curriculum yields the identical set — so resample is removed
+    from the strategy menu and the orchestrator/fallback must pick ``acquire`` or
+    ``synthesize`` instead. An empty pool returns False (resample stays nominally allowed;
+    there is simply nothing to draw yet).
+    """
+    pool = set(pool_texts)
+    if not pool:
+        return False
+    return pool <= set(curriculum_texts)
+
+
+def resample_available_for_state(state: Mapping[str, Any]) -> bool:
+    """Whether ``resample`` can still add novel rows given the current pool + curriculum.
+
+    Best-effort read from state: the training pool is ``state['train_examples']`` and the
+    current curriculum is the JSONL at ``state['current_dataset_path']``. Used by the
+    orchestrator prompt, the decision validator, and the fallback planner. curate re-derives
+    the same signal precisely from its eval-decontaminated pool at execution time, so this is
+    the advisory copy — it errs toward allowing resample when the dataset cannot be read.
+    """
+    pool_texts = _normalized_row_texts(state.get("train_examples") or [])
+    if not pool_texts:
+        return True
+    path = state.get("current_dataset_path")
+    curriculum: list[Any] = []
+    if path and os.path.isfile(str(path)):
+        try:
+            with open(str(path), encoding="utf-8") as source:
+                curriculum = [
+                    json.loads(line)
+                    for line in source
+                    if line.strip()
+                ]
+        except Exception:  # pragma: no cover - unreadable artifact ⇒ allow resample
+            return True
+    return not resample_pool_exhausted(pool_texts, _normalized_row_texts(curriculum))
 
 
 def _data_size_ceiling() -> int:
@@ -208,12 +277,18 @@ def normalize_data_rebuild_plan(
     default_dataset_version: int = 0,
     remaining_acquire_rounds: int = MAX_PAID_ACQUIRE_ROUNDS_PER_RUN,
     forbidden_eval_texts: list[str] | tuple[str, ...] | set[str] = (),
+    resample_available: bool = True,
 ) -> dict[str, Any]:
     """Validate and normalize one bounded, single-strategy data-rebuild plan.
 
     The result is JSON-only and strictly allow-listed. Numeric requests are
     clamped and snapped so provider drift cannot create an unbounded action.
     There is no task-type or score gating: any strategy is valid for any task.
+
+    ``resample_available=False`` means the entire training pool is already in the current
+    curriculum, so a ``resample`` strategy would add zero novel rows. In that case the plan
+    is redirected to ``synthesize`` (which generates genuinely new rows) rather than executed
+    as a no-op reshuffle.
     """
     if not isinstance(raw, Mapping):
         raise ValueError("data_rebuild is required and must be a JSON object")
@@ -239,6 +314,10 @@ def normalize_data_rebuild_plan(
             f"data_rebuild.strategy {strategy!r} must be one of "
             + ", ".join(DATA_REBUILD_STRATEGIES)
         )
+    # The whole pool is already in the curriculum ⇒ resample can add no novel rows.
+    # Redirect to synthesize (new synthetic material) instead of running a no-op reshuffle.
+    if strategy == "resample" and not resample_available:
+        strategy = "synthesize"
 
     hint_value = raw.get("pattern_hint")
     hint = (
@@ -358,6 +437,7 @@ def _fallback_strategy_from_signal(
     *,
     task_type: str,
     score: float | None = None,
+    resample_available: bool = True,
 ) -> str:
     """Pick a strategy NON-DETERMINISTICALLY, biased by the measured failure signal.
 
@@ -365,6 +445,9 @@ def _fallback_strategy_from_signal(
     not track "tried" plans or rotate through a bounded space — it draws a weighted
     random strategy so repeated fallbacks still explore. The weights lean on the same
     aggregate signals the orchestrator sees (per-difficulty accuracy, confusion pairs).
+
+    When ``resample_available`` is False (the whole pool is already in the curriculum),
+    ``resample`` is dropped from the menu so the fallback cannot pick a no-op reshuffle.
     """
     report = state.get("test_report") or {}
     buckets = report.get("by_difficulty") or {}
@@ -377,6 +460,9 @@ def _fallback_strategy_from_signal(
     confusion = report.get("confusion_pairs") or []
 
     weights = {"resample": 1.0, "acquire": 1.0, "synthesize": 1.0}
+    if not resample_available:
+        # Pool fully in the curriculum ⇒ reshuffling adds nothing; take resample off the menu.
+        weights.pop("resample", None)
     # Failing even the easy bucket => the data/labels are wrong; bring in new material.
     if easy is not None and easy < 0.6:
         weights["acquire"] += 2.0
@@ -395,8 +481,13 @@ def fallback_data_rebuild_plan(
     *,
     hypothesis: str,
     score: float | None = None,
+    resample_available: bool = True,
 ) -> dict[str, Any]:
-    """Build a non-deterministic, no-paid-call-by-default fallback plan."""
+    """Build a non-deterministic, no-paid-call-by-default fallback plan.
+
+    ``resample_available=False`` removes ``resample`` from the strategy menu (the whole pool
+    is already in the curriculum, so reshuffling is a no-op).
+    """
     task_type = str(state.get("task_type") or "classification")
     score = (
         float(score)
@@ -407,6 +498,7 @@ def fallback_data_rebuild_plan(
         state,
         task_type=task_type,
         score=score,
+        resample_available=resample_available,
     )
 
     report = state.get("test_report") or {}
@@ -459,4 +551,5 @@ def fallback_data_rebuild_plan(
         target_rows=target_rows,
         default_dataset_version=_best_dataset_version(state),
         remaining_acquire_rounds=remaining_paid_acquire_rounds(state),
+        resample_available=resample_available,
     )
