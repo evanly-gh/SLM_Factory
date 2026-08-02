@@ -75,6 +75,15 @@ def _load_named_benchmark(name: str, state: AgentState, acquire_meta: dict):
     return train_examples, test_examples
 
 
+class QwenBaselineUnavailableError(RuntimeError):
+    """The Qwen-3.6 reference endpoint could not be measured, so no accuracy goal exists.
+
+    This is FATAL by design: the Qwen baseline is the sole accuracy target, so an unreachable
+    endpoint has no honest fallback. Raising breaks the pipeline loop rather than degrading to a
+    guessed threshold.
+    """
+
+
 def _calibrate_qwen_goal_if_pending(state: AgentState, eval_set) -> None:
     """Complete the Qwen-3.6-baseline accuracy goal once the frozen E exists.
 
@@ -83,9 +92,10 @@ def _calibrate_qwen_goal_if_pending(state: AgentState, eval_set) -> None:
     ``min(0.99, max(measured, floor))`` via agent.threshold.threshold_from_endpoint_baseline.
     ``initial_stop_threshold`` (the immutable floor) is written ONCE, here.
 
-    Degrades honestly: if the endpoint is unreachable (e.g. a dev box with no SYNTH_ENDPOINT),
-    the goal is set to the floor with an explicit ``endpoint='unreachable'`` provenance rather
-    than crashing or silently using a bogus high target.
+    The Qwen baseline is the ONLY accuracy target. If the endpoint is unreachable or the
+    measurement errors, this RAISES ``QwenBaselineUnavailableError`` and the run stops — there
+    is deliberately no fallback to a guessed threshold. A successfully-measured-but-weak score
+    is still floored at 0.8.
     """
     calibration = state.get("threshold_calibration") or {}
     if calibration.get("source") != "pending_qwen_baseline":
@@ -95,23 +105,24 @@ def _calibrate_qwen_goal_if_pending(state: AgentState, eval_set) -> None:
 
     floor = float(calibration.get("floor", 0.8))
     task_type = state["task_type"]
-    baseline = None
     try:
         baseline = measure_endpoint_baseline(eval_set, task_type, log=print)
-    except Exception as error:  # noqa: BLE001 - a measurement failure must not kill the run
-        print(f"      [threshold] Qwen baseline measurement failed ({str(error)[:120]}); "
-              "falling back to the floor")
+    except Exception as error:  # noqa: BLE001 - re-raised as a fatal calibration failure
+        raise QwenBaselineUnavailableError(
+            f"Qwen-3.6 baseline measurement failed ({str(error)[:160]}); the reference "
+            "endpoint is the sole accuracy target, so the run cannot continue"
+        ) from error
 
     if baseline is None:
-        threshold, reason = threshold_from_endpoint_baseline(0.0, floor=floor)
-        provenance = {"measured_qwen": None, "endpoint": "unreachable"}
-        print(f"      [threshold] Qwen endpoint unavailable — goal set to floor {threshold:.4f}")
-    else:
-        threshold, reason = threshold_from_endpoint_baseline(baseline.f1, floor=floor)
-        provenance = {"measured_qwen": round(float(baseline.f1), 4),
-                      "measured_metric": baseline.metric, "endpoint": "reachable"}
-        print(f"      [threshold] Qwen baseline {baseline.f1:.4f} → goal {threshold:.4f} "
-              f"(floor {floor:.2f})")
+        raise QwenBaselineUnavailableError(
+            "Qwen-3.6 baseline endpoint is unreachable (measure_endpoint_baseline returned "
+            "None); the reference endpoint is the sole accuracy target, so the run cannot "
+            "continue. Set SYNTH_ENDPOINT/SYNTH_MODEL to a reachable Qwen-3.6 server."
+        )
+
+    threshold, reason = threshold_from_endpoint_baseline(baseline.f1, floor=floor)
+    print(f"      [threshold] Qwen baseline {baseline.f1:.4f} → goal {threshold:.4f} "
+          f"(floor {floor:.2f})")
 
     state["stop_threshold"] = threshold
     state["initial_stop_threshold"] = threshold
@@ -121,7 +132,9 @@ def _calibrate_qwen_goal_if_pending(state: AgentState, eval_set) -> None:
         "floor": floor,
         "reason": reason,
         "pending": False,
-        **provenance,
+        "measured_qwen": round(float(baseline.f1), 4),
+        "measured_metric": baseline.metric,
+        "endpoint": "reachable",
     }
 
 

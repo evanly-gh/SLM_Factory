@@ -18,8 +18,8 @@ Roles
 - ORCHESTRATOR_MODEL : the "brain" — all planning/decision/generation calls.
 - JUDGE_MODEL        : required local Qwen3.6 LLM-as-judge for `generation`
                        scoring, served by JUDGE_ENDPOINT with no cloud fallback.
-- TEACHER_MODEL_*    : DeepSeek/OpenAI CoT fallback models (paper §2.3/§2.5).
-                       Local Qwen3.6 is always primary.
+- CoT teacher        : the local Qwen3.6 synth model, and ONLY that model — there is
+                       no cloud CoT fallback (paper §2.3/§2.5).
 
 Model options (Anthropic, as of 2026-07)
 ----------------------------------------
@@ -31,33 +31,25 @@ Model options (Anthropic, as of 2026-07)
 Full dated IDs (e.g. claude-haiku-4-5-20251001) also work. Prefer the undated
 alias so you always get the latest snapshot of a tier.
 
-CoT backends
-------------
-    Qwen3.6-35B (local vLLM)        : primary for every generation-family task
-    deepseek-v4-flash (thinking)     : math/science CoT — needs DEEPSEEK_API_KEY
-    gpt-4.1                          : code/QA CoT      — needs OPENAI_API_KEY
-Cloud order is task-aware; if both keys are absent or fail, CoT is skipped.
-Claude/the orchestrator is never a CoT fallback.
+CoT backend
+-----------
+    Qwen3.6-35B (local vLLM) : the sole CoT teacher for every generation-family task.
+If the local synth endpoint is unavailable, CoT annotation is skipped (non-fatal). There is
+no cloud CoT fallback, and Claude/the orchestrator is never a CoT teacher.
 """
 import os
 
 # --- API keys ---
 ANTHROPIC_API_KEY = os.environ["ANTHROPIC_API_KEY"]
 EXA_API_KEY = os.environ["EXA_API_KEY"]
-OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")
-DEEPSEEK_API_KEY = os.environ.get("DEEPSEEK_API_KEY", "")
 
 # --- Orchestrator: the single model that drives every planning/decision call ---
 # Override per-run with SLM_ORCHESTRATOR_MODEL without editing this file.
 ORCHESTRATOR_MODEL = os.environ.get("SLM_ORCHESTRATOR_MODEL", "claude-sonnet-4-6")
 
-# --- Cloud fallback models for CoT annotation (paper §2.3, §2.5) ---
-# Qwen3.6 is primary. DeepSeek V4 Flash/OpenAI are ordered fallbacks; Claude is never used for CoT.
-DEEPSEEK_BASE_URL = "https://api.deepseek.com"
-TEACHER_MODEL_DEEPSEEK = os.environ.get("SLM_TEACHER_MODEL_DEEPSEEK", "deepseek-v4-flash")
-TEACHER_MODEL_GPT = os.environ.get("SLM_TEACHER_MODEL_GPT", "gpt-4.1")
-# Retained only for the legacy hard-negative compatibility path in curriculum.py.
-# It is not reachable from CoT generation.
+# --- Legacy hard-negative compatibility path (curriculum.py) only ---
+# NOT reachable from CoT generation, which is Qwen3.6-only. Kept so the legacy hard-negative
+# helper can still fall back to the orchestrator tier when explicitly invoked.
 TEACHER_MODEL_CLAUDE = os.environ.get("SLM_TEACHER_MODEL_CLAUDE", ORCHESTRATOR_MODEL)
 
 # --- Cheap mode (SLM_CHEAP=1, or `python run.py --cheap`) ---
@@ -203,8 +195,9 @@ ARTIFACTS_DIR = "artifacts"
 #   HW_LATENCY_TTFT_MS — interactive time-to-first-token ceiling.
 #   HW_POWER_WATTS     — sustained-inference power budget.
 #   HW_MIN_TOK_S       — decode-throughput UX floor (0 disables; 6 ≈ reading speed).
-#   HW_FALLBACK_CHIP   — throughput-scaling anchor used ONLY when the device chip
-#                        cannot be resolved from the user's description.
+#   HW_FALLBACK_CHIP   — the reference chip NAME used ONLY when the device chip cannot be
+#                        resolved from the user's description. It is a tier label for
+#                        constraint bookkeeping; it carries no performance estimate.
 HW_LATENCY_TTFT_MS = 2000
 HW_POWER_WATTS = 5.0
 HW_MIN_TOK_S = 0.0
@@ -212,16 +205,19 @@ HW_FALLBACK_CHIP = "snapdragon_778g"
 
 # --- On-device hardware evaluation (hardware_eval/on_device_eval.py) ---
 # HW_ONDEVICE_BACKEND — how metrics are gathered:
-#     "theoretical" (default) : ModelSpec estimates, no hardware. Safe on a GPU node.
+#     "unmeasured" (default)  : all-None metrics, NO hardware and NO estimates. Downstream
+#                               gating renders these as "UNMEASURED" and declines to gate,
+#                               rather than eliminating a candidate on a fabricated number.
 #     "llama_cpp"             : local llama-cli timing on the built GGUF (no phone).
 #     "adb_llama"             : llama-cli on a connected device via ADB.
 #     "smolchat"              : broadcast to the SmolChat app + logcat scrape (richest).
+#     ("theoretical" is accepted as a legacy alias for "unmeasured".)
 # HW_GATING_ENABLED — when True, latency/power/memory become HARD gates in iterate_node
 #     (a converged model that violates hardware is not accepted as terminal).
 # HW_VERIFY_ON_DEVICE — when True, run.py runs a real on-device measurement pass after
-#     convergence and writes hardware_eval.json. Requires a non-theoretical backend
-#     and a connected device; on failure it logs and continues (never crashes the run).
-HW_ONDEVICE_BACKEND = os.environ.get("SLM_HW_BACKEND", "theoretical")
+#     convergence and writes hardware_eval.json. Requires a real (measuring) backend and a
+#     connected device; on failure it logs and continues (never crashes the run).
+HW_ONDEVICE_BACKEND = os.environ.get("SLM_HW_BACKEND", "unmeasured")
 HW_GATING_ENABLED = os.environ.get("SLM_HW_GATING", "0") == "1"
 HW_VERIFY_ON_DEVICE = os.environ.get("SLM_HW_VERIFY_ON_DEVICE", "0") == "1"
 

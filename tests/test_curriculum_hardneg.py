@@ -9,91 +9,16 @@ os.environ.setdefault("EXA_API_KEY", "test-key")
 os.environ.setdefault("ANTHROPIC_API_KEY", "test-key")
 
 
-def test_math_cot_fallback_order_is_deepseek_then_openai(monkeypatch):
-    import config.config as config
-    from data import curriculum
-
-    monkeypatch.setattr(config, "DEEPSEEK_API_KEY", "deep-key")
-    monkeypatch.setattr(config, "OPENAI_API_KEY", "open-key")
-    monkeypatch.setattr("openai.OpenAI", lambda **kwargs: kwargs)
-
-    fallbacks = curriculum.get_cot_fallbacks("math_reasoning", "gsm8k")
-
-    assert [model for _, model in fallbacks] == [
-        config.TEACHER_MODEL_DEEPSEEK,
-        config.TEACHER_MODEL_GPT,
-    ]
-
-
-def test_general_cot_fallback_order_is_openai_then_deepseek(monkeypatch):
-    import config.config as config
-    from data import curriculum
-
-    monkeypatch.setattr(config, "DEEPSEEK_API_KEY", "deep-key")
-    monkeypatch.setattr(config, "OPENAI_API_KEY", "open-key")
-    monkeypatch.setattr("openai.OpenAI", lambda **kwargs: kwargs)
-
-    fallbacks = curriculum.get_cot_fallbacks("generation", "samsum")
-
-    assert [model for _, model in fallbacks] == [
-        config.TEACHER_MODEL_GPT,
-        config.TEACHER_MODEL_DEEPSEEK,
-    ]
-
-
-def test_scienceqa_cot_fallback_order_is_deepseek_then_openai(monkeypatch):
-    import config.config as config
-    from data import curriculum
-
-    monkeypatch.setattr(config, "DEEPSEEK_API_KEY", "deep-key")
-    monkeypatch.setattr(config, "OPENAI_API_KEY", "open-key")
-    monkeypatch.setattr("openai.OpenAI", lambda **kwargs: kwargs)
-
-    fallbacks = curriculum.get_cot_fallbacks("generation", "ScienceQA")
-
-    assert [model for _, model in fallbacks] == [
-        config.TEACHER_MODEL_DEEPSEEK,
-        config.TEACHER_MODEL_GPT,
-    ]
-
-
-def test_arc_aliases_use_deepseek_before_openai(monkeypatch):
-    import config.config as config
-    from data import curriculum
-
-    monkeypatch.setattr(config, "DEEPSEEK_API_KEY", "deep-key")
-    monkeypatch.setattr(config, "OPENAI_API_KEY", "open-key")
-    monkeypatch.setattr("openai.OpenAI", lambda **kwargs: kwargs)
-
-    for alias in ("ARC", "AI2 ARC", "ARC-Challenge", "ARC_C"):
-        fallbacks = curriculum.get_cot_fallbacks("generation", alias)
-        assert [model for _, model in fallbacks] == [
-            config.TEACHER_MODEL_DEEPSEEK,
-            config.TEACHER_MODEL_GPT,
-        ], alias
-
-
-def test_cot_benchmark_uses_task_name_when_benchmark_is_null():
-    from agent.nodes.curate import _cot_benchmark
-
-    assert _cot_benchmark({"benchmark": None, "task_name": "ScienceQA"}) == "ScienceQA"
-
-
-def test_cot_fallback_builder_has_no_anthropic_backend():
-    from data import curriculum
-
-    source = inspect.getsource(curriculum.get_cot_fallbacks)
-    assert "anthropic" not in source.lower()
-    assert "ORCHESTRATOR_MODEL" not in source
-
-
-def test_curate_cot_path_has_no_orchestrator_teacher():
+def test_curate_cot_path_has_no_cloud_teacher():
+    """The CoT path uses only the local Qwen3.6 synth generate_fn — no orchestrator/cloud
+    teacher client and no removed cloud-fallback builder."""
     from agent.nodes import curate
 
     source = inspect.getsource(curate._annotate_generation_cot)
     assert "get_teacher_client" not in source
     assert "teacher_client" not in source
-    assert "get_cot_fallbacks" in source
+    assert "get_cot_fallbacks" not in source
+    assert "generate_fn" in source
 
 
 def test_math_hard_negatives_not_trained_on_wrong_answers():
@@ -298,91 +223,32 @@ def test_bundle_schema_cot_prompt_uses_gold_answer_not_task_label(
     assert task_label not in prompts[0]
 
 
-def test_qwen_cot_success_prevents_cloud_fallback():
-    from data.curriculum import annotate_cot
-
-    fallback = MagicMock()
-    out = annotate_cot(
-        [{"prompt": "p", "response": "r"}],
-        generate_fn=lambda *_: "local reasoning",
-        fallback_teachers=[(fallback, "gpt-4.1")],
-    )
-
-    assert out[0]["cot_reasoning"] == "local reasoning"
-    fallback.chat.completions.create.assert_not_called()
-
-
-def test_empty_qwen_cot_output_uses_first_fallback():
-    from data.curriculum import annotate_cot
-
-    fallback = MagicMock()
-    fallback.chat.completions.create.return_value.choices[0].message.content = "cloud reasoning"
-    out = annotate_cot(
-        [{"prompt": "p", "response": "r"}],
-        generate_fn=lambda *_: "",
-        fallback_teachers=[(fallback, "deepseek-reasoner")],
-    )
-
-    assert out[0]["cot_reasoning"] == "cloud reasoning"
-
-
-def test_failed_first_cot_fallback_advances_to_second():
-    from data.curriculum import annotate_cot
-
-    first, second = MagicMock(), MagicMock()
-    first.chat.completions.create.side_effect = RuntimeError("down")
-    second.chat.completions.create.return_value.choices[0].message.content = "second reasoning"
-
-    def qwen_down(*_):
-        raise RuntimeError("local down")
-
-    out = annotate_cot(
-        [{"prompt": "p", "response": "r"}],
-        generate_fn=qwen_down,
-        fallback_teachers=[(first, "deepseek-reasoner"), (second, "gpt-4.1")],
-    )
-
-    assert out[0]["cot_reasoning"] == "second reasoning"
-    first.chat.completions.create.assert_called_once()
-    second.chat.completions.create.assert_called_once()
-
-
-def test_cloud_cot_fallback_concurrency_is_capped_at_16(monkeypatch):
+def test_local_cot_concurrency_respects_synth_concurrency_env(monkeypatch):
+    """The local Qwen synth generate_fn fans out concurrently, bounded by
+    SLM_SYNTH_CONCURRENCY — never one-at-a-time and never above the configured cap."""
     import threading
     import time
-    from types import SimpleNamespace
     from data.curriculum import annotate_cot
 
-    class TrackingCompletions:
-        def __init__(self):
-            self.active = 0
-            self.max_active = 0
-            self.lock = threading.Lock()
+    lock = threading.Lock()
+    state = {"active": 0, "max_active": 0}
 
-        def create(self, **_kwargs):
-            with self.lock:
-                self.active += 1
-                self.max_active = max(self.max_active, self.active)
-            time.sleep(0.03)
-            with self.lock:
-                self.active -= 1
-            return SimpleNamespace(
-                choices=[SimpleNamespace(message=SimpleNamespace(content="cloud reasoning"))]
-            )
+    def gen(prompt, temperature, max_tokens):
+        with lock:
+            state["active"] += 1
+            state["max_active"] = max(state["max_active"], state["active"])
+        time.sleep(0.03)
+        with lock:
+            state["active"] -= 1
+        return "local reasoning"
 
-    completions = TrackingCompletions()
-    fallback = SimpleNamespace(chat=SimpleNamespace(completions=completions))
     examples = [{"prompt": f"p{i}", "response": "r"} for i in range(40)]
-    monkeypatch.setenv("SLM_SYNTH_CONCURRENCY", "32")
+    monkeypatch.setenv("SLM_SYNTH_CONCURRENCY", "4")
 
-    out = annotate_cot(
-        examples,
-        generate_fn=lambda *_: "",
-        fallback_teachers=[(fallback, "gpt-4.1")],
-    )
+    out = annotate_cot(examples, generate_fn=gen, task_type="generation")
 
-    assert all(ex["cot_reasoning"] == "cloud reasoning" for ex in out)
-    assert 1 < completions.max_active <= 16
+    assert all(ex["cot_reasoning"] == "local reasoning" for ex in out)
+    assert 1 < state["max_active"] <= 4
 
 
 def test_none_cot_is_treated_as_missing():

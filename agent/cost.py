@@ -46,16 +46,12 @@ class MissingEventPathError(RuntimeError):
 # Official public API rates, USD per million tokens, verified 2026-07-21.
 # Sources:
 #   Anthropic: https://platform.claude.com/docs/en/about-claude/pricing
-#   OpenAI:    https://developers.openai.com/api/docs/models/gpt-4.1
-#   DeepSeek:  https://api-docs.deepseek.com/quick_start/pricing
 _DEFAULT_PRICING = {
     "effective_date": "2026-07-21",
     "currency": "USD",
     "unit": "per_million_tokens",
     "sources": {
         "anthropic": "https://platform.claude.com/docs/en/about-claude/pricing",
-        "openai": "https://developers.openai.com/api/docs/models/gpt-4.1",
-        "deepseek": "https://api-docs.deepseek.com/quick_start/pricing",
     },
     "models": {
         "claude-sonnet-5": {
@@ -91,18 +87,6 @@ _DEFAULT_PRICING = {
             "cached_input_per_mtok": 0.10,
             "cache_write_5m_per_mtok": 1.25,
             "cache_write_1h_per_mtok": 2.0,
-        },
-        "gpt-4.1": {
-            "provider": "openai",
-            "input_per_mtok": 2.0,
-            "output_per_mtok": 8.0,
-            "cached_input_per_mtok": 0.50,
-        },
-        "deepseek-v4-flash": {
-            "provider": "deepseek",
-            "input_per_mtok": 0.14,
-            "output_per_mtok": 0.28,
-            "cached_input_per_mtok": 0.0028,
         },
     },
     # Exa exposes the authoritative cost on successful responses.  This is used
@@ -166,10 +150,6 @@ def _pricing_key(provider: str, model: str, registry: dict) -> str | None:
         ("claude-opus-4-8", "claude-opus-4-8"),
         ("claude-sonnet-4-6", "claude-sonnet-4-6"),
         ("claude-haiku-4-5", "claude-haiku-4-5"),
-        ("deepseek-v4-flash", "deepseek-v4-flash"),
-        # Until retirement, this alias has V4 Flash thinking-mode billing.
-        ("deepseek-reasoner", "deepseek-v4-flash"),
-        ("gpt-4.1", "gpt-4.1"),
     )
     for needle, key in aliases:
         if needle in model_l and key in models:
@@ -648,7 +628,8 @@ def _is_private_host(hostname: str | None) -> bool:
 
 
 def openai_provider(client: Any, model: str, provider: str | None = None) -> str:
-    """Classify an OpenAI-compatible client, prioritizing local-vLLM safety."""
+    """Classify an OpenAI-compatible client. The only such client in the pipeline is the
+    local vLLM synth/judge endpoint (Qwen3.6); there are no cloud OpenAI-compatible teachers."""
     model_l = (model or "").lower()
     base_url = _client_base_url(client)
     parsed = urlparse(base_url if "://" in base_url else f"//{base_url}")
@@ -662,11 +643,7 @@ def openai_provider(client: Any, model: str, provider: str | None = None) -> str
         or (configured_local and base_url.rstrip("/") == configured_local.rstrip("/"))
     ):
         return "local"
-    if "deepseek" in model_l or (host and "deepseek.com" in host):
-        return "deepseek"
-    if host and "openai.com" in host:
-        return "openai"
-    return (provider or "openai").lower()
+    return (provider or "local").lower()
 
 
 def _openai_usage(response: Any, provider: str) -> dict:

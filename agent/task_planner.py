@@ -9,8 +9,9 @@ Given ONLY a natural-language task description, the orchestrator LLM
   - labels         : class names / entity types / schema fields / [] for generation types
   - exa_queries    : web-search query per label/topic
   - benchmark      : a known public benchmark if one fits, else null
-  - threshold_headroom : bounded rung used by agent/threshold.py to calibrate the target
 This replaces hardcoded, task-specific routing so the same code handles ANY task.
+The accuracy target is NOT chosen here — it is the Qwen-3.6 reference baseline on the run's
+eval set, measured by the system in eval_setup (see agent/threshold.py).
 """
 import json
 import re
@@ -26,7 +27,7 @@ adapts a small on-device language model to a user's task.
 The target model is in the {param_range} parameter range, constrained to run on Android \
 hardware. This size class has known capability ceilings.
 
-Candidate models available for this run (context for your data-size and headroom \
+Candidate models available for this run (context for your data-size \
 choices; you do NOT set an accuracy number from these):
 {pool_summary}
 
@@ -39,10 +40,9 @@ use flags to express variants within a type:
   Binary or multi-class argmax label prediction.
   Examples: spam detection, sentiment, intent routing (any number of classes).
   Eval: accuracy or macro-F1.
-  Stop threshold: anchor to SOTA (see STOP THRESHOLD section).
   Flags: set "multi_label": true for tasks where multiple labels apply simultaneously \
   (content moderation, product tagging, symptom classification). \
-  Eval then becomes per-label micro-F1; threshold 0.70–0.85.
+  Eval then becomes per-label micro-F1. \
   Set "multilingual": true if the input text is non-English or code-switching.
 
 - "NER"
@@ -50,28 +50,24 @@ use flags to express variants within a type:
   Examples: person/org/location tagging, medical entities, \
   parsing receipts into {{vendor, total, date}}, slot filling, function call argument parsing.
   Eval: entity-level span-F1 by default; field-level F1 when "schema" is set.
-  Stop threshold: anchor to SOTA (see STOP THRESHOLD section).
   Flags: set "schema": {{"field": "description", ...}} for structured JSON extraction tasks. \
   Set "multilingual": true for non-English entity extraction.
 
 - "math_reasoning"
   Arithmetic, algebra, word problems, step-by-step derivations.
-  Mandatory chain-of-thought; cloud fallback teacher = DeepSeek V4 Flash (thinking mode).
+  Mandatory chain-of-thought; the CoT teacher is the local Qwen3.6 synth model.
   Eval: final-answer exact match (NOT LLM-as-judge).
-  Stop threshold: anchor to GSM8K/benchmark SOTA at this size (see STOP THRESHOLD section).
   No flags.
 
 - "code_generation"
   Function synthesis, completion, bug-fix, SQL generation.
   Eval: execution pass@1 against unit tests.
-  Stop threshold: anchor to APPS introductory pass@1 SOTA at this size (see STOP THRESHOLD section).
   No flags.
 
 - "generation"
   Open-ended summarization, open-domain QA, dialogue, translation, instruction following.
   Use this when none of the format-bound types below fit and none of the above fit.
   Eval: LLM-as-judge [0,1].
-  Stop threshold: anchor to SOTA (see STOP THRESHOLD section).
   Set "multilingual": true for translation or non-English generation tasks.
 
 - "function_call"
@@ -93,39 +89,17 @@ LABELS field:
 - NER with schema: list of JSON field names (keys in the output schema).
 - math_reasoning, code_generation, generation, function_call, diff: [] (empty).
 
-ACCURACY TARGET — you do NOT set a number.
+ACCURACY TARGET — you do NOT set a number or a headroom.
 
-The stop threshold is calibrated by the system, from one of two sources, neither of which is
-your recall of leaderboards:
-  1. config/benchmark_baselines.md — a sourced, human-verified registry, used only when its
-     metric name matches what this pipeline actually measures for the task type.
-  2. Otherwise, the pipeline's OWN first measurement: max(zero-shot baseline, first fine-tune)
-     on the held-out eval set, plus a bounded headroom.
+The stop threshold is fixed by the system: it is the separately-hosted Qwen-3.6 reference
+model's own zero-shot score on THIS run's held-out eval set, measured with the identical
+metric, floored at 0.8 and capped at 0.99. "Good enough" therefore means "matches the strong
+reference," not a recalled leaderboard number. If that endpoint is unreachable, the run stops
+with an error — there is no fallback target to guess.
 
-Your job is only to (a) name the "benchmark" accurately so the registry can be searched, and
-(b) choose "threshold_headroom" — how much ABOVE the first measured score the target should sit
-if the registry has no usable row.
-
-"threshold_headroom" must be exactly one of 0.02, 0.05, 0.10, 0.15. Choose it from expected
-headroom, and justify it in "rationale":
-  0.02 — near a known ceiling, or a noisy/small-label task where more is unreachable
-  0.05 — default; ordinary fine-tuning gain over a reasonable first config
-  0.10 — the base model is clearly underfitting this format and should improve a lot
-  0.15 — the task is far outside the base model's behaviour (rare notation, closed vocabulary)
-Do NOT invent a SOTA figure, and do NOT report a remembered leaderboard score as fact.
-
-Do NOT default to a low, generic number — a too-low target makes the loop stop before the
-model is actually good. The ranges below are only SANITY BOUNDS / fallbacks for when you
-cannot estimate the SOTA; the SOTA anchor takes precedence:
-- Binary classification: 0.90–0.97
-- Multi-class (10–30 classes): 0.82–0.92
-- Multi-label classification: 0.72–0.88
-- NER (span-F1): 0.72–0.88
-- NER with schema (field-F1): 0.78–0.92
-- Math reasoning: anchor to GSM8K/benchmark SOTA at this size (often 0.55–0.80 for ~1.5–3B fine-tunes)
-- Code generation: anchor to APPS introductory pass@1 SOTA at this size
-- Generation / translation: 0.78–0.92
-- Any multilingual task: subtract 5–10pp from the above
+Your only threshold-related job is to name the "benchmark" accurately when a well-known one
+fits (it helps data acquisition). Do NOT invent a SOTA figure, do NOT report a remembered
+leaderboard score as fact, and do NOT emit a threshold or headroom.
 
 DATA SIZE — choose how many examples to build for the CURRICULUM (training) and the
 held-out EVAL set. Ground this in fine-tuning sample-size research and two factors:
@@ -156,10 +130,9 @@ Reply with ONLY a JSON object (no prose, no code fences) with these keys:
 - "multilingual": true | false (default false)
 - "exa_queries": object mapping each label/field/topic to a web-search query for REAL examples
 - "benchmark": well-known public benchmark name, or null
-- "threshold_headroom": one of 0.02 | 0.05 | 0.10 | 0.15 (how far above the first measured score to target)
 - "curriculum_size": integer — total training examples to curate (bias up for obscure tasks)
 - "eval_size": integer — held-out eval examples (bigger = more reliable metrics)
-- "rationale": one sentence: task_type + flag choices + why that threshold_headroom + your data-size reasoning
+- "rationale": one sentence: task_type + flag choices + your data-size reasoning
 
 EXAMPLE (task: "detect spam vs legitimate SMS on a Pixel 8"):
 {{
@@ -174,10 +147,9 @@ EXAMPLE (task: "detect spam vs legitimate SMS on a Pixel 8"):
     "ham": "examples of normal everyday personal SMS text message conversations"
   }},
   "benchmark": "SMS Spam Collection",
-  "threshold_headroom": 0.05,
   "curriculum_size": 1200,
   "eval_size": 800,
-  "rationale": "Binary classification; 0.05 headroom since SMS spam is near-solved so a first config should already be close; popular benchmark so a moderate 1200-example curriculum suffices."
+  "rationale": "Binary classification; popular benchmark so a moderate 1200-example curriculum suffices."
 }}
 
 User task description:
@@ -286,13 +258,11 @@ def plan_task(description: str, anthropic_client=None, log=print, model_pool=Non
     plan.setdefault("labels", [])
     plan.setdefault("exa_queries", {})
     plan.setdefault("benchmark", None)
-    # No stop_threshold default. The planner no longer proposes one — see agent/threshold.py
-    # for why a recalled SOTA number was removed. `threshold_headroom` is snapped to the
-    # bounded rung set; an absent or nonsense value falls back to the middle rung.
-    from agent.threshold import snap_headroom
-
-    plan["threshold_headroom"] = snap_headroom(plan.get("threshold_headroom"))
+    # No stop_threshold default. The planner no longer proposes one — the accuracy goal is the
+    # Qwen-3.6 baseline on E, measured in eval_setup (see agent/threshold.py). Any recalled
+    # threshold/headroom the planner emits is dropped.
     plan.pop("stop_threshold", None)
+    plan.pop("threshold_headroom", None)
     plan.setdefault("task_name", "task")
     plan.setdefault("multi_label", False)
     plan.setdefault("schema", None)
@@ -304,7 +274,7 @@ def plan_task(description: str, anthropic_client=None, log=print, model_pool=Non
         f"      [planner] task_type={plan['task_type']}  "
         f"multi_label={plan['multi_label']}  schema={'set' if plan['schema'] else 'null'}  "
         f"multilingual={plan['multilingual']}  labels={plan['labels']}  "
-        f"benchmark={plan['benchmark']}  threshold_headroom={plan['threshold_headroom']}"
+        f"benchmark={plan['benchmark']}"
     )
     log(f"      [planner] data targets (pre-clamp): curriculum={plan['curriculum_size']}  "
         f"eval={plan['eval_size']}")
