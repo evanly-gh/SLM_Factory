@@ -136,6 +136,42 @@ def test_curation_log_omits_data_sources_section_when_no_external_source(tmp_pat
     assert "### Data sources" not in text
 
 
+def test_curation_log_renders_eval_firewall_line_when_rows_removed(tmp_path):
+    path = tmp_path / "data-curation.md"
+    log = CurationLog(str(path))
+    result = EvalResult(0.8, {}, [])
+    log.write_iteration(
+        **_base_kwargs(result),
+        eval_firewall={"total": 4, "by_layer": {"train_anchor": 3, "final": 1}},
+    )
+    text = path.read_text(encoding="utf-8")
+    assert "- Eval firewall removed: 4 row(s)" in text
+    assert "train_anchor=3" in text
+    assert "final=1" in text
+
+
+def test_curation_log_renders_zero_firewall_line_for_clean_build(tmp_path):
+    # A clean build (nothing removed) still emits the line so the firewall is positively confirmed.
+    path = tmp_path / "data-curation.md"
+    log = CurationLog(str(path))
+    result = EvalResult(0.8, {}, [])
+    log.write_iteration(
+        **_base_kwargs(result),
+        eval_firewall={"total": 0, "by_layer": {"train_anchor": 0, "final": 0}},
+    )
+    text = path.read_text(encoding="utf-8")
+    assert "- Eval firewall removed: 0 row(s)" in text
+
+
+def test_curation_log_omits_firewall_line_when_not_provided(tmp_path):
+    path = tmp_path / "data-curation.md"
+    log = CurationLog(str(path))
+    result = EvalResult(0.8, {}, [])
+    log.write_iteration(**_base_kwargs(result))
+    text = path.read_text(encoding="utf-8")
+    assert "Eval firewall removed" not in text
+
+
 def test_curation_log_iteration_is_retry_idempotent(tmp_path):
     path = tmp_path / "data-curation.md"
     log = CurationLog(str(path))

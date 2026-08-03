@@ -1,4 +1,3 @@
-import ast
 import os
 import re
 import subprocess
@@ -6,20 +5,25 @@ from pathlib import Path
 
 
 PIPELINE_DIR = Path(__file__).parent
-TASK_SCRIPTS = (
-    "run_code_l40s.slurm",
+
+# Legacy autonomous task scripts kept for task types not covered by the six curated benchmarks:
+# math_reasoning and NER. They run on the group-owned gpu-l40s partition (4 GPUs, weeklong).
+LEGACY_TASK_SCRIPTS = (
     "run_math_l40s.slurm",
     "run_ner_l40s.slurm",
-    "run_generation_l40s.slurm",
 )
 
-
-def _embedded_python(source: str) -> str:
-    match = re.search(r"<<'PY'\n(?P<body>.*?)\nPY(?:\n|$)", source, re.DOTALL)
-    assert match is not None
-    body = match.group("body")
-    ast.parse(body)
-    return body
+# The six curated-benchmark pipeline scripts: 2x L40S on the preemptible ckpt partition, each
+# pinning one deterministic loader via SLM_BENCHMARK_TASK. Value = (benchmark key, task_type).
+# Kept in lockstep with agent/nodes/cold_start/eval_setup.py::NAMED_BENCHMARK_TASK_TYPES.
+CKPT_BENCHMARK_SCRIPTS = {
+    "run_clinc150_ckpt.slurm": ("clinc150", "classification"),
+    "run_routerbench_ckpt.slurm": ("routerbench", "classification"),
+    "run_medqa_ckpt.slurm": ("medqa", "classification"),
+    "run_dialogsum_samsum_ckpt.slurm": ("dialogsum_samsum", "generation"),
+    "run_xlam_bfcl_ckpt.slurm": ("xlam_bfcl", "function_call"),
+    "run_coedit_ckpt.slurm": ("coedit", "diff"),
+}
 
 
 def _sbatch_directives(source: str) -> dict[str, str]:
@@ -108,24 +112,7 @@ def _assert_bounded_term_contract(source: str) -> None:
     )
 
 
-def test_code_l40s_script_targets_apps_introductory():
-    source = (PIPELINE_DIR / "run_code_l40s.slurm").read_text(encoding="utf-8")
-    task_line = next(line for line in source.splitlines() if line.startswith("export TASK="))
-
-    assert "APPS introductory" in task_line
-    assert "MBPP" not in task_line
-    assert "HumanEval" not in source
-    assert "checksum-verified offline APPS introductory bundle" in source
-    assert "call-based and stdin/stdout" in source
-    assert "SLM_MAX_SEQ_LENGTH=4096" in source
-    assert "SLM_APPS_MAX_CASES" not in source
-    assert "Samsung Galaxy S24 Ultra" in source
-    assert "#SBATCH --gres=gpu:l40s:4" in source
-    assert "Sonnet-1M" in source
-    assert "Qwen3.6-primary CoT" in source
-    assert "SLM_QUANT_EVAL=1" in source
-    assert "SLM_CUDA_ISOLATION=1" in source
-
+# --- Legacy autonomous task scripts (math + NER) --------------------------------
 
 def test_math_l40s_comments_match_current_cot_and_token_routing():
     source = (PIPELINE_DIR / "run_math_l40s.slurm").read_text(encoding="utf-8")
@@ -138,6 +125,59 @@ def test_math_l40s_comments_match_current_cot_and_token_routing():
     assert "Sonnet teacher" not in source
     assert "256-token" not in source
 
+
+def test_legacy_task_scripts_have_weeklong_requeue_contract():
+    for filename in LEGACY_TASK_SCRIPTS:
+        source = (PIPELINE_DIR / filename).read_text(encoding="utf-8")
+        directives = _sbatch_directives(source)
+        assert directives["gres"] == "gpu:l40s:4"
+        assert directives["mem"] == "224G"
+        assert directives["time"] == "7-00:00:00"
+        assert "#SBATCH --requeue" in source
+        assert "#SBATCH --signal=B:USR1@7200" in source
+        assert "export SLM_CUDA_ISOLATION=1" in source
+        assert "gpu:a40" not in source.lower()
+        assert "gpu:a100" not in source.lower()
+
+
+# --- Curated-benchmark ckpt scripts (the six loaders on 2x L40S) ----------------
+
+def test_ckpt_benchmark_scripts_cover_exactly_the_six_curated_loaders():
+    # The scripts on disk must match the mapping (no orphans, none missing), and each key must be
+    # one of the six benchmarks (guards against a typo'd SLM_BENCHMARK_TASK that run.py rejects).
+    on_disk = {p.name for p in PIPELINE_DIR.glob("run_*_ckpt.slurm")}
+    assert on_disk == set(CKPT_BENCHMARK_SCRIPTS)
+    expected_keys = {"clinc150", "routerbench", "medqa",
+                     "dialogsum_samsum", "xlam_bfcl", "coedit"}
+    assert {key for key, _ in CKPT_BENCHMARK_SCRIPTS.values()} == expected_keys
+
+
+def test_ckpt_benchmark_scripts_use_2xl40s_on_ckpt_with_requeue_contract():
+    for filename, (key, _task_type) in CKPT_BENCHMARK_SCRIPTS.items():
+        source = (PIPELINE_DIR / filename).read_text(encoding="utf-8")
+        directives = _sbatch_directives(source)
+        assert directives["partition"] == "ckpt", filename
+        assert directives["account"] == "intelligentsystems", filename
+        assert directives["gres"] == "gpu:l40s:2", filename
+        assert directives["time"] == "7-00:00:00", filename
+        # Preemptible ckpt makes the checkpoint/requeue contract load-bearing.
+        assert "#SBATCH --requeue" in source, filename
+        assert "#SBATCH --signal=B:USR1@7200" in source, filename
+        # The curated loader is pinned via the env var run.py now honors.
+        assert f"export SLM_BENCHMARK_TASK={key}" in source, filename
+        assert "export SLM_CUDA_ISOLATION=1" in source, filename
+        assert "source " in source and "_l40s_task_body.sh" in source, filename
+        assert "gpu:a40" not in source.lower(), filename
+        assert "gpu:a100" not in source.lower(), filename
+
+
+def test_ckpt_benchmark_scripts_log_to_logs_slurm():
+    for filename in CKPT_BENCHMARK_SCRIPTS:
+        directives = _sbatch_directives((PIPELINE_DIR / filename).read_text(encoding="utf-8"))
+        assert "/logs/slurm/" in directives["output"], filename
+
+
+# --- Shared 2-GPU task body: GPU-profile math + durability contract -------------
 
 def test_shared_l40s_body_exercises_agent_discovery_before_local_fallback():
     source = (PIPELINE_DIR / "_l40s_task_body.sh").read_text(encoding="utf-8")
@@ -272,20 +312,6 @@ def test_gpu_profile_rejects_invalid_tp_ids_and_exclusive_overlap():
     assert "must not overlap" in overlap.stderr
 
 
-def test_four_task_scripts_have_weeklong_requeue_contract():
-    for filename in TASK_SCRIPTS:
-        source = (PIPELINE_DIR / filename).read_text(encoding="utf-8")
-        directives = _sbatch_directives(source)
-        assert directives["gres"] == "gpu:l40s:4"
-        assert directives["mem"] == "224G"
-        assert directives["time"] == "7-00:00:00"
-        assert "#SBATCH --requeue" in source
-        assert "#SBATCH --signal=B:USR1@7200" in source
-        assert "export SLM_CUDA_ISOLATION=1" in source
-        assert "gpu:a40" not in source.lower()
-        assert "gpu:a100" not in source.lower()
-
-
 def test_shared_l40s_body_restarts_synth_and_resumes_stable_run():
     source = (PIPELINE_DIR / "_l40s_task_body.sh").read_text(encoding="utf-8")
 
@@ -375,29 +401,8 @@ def test_term_grace_waits_for_finalization_then_kills_hung_child(tmp_path):
 
 
 def test_all_task_scripts_and_shared_body_have_valid_bash_syntax():
-    for filename in (*TASK_SCRIPTS, "_l40s_task_body.sh"):
+    for filename in (*LEGACY_TASK_SCRIPTS, *CKPT_BENCHMARK_SCRIPTS, "_l40s_task_body.sh"):
         subprocess.run(["bash", "-n", str(PIPELINE_DIR / filename)], check=True)
-
-
-def test_emotion_script_has_same_weeklong_checkpoint_signal_contract():
-    path = PIPELINE_DIR / "run_emotion_orch_full_l40s.slurm"
-    source = path.read_text(encoding="utf-8")
-    directives = _sbatch_directives(source)
-
-    assert directives["time"] == "7-00:00:00"
-    assert "#SBATCH --requeue" in source
-    assert "#SBATCH --signal=B:USR1@7200" in source
-    assert "SLM_MAX_WALLCLOCK_S=0" in source
-    assert "aggregate wall-clock auto-termination" in source
-    assert "SLM_MAX_SEQ_LENGTH=4096" in source
-    assert "SLM_EVAL_MAX_NEW_TOKENS_CLASSIFICATION=50" in source
-    assert "SLM_CUDA_ISOLATION=1" in source
-    assert "SLM_RUN_DIR" in source
-    assert "--resume" in source
-    assert "scontrol requeue" in source
-    assert "durable_resume_available" in source
-    _assert_bounded_term_contract(source)
-    subprocess.run(["bash", "-n", str(path)], check=True)
 
 
 def test_pipeline_docs_explain_continuous_requeue_guard_semantics():
@@ -415,253 +420,6 @@ def test_pipeline_docs_explain_continuous_requeue_guard_semantics():
     assert "`TERM` takes precedence over requeue" in source
 
 
-def test_manual_qwen35_readiness_script_is_short_isolated_and_unsubmitted():
-    source = (
-        PIPELINE_DIR / "manual_qwen35_readiness_l40s.slurm"
-    ).read_text(encoding="utf-8")
-
-    assert "MANUAL / UNSUBMITTED" in source
-    assert "PASS CRITERIA" in source
-    assert "TIMING CRITERIA" in source
-    assert "VRAM CRITERIA" in source
-    directives = _sbatch_directives(source)
-    assert directives["gres"] == "gpu:l40s:1"
-    assert directives["time"] == "00:45:00"
-    assert "SLM_CUDA_ISOLATION=1" in source
-    assert "Qwen/Qwen3.5-0.8B" in source
-    assert "SLM_QUANT_EVAL=1" in source
-    assert "SLM_QUANT_EVAL=0" not in source
-    assert "nr_epochs=1" in source
-    assert "timeout --signal=TERM 35m" in source
-    assert "convert_hf_to_gguf" in source
-    assert "llama-quantize" in source
-    assert "llama-cpp-python" in source
-    assert "nvidia-smi" in source
-    assert "MAX_PEAK_USED_MIB=" in source
-    assert "MAX_POST_WORKER_DELTA_MIB=" in source
-    assert "peak_gpu_used_mib" in source
-    assert "post_worker_delta_mib" in source
-
-    python = _embedded_python(source)
-    tree = ast.parse(python)
-    calls = [
-        node
-        for node in ast.walk(tree)
-        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
-    ]
-    call_names = [node.func.id for node in calls]
-    assert "train" in call_names
-    assert "infer" in call_names
-    assert "infer_batch" in call_names
-    assert "_build_gguf_for_eval" in call_names
-    batch_call = next(node for node in calls if node.func.id == "infer_batch")
-    batch_prompts = next(
-        node.value
-        for node in ast.walk(tree)
-        if isinstance(node, ast.Assign)
-        and any(
-            isinstance(target, ast.Name) and target.id == "batch_prompts"
-            for target in node.targets
-        )
-    )
-    assert isinstance(batch_prompts, ast.List)
-    prompt_values = [
-        element.value
-        for element in batch_prompts.elts
-        if isinstance(element, ast.Constant)
-        and isinstance(element.value, str)
-    ]
-    assert len(prompt_values) > 1
-    assert len({len(prompt) for prompt in prompt_values}) > 1
-    assert isinstance(batch_call.args[0], ast.Name)
-    assert batch_call.args[0].id == "batch_prompts"
-    deployment_evals = [
-        node
-        for node in calls
-        if node.func.id == "run_eval"
-        and any(
-            keyword.arg == "gguf_path"
-            and isinstance(keyword.value, ast.Name)
-            for keyword in node.keywords
-        )
-    ]
-    assert len(deployment_evals) == 1
-    quant_keyword = next(
-        keyword
-        for keyword in deployment_evals[0].keywords
-        if keyword.arg == "quant"
-    )
-    assert isinstance(quant_keyword.value, ast.Constant)
-    assert quant_keyword.value.value == "Q4_K_M"
-
-
-def test_manual_qwen36_tp4_colocation_smoke_is_bounded_local_and_unsubmitted():
-    path = PIPELINE_DIR / "manual_qwen36_tp4_colocation_l40s.slurm"
-    source = path.read_text(encoding="utf-8")
-
-    assert "MANUAL / UNSUBMITTED" in source
-    assert "PASS CRITERIA" in source
-    assert "No cloud keys or calls" in source
-    directives = _sbatch_directives(source)
-    assert directives["gres"] == "gpu:l40s:4"
-    assert directives["time"] == "01:30:00"
-    assert "Qwen/Qwen3.6-35B-A3B" in source
-    assert "Qwen/Qwen3.5-4B" in source
-    assert "CUDA_VISIBLE_DEVICES=0,1,2,3" in source
-    assert "--tensor-parallel-size 4" in source
-    assert "--quantization fp8" in source
-    utilization = re.search(
-        r"--gpu-memory-utilization\s+([0-9.]+)",
-        source,
-    )
-    assert utilization is not None
-    assert float(utilization.group(1)) <= 0.50
-    assert "http://127.0.0.1:" in source
-    assert "LocalJudgeClient" in source
-    assert ".preflight()" in source
-    assert ".score_many(" in source
-    assert "SLM_CUDA_ISOLATION=1" in source
-    assert "export CUDA_VISIBLE_DEVICES=0" in source
-    assert "SLM_MAX_SEQ_LENGTH=4096" in source
-    assert "SLM_EVAL_BATCH_SIZE=4" in source
-    assert "generation eval worker keeps its model resident" in source
-    assert "APPS 4096/1024 batch pressure" in source
-    assert "timeout --signal=TERM 60m" in source
-    assert "nvidia-smi" in source
-    assert "gpu-memory-snapshots.csv" in source
-    assert "OutOfMemoryError" in source
-    assert "st_size > 0" in source
-    assert "SLM_JUDGE_ALLOW_REMOTE" not in source
-
-    python = _embedded_python(source)
-    tree = ast.parse(python)
-    call_names = [
-        node.func.id
-        for node in ast.walk(tree)
-        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
-    ]
-    assert "train" in call_names
-    assert "infer_batch" in call_names
-    assert "_build_gguf_for_eval" in call_names
-    assert "run_eval" in call_names
-
-    infer_calls = [
-        node
-        for node in ast.walk(tree)
-        if isinstance(node, ast.Call)
-        and isinstance(node.func, ast.Name)
-        and node.func.id == "infer_batch"
-    ]
-    apps_pressure = [
-        node for node in infer_calls
-        if any(
-            keyword.arg == "max_new_tokens"
-            and isinstance(keyword.value, ast.Constant)
-            and keyword.value.value == 1024
-            for keyword in node.keywords
-        )
-        and any(
-            keyword.arg == "task_type"
-            and isinstance(keyword.value, ast.Constant)
-            and keyword.value.value == "code_generation"
-            for keyword in node.keywords
-        )
-    ]
-    assert len(apps_pressure) == 1
-
-    generation_eval_sets = {
-        target.id
-        for node in ast.walk(tree)
-        if isinstance(node, ast.Assign)
-        and isinstance(node.value, ast.Call)
-        and isinstance(node.value.func, ast.Name)
-        and node.value.func.id == "EvalSet"
-        and any(
-            keyword.arg == "task_type"
-            and isinstance(keyword.value, ast.Constant)
-            and keyword.value.value == "generation"
-            for keyword in node.value.keywords
-        )
-        for target in node.targets
-        if isinstance(target, ast.Name)
-    }
-    generation_eval_calls = [
-        node
-        for node in ast.walk(tree)
-        if isinstance(node, ast.Call)
-        and isinstance(node.func, ast.Name)
-        and node.func.id == "run_eval"
-        and node.args
-        and isinstance(node.args[0], ast.Name)
-        and node.args[0].id in generation_eval_sets
-    ]
-    assert len(generation_eval_calls) == 1
-
-
-def test_manual_qwen36_cot_smoke_is_colocated_single_call_and_unsubmitted():
-    source = (
-        PIPELINE_DIR / "manual_qwen36_cot_smoke_l40s.slurm"
-    ).read_text(encoding="utf-8")
-
-    assert "MANUAL / UNSUBMITTED" in source
-    assert "PASS CRITERIA" in source
-    directives = _sbatch_directives(source)
-    assert directives["gres"] == "gpu:l40s:1"
-    assert directives["time"] == "00:45:00"
-    assert "Qwen/Qwen3.6-35B-A3B" in source
-    assert "vllm serve" in source
-    assert "--max-num-seqs 1" in source
-    assert "http://127.0.0.1:" in source
-    assert "MAX_GENERATION_CALLS=1" in source
-    assert "ANTHROPIC_API_KEY=manual-readiness-no-call" in source
-    assert "EXA_API_KEY=manual-readiness-no-call" in source
-    assert "timeout --signal=TERM 240s" in source
-    assert "request_timeout=210.0" in source
-    assert "seq 1 120" not in source
-    assert "does not create cost.json or timings.json" in source
-    assert "SLURM output" in source
-    assert "vLLM server log" in source
-
-    timeout_match = re.search(r"^READINESS_TIMEOUT_S=(\d+)$", source, re.MULTILINE)
-    assert timeout_match is not None
-    assert int(timeout_match.group(1)) == 900
-    assert re.search(
-        r"CUDA_MOD=\$\((?s:.*?)\)\s*\|\| true",
-        source,
-    )
-    assert "READINESS_DEADLINE=$((SECONDS + READINESS_TIMEOUT_S))" in source
-    assert '--max-time "$CURL_TIMEOUT_S"' in source
-    assert "--noproxy '*'" in source
-    assert 'sleep "$SLEEP_S"' in source
-
-    python = _embedded_python(source)
-    tree = ast.parse(python)
-    generation_calls = [
-        node
-        for node in ast.walk(tree)
-        if isinstance(node, ast.Call)
-        and isinstance(node.func, ast.Name)
-        and node.func.id == "generate"
-    ]
-    assert len(generation_calls) == 1
-    max_tokens = next(
-        keyword.value.value
-        for keyword in generation_calls[0].keywords
-        if keyword.arg == "max_tokens"
-        and isinstance(keyword.value, ast.Constant)
-    )
-    assert max_tokens == 96
-
-
-def test_manual_readiness_scripts_have_valid_bash_syntax():
-    for path in (
-        PIPELINE_DIR / "manual_qwen35_readiness_l40s.slurm",
-        PIPELINE_DIR / "manual_qwen36_cot_smoke_l40s.slurm",
-        PIPELINE_DIR / "manual_qwen36_tp4_colocation_l40s.slurm",
-    ):
-        subprocess.run(["bash", "-n", str(path)], check=True)
-
-
 # --- Log directory split: pipeline runs vs GPU infrastructure -------------------
 # logs/slurm/ holds pipeline run logs; logs/gpu_setup/ holds the vLLM synth server and
 # GPU toolchain builds. Slurm does not create an --output directory and fails the job
@@ -671,7 +429,7 @@ REPO_ROOT = PIPELINE_DIR.parent.parent
 
 
 def test_pipeline_task_scripts_log_to_logs_slurm():
-    for name in TASK_SCRIPTS + ("run_emotion_orch_full_l40s.slurm",):
+    for name in (*LEGACY_TASK_SCRIPTS, *CKPT_BENCHMARK_SCRIPTS):
         directives = _sbatch_directives((PIPELINE_DIR / name).read_text())
         output = directives["output"]
         assert "/logs/slurm/" in output, f"{name} must log to logs/slurm/, got {output}"

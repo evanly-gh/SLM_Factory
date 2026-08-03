@@ -55,6 +55,7 @@ class CurationLog:
         hardware_notes: str = "Phase 1: theoretical",
         hw_constraints: dict | None = None,
         entry_id: str | None = None,
+        eval_firewall: dict | None = None,
     ) -> None:
         timestamp = datetime.now().isoformat(timespec="seconds")
         generated = n_hard if n_hard_generated is None else n_hard_generated
@@ -64,6 +65,16 @@ class CurationLog:
             else n_gold + n_hard_source + generated
         )
         ratio_total = actual_total if actual_total > 0 else 1
+
+        # Eval-firewall audit line: total contaminated rows removed this build + per-checkpoint
+        # breakdown. Always rendered (even at 0) so a clean build positively confirms the firewall.
+        if eval_firewall is not None:
+            fw_total = int(eval_firewall.get("total", 0) or 0)
+            fw_layers = eval_firewall.get("by_layer") or {}
+            fw_detail = ", ".join(f"{k}={v}" for k, v in fw_layers.items()) or "no checkpoints"
+            firewall_line = f"- Eval firewall removed: {fw_total} row(s) [{fw_detail}]\n"
+        else:
+            firewall_line = ""
 
         # Format hardware PASS/FAIL lines (design doc §4.3)
         hw_lines = ""
@@ -145,7 +156,7 @@ class CurationLog:
 - Source novelty: {source_novelty or {}}
 - Plan yield: {plan_yield or {}}
 - Distribution: {label_dist}
-{data_sources_section}
+{firewall_line}{data_sources_section}
 ### Training config (π_{iteration})
 - Config A: {config_a}
 - Config B: {config_b}
