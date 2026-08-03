@@ -653,9 +653,10 @@ def test_generation_scorer_uses_required_local_judge_and_propagates_parse_failur
     from eval.scorers import generation
 
     eval_set = EvalSet(
-        pos=[{"text": "first-question", "answer": "first-gold"}],
-        neg=[{"text": "second-question", "answer": "second-gold"}],
-        boundary=[],
+        all=[
+            {"text": "first-question", "answer": "first-gold"},
+            {"text": "second-question", "answer": "second-gold"},
+        ],
         task_type="generation",
     )
     monkeypatch.setenv("SLM_COST_EVENT_PATH", str(tmp_path / "cost.jsonl"))

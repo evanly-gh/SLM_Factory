@@ -13,7 +13,7 @@ def _mock_scorer():
     s.build_prompts.return_value = ["p1"]
     s.extract_predictions.return_value = ["ans"]
     s.score.return_value = {
-        "f1": 0.8, "per_class": {}, "slices": {"pos": 1.0, "neg": 0.8, "boundary": 0.9},
+        "f1": 0.8, "per_class": {},
         "failures": [],
     }
     return s

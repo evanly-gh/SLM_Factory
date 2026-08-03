@@ -90,9 +90,6 @@ def measure_endpoint_baseline(
     return EvalResult(
         f1=result["f1"],
         per_class=result["per_class"],
-        pos_score=result["slices"]["pos"],
-        neg_score=result["slices"]["neg"],
-        boundary_score=result["slices"]["boundary"],
         failures=result["failures"],
         execution_diagnostics=result.get("execution_diagnostics", []),
         metric=metric,

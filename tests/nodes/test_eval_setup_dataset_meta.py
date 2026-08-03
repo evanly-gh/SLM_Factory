@@ -202,9 +202,6 @@ def test_shared_preparer_uses_dynamic_800_eval_slices(task_type, row):
         800,
     )
 
-    assert len(eval_set.pos) == 320
-    assert len(eval_set.neg) == 320
-    assert len(eval_set.boundary) == 160
     assert len(eval_set.all) == 800
 
 

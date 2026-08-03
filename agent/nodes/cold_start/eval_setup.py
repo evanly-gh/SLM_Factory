@@ -138,14 +138,12 @@ def _calibrate_qwen_goal_if_pending(state: AgentState, eval_set) -> None:
     }
 
 
-def _eval_split_sizes(target: int) -> dict:
-    """Scale the pos/neg/boundary eval slices to the ORCHESTRATOR's eval-size target (B161).
-    build_eval_set defaulted to 40/40/20 = 100 total, which silently capped the eval set to
-    100 no matter how many test rows were acquired (the eval-size bug). Keep the 0.4/0.4/0.2
-    ratio at the requested scale."""
-    t = max(int(target or 0), 30)
-    return {"n_pos": int(round(t * 0.4)), "n_neg": int(round(t * 0.4)),
-            "n_boundary": int(round(t * 0.2))}
+def _eval_target(target: int) -> int:
+    """Clamp the ORCHESTRATOR's eval-size target to a sane floor (B161).
+    build_eval_set defaulted to 100 total, which silently capped the eval set no matter how
+    many test rows were acquired (the eval-size bug). Honor the requested size with a min-30
+    floor so a tiny target can never starve the eval set."""
+    return max(int(target or 0), 30)
 
 
 def _load_shared_dataset(shared_dir: str):
@@ -213,7 +211,7 @@ def _load_shared_dataset(shared_dir: str):
 
 def eval_setup_node(state: AgentState) -> AgentState:
     """
-    Node 2: download data and build E = Epos ∪ Eneg ∪ Eboundary.
+    Node 2: download data and build the held-out eval set E.
     Eval set is built BEFORE any training. Fixed throughout all iterations.
     task_type flows from state — no hardcoding.
     """
@@ -241,7 +239,7 @@ def eval_setup_node(state: AgentState) -> AgentState:
         state["eval_source_ban"] = list(_shared_eval_ban or [])
         eval_set = build_eval_set(
             test_examples, task_type=task_type,
-            **_eval_split_sizes(state.get("eval_size_target", 800)),
+            target=_eval_target(state.get("eval_size_target", 800)),
             multi_label=plan.get("multi_label", False) if plan else False,
             schema=(plan.get("schema") if plan else None),
             multilingual=plan.get("multilingual", False) if plan else False,
@@ -253,10 +251,9 @@ def eval_setup_node(state: AgentState) -> AgentState:
             os.path.join(ARTIFACTS_DIR, "eval_set.json"),
             {
                 "task_type": eval_set.task_type,
-                "counts": {"pos": len(eval_set.pos), "neg": len(eval_set.neg),
-                           "boundary": len(eval_set.boundary), "total": len(eval_set.all)},
+                "counts": {"total": len(eval_set.all)},
                 "difficulty_counts": ({k: len(v) for k, v in _shared_diff.items()} if _shared_diff else {}),
-                "pos": eval_set.pos, "neg": eval_set.neg, "boundary": eval_set.boundary,
+                "examples": eval_set.all,
                 "difficulty": _shared_diff or {},
             },
         )
@@ -337,15 +334,14 @@ def eval_setup_node(state: AgentState) -> AgentState:
     eval_set = build_eval_set(
         test_examples,
         task_type=task_type,
-        **_eval_split_sizes(state.get("eval_size_target", 800)),
+        target=_eval_target(state.get("eval_size_target", 800)),
         multi_label=plan.get("multi_label", False),
         schema=plan.get("schema", None),
         multilingual=plan.get("multilingual", False),
     )
     state["eval_set"] = eval_set
     print(f"      [eval_setup] eval set built: {len(eval_set.all)} examples "
-          f"(target {state.get('eval_size_target', 800)}; pos={len(eval_set.pos)} "
-          f"neg={len(eval_set.neg)} boundary={len(eval_set.boundary)})")
+          f"(target {state.get('eval_size_target', 800)})")
 
     # Difficulty-stratify the eval set for the test-data agent (B161): label each held-out
     # example easy/medium/hard by the base-model zero-shot capability gradient (smallest vs
@@ -376,12 +372,9 @@ def eval_setup_node(state: AgentState) -> AgentState:
         os.path.join(ARTIFACTS_DIR, "eval_set.json"),
         {
             "task_type": eval_set.task_type,
-            "counts": {"pos": len(eval_set.pos), "neg": len(eval_set.neg),
-                       "boundary": len(eval_set.boundary), "total": len(eval_set.all)},
+            "counts": {"total": len(eval_set.all)},
             "difficulty_counts": ({k: len(v) for k, v in difficulty.items()} if difficulty else {}),
-            "pos": eval_set.pos,
-            "neg": eval_set.neg,
-            "boundary": eval_set.boundary,
+            "examples": eval_set.all,
             "difficulty": difficulty or {},
         },
     )

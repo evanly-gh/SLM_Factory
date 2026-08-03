@@ -12,9 +12,7 @@ EVAL_TEXT = "Held-Out\nEvaluation Secret"
 
 def _eval_set():
     return EvalSet(
-        pos=[{"text": EVAL_TEXT, "label": "a"}],
-        neg=[],
-        boundary=[],
+        all=[{"text": EVAL_TEXT, "label": "a"}],
         task_type="classification",
     )
 

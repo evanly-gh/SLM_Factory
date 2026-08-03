@@ -32,9 +32,7 @@ def _row(
 
 def _score_one(prediction, row=None):
     eval_set = EvalSet(
-        pos=[row or _row()],
-        neg=[],
-        boundary=[],
+        all=[row or _row()],
         task_type="code_generation",
     )
     return generation.score(eval_set, [prediction])
@@ -157,9 +155,7 @@ def test_mbpp_aggregate_score_uses_per_row_tests():
     correct = _row(["assert add(1, 4) == 5"])
     wrong = _row(["assert multiply(3, 4) == 12"], answer="def multiply(a, b): return a * b")
     eval_set = EvalSet(
-        pos=[correct],
-        neg=[wrong],
-        boundary=[],
+        all=[correct, wrong],
         task_type="code_generation",
     )
 
@@ -331,7 +327,7 @@ def test_code_prompt_preserves_required_signature_without_revealing_solution():
         entry_point="add",
         signature="def add(a: int, b: int = 0) -> int:",
     )
-    eval_set = EvalSet(pos=[row], neg=[], boundary=[], task_type="code_generation")
+    eval_set = EvalSet(all=[row], task_type="code_generation")
 
     prompt = generation.build_prompts(eval_set)[0]
 
@@ -362,11 +358,9 @@ def test_code_prompt_never_derives_signature_or_helpers_from_hidden_gold():
 
 
 def test_code_extraction_strips_markdown_fences_only_for_code_generation():
-    code_set = EvalSet(pos=[_row()], neg=[], boundary=[], task_type="code_generation")
+    code_set = EvalSet(all=[_row()], task_type="code_generation")
     math_set = EvalSet(
-        pos=[{"text": "1+1", "answer": "2"}],
-        neg=[],
-        boundary=[],
+        all=[{"text": "1+1", "answer": "2"}],
         task_type="math_reasoning",
     )
     raw = "Here is the solution:\n```python\ndef add(a, b):\n    return a + b\n```"

@@ -46,9 +46,6 @@ def test_report_exposes_aggregate_confusion_counts_without_eval_text():
     result = EvalResult(
         f1=0.5,
         per_class={},
-        pos_score=0.5,
-        neg_score=0.5,
-        boundary_score=0.5,
         failures=[
             {"text": secret_a, "label": "a", "predicted": "b"},
             {"text": secret_b, "label": "b", "predicted": "a"},

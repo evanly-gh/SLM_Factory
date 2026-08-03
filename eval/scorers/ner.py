@@ -1,5 +1,5 @@
 # eval/scorers/ner.py
-from eval.metrics import entity_f1, per_slice_scores
+from eval.metrics import entity_f1
 from data.eval_set import EvalSet
 from collections import Counter
 import json
@@ -31,10 +31,6 @@ def extract_predictions(raw_outputs: list[str], eval_set: EvalSet) -> list[list[
 def score(eval_set: EvalSet, predictions: list[list[dict]]) -> dict:
     gold = [ex.get("entities", []) for ex in eval_set.all]
     f1 = entity_f1(predictions, gold)
-    # Per-slice: convert to binary has-entity labels for slice scoring
-    pred_labels = ["entity" if p else "no_entity" for p in predictions]
-    gold_labels = ["entity" if g else "no_entity" for g in gold]
-    slices = per_slice_scores(eval_set, pred_labels, gold_labels=gold_labels)
     failures = [
         {**ex, "predicted": pred}
         for ex, pred, g in zip(eval_set.all, predictions, gold)
@@ -44,6 +40,5 @@ def score(eval_set: EvalSet, predictions: list[list[dict]]) -> dict:
         "f1": f1,
         "metric": "span_f1",
         "per_class": {"entity_f1": f1},
-        "slices": slices,
         "failures": failures,
     }

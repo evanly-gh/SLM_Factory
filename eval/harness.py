@@ -77,9 +77,6 @@ class EvalResult:
     # checkpoints and DAG replay depend on the field name.
     f1: float
     per_class: dict
-    pos_score: float
-    neg_score: float
-    boundary_score: float
     failures: list[dict]
     execution_diagnostics: list[dict] = field(default_factory=list)
     metric: str = "f1"
@@ -187,9 +184,6 @@ def _run_eval_local(
     return EvalResult(
         f1=result["f1"],
         per_class=result["per_class"],
-        pos_score=result["slices"]["pos"],
-        neg_score=result["slices"]["neg"],
-        boundary_score=result["slices"]["boundary"],
         failures=result["failures"],
         execution_diagnostics=result.get("execution_diagnostics", []),
         metric=result.get("metric", TASK_METRIC_NAMES.get(task_type, "f1")),

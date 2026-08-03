@@ -41,9 +41,7 @@ def _apps_row(
 
 def _score_one(prediction, row):
     eval_set = EvalSet(
-        pos=[row],
-        neg=[],
-        boundary=[],
+        all=[row],
         task_type="code_generation",
     )
     return generation.score(eval_set, [prediction])
@@ -758,7 +756,7 @@ def test_apps_call_prompt_includes_starter_code_and_required_entry_point():
         {"fn_name": "add", "inputs": ["[2, 3]"], "outputs": ["5"]},
         answer=answer,
     )
-    eval_set = EvalSet(pos=[row], neg=[], boundary=[], task_type="code_generation")
+    eval_set = EvalSet(all=[row], task_type="code_generation")
 
     prompt = generation.build_prompts(eval_set)[0]
 

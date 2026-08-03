@@ -510,9 +510,6 @@ def test_downward_choice_injects_sourced_qwen35_capability_contract():
     failed_probe = EvalResult(
         f1=0.70,
         per_class={},
-        pos_score=0.70,
-        neg_score=0.70,
-        boundary_score=0.70,
         failures=[],
     )
     with (
@@ -567,9 +564,6 @@ def test_downward_probe_reuses_shared_chooser_and_honors_exact_quant_selector():
     failed_probe = EvalResult(
         f1=0.70,
         per_class={},
-        pos_score=0.70,
-        neg_score=0.70,
-        boundary_score=0.70,
         failures=[],
     )
     trained = []

@@ -85,7 +85,7 @@ def test_xlam_gold_is_scored_correct_by_the_function_call_scorer():
         "tools": [{"name": "book", "parameters": {"people": "int", "time": "string"}}],
         "answers": [{"name": "book", "arguments": {"people": 2, "time": "7pm"}}],
     }])
-    es = EvalSet(pos=rows, neg=[], boundary=[], task_type="function_call")
+    es = EvalSet(all=rows, task_type="function_call")
     preds = extract_predictions([rows[0]["answer"]], es)
     result = score(es, preds)
     assert result["f1"] == 1.0
@@ -127,7 +127,7 @@ def test_coedit_gold_diff_applies_and_reproduces_target():
         {"src": "Improve clarity: The thing is very big and large.",
          "tgt": "The object is enormous."},
     ])
-    es = EvalSet(pos=rows, neg=[], boundary=[], task_type="diff")
+    es = EvalSet(all=rows, task_type="diff")
     preds = extract_predictions([rows[0]["answer"]], es)
     result = score(es, preds)
     assert result["per_class"]["format_valid"] == 1.0

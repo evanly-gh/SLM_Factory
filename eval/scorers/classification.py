@@ -1,6 +1,6 @@
 # eval/scorers/classification.py
 import re
-from eval.metrics import binary_f1, per_slice_scores
+from eval.metrics import binary_f1
 from data.eval_set import EvalSet
 
 CLASSIFY_PROMPT = (
@@ -63,7 +63,6 @@ def score(eval_set: EvalSet, predictions: list[str]) -> dict:
         # Binary: F1 of the (minority) positive class.
         pos_label = min(all_labels, key=lambda l: labels.count(l))
         f1 = binary_f1(predictions, labels, pos_label=pos_label)
-    slices = per_slice_scores(eval_set, predictions)
     failures = [
         {**ex, "predicted": pred}
         for ex, pred, lbl in zip(eval_set.all, predictions, labels)
@@ -73,6 +72,5 @@ def score(eval_set: EvalSet, predictions: list[str]) -> dict:
         "f1": f1,
         "metric": "macro_f1",
         "per_class": per_class,
-        "slices": slices,
         "failures": failures,
     }

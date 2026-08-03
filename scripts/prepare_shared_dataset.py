@@ -42,14 +42,14 @@ SHARED_CHECKSUM_FILES = SHARED_CONTENT_FILES + ("manifest.json",)
 
 
 def _build_requested_eval_set(examples, plan, eval_size):
-    """Build the frozen eval set at the same dynamic 40/40/20 target as runs."""
-    from agent.nodes.cold_start.eval_setup import _eval_split_sizes
+    """Build the frozen eval set at the same dynamic size target as runs."""
+    from agent.nodes.cold_start.eval_setup import _eval_target
     from data.eval_set import build_eval_set
 
     return build_eval_set(
         examples,
         task_type=plan["task_type"],
-        **_eval_split_sizes(eval_size),
+        target=_eval_target(eval_size),
         multi_label=plan.get("multi_label", False),
         schema=plan.get("schema"),
         multilingual=plan.get("multilingual", False),

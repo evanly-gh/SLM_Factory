@@ -29,7 +29,7 @@ def _row(text, src, tgt):
 
 
 def _eval_set(rows):
-    return EvalSet(pos=list(rows), neg=[], boundary=[], task_type="diff")
+    return EvalSet(all=list(rows), task_type="diff")
 
 
 SRC = "The quick brown fox.\nJumps over the lazy dog.\nThe end.\n"

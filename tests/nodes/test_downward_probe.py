@@ -59,9 +59,6 @@ def test_quantized_downward_probe_scores_exact_deployment_artifact():
     result = EvalResult(
         f1=0.88,
         per_class={},
-        pos_score=0.88,
-        neg_score=0.88,
-        boundary_score=0.88,
         failures=[],
     )
     with (
@@ -108,7 +105,7 @@ def test_downward_training_uses_stable_atomic_run_artifact(tmp_path, monkeypatch
         (checkpoint / "adapter_model.safetensors").write_bytes(b"weights")
         return TrainingOutput(str(checkpoint), None)
 
-    result = EvalResult(0.91, {}, 0.91, 0.91, 0.91, [])
+    result = EvalResult(0.91, {}, [])
     monkeypatch.setattr(probe_module, "slm_train", fake_train)
     monkeypatch.setattr(probe_module, "run_eval", lambda *_args, **_kwargs: result)
 
@@ -160,7 +157,7 @@ def test_adopts_smaller_model_when_it_clears_threshold(mock_fp, mock_choose, moc
     mock_fp.return_value = [smaller]
     mock_choose.return_value = smaller
     mock_te.return_value = ("/small/ckpt", EvalResult(
-        f1=0.92, per_class={}, pos_score=0.9, neg_score=0.9, boundary_score=0.9, failures=[]))
+        f1=0.92, per_class={}, failures=[]))
     state = _state(current)
     state.update({
         "iteration": 4,
@@ -220,7 +217,7 @@ def test_keeps_current_when_smaller_fails_threshold(mock_fp, mock_choose, mock_t
     mock_fp.return_value = [smaller]
     mock_choose.return_value = smaller
     mock_te.return_value = ("/small/ckpt", EvalResult(
-        f1=0.70, per_class={}, pos_score=0.7, neg_score=0.7, boundary_score=0.7, failures=[]))
+        f1=0.70, per_class={}, failures=[]))
     current = _model(tier=2, model_id="test/Big")
     out = downward_probe_node(_state(current))
     assert out["selected_model"].model_id == "test/Big"  # unchanged
@@ -528,9 +525,6 @@ def test_downward_probe_tracks_and_adopts_multiple_successful_tiers():
             EvalResult(
                 f1=score,
                 per_class={},
-                pos_score=score,
-                neg_score=score,
-                boundary_score=score,
                 failures=[],
             ),
         )
@@ -791,9 +785,6 @@ def test_downward_probe_pending_retry_skips_gate_and_model_api():
     result = EvalResult(
         f1=0.92,
         per_class={},
-        pos_score=0.92,
-        neg_score=0.92,
-        boundary_score=0.92,
         failures=[],
     )
     with (

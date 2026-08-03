@@ -39,9 +39,7 @@ def _state(tmp_path: Path) -> dict:
     write_artifact_manifest(weights, artifact_type="training_checkpoint")
     model = ANDROID_POOL[0]
     eval_set = EvalSet(
-        pos=[{"text": "p", "label": "yes"}],
-        neg=[{"text": "n", "label": "no"}],
-        boundary=[],
+        all=[{"text": "p", "label": "yes"}, {"text": "n", "label": "no"}],
         task_type="classification",
         multi_label=False,
         schema={"label": "string"},
@@ -50,9 +48,6 @@ def _state(tmp_path: Path) -> dict:
     result = EvalResult(
         f1=0.75,
         per_class={"yes": 0.8},
-        pos_score=0.8,
-        neg_score=0.7,
-        boundary_score=0.0,
         failures=[{"text": "n"}],
         execution_diagnostics=[{"status": "ok"}],
     )
