@@ -399,6 +399,10 @@ def evaluate_node(state: AgentState) -> AgentState:
         "score": current_score,
         "best_config": best_label,
         "intervention": dag_intervention,
+        # Free-text orchestrator rationale for this iteration. Mirrors the value written to
+        # data-curation.md so the DAG (and post-run graphics) are self-sufficient without
+        # having to parse the markdown log. See agent/run_graphics.py.
+        "hypothesis": state.get("last_hypothesis", ""),
         "failures": len(best_result.failures),
         "pruned": False,
         # Keep every actually-trained identity even when the zero-shot baseline

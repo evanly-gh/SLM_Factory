@@ -1258,6 +1258,23 @@ for _provider, _summary in cost["by_provider"].items():
 log("")
 log(format_run_data_sources(_data_sources_agg))
 log(f"  (full provenance: {os.path.join(RUN_DIR, 'data_sources.json')})")
+
+# Post-run summary graphics. Fail-safe: the run has already succeeded by this point, so a
+# plotting error (or a missing matplotlib) must never change the outcome — log and move on.
+try:
+    from agent.run_graphics import generate_run_graphics
+
+    _graphics = generate_run_graphics(
+        RUN_DIR,
+        state=last_state,
+        baselines=baselines,
+        stop_threshold=threshold,
+    )
+    if _graphics:
+        log(f"  graphics: {os.path.dirname(str(_graphics[0]))} ({len(_graphics)} files)")
+except Exception as _graphics_error:  # noqa: BLE001 — never let reporting break a finished run
+    log(f"  graphics: skipped ({type(_graphics_error).__name__}: {_graphics_error})")
+
 log(f"  logs: {RUN_DIR}")
 
 _RUN_EXIT_CODE = process_exit_code(pipeline_error)
