@@ -525,25 +525,6 @@ def score(eval_set: EvalSet, predictions: list[str]) -> dict:
         code_results.extend([None] * len(triples))
 
     average = sum(scores) / len(scores) if scores else 0.0
-    predicted_labels = [
-        "correct" if value >= 0.5 else "wrong"
-        for value in scores
-    ]
-    gold_labels = (
-        ["correct"] * len(eval_set.all)
-        if task_type == "code_generation"
-        else [
-            "correct" if example.get("answer") else "wrong"
-            for example in eval_set.all
-        ]
-    )
-    from eval.metrics import per_slice_scores
-
-    slices = per_slice_scores(
-        eval_set,
-        predicted_labels,
-        gold_labels=gold_labels,
-    )
     failures = []
     for example, prediction, value, execution in zip(
         eval_set.all,
@@ -600,7 +581,6 @@ def score(eval_set: EvalSet, predictions: list[str]) -> dict:
         "f1": average,
         "metric": metric_name,
         "per_class": {metric_name: average},
-        "slices": slices,
         "failures": failures,
         "execution_diagnostics": execution_diagnostics,
     }

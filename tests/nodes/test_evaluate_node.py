@@ -66,7 +66,7 @@ def _make_state(quant=None):
 
 
 def _mock_eval_result(f1=0.85):
-    return EvalResult(f1=f1, per_class={}, pos_score=0.9, neg_score=0.8, boundary_score=0.85, failures=[])
+    return EvalResult(f1=f1, per_class={}, failures=[])
 
 
 def test_gguf_build_delegates_to_disposable_worker_when_enabled(monkeypatch):

@@ -152,12 +152,10 @@ def test_sqlite_serializer_stores_selectors_and_paths_not_domain_instances():
         "model": model,
         "hardware": HardwareConstraints(1000, 800, 2000),
         "eval_set": EvalSet(
-            pos=[{"text": "p"}],
-            neg=[],
-            boundary=[],
+            all=[{"text": "p"}],
             task_type="classification",
         ),
-        "result": EvalResult(0.5, {}, 0.5, 0.0, 0.0, []),
+        "result": EvalResult(0.5, {}, []),
         "training": TrainingOutput("/weights", "/weights/model.gguf"),
     }
 

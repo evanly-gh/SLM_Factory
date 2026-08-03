@@ -2884,3 +2884,36 @@ headroom rides along in the existing `task_analysis` call.
      `_infer_pos_label`/`_infer_neg_label` imports.
 - **Status:** 🟢 implemented; all five edited modules parse; `resample_available` added to
   `AgentState`.
+
+---
+
+## B212 — removed the vestigial pos/neg/boundary eval slices (no functional effect)
+
+- **Where:** `data/eval_set.py`, `eval/metrics.py`, `eval/scorers/{classification,ner,generation,function_call,diff}.py`,
+  `eval/harness.py`, `eval/endpoint_eval.py`, `data/curation_log.py`, `agent/state_codec.py`,
+  `agent/checkpoint.py`, `agent/nodes/cold_start/eval_setup.py`, `hardware_eval/quant_accuracy_eval.py`,
+  `agent/nodes/cold_start/model_selection/interpolation.py`, `scripts/prepare_shared_dataset.py`
+- **Found:** 2026-08-02, from Evan's question "does pos/neg/boundary have any effect on anything?"
+  (see [Evan's Notes 2026-08-02 Q4](Evan's%20Notes/2026-08-02-eval-firewall-test-agent-synth-prompt.md)).
+- **The finding.** The eval set carried three slices — `pos`, `neg`, `boundary` — with **no
+  functional effect**. Tracing every read: the slices were only ever recombined into `.all` (what
+  all eval, prompting, difficulty labeling, and firewall matching use); the per-slice scores
+  (`per_slice_scores` → `EvalResult.pos_score/neg_score/boundary_score`) flowed to exactly one
+  place — a cosmetic `Epos | Eneg | Eboundary` line in the curation log. **Nothing branched on
+  them.** For the NER/generation families the split was a meaningless random 3-way partition anyway.
+- **The change.** Deleted the slices end to end: `EvalSet` is now a single flat `.all` sample;
+  `per_slice_scores` and the three `EvalResult` score fields are gone; the five scorers no longer
+  emit a `"slices"` key; the curation-log line is removed. `build_eval_set(examples, task_type,
+  target=…)` now returns a target-sized sample — **label-coverage stratification (round-robin
+  across labels) is retained for multi-class classification**, everything else is a shuffled top-N.
+  `_eval_split_sizes` → `_eval_target` (single int, min-30 floor). `eval_set.json` shrank to
+  `counts={"total": …}` + `examples=[…]`.
+- **Back-compat.** `EvalSet.from_serialized` folds legacy `pos+neg+boundary` into `all`, so old
+  checkpoints and artifacts still load. Serialization (`state_codec`, sqlite `checkpoint`) now
+  emits/reads `all` and decodes via `from_serialized`.
+- **Status:** 🟢 implemented. No behavior change to any decision path (the removed data drove
+  nothing). Only visible changes: the curation-log line and `eval_set.json` schema shrink, and
+  multi-class eval sampling is now explicit label round-robin instead of implicit-via-slices. All
+  changed production files parse; the affected test subset matches the pre-change pass/fail baseline
+  (remaining failures are pre-existing: missing `langgraph-checkpoint-sqlite`, Windows cp1252
+  `read_text()`, and absent local dataset bundles).

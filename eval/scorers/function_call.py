@@ -156,8 +156,6 @@ def _call_correct(gold_calls: list[dict], pred_calls: list[dict], allowed: set[s
 
 
 def score(eval_set: EvalSet, predictions: list[list[dict] | None]) -> dict:
-    from eval.metrics import per_slice_scores
-
     content_scores: list[float] = []
     format_scores: list[float] = []
     failures: list[dict] = []
@@ -175,14 +173,9 @@ def score(eval_set: EvalSet, predictions: list[list[dict] | None]) -> dict:
     f1 = sum(content_scores) / n if n else 0.0
     format_valid_mean = sum(format_scores) / n if n else 0.0
 
-    predicted_labels = ["correct" if v >= 0.5 else "wrong" for v in content_scores]
-    gold_labels = ["correct"] * n
-    slices = per_slice_scores(eval_set, predicted_labels, gold_labels=gold_labels)
-
     return {
         "f1": f1,
         "metric": "ast_arg_match",
         "per_class": {"ast_arg_match": f1, "format_valid": format_valid_mean},
-        "slices": slices,
         "failures": failures,
     }

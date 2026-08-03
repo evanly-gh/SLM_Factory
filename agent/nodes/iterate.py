@@ -935,6 +935,18 @@ escalate to a larger model. Never inspect raw eval rows. Return only the decisio
 """
 
     messages = [SystemMessage(content=_ITERATE_SYSTEM), HumanMessage(content=user_content)]
+
+    # Log the COMPLETE context the orchestrator receives this turn — system prompt + user
+    # content (trajectory, current-iteration summary, test-agent report, already-tried configs,
+    # data-rebuild notes, source novelty/yield). This is the full, verbatim decision input; it
+    # makes every orchestrator call auditable and reproducible from the run log. (No raw eval
+    # rows appear here by construction — the report carries aggregates only.)
+    _orch_id = state["selected_model"].label if state.get("selected_model") else "?"
+    _log(_orch_id, "  ===== ORCHESTRATOR CONTEXT (full prompt sent this turn) =====")
+    _log(_orch_id, f"  --- system prompt ---\n{_ITERATE_SYSTEM}")
+    _log(_orch_id, f"  --- user content ---\n{user_content}")
+    _log(_orch_id, "  ===== END ORCHESTRATOR CONTEXT =====")
+
     response = tracked_chat_anthropic_invoke(
         llm,
         messages,

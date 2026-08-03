@@ -40,8 +40,12 @@ def _load_eval_set(path: str, task_type_override: str | None):
     with open(path, encoding="utf-8") as f:
         d = json.load(f)
     task_type = task_type_override or d.get("task_type")
-    return EvalSet(pos=d.get("pos", []), neg=d.get("neg", []),
-                   boundary=d.get("boundary", []), task_type=task_type), task_type
+    # Artifact stores rows under "examples"; from_serialized also folds legacy pos/neg/boundary.
+    rows = d.get("all") if d.get("all") is not None else d.get("examples")
+    payload = {**d, "task_type": task_type}
+    if rows is not None:
+        payload["all"] = rows
+    return EvalSet.from_serialized(payload), task_type
 
 
 def main() -> int:

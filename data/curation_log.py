@@ -154,7 +154,6 @@ class CurationLog:
 ### Eval results
 - f(π_{iteration}): {eval_result.f1:.4f}
 - Per class: {eval_result.per_class}
-- Epos: {eval_result.pos_score:.4f} | Eneg: {eval_result.neg_score:.4f} | Eboundary: {eval_result.boundary_score:.4f}
 - Remaining failures: {len(eval_result.failures)}
 {taxonomy_section}
 ### Iteration policy decision

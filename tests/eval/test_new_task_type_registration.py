@@ -16,19 +16,16 @@ NEW_TYPES = ("function_call", "diff")
 
 @pytest.mark.parametrize("task_type", NEW_TYPES)
 def test_registered_in_eval_set_task_types(task_type):
-    from data.eval_set import TASK_TYPES, _GENERATION_FAMILY, _canonical_split_type
+    from data.eval_set import TASK_TYPES
 
     assert task_type in TASK_TYPES
-    # Both carry a {text, answer} schema, so they partition like the generation family.
-    assert task_type in _GENERATION_FAMILY
-    assert _canonical_split_type(task_type) == "generation"
 
 
 @pytest.mark.parametrize("task_type", NEW_TYPES)
 def test_eval_set_accepts_new_type(task_type):
     from data.eval_set import EvalSet
 
-    es = EvalSet(pos=[{"text": "x", "answer": "y"}], neg=[], boundary=[], task_type=task_type)
+    es = EvalSet(all=[{"text": "x", "answer": "y"}], task_type=task_type)
     assert es.task_type == task_type
     assert len(es.all) == 1
 

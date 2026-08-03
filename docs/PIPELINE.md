@@ -250,7 +250,10 @@ trust.
 
 `agent/nodes/cold_start/eval_setup.py::eval_setup_node`
 
-Builds `E = E_pos ∪ E_neg ∪ E_boundary` **before any training**, fixed for the whole run.
+Builds the held-out eval set `E` **before any training**, fixed for the whole run. `E` is a
+single flat sample of examples (`EvalSet.all`) — there are no pos/neg/boundary slices (removed
+2026-08-02; they had no functional effect and, for non-classification families, were a
+meaningless random partition).
 
 - **Shared-dataset path** (`SLM_SHARED_DATASET_DIR`) loads a frozen bundle so competing
   strategies see identical data. Requires `manifest.json` + `checksums.sha256`, verifies every
@@ -260,14 +263,17 @@ Builds `E = E_pos ∪ E_neg ∪ E_boundary` **before any training**, fixed for t
 - **Acquisition path** — `data/loaders/web_acquire.py::acquire_dataset` with
   `gold_target = 0.65 × curriculum_size_target` and request headroom `×1.15 + 40` to survive
   eval-overlap removal and quality-control drops.
-- `_eval_split_sizes(target)` scales the pos/neg/boundary slices at a fixed **0.4 / 0.4 / 0.2**
-  ratio to `eval_size_target`. This was previously hardcoded 40/40/20, which silently capped
-  every eval set at 100 rows regardless of how many test rows were acquired.
+- `_eval_target(target)` clamps `eval_size_target` to a min-30 floor and passes it to
+  `build_eval_set` as the total sample size. (Historically `build_eval_set` defaulted to 100,
+  which silently capped every eval set at 100 rows regardless of how many test rows were
+  acquired.) Multi-class classification keeps **label-coverage stratification** — a round-robin
+  draw across every label so `E` spans the full label range; every other task type is a plain
+  shuffled top-N sample.
 - **Leak firewall (layer 1)** — after *all* acquisition paths, any train row whose normalized
   text matches a test row raises `ValueError`. Logged as
   `official train/test separation: normalized overlap=0`.
 - **Difficulty stratification** via `test_agent.label_difficulty` — see [§6.4](#64-test-data-agent).
-- Persists `artifacts/eval_set.json` (counts, all three slices, difficulty buckets).
+- Persists `artifacts/eval_set.json` (`counts.total`, the `examples` rows, difficulty buckets).
 
 **Three-way split.** The held-out eval set is *not* the trainer's validation set. The trainer
 carves its own 12% validation split from the curriculum (seed 1234) for best-checkpoint early

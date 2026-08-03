@@ -171,9 +171,6 @@ class TestInterpolation:
         result = EvalResult(
             f1=0.77,
             per_class={},
-            pos_score=0.77,
-            neg_score=0.77,
-            boundary_score=0.77,
             failures=[],
         )
         with (

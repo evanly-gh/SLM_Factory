@@ -25,7 +25,7 @@ def test_run_eval_uses_infer_batch_when_no_gguf(mock_infer):
     mock_infer.return_value = ["spam", "ham"]
     scorer_mock = _make_scorer_mock()
     scorer_mock.score.return_value = {
-        "f1": 0.9, "per_class": {}, "slices": {"pos": 1.0, "neg": 0.8, "boundary": 0.9}, "failures": []
+        "f1": 0.9, "per_class": {}, "failures": []
     }
     with patch("eval.scorers.classification", scorer_mock):
         result = run_eval(_make_eval_set(), "/weights", "model-id", "classification")
@@ -45,7 +45,7 @@ def test_run_eval_uses_infer_batch_gguf_when_gguf_path_set(mock_gguf):
     mock_gguf.return_value = ["spam", "ham"]
     scorer_mock = _make_scorer_mock()
     scorer_mock.score.return_value = {
-        "f1": 0.85, "per_class": {}, "slices": {"pos": 0.9, "neg": 0.8, "boundary": 0.85}, "failures": []
+        "f1": 0.85, "per_class": {}, "failures": []
     }
     with patch("eval.scorers.classification", scorer_mock):
         result = run_eval(
@@ -78,7 +78,6 @@ def test_code_eval_preserves_execution_case_diagnostics(mock_infer, monkeypatch)
     scorer.score.return_value = {
         "f1": 1.0,
         "per_class": {},
-        "slices": {"pos": 1.0, "neg": 0.0, "boundary": 0.0},
         "failures": [],
         "execution_diagnostics": [
             {"tests_used": 10, "tests_total": 23, "score": 1.0}
@@ -104,7 +103,7 @@ def test_run_eval_delegates_to_disposable_worker_when_enabled(monkeypatch):
     from eval.harness import EvalResult
 
     eval_set = _make_eval_set()
-    expected = EvalResult(0.7, {}, 0.8, 0.6, 0.7, [])
+    expected = EvalResult(0.7, {}, [])
     monkeypatch.setenv("SLM_CUDA_ISOLATION", "1")
     monkeypatch.delenv("SLM_CUDA_WORKER", raising=False)
     with patch("training.cuda_isolation.run_isolated", return_value=expected) as worker, \

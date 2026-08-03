@@ -123,7 +123,7 @@ def _probe_model(
                     "[interpolation] No dataset or eval_set; skipping probe for %s", model.model_id
                 )
                 return 0.0
-            seed_examples = list(eval_set.pos) + list(eval_set.neg) + list(eval_set.boundary)
+            seed_examples = list(eval_set.all)
             src = "eval_seed"
         if not seed_examples:
             return 0.0

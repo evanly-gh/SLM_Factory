@@ -53,7 +53,7 @@ def test_non_numeric_measured_falls_back_to_floor():
 
 def _classification_eval_set():
     rows = [{"text": "win a free prize now", "label": "spam"}]
-    return EvalSet(pos=rows, neg=[], boundary=[], task_type="classification")
+    return EvalSet(all=rows, task_type="classification")
 
 
 def test_measure_endpoint_baseline_scores_with_injected_generate_fn():
@@ -139,8 +139,7 @@ def test_eval_setup_completes_goal_from_measured_baseline(monkeypatch):
     import agent.nodes.cold_start.eval_setup as eval_setup
     from eval.harness import EvalResult
 
-    fake = EvalResult(f1=0.88, per_class={}, pos_score=0.9, neg_score=0.9,
-                      boundary_score=0.8, failures=[], metric="macro_f1")
+    fake = EvalResult(f1=0.88, per_class={}, failures=[], metric="macro_f1")
     monkeypatch.setattr(eval_setup, "measure_endpoint_baseline",
                         lambda *a, **k: fake, raising=False)
 

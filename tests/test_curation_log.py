@@ -18,9 +18,6 @@ def test_curation_log_persists_complete_dataset_composition(tmp_path):
     result = EvalResult(
         f1=0.8,
         per_class={},
-        pos_score=0.8,
-        neg_score=0.8,
-        boundary_score=0.8,
         failures=[{
             "text": "raw held-out prompt secret",
             "label": "gold",
@@ -107,7 +104,7 @@ def _base_kwargs(result):
 def test_curation_log_renders_data_sources_section_with_links_and_counts(tmp_path):
     path = tmp_path / "data-curation.md"
     log = CurationLog(str(path))
-    result = EvalResult(0.8, {}, 0.8, 0.8, 0.8, [])
+    result = EvalResult(0.8, {}, [])
     log.write_iteration(
         **_base_kwargs(result),
         source_usage=[
@@ -130,7 +127,7 @@ def test_curation_log_renders_data_sources_section_with_links_and_counts(tmp_pat
 def test_curation_log_omits_data_sources_section_when_no_external_source(tmp_path):
     path = tmp_path / "data-curation.md"
     log = CurationLog(str(path))
-    result = EvalResult(0.8, {}, 0.8, 0.8, 0.8, [])
+    result = EvalResult(0.8, {}, [])
     log.write_iteration(
         **_base_kwargs(result),
         source_usage=[{"source": "existing pool", "url": None, "rows": 3000, "novel_rows": 0}],
@@ -142,7 +139,7 @@ def test_curation_log_omits_data_sources_section_when_no_external_source(tmp_pat
 def test_curation_log_iteration_is_retry_idempotent(tmp_path):
     path = tmp_path / "data-curation.md"
     log = CurationLog(str(path))
-    result = EvalResult(0.8, {}, 0.8, 0.8, 0.8, [])
+    result = EvalResult(0.8, {}, [])
     kwargs = {
         "iteration": 2,
         "task_type": "classification",

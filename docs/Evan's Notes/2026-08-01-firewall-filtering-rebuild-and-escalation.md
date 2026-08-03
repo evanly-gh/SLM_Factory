@@ -17,7 +17,7 @@ the code won and the drift is flagged as ⚠ STALE DOC.
 2. [The filtering / quality-control process](#2-the-filtering--quality-control-process)
 3. [How `data_rebuild` works, and whether reshuffle is valid](#3-how-data_rebuild-works-and-whether-reshuffle-is-valid)
 4. [What each of the six benchmarks measures](#4-what-each-of-the-six-benchmarks-measures)
-5. [pos/neg/boundary and easy/medium/hard in the training pipeline](#5-posnegboundary-and-easymediumhard-in-the-training-pipeline)
+5. [easy/medium/hard difficulty in the training pipeline](#5-easymediumhard-difficulty-in-the-training-pipeline)
 6. [What the orchestrator sees at `iterate`, and what it emits](#6-what-the-orchestrator-sees-at-iterate-and-what-it-emits)
 7. [Escalation policy: 30 evals / 15-eval window / 2% — decision + how to wire it](#7-escalation-policy)
 8. [Appendix: stale-doc corrections found while writing this](#8-appendix-stale-doc-corrections)
@@ -231,28 +231,22 @@ outcomes offline; MedQA is knowledge-bound and anchors the top of the size range
 
 ---
 
-## 5. pos/neg/boundary and easy/medium/hard in the training pipeline
+## 5. easy/medium/hard difficulty in the training pipeline
 
-**Headline (verified against current code): both are EVAL-side constructs. Neither directly shapes
-the training curriculum today.** They influence training only *indirectly*, as decision signals
-that steer strategy selection and the orchestrator's prompt.
+**Headline (verified against current code): difficulty is an EVAL-side construct. It does not
+directly shape the training curriculum today.** It influences training only *indirectly*, as a
+decision signal that steers strategy selection and the orchestrator's prompt.
 
-### 5.1 pos / neg / boundary — eval-only
+### 5.1 pos / neg / boundary — REMOVED (2026-08-02)
 
-Definitions (docstring, [eval_set.py:71-94](../../data/eval_set.py#L71-L94)):
-
-| Family | pos | neg | boundary |
-|---|---|---|---|
-| classification | clear positive-class | clear negative-class | confusable pairs at the class boundary |
-| NER | entity-rich / schema-complete w/ gold | entity-free / schema-empty (hallucination test) | overlapping entity types / partial schema |
-| generation (+ math, code, function_call, diff) | well-formed, unambiguous answer | adversarial / ill-posed | multi-step / edge-case |
-
-Built once in `build_eval_set` at the **0.4/0.4/0.2** ratio (`_eval_split_sizes`,
-[eval_setup.py:141-148](../../agent/nodes/cold_start/eval_setup.py#L141-L148)). Binary
-classification builds `boundary` as negatives whose text length is closest to the positive-class
-mean (a confusability proxy, paper §2.5 Eq. 7). **`curate.py` and `curriculum.py` never read
-`.pos`/`.neg`/`.boundary`** — the eval set is touched by curate only as the overlap firewall
-(`eval_set.all`). So pos/neg/boundary shapes *what you're graded on*, never *what you train on*.
+The eval set used to carry a three-way `pos`/`neg`/`boundary` split, but it had **no functional
+effect**: every consumer used the `.all` union, `curate.py`/`curriculum.py` never read the slices,
+and for the NER/generation families the split was a meaningless random partition. The three slice
+scores were only ever printed as one cosmetic line in the curation log — nothing branched on them.
+The slices were deleted; `EvalSet` is now a single flat `.all` sample. `build_eval_set` keeps
+**label-coverage stratification** for multi-class classification (round-robin across labels up to
+the target) and is a plain shuffled top-N sample for every other task type. The real difficulty
+signal is easy/medium/hard below, which is independent and untouched.
 
 ### 5.2 easy / medium / hard — eval-only, drives diagnosis not sampling
 

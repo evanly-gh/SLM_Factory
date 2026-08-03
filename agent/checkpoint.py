@@ -602,9 +602,7 @@ def _sqlite_encode(value: Any) -> Any:
         return {
             _SQLITE_TYPE_KEY: "eval_set",
             "value": {
-                "pos": _sqlite_encode(value.pos),
-                "neg": _sqlite_encode(value.neg),
-                "boundary": _sqlite_encode(value.boundary),
+                "all": _sqlite_encode(value.all),
                 "task_type": value.task_type,
                 "multi_label": value.multi_label,
                 "schema": _sqlite_encode(value.schema),
@@ -677,7 +675,7 @@ def _sqlite_decode(value: Any) -> Any:
     if kind == "eval_set":
         from data.eval_set import EvalSet
 
-        return EvalSet(**_sqlite_decode(value["value"]))
+        return EvalSet.from_serialized(_sqlite_decode(value["value"]))
     if kind == "eval_result":
         from eval.harness import EvalResult
 

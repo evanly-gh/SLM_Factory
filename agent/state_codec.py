@@ -51,9 +51,7 @@ def _encode_eval_set(value: EvalSet | None) -> dict | None:
         return None
     return _json_safe(
         {
-            "pos": value.pos,
-            "neg": value.neg,
-            "boundary": value.boundary,
+            "all": value.all,
             "task_type": value.task_type,
             "multi_label": value.multi_label,
             "schema": value.schema,
@@ -164,7 +162,7 @@ def decode_state(
         if not isinstance(value, dict):
             raise StateCodecError("state.eval_set must be an object")
         try:
-            decoded["eval_set"] = EvalSet(**value)
+            decoded["eval_set"] = EvalSet.from_serialized(value)
         except (TypeError, ValueError) as exc:
             raise StateCodecError(f"invalid EvalSet in checkpoint: {exc}") from exc
     if "last_eval" in decoded and decoded["last_eval"] is not None:

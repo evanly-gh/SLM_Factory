@@ -238,9 +238,7 @@ def test_apps_default_800_eval_prompts_fit_4096_context_with_output_reserve():
     eval_set = build_eval_set(
         rows,
         "code_generation",
-        n_pos=320,
-        n_neg=320,
-        n_boundary=160,
+        target=800,
     )
     prompts = build_prompts(eval_set)
     conservative_counts = [
