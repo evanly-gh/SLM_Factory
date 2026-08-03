@@ -350,7 +350,7 @@ it. If you want the sizing to track real OOD-ness rather than a prior, the lever
 zero-shot base-model score back into the curriculum target — currently an open design point.
 
 ---
-
+/mmfs1/gscratch/intelligentsystems/evanly/SLM_Factory/training/quantize.py
 ## Changes shipped alongside this note (2026-08-02)
 
 1. **curate no longer truncates to `target_rows`.** The old `dataset = dataset[:target_rows]` is

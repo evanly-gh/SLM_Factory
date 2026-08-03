@@ -11,6 +11,7 @@ dependencies = [
     "langgraph>=0.2.0",
     "langgraph-checkpoint-sqlite>=3.1.0",
     "llama-cpp-python>=0.3.0",
+    "matplotlib>=3.7.0",
     "openai>=1.40.0",
     "pandas>=2.0.0",
     "peft>=0.14.0",
