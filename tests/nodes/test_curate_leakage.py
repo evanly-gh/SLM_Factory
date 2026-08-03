@@ -83,3 +83,11 @@ def test_data_rebuild_never_seeds_or_saves_normalized_eval_text(
     assert eval_normalized not in _normalized_training_texts(captured_seeds)
     assert eval_normalized not in _normalized_training_texts(_saved_rows(out))
 
+    # Durable firewall audit: the contaminating train anchor is counted, and the per-layer
+    # breakdown + total are persisted to last_curation for post-hoc observability.
+    firewall = out["last_curation"]["eval_firewall"]
+    assert firewall["total"] >= 1
+    assert firewall["by_layer"].get("train_anchor", 0) >= 1
+    # The final checkpoint always records a key (even at zero) so a clean build is confirmable.
+    assert "final" in firewall["by_layer"]
+

@@ -74,9 +74,19 @@ def _normalized_eval_texts(eval_set) -> set[str]:
 def _exclude_eval_rows(
     rows: list[dict],
     eval_set,
+    *,
+    tally: dict | None = None,
+    layer: str | None = None,
 ) -> tuple[list[dict], int]:
-    """Apply the normalized-text eval firewall to candidate training rows."""
+    """Apply the normalized-text eval firewall to candidate training rows.
+
+    When ``tally`` is provided, the number of rows removed at this ``layer`` is accumulated into
+    it (creating the key at 0 even when nothing is removed) so a run can durably report firewall
+    activity per iteration — including the healthy zero-drop case.
+    """
     eval_texts = _normalized_eval_texts(eval_set)
+    if tally is not None and layer is not None:
+        tally.setdefault(layer, 0)
     if not eval_texts:
         return list(rows), 0
     clean = [
@@ -85,7 +95,10 @@ def _exclude_eval_rows(
         if not isinstance(row, dict)
         or normalize_text(_row_text(row)) not in eval_texts
     ]
-    return clean, len(rows) - len(clean)
+    removed = len(rows) - len(clean)
+    if tally is not None and layer is not None:
+        tally[layer] = tally.get(layer, 0) + removed
+    return clean, removed
 
 
 def _read_jsonl(path: str | None) -> list[dict]:
@@ -207,11 +220,15 @@ def _merge_persistent_train_rows(
     existing_rows: list[dict],
     mined_rows: list[dict],
     eval_set,
+    *,
+    tally: dict | None = None,
 ) -> list[dict]:
     """Retain novel real rows for every later rebuild and checkpoint."""
     candidates, _ = _exclude_eval_rows(
         [*existing_rows, *mined_rows],
         eval_set,
+        tally=tally,
+        layer="persistent_merge",
     )
     merged = []
     seen = set()
@@ -233,6 +250,7 @@ def _synthesize_positive_rows(
     *,
     model_id: str,
     seed: int,
+    tally: dict | None = None,
 ) -> list[dict]:
     task_type = state["task_type"]
     # Ungated (redesign 2026-07-31): synthesis is available for EVERY task type and score.
@@ -279,7 +297,8 @@ def _synthesize_positive_rows(
             or row.get("_provenance") == "synthetic_positive"
         )
     ]
-    generated, removed = _exclude_eval_rows(generated, state.get("eval_set"))
+    generated, removed = _exclude_eval_rows(
+        generated, state.get("eval_set"), tally=tally, layer="synthesis")
     if removed:
         _log(model_id, f"  Synthesis eval firewall removed {removed} row(s)")
     return generated[:plan["synth_rows"]]
@@ -294,6 +313,7 @@ def _synth_fill_to_target(
     state: AgentState,
     model_id: str,
     fallbacks: list[dict] | None = None,
+    tally: dict | None = None,
 ) -> list[dict]:
     """Top up the dataset with task-adaptive synthesis up to ``target_rows``.
 
@@ -341,7 +361,8 @@ def _synth_fill_to_target(
             or row.get("_provenance") == "synthetic_positive"
         )
     ]
-    extra, _ = _exclude_eval_rows(extra, state.get("eval_set"))
+    extra, _ = _exclude_eval_rows(
+        extra, state.get("eval_set"), tally=tally, layer="synth_fill")
     if not extra and fallbacks is not None:
         fallbacks.append({
             "policy": "synth_fill_empty",
@@ -423,9 +444,16 @@ def curate_node(state: AgentState) -> AgentState:
             "curate_node requires a fixed eval_set before rebuilding data"
         )
 
+    # Per-layer eval-firewall accounting for this rebuild. Every _exclude_eval_rows call records
+    # into this dict (even zero-drop layers), so firewall activity is durably observable — see the
+    # always-on summary line below and the persisted eval_firewall block in last_curation.
+    firewall_tally: dict[str, int] = {}
+
     train_rows, excluded_train = _exclude_eval_rows(
         list(state.get("train_examples") or []),
         eval_set,
+        tally=firewall_tally,
+        layer="train_anchor",
     )
     if excluded_train:
         _log(
@@ -525,7 +553,8 @@ def curate_node(state: AgentState) -> AgentState:
             plan_identity="",
             log=lambda message: _log(model_id, message),
         )
-        mined_rows, removed = _exclude_eval_rows(mined_rows, eval_set)
+        mined_rows, removed = _exclude_eval_rows(
+            mined_rows, eval_set, tally=firewall_tally, layer="mined")
         if removed:
             _log(model_id, f"  Mining eval firewall removed {removed} row(s)")
         state["source_acquire_rounds_used"] = max(
@@ -543,6 +572,7 @@ def curate_node(state: AgentState) -> AgentState:
             train_rows,
             mined_rows,
             eval_set,
+            tally=firewall_tally,
         )
         train_rows = list(state["train_examples"])
 
@@ -568,6 +598,7 @@ def curate_node(state: AgentState) -> AgentState:
             train_rows,
             model_id=model_id,
             seed=seed,
+            tally=firewall_tally,
         )
         if not generated_rows:
             allocation_fallbacks.append({
@@ -633,6 +664,7 @@ def curate_node(state: AgentState) -> AgentState:
         state=state,
         model_id=model_id,
         fallbacks=allocation_fallbacks,
+        tally=firewall_tally,
     )
 
     dataset = _annotate_generation_cot(
@@ -647,12 +679,23 @@ def curate_node(state: AgentState) -> AgentState:
     # No upper truncation: target_rows is a floor for synth-fill, not a cap. Extra rows
     # above target (e.g. acquire/synthesize overshoot) are kept — we only guard against
     # too FEW rows, never too many.
-    dataset, removed_final = _exclude_eval_rows(dataset, eval_set)
+    dataset, removed_final = _exclude_eval_rows(
+        dataset, eval_set, tally=firewall_tally, layer="final")
     if removed_final:
         _log(
             model_id,
             f"  Final eval firewall removed {removed_final} row(s)",
         )
+
+    # Always-on firewall summary (even when nothing was dropped) so every run's log confirms the
+    # eval firewall ran and by how much. The per-layer breakdown is persisted in last_curation.
+    firewall_total = sum(firewall_tally.values())
+    _log(
+        model_id,
+        f"  Eval firewall: {firewall_total} row(s) removed across "
+        f"{len(firewall_tally)} checkpoint(s) "
+        f"[{', '.join(f'{k}={v}' for k, v in firewall_tally.items())}]",
+    )
 
     next_version = int(state.get("dataset_version", 0) or 0) + 1
     for row in dataset:
@@ -760,6 +803,9 @@ def curate_node(state: AgentState) -> AgentState:
         "source_usage": source_usage,
         "plan_yield": plan_yield,
         "allocation_fallbacks": allocation_fallbacks,
+        # Durable eval-firewall audit: per-checkpoint drop counts + total for this rebuild, so
+        # contamination filtering is observable from artifacts (not only run.log grepping).
+        "eval_firewall": {"total": firewall_total, "by_layer": dict(firewall_tally)},
     }
     # Run-wide provenance accumulator (survives across iterations/checkpoints). Assigned as a
     # NEW list, never mutated in place, so it persists to the LangGraph channel (cf. B122).

@@ -501,6 +501,7 @@ def evaluate_node(state: AgentState) -> AgentState:
         score_band=policy["band"],
         next_intervention=policy["intervention"],
         hypothesis=state.get("last_hypothesis", ""),
+        eval_firewall=curation.get("eval_firewall"),
         model_id=model_id,
         size_mb=hw_profile.get("size_mb") or 0,
         tier=hw_profile.get("tier") or 0,

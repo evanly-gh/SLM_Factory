@@ -582,12 +582,32 @@ log("")
 # --------------------------------------------------------------------------
 # Initial state
 # --------------------------------------------------------------------------
+# Curated-benchmark pin: SLM_BENCHMARK_TASK selects one of the six deterministic loaders instead
+# of the autonomous web_acquire path. eval_setup only consults that env on the NON-autonomous
+# branch (task_plan is None), so we must start the run non-autonomous with the loader's task_type
+# preset — otherwise task_analysis would plan a task and the env would be silently ignored.
+_benchmark_task = (os.environ.get("SLM_BENCHMARK_TASK") or "").strip().lower()
+_initial_autonomous = True
+_initial_task_type = ""
+if _benchmark_task:
+    _bench_map = _eval_setup_mod.NAMED_BENCHMARK_TASK_TYPES
+    if _benchmark_task not in _bench_map:
+        raise SystemExit(
+            f"SLM_BENCHMARK_TASK={_benchmark_task!r} is not a known benchmark; "
+            f"choose one of {sorted(_bench_map)}"
+        )
+    _initial_task_type = _bench_map[_benchmark_task][0]
+    _initial_autonomous = False
+    os.environ["SLM_BENCHMARK_TASK"] = _benchmark_task  # normalized for eval_setup
+    log(f"  benchmark: SLM_BENCHMARK_TASK={_benchmark_task} "
+        f"(curated loader, task_type={_initial_task_type}, non-autonomous)")
+
 fresh_initial_state = {
     "description": description,
     "target_metric": "F1",
     "hardware_constraints": HW,
-    "task_type": "",
-    "autonomous": True,
+    "task_type": _initial_task_type,
+    "autonomous": _initial_autonomous,
     "task_plan": None,
     "selected_model": None,
     "feasible_models": [],

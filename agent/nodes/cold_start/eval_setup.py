@@ -24,23 +24,41 @@ SHARED_CONTENT_FILES = (
 SHARED_CHECKSUM_FILES = SHARED_CONTENT_FILES + ("manifest.json",)
 
 
+# Single source of truth for the six curated benchmarks' task types + human labels, keyed by the
+# SLM_BENCHMARK_TASK value. Kept free of loader imports so callers (e.g. the driver deciding the
+# initial task_type) can read it without pulling `datasets` or any optional loader dependency.
+NAMED_BENCHMARK_TASK_TYPES: dict[str, tuple[str, str]] = {
+    "clinc150": ("classification", "CLINC150 (clinc_oos/plus)"),
+    "dialogsum_samsum": ("generation", "DialogSum + SAMSum"),
+    "xlam_bfcl": ("function_call", "xLAM-60k / BFCL"),
+    "coedit": ("diff", "CoEdIT (grammarly/coedit)"),
+    "routerbench": ("classification", "RouterBench"),
+    "medqa": ("classification", "MedQA-USMLE-4-options"),
+}
+
+
 def _named_benchmark_loaders() -> dict:
     """Registry of the six curated benchmark loaders, selectable via SLM_BENCHMARK_TASK on the
     non-autonomous path. Each entry is (loader_callable, task_type, source_label). Imports are
-    lazy so a missing optional dependency only breaks the benchmark that needs it."""
+    lazy so a missing optional dependency only breaks the benchmark that needs it. Task types /
+    labels come from NAMED_BENCHMARK_TASK_TYPES so there is one source of truth."""
     from data.loaders.clinc150 import load_clinc150
     from data.loaders.dialogsum_samsum import load_dialogsum_samsum
     from data.loaders.xlam_bfcl import load_xlam_bfcl
     from data.loaders.coedit import load_coedit
     from data.loaders.routerbench import load_routerbench
     from data.loaders.medqa import load_medqa
+    loaders = {
+        "clinc150": load_clinc150,
+        "dialogsum_samsum": load_dialogsum_samsum,
+        "xlam_bfcl": load_xlam_bfcl,
+        "coedit": load_coedit,
+        "routerbench": load_routerbench,
+        "medqa": load_medqa,
+    }
     return {
-        "clinc150": (load_clinc150, "classification", "CLINC150 (clinc_oos/plus)"),
-        "dialogsum_samsum": (load_dialogsum_samsum, "generation", "DialogSum + SAMSum"),
-        "xlam_bfcl": (load_xlam_bfcl, "function_call", "xLAM-60k / BFCL"),
-        "coedit": (load_coedit, "diff", "CoEdIT (grammarly/coedit)"),
-        "routerbench": (load_routerbench, "classification", "RouterBench"),
-        "medqa": (load_medqa, "classification", "MedQA-USMLE-4-options"),
+        key: (loaders[key], task_type, label)
+        for key, (task_type, label) in NAMED_BENCHMARK_TASK_TYPES.items()
     }
 
 
