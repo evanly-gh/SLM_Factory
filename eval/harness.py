@@ -82,6 +82,82 @@ class EvalResult:
     metric: str = "f1"
 
 
+_PREDICTION_SAMPLE_N = int(os.environ.get("SLM_EVAL_SAMPLE_LOG_N", "3"))
+
+
+def _attach_reasoning_to_failures(result, eval_set, raw_outputs, predictions) -> None:
+    """Record the chain-of-thought that produced each failed answer.
+
+    A CoT-trained model emits `<reasoning>...</reasoning>` before its answer. Only the ANSWER is
+    scored — handing a reasoning block to a judge asked "how good is this summary?" guarantees a
+    poor score for output that may contain a perfectly good summary. But the reasoning is the
+    part that explains WHY the answer is wrong, so it is kept here rather than discarded: a
+    failure record with the answer alone cannot distinguish bad reasoning from bad phrasing.
+
+    Keyed by eval-row index, which is stable — the scorers preserve row order and `predictions`
+    is positional. Failures are matched on the row's own text, so this is a no-op for scorers
+    that emit no reasoning (B251).
+    """
+    if getattr(eval_set, "task_type", None) == "code_generation":
+        return
+    failures = (result or {}).get("failures") or []
+    if not failures:
+        return
+    try:
+        from eval.scorers.generation import split_reasoning
+    except Exception:  # noqa: BLE001 — diagnostics must never break scoring
+        return
+    reasoning_by_answer: dict[str, str] = {}
+    for raw, prediction in zip(raw_outputs, predictions):
+        reasoning, _answer = split_reasoning(raw)
+        if reasoning:
+            reasoning_by_answer.setdefault(str(prediction), reasoning)
+    if not reasoning_by_answer:
+        return
+    for failure in failures:
+        if isinstance(failure, dict):
+            reasoning = reasoning_by_answer.get(str(failure.get("predicted")))
+            if reasoning:
+                failure["reasoning"] = reasoning
+
+
+def _log_prediction_samples(eval_set, raw_outputs, predictions) -> None:
+    """Print a few raw model answers next to the extracted prediction and the gold label.
+
+    Scores alone cannot distinguish "the model picked the wrong class" from "the model answered
+    in a format the extractor could not read". Showing the RAW output beside the extracted value
+    makes that difference visible — an `__EXTRACTION_FAILED__` next to a chatty answer is a
+    prompt/format problem, while a clean wrong label is a real accuracy problem.
+
+    Prefers examples that failed extraction, since those are the diagnostic ones.
+    """
+    if _PREDICTION_SAMPLE_N <= 0:
+        return
+    rows = getattr(eval_set, "all", None) or []
+    n = min(len(rows), len(raw_outputs), len(predictions))
+    if n == 0:
+        return
+    failed = [i for i in range(n) if str(predictions[i]) == "__EXTRACTION_FAILED__"]
+    chosen = (failed + [i for i in range(n) if i not in set(failed)])[:_PREDICTION_SAMPLE_N]
+
+    def _clip(value, limit=110):
+        text = " ".join(str(value or "").split())
+        return text[:limit] + ("…" if len(text) > limit else "")
+
+    print(
+        f"      [eval] sample predictions ({len(chosen)} of {n}"
+        + (f"; {len(failed)} extraction failure(s) this eval" if failed else "")
+        + "):"
+    )
+    for i in chosen:
+        gold = rows[i].get("answer") or rows[i].get("label")
+        flag = "  <-- EXTRACTION FAILED" if str(predictions[i]) == "__EXTRACTION_FAILED__" else ""
+        print(f"        input : {_clip(rows[i].get('text'))}")
+        print(f"        gold  : {_clip(gold, 60)}")
+        print(f"        raw   : {_clip(raw_outputs[i])}")
+        print(f"        parsed: {_clip(predictions[i], 60)}{flag}")
+
+
 def run_eval(
     eval_set: EvalSet,
     weights_ref: str,
@@ -179,7 +255,9 @@ def _run_eval_local(
         )
 
     predictions = scorer.extract_predictions(raw_outputs, eval_set)
+    _log_prediction_samples(eval_set, raw_outputs, predictions)
     result = scorer.score(eval_set, predictions)
+    _attach_reasoning_to_failures(result, eval_set, raw_outputs, predictions)
 
     return EvalResult(
         f1=result["f1"],

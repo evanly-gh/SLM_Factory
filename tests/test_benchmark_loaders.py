@@ -15,6 +15,42 @@ import json  # noqa: E402
 import pytest  # noqa: E402
 
 
+# --- HF repo id hygiene --------------------------------------------------------
+# huggingface_hub >= 1.0 parses every dataset reference as an `hf://datasets/<id>` URI and
+# rejects bare canonical names ("clinc_oos") with HfUriError: a repo id must be
+# 'namespace/name'. A namespace-less constant therefore fails at load time on the cluster,
+# not at import time, so it survives every unit test until the run crashes.
+
+CURATED_LOADER_REPO_ID_CONSTANTS = {
+    "data.loaders.clinc150": ("HF_ID",),
+    "data.loaders.routerbench": ("HF_ID",),
+    "data.loaders.medqa": ("HF_ID",),
+    "data.loaders.coedit": ("HF_ID",),
+    "data.loaders.dialogsum_samsum": ("DIALOGSUM_ID", "SAMSUM_ID"),
+    "data.loaders.xlam_bfcl": ("XLAM_ID", "BFCL_ID"),
+}
+
+
+@pytest.mark.parametrize(
+    ("module_name", "constant"),
+    [
+        (module_name, constant)
+        for module_name, constants in CURATED_LOADER_REPO_ID_CONSTANTS.items()
+        for constant in constants
+    ],
+)
+def test_curated_loader_repo_ids_are_namespaced(module_name, constant):
+    import importlib
+
+    repo_id = getattr(importlib.import_module(module_name), constant)
+    namespace, sep, name = repo_id.partition("/")
+    assert sep and namespace and name, (
+        f"{module_name}.{constant} = {repo_id!r} is not a 'namespace/name' repo id; "
+        "huggingface_hub >= 1.0 raises HfUriError for bare canonical dataset names"
+    )
+    assert "/" not in name, f"{module_name}.{constant} = {repo_id!r} has too many path segments"
+
+
 # --- CLINC150 (classification) -------------------------------------------------
 
 def test_clinc150_shapes_text_label_and_drops_empty():
@@ -29,6 +65,60 @@ def test_clinc150_shapes_text_label_and_drops_empty():
         {"text": "set an alarm for 6am", "label": "alarm"},
         {"text": "asdkjfh", "label": "oos"},
     ]
+
+
+# CLINC150's HF splits are grouped by intent (all ~100 rows of intent 61, then the next
+# intent, ...). A head slice `train[:3250]` therefore yields only 33 of the 151 intents, and
+# `test[:800]` a different 27 — the model would train and be scored on mismatched label
+# spaces. The loader must draw across labels instead of taking a prefix.
+
+def test_clinc150_stratified_sample_covers_every_label():
+    from data.loaders.clinc150 import stratified_by_label
+
+    rows = [
+        {"text": f"utterance {label}-{i}", "label": label}
+        for label in ("alarm", "balance", "oos", "translate")
+        for i in range(50)
+    ]
+    picked = stratified_by_label(rows, 8)
+
+    assert len(picked) == 8
+    assert {row["label"] for row in picked} == {"alarm", "balance", "oos", "translate"}
+    # Round-robin keeps the draw balanced, not front-loaded on one label.
+    assert all(
+        sum(row["label"] == label for row in picked) == 2
+        for label in ("alarm", "balance", "oos", "translate")
+    )
+
+
+def test_clinc150_stratified_sample_is_deterministic_and_bounded():
+    from data.loaders.clinc150 import stratified_by_label
+
+    rows = [
+        {"text": f"u{label}-{i}", "label": label}
+        for label in ("a", "b", "c")
+        for i in range(10)
+    ]
+    # Deterministic across calls: a requeued run must rebuild the identical curriculum.
+    assert stratified_by_label(rows, 7) == stratified_by_label(rows, 7)
+    # Never invents or drops rows at the boundaries.
+    assert stratified_by_label(rows, 0) == []
+    assert len(stratified_by_label(rows, 999)) == len(rows)
+    assert all(row in rows for row in stratified_by_label(rows, 7))
+
+
+def test_clinc150_loader_does_not_head_slice_grouped_splits():
+    """Guard the root cause: an intent-grouped split must be read whole, then sampled."""
+    import inspect
+
+    from data.loaders import clinc150
+
+    source = inspect.getsource(clinc150.load_clinc150)
+    assert "[:" not in source.replace("[:limit]", ""), (
+        "load_clinc150 must not head-slice the HF split; CLINC150 is grouped by intent so a "
+        "prefix covers only a fraction of the 151 labels"
+    )
+    assert "stratified_by_label" in source
 
 
 # --- DialogSum / SAMSum (generation) -------------------------------------------

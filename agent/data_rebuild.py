@@ -26,14 +26,22 @@ from typing import Any
 
 DATA_REBUILD_SCHEMA_VERSION = 2
 DATA_REBUILD_STRATEGIES = ("resample", "acquire", "synthesize")
+# Mirrors agent.nodes.iterate.HYPOTHESIS_MAX_CHARS (imported lazily to avoid a circular import).
+# The rebuild plan carries the same reasoning text, so capping it here at the old 240 would have
+# re-severed what the source fix restores. `pattern_hint` additionally steers synthesis prompts,
+# so it keeps its own tighter bound — but wide enough to hold a full confusion-pair list (B238).
+HYPOTHESIS_MAX_CHARS = int(os.environ.get("SLM_HYPOTHESIS_MAX_CHARS", "2000"))
+PATTERN_HINT_MAX_CHARS = 1200
 MAX_CONFUSION_PAIRS = 8
 MAX_PAID_ACQUIRE_ROUNDS_PER_PLAN = 3
 MAX_PAID_ACQUIRE_ROUNDS_PER_RUN = 9
 
+# Fields the ORCHESTRATOR may send. `target_rows` is deliberately absent: curriculum size is a
+# deterministic per-tier computation (agent.data_sizing), not a judgement call, so a plan that
+# tries to set it is rejected rather than silently overriding the computed target (B247).
 _PLAN_FIELDS = frozenset({
     "schema_version",
     "strategy",
-    "target_rows",
     "resample_fraction",
     "new_real_rows",
     "synth_rows",
@@ -43,6 +51,28 @@ _PLAN_FIELDS = frozenset({
     "pattern_hint",
 })
 _DIFFICULTY_BUCKETS = ("easy", "medium", "hard")
+
+
+def plan_budget_identity(plan: Mapping[str, Any]) -> str:
+    """Content-addressed key for a plan's paid-acquisition budget bucket.
+
+    Plan-identity *dedup* was removed in the 2026-07-31 redesign, but the durable ledger in
+    ``data/acquisition_budget.py`` still meters spend per plan
+    (``MAX_PAID_ACQUIRE_ROUNDS_PER_PLAN`` inside ``MAX_PAID_ACQUIRE_ROUNDS_PER_RUN``) and
+    rejects an empty identity. Hashing the plan's own fields gives that bucket a stable key
+    without reintroducing dedup: re-picking an identical plan keeps drawing from the same
+    allowance, while a materially different plan gets a fresh one. Plans carry no seed, so
+    equal plans always hash equally (B220).
+    """
+    canonical = {
+        key: plan.get(key)
+        for key in sorted(_PLAN_FIELDS)
+        if isinstance(plan, Mapping) and plan.get(key) is not None
+    }
+    digest = hashlib.sha256(
+        json.dumps(canonical, sort_keys=True, default=str).encode("utf-8")
+    ).hexdigest()
+    return f"plan-{digest[:16]}"
 
 
 def _row_text(row: Any) -> str:
@@ -292,7 +322,12 @@ def normalize_data_rebuild_plan(
     """
     if not isinstance(raw, Mapping):
         raise ValueError("data_rebuild is required and must be a JSON object")
-    unsupported = set(raw) - _PLAN_FIELDS
+    # `target_rows` was part of the contract until B247 and the model may still emit it out of
+    # habit. Ignore it rather than failing the whole decision over a field whose value we would
+    # discard anyway — a hard rejection here costs a reask round-trip and, if the model is
+    # stubborn, the decision entirely. Every OTHER unknown key is still an error.
+    ignored = {"target_rows"} & set(raw)
+    unsupported = set(raw) - _PLAN_FIELDS - ignored
     if unsupported:
         raise ValueError(
             "unsupported data_rebuild field(s): " + ", ".join(sorted(unsupported))
@@ -307,7 +342,7 @@ def normalize_data_rebuild_plan(
             f"data_rebuild.schema_version must be {DATA_REBUILD_SCHEMA_VERSION}"
         )
 
-    hypothesis_text = _plain_text(hypothesis, "hypothesis", maximum=240)
+    hypothesis_text = _plain_text(hypothesis, "hypothesis", maximum=HYPOTHESIS_MAX_CHARS)
     strategy = raw.get("strategy")
     if strategy not in DATA_REBUILD_STRATEGIES:
         raise ValueError(
@@ -330,7 +365,7 @@ def normalize_data_rebuild_plan(
         hint
         if hypothesis_clause in hint
         else (f"{hint}; {hypothesis_clause}" if hint else hypothesis_clause)
-    )[:240]
+    )[:PATTERN_HINT_MAX_CHARS]
     normalized_hint = re.sub(r"\s+", " ", pattern_hint).strip().lower()
     for eval_text in forbidden_eval_texts:
         normalized_eval = re.sub(r"\s+", " ", str(eval_text)).strip().lower()
@@ -347,14 +382,14 @@ def normalize_data_rebuild_plan(
     plan = {
         "schema_version": DATA_REBUILD_SCHEMA_VERSION,
         "strategy": strategy,
-        "target_rows": _integer(
-            raw.get("target_rows"),
-            field="data_rebuild.target_rows",
-            default=target_rows,
-            lower=16,
-            upper=_data_size_ceiling(),
-            step=8,
-        ),
+        # NOT orchestrator-settable. Curriculum size is decided deterministically per tier by
+        # `agent.data_sizing` from the measured zero-shot baseline and the model's parameter
+        # count; the caller passes that value in here. Letting the plan carry its own number
+        # created two authorities for one quantity and the LLM silently won: in
+        # slm-clinc150-cse-38180646 the computed target was 7053 and the plan asked for 3000, so
+        # the curriculum was cut from 5758 to 2998 rows on a subjective "scale it down" judgement
+        # (B247). A `target_rows` key in the raw payload is now rejected as unsupported.
+        "target_rows": target_rows,
         "resample_fraction": _number(
             raw.get("resample_fraction"),
             field="data_rebuild.resample_fraction",

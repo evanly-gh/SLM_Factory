@@ -9,8 +9,14 @@ The internal mechanism is proprietary and not disclosed.
 Approach: Structured compaction of data-curation.md. Last 3 iterations kept in full detail;
  older iterations compressed to one-line summaries preserving iteration number, score, 
  intervention, and hypothesis.
-Integration: iterate_node._llm_iterate() calls compact_trajectory() before sending the 
-trajectory to the LLM, preventing context bloat. The full uncompacted file stays on disk.
+
+STATUS: this is now the FALLBACK path. `agent/run_memory.py` builds the orchestrator's context
+from `state["dag"]` instead, because a flat dump of the log cannot distinguish a kept improvement
+from a rolled-back attempt (B239). compact_trajectory still runs on iteration 1, before the DAG
+has any nodes, and for callers with no DAG in state.
+
+Integration: iterate_node._llm_iterate() calls build_run_memory() first and falls back to
+compact_trajectory() only when that returns "". The full uncompacted file stays on disk.
 Token budget: Auto-compacts when trajectory exceeds ~8000 tokens (~32K chars).
 Key principle from research: "Context rot — the measurable degradation in model 
 performance as context grows — begins well before the token limit." Proactive compaction 
@@ -83,6 +89,22 @@ def compact_trajectory(full_trajectory: str, n_recent: int = N_RECENT) -> str:
     return result
 
 
+def _field(section: str, label: str) -> str:
+    """
+    Read a `- <label>: <value>` field without crossing the end of its line.
+
+    The previous patterns were `re.search(rf'{label}:\\s*(.+)')`. Because `\\s*` matches
+    newlines, an EMPTY field silently captured the next non-empty line of the document.
+    Iteration 1 has no orchestrator hypothesis, so its summary came out as
+    `- Iter 1: ... — ### Hardware profile (Phase 1: theoretical)` — the heading of the
+    following section presented to the model as its own past reasoning (B238).
+
+    Anchoring to the line keeps an empty field empty.
+    """
+    match = re.search(rf'^-?\s*{label}:[ \t]*(.*)$', section, flags=re.MULTILINE)
+    return match.group(1).strip() if match else ""
+
+
 def _extract_iteration_summary(section: str) -> str:
     """Extract a one-line summary from a full iteration section."""
     iter_match = re.search(r'Iteration (\d+)', section)
@@ -91,16 +113,13 @@ def _extract_iteration_summary(section: str) -> str:
     score_match = re.search(r'f\(π_\d+\):\s*([\d.]+)', section)
     score = score_match.group(1) if score_match else "?"
 
-    intervention_match = re.search(r'Next intervention:\s*(.+)', section)
-    intervention = intervention_match.group(1).strip() if intervention_match else "?"
+    intervention = _field(section, "Next intervention") or "?"
+    # Kept in FULL. This used to be [:100], a second cut on top of the 240-char source cap,
+    # which left a fragment ending mid-word as the model's only record of past reasoning.
+    hypothesis = _field(section, "Hypothesis")
+    band = _field(section, "Score band") or "?"
 
-    hypothesis_match = re.search(r'Hypothesis:\s*(.+)', section)
-    hypothesis = hypothesis_match.group(1).strip()[:100] if hypothesis_match else ""
-
-    band_match = re.search(r'Score band:\s*(.+)', section)
-    band = band_match.group(1).strip() if band_match else "?"
-
-    model_match = re.search(r'Model:\s*(\S+)', section)
+    model_match = re.search(r'^-?\s*Model:[ \t]*(\S+)', section, flags=re.MULTILINE)
     model = model_match.group(1) if model_match else "?"
 
     return (

@@ -10,6 +10,7 @@ from eval.endpoint_eval import measure_endpoint_baseline
 from data.loaders.dataset_integrity import (
     normalize_text,
     normalized_text_overlap,
+    remove_normalized_train_overlap,
     required_fields_for_task,
     validate_rows,
     verify_checksum_sidecar,
@@ -84,6 +85,17 @@ def _load_named_benchmark(name: str, state: AgentState, acquire_meta: dict):
     print(f"      [eval_setup] loading named benchmark {key!r} ({source_label}): "
           f"train≤{max_train} test≤{max_test}")
     train_examples, test_examples = loader(max_train=max(max_train, 60), max_test=max(max_test, 60))
+    # Stage-0 decontamination, matching the autonomous acquire_dataset path. Official benchmark
+    # splits are not guaranteed disjoint (CLINC150 ships "what's your designation" in both splits
+    # under two different intents), and this path never passes through web_acquire, so without
+    # this the eval_setup overlap firewall would turn a source-data quirk into a fatal raise.
+    # The held-out test rows are authoritative and never modified; the train row is dropped.
+    train_examples, overlap_removed = remove_normalized_train_overlap(
+        train_examples, test_examples)
+    if overlap_removed:
+        print(f"      [eval_setup] Stage-0 normalized overlap removal for {key!r}: "
+              f"removed {overlap_removed} train row(s); official test rows unchanged")
+    acquire_meta["overlap_removed_from_train"] = overlap_removed
     acquire_meta["source"] = source_label
     acquire_meta["source_records"] = [
         {"kind": "hf", "id": key, "split": "train", "role": "curriculum"},

@@ -48,7 +48,7 @@ def _apply_data_targets(state: AgentState, task_type: str) -> None:
     Curriculum floor is deliberately high (small on-device models need more data); eval floor
     keeps macro-F1 statistically stable."""
     from config.config import (
-        CURRICULUM_SIZE_FLOOR, EVAL_SET_SIZE, DATA_SIZE_CEILING, DATASET_SIZE_BY_TYPE,
+        CURRICULUM_SIZE_FLOOR, EVAL_SET_SIZE, DATA_SIZE_CEILING,
     )
     plan = state.get("task_plan") or {}
 
@@ -59,10 +59,15 @@ def _apply_data_targets(state: AgentState, task_type: str) -> None:
             v = 0
         return max(floor, min(v, DATA_SIZE_CEILING))
 
+    # Initial target only. The real target is computed per tier by
+    # agent/data_sizing.resize_curriculum_for_tier once a model is selected and its zero-shot
+    # baseline is known; this just seeds a sane value for the first curate pass. The old
+    # DATASET_SIZE_BY_TYPE table (classification=150, …) was removed — every value in it was far
+    # below the floor, so it was clamped away on every path and only created the impression that
+    # per-task sizes were being honoured.
     _curr_plan = plan.get("curriculum_size")
     if _curr_plan is None:
-        # Fall back to the per-type default, but never below the floor.
-        _curr_plan = DATASET_SIZE_BY_TYPE.get(task_type, CURRICULUM_SIZE_FLOOR)
+        _curr_plan = CURRICULUM_SIZE_FLOOR
     curriculum = _clamp(_curr_plan, CURRICULUM_SIZE_FLOOR)
     eval_size = _clamp(plan.get("eval_size", EVAL_SET_SIZE) or EVAL_SET_SIZE, EVAL_SET_SIZE)
 

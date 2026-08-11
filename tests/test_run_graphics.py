@@ -56,7 +56,8 @@ def _two_tier_progression():
 def test_iteration_records_maps_fields_and_tier_boundary():
     records, meta = run_graphics._iteration_records(_two_tier_progression())
 
-    assert [r["global_idx"] for r in records] == [0, 1, 2]
+    # 1-based, matching how iterations are numbered in the logs, DAG and curation entries.
+    assert [r["global_idx"] for r in records] == [1, 2, 3]
     assert [r["score"] for r in records] == [0.40, 0.55, 0.72]
     # Composition folded from pi.D.composition.
     assert records[1]["n_generated"] == 40

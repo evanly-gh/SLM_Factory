@@ -155,8 +155,11 @@ def test_iterate_parser_snaps_the_five_tunable_values():
     hp = decision["hyperparams"]
     assert hp["lora_rank"] == 16
     # ratio 3 is equidistant from the allowed 2 and 4; _snap tie-breaks to the
-    # smaller, so alpha = 16 x 2.
-    assert hp["lora_alpha"] == 32
+    # smaller, so the applied ratio is 2 (alpha = 16 x 2 = 32).
+    # The decision records the orchestrator-facing `alpha_ratio`, not the derived absolute
+    # `lora_alpha`; the trainer re-derives alpha via normalize_hyperparams (B244).
+    assert hp["alpha_ratio"] == 2
+    assert "lora_alpha" not in hp
     assert hp["weight_decay"] == 0.1
     assert hp["learning_rate"] == 5e-4
     assert hp["nr_epochs"] == 8
@@ -315,8 +318,10 @@ def test_iterate_normalizes_bounded_declarative_data_rebuild_plan():
 
     plan = decision["data_rebuild"]
     assert plan["strategy"] == "synthesize"
-    # target_rows now clamps to DATA_SIZE_CEILING, not the old 2000 cap.
-    assert plan["target_rows"] == DATA_SIZE_CEILING
+    # target_rows is no longer orchestrator-settable: the 99999 in the payload above is ignored
+    # and the deterministic per-tier target stands (B247). 3000 is normalize's default here
+    # because this call does not pass one.
+    assert plan["target_rows"] == 3000
     assert plan["resample_fraction"] == pytest.approx(0.65)
     assert plan["new_real_rows"] == 35
     # synthesize snaps synth_rows into the 100–500 band (19 -> 100).

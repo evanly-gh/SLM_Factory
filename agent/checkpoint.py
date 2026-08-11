@@ -140,9 +140,13 @@ def runtime_config_snapshot(mode: str) -> dict[str, Any]:
         "SLM_SHARED_DATASET_DIR", ""
     )
     env_defaults = {
-        "SLM_STAGNATION_WINDOW": "50",
+        # These MUST match the module defaults in agent/nodes/iterate.py. They previously read
+        # "50" for both the window and the (now-deleted) stall counter while the code used 20,
+        # so the resume fingerprint recorded a value the run never actually used — masking real
+        # drift and inventing fake drift. SLM_MAX_STALL_EVALS was removed entirely on 2026-08-05.
+        "SLM_STAGNATION_WINDOW": "15",
         "SLM_STAGNATION_MIN_DELTA": "0.02",
-        "SLM_MAX_STALL_EVALS": "50",
+        "SLM_MAX_EVALS_BEFORE_ESCALATION": "30",
         "SLM_MAX_SEQ_LENGTH": "4096",
         "SLM_EVAL_BATCH_SIZE": "",
         "SLM_EVAL_MAX_NEW_TOKENS_CLASSIFICATION": "50",

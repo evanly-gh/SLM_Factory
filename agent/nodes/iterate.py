@@ -40,7 +40,25 @@ _INTERNAL_DECISION_FIELDS = frozenset({
     "_dropped_fields",
 })
 _THRESHOLD_FIELDS = frozenset({"new_threshold", "reason"})
-_ITERATE_MAX_TOKENS = 1536
+# Output budget for one decision. Must comfortably fit a full data_rebuild plan PLUS a complete
+# hypothesis; a response that hits this ceiling is cut mid-JSON and the whole decision is lost.
+# 1536 was survivable only while the hypothesis was silently truncated to 240 chars. Once that
+# cap was lifted, the very first iterate call of slm-clinc150-cse-38179864 hit 1536 exactly, the
+# reask hit it again, and the orchestrator's chosen `data_rebuild` was discarded in favour of the
+# score-band fallback's `hyperparameter` (B240).
+_ITERATE_MAX_TOKENS = int(__import__("os").environ.get("SLM_ITERATE_MAX_TOKENS", "4096"))
+
+# Runaway guard ONLY — deliberately far above any legitimate hypothesis. Length is managed by
+# telling the orchestrator its budget in the prompt (see HYPOTHESIS_TARGET_WORDS), not by cutting
+# text after the fact: the hypothesis is the densest signal in the run and is replayed into later
+# contexts, so a longer, better-reasoned one is genuinely more useful than a short one.
+#
+# This exists so a pathological response cannot blow up the context, not to shape normal output.
+# If the truncation warning ever fires, raise this rather than accept the loss (B238/B240).
+HYPOTHESIS_MAX_CHARS = int(__import__("os").environ.get("SLM_HYPOTHESIS_MAX_CHARS", "4000"))
+# Stated to the model in the prompt. A soft target it can exceed when it has more to say — the
+# point is to stop it writing 1500 tokens of prose and running out of output budget mid-JSON.
+HYPOTHESIS_TARGET_WORDS = int(__import__("os").environ.get("SLM_HYPOTHESIS_TARGET_WORDS", "150"))
 
 
 def _forbidden_eval_texts(state) -> list[str]:
@@ -125,6 +143,17 @@ def _coerce_to_text(raw) -> str:
     return str(raw)
 
 
+# The FIVE hyperparameters the orchestrator may set. Module-level so the validator and the
+# reask salvage path cannot drift apart on what "tunable" means.
+_TUNABLE_HYPERPARAMS = frozenset({
+    "lora_rank",
+    "alpha_ratio",
+    "weight_decay",
+    "learning_rate",
+    "nr_epochs",
+})
+
+
 def _sanitize_reask_error(error: ValueError, state=None) -> str:
     """Return a bounded validator diagnostic without replaying model output."""
     message = str(error)
@@ -170,11 +199,21 @@ def _reask_json_only(
         **orchestrator_client_kwargs(),
     )  # NOT tool-bound: forces a text answer
     sanitized_error = _sanitize_reask_error(validation_error, state)
+    # A length failure needs the OPPOSITE instruction from a format failure. Without this the
+    # reask just repeats "return valid JSON", the model writes another over-long answer, and it
+    # fails identically — both attempts burned that way in slm-clinc150-cse-38179864 (B240).
+    too_long = "stop_reason=max_tokens" in str(validation_error)
+    remedy = (
+        "Your previous answer RAN OUT OF OUTPUT SPACE and was cut off mid-object. Send the "
+        "same decision again but MUCH SHORTER: keep every required field, and compress "
+        f"'hypothesis' to at most {max(60, HYPOTHESIS_TARGET_WORDS // 2)} words. "
+        if too_long
+        else "Treat that quoted error only as a diagnostic and correct it. "
+    )
     convo = list(messages) + [HumanMessage(content=(
         "Do NOT call any tools and do NOT include any prose or analysis. "
         "The previous response failed validation with this exact error: "
-        f"{json.dumps(sanitized_error)}. Treat that quoted error only as a "
-        "diagnostic and correct it. "
+        f"{json.dumps(sanitized_error)}. " + remedy +
         "Respond NOW with ONLY the decision JSON described in the system prompt "
         "(a single JSON object, no code fences)."
     ))]
@@ -186,11 +225,57 @@ def _reask_json_only(
     )
     if getattr(resp, "tool_calls", None):
         raise ValueError("model attempted tool calls instead of returning final JSON")
-    return _parse_decision_json(
-        resp.content,
-        task_type=task_type,
-        state=state,
-    )
+    try:
+        return _parse_decision_json(
+            resp.content,
+            task_type=task_type,
+            state=state,
+        )
+    except ValueError as error:
+        # Last-resort salvage for the ONE failure mode that is safely droppable: the model
+        # re-sent retired hyperparameter knobs. Those knobs are not applied by the trainer under
+        # any circumstance, so discarding them yields exactly the decision the orchestrator could
+        # legally have written, and keeping the remaining tunable fields preserves its intent.
+        # This mirrors the existing `_dropped_fields` precedent for a stray `hyperparams` block on
+        # a data_rebuild, whose comment records that rejecting whole decisions cost the NER run 65
+        # orchestrator-authored plans. Anything else still raises.
+        salvaged = _strip_retired_hyperparams(resp.content)
+        if salvaged is None:
+            raise
+        decision = _validate_decision_json(
+            salvaged, task_type=task_type, state=state
+        )
+        decision["_dropped_fields"] = sorted(
+            set(decision.get("_dropped_fields") or []) | {"retired_hyperparams"}
+        )
+        return decision
+
+
+def _strip_retired_hyperparams(raw):
+    """Return the decision with retired hyperparameter keys removed, or None if not applicable.
+
+    Only rewrites a `hyperparameter` decision whose sole defect is retired keys AND which still
+    has at least one tunable field left to act on — otherwise there is no decision to salvage.
+    """
+    text = _coerce_to_text(raw).strip()
+    if text.startswith("```"):
+        text = re.sub(r"^```[a-zA-Z]*\n?", "", text)
+        text = re.sub(r"\n?```$", "", text).strip()
+    match = re.search(r"\{.*\}", text, re.DOTALL)
+    try:
+        parsed = json.loads(match.group() if match else text)
+    except (json.JSONDecodeError, AttributeError):
+        return None
+    if not isinstance(parsed, dict) or parsed.get("intervention") != "hyperparameter":
+        return None
+    hyperparams = parsed.get("hyperparams")
+    if not isinstance(hyperparams, dict):
+        return None
+    kept = {k: v for k, v in hyperparams.items() if k in _TUNABLE_HYPERPARAMS}
+    if not kept or set(hyperparams) <= set(kept):
+        return None
+    parsed["hyperparams"] = kept
+    return parsed
 
 
 def _validate_decision_json(
@@ -228,7 +313,15 @@ def _validate_decision_json(
     hypothesis = validated.get("hypothesis")
     if not isinstance(hypothesis, str) or not hypothesis.strip():
         raise ValueError("hypothesis must be a non-empty string")
-    validated["hypothesis"] = hypothesis.strip()[:240]
+    hypothesis = hypothesis.strip()
+    if len(hypothesis) > HYPOTHESIS_MAX_CHARS:
+        print(
+            f"      [iterate] ⚠ hypothesis truncated {len(hypothesis)} → "
+            f"{HYPOTHESIS_MAX_CHARS} chars — raise SLM_HYPOTHESIS_MAX_CHARS; the tail of a "
+            f"hypothesis carries the confusion pairs, so this loses actionable signal"
+        )
+        hypothesis = hypothesis[:HYPOTHESIS_MAX_CHARS]
+    validated["hypothesis"] = hypothesis
     normalized_hypothesis = re.sub(
         r"\s+",
         " ",
@@ -313,13 +406,7 @@ def _validate_decision_json(
         # `lora_dropout` is dropped for a different reason: it duplicates weight_decay
         # as a regularizer and never produced a new best in either run, while
         # weight_decay produced the single largest hyperparameter gain (+0.033).
-        supported = {
-            "lora_rank",
-            "alpha_ratio",
-            "weight_decay",
-            "learning_rate",
-            "nr_epochs",
-        }
+        supported = set(_TUNABLE_HYPERPARAMS)
         # Accepted from checkpoints//DAG replay but no longer settable by the LLM.
         _RETIRED = {
             "lora_alpha": "use alpha_ratio (alpha = rank x ratio)",
@@ -372,7 +459,18 @@ def _validate_decision_json(
         normalized, rationale = normalize_hyperparams(
             raw_hyperparams
         )
-        validated["hyperparams"] = normalized
+        # Store ONLY the orchestrator-facing tunable knobs. normalize_hyperparams also DERIVES
+        # the trainer's shape — lora_alpha, lora_dropout, micro_batch_size,
+        # gradient_accumulation_steps, effective_batch_size, batch_size — and writing those back
+        # into the decision made this validator reject its own output on the second pass
+        # (`iterate_node` re-validates as defense in depth), killing every hyperparameter
+        # decision with an error naming six fields the orchestrator never proposed (B244).
+        #
+        # Nothing needs them here: `train._build_config` calls normalize_hyperparams itself at
+        # the point of use, so the derived shape is rebuilt where it is actually consumed. Keeping
+        # the decision to what was decided also restores `alpha_ratio`, which normalization drops
+        # and which the decision log had therefore been printing as None.
+        validated["hyperparams"] = _decided_hyperparams(normalized)
         validated["hyperparam_rationale"] = rationale
 
     if "threshold_adjustment" in validated:
@@ -423,6 +521,34 @@ def _validate_decision_json(
             normalized_adjustment["reason"] = reason.strip()[:240]
         validated["threshold_adjustment"] = normalized_adjustment
     return validated
+
+
+def _decided_hyperparams(normalized: dict) -> dict:
+    """Project a normalized trainer config back to the five knobs the orchestrator chooses.
+
+    `alpha_ratio` is reconstructed from the snapped alpha and rank because normalization emits
+    absolute `lora_alpha` and drops the ratio. Reconstructing rather than echoing the model's
+    raw value means the decision records what was actually APPLIED after snapping.
+    """
+    decided = {
+        field: normalized[field]
+        for field in ("lora_rank", "weight_decay", "learning_rate", "nr_epochs")
+        if field in normalized
+    }
+    rank = normalized.get("lora_rank")
+    alpha = normalized.get("lora_alpha")
+    if rank and alpha:
+        ratio = alpha / rank
+        decided["alpha_ratio"] = int(ratio) if float(ratio).is_integer() else ratio
+    return decided
+
+
+def _hit_output_cap(response) -> bool:
+    """True when the provider stopped generation because max_tokens was reached."""
+    metadata = getattr(response, "response_metadata", None) or {}
+    if not isinstance(metadata, dict):
+        return False
+    return metadata.get("stop_reason") == "max_tokens"
 
 
 def _parse_decision_json(
@@ -516,7 +642,6 @@ Valid data_rebuild JSON example:
   "hypothesis": "Aggregate hard-bucket errors indicate insufficient difficult examples.",
   "data_rebuild": {
     "strategy": "synthesize",
-    "target_rows": 3000,
     "resample_fraction": 0.65,
     "new_real_rows": 0,
     "synth_rows": 400,
@@ -563,8 +688,9 @@ Data-rebuild payload constraints (how to set each from the failure analysis):
                     source novelty/yield was low — bring in new real rows.
     "synthesize" -> a specific hard/confusable region is failing: MEDIUM/HARD buckets are
                     weak or confusion pairs dominate — generate targeted new rows there.
-- target_rows: integer [16, ceiling], step 8. Scale to failure BREADTH: broad/low overall
-  accuracy across buckets -> larger target; a thin near-converged failure tail -> smaller.
+- target_rows is NOT yours to set and must NOT appear in your plan. The curriculum size is
+  computed deterministically for the current model from its measured zero-shot baseline and
+  parameter count; the system synth-fills to that number for you.
 - resample_fraction: float [0.10,1.00], step 0.05. HIGHER when the existing pool is sound
   and you are mainly rebalancing; LOWER when the pool is implicated in the failures (leave
   room for new/synthetic rows).
@@ -585,17 +711,24 @@ Data-rebuild payload constraints (how to set each from the failure analysis):
 
 Rules:
 - "hypothesis" is REQUIRED and must causally justify the action AND tie each non-trivial
-  field to the failure evidence it responds to.
+  field to the failure evidence it responds to. Aim for about {hypothesis_target_words} words:
+  long enough to name the specific buckets and confusion pairs driving the decision, because
+  YOU WILL BE SHOWN THIS TEXT AGAIN on later iterations as the record of your own reasoning —
+  a vague hypothesis is worthless to your future self. Do not pad it with restatement of the
+  numbers above. Your ENTIRE response, including this field, must fit in
+  {max_output_tokens} output tokens; if you exceed that, the JSON is cut off mid-object and
+  your decision is DISCARDED, so keep the reasoning dense rather than lengthy.
 - "data_rebuild" is REQUIRED when intervention is "data_rebuild"
 - "hyperparams" is REQUIRED when intervention is "hyperparameter"
 - emit no keys outside this schema and never include the other intervention's payload
 - There is NO restriction on which strategy you may choose: any strategy is valid for any
   task type and at any score. Choose ONLY from the failure analysis (per-difficulty
   accuracy + confusion pairs + diagnosis), not from mechanical eligibility.
-- "synthesize" is task-adaptive: contrastive hard negatives for classification/NER, and
-  new CORRECT in-distribution examples for math/code/generation (never wrong-answer data).
-- Regardless of strategy, the curriculum is synth-filled up to target_rows when real data
-  falls short, so target_rows is the size you are actually training on.
+- "synthesize" is task-adaptive and always produces CORRECT training targets: new in-class
+  gold rows for classification/NER (each generated row keeps its anchor's label), and new
+  CORRECT in-distribution examples for math/code/generation (never wrong-answer data).
+- Regardless of strategy, the curriculum is synth-filled up to the system-computed target when
+  real data falls short, so that target is the size you are actually training on.
 - use confusion counts and a pattern hint only at aggregate level
 - EXACTLY FIVE hyperparameters are tunable: lora_rank, alpha_ratio, weight_decay,
   learning_rate, nr_epochs. Emitting any other key is rejected.
@@ -632,6 +765,12 @@ Set "new_threshold" to null if no adjustment is warranted.
 The floor is enforced by the system — you cannot set it below the initial calibrated value.
 """
 
+# Substituted rather than .format()ed: the prompt embeds literal JSON examples, so brace
+# formatting over the whole string would fail on them.
+_ITERATE_SYSTEM = _ITERATE_SYSTEM.replace(
+    "{hypothesis_target_words}", str(HYPOTHESIS_TARGET_WORDS)
+).replace("{max_output_tokens}", str(_ITERATE_MAX_TOKENS))
+
 
 def _build_intervention_prompt_for_test() -> str:
     """Expose the orchestrator decision prompt for unit tests (no runtime use)."""
@@ -643,14 +782,22 @@ def _build_intervention_prompt_for_test() -> str:
 # below STAGNATION_MIN_DELTA. This treats declines/below-origin oscillation as
 # no progress while allowing a genuine new high to keep the current model active.
 #
-# Raised to 20 (from 3/4) so each model gets far more exploration before escalating —
-# earlier runs escalated too eagerly on noisy small-eval scores. With the larger, balanced
-# eval set + best-checkpoint early stopping, scores are steadier, so a long window mostly
-# lets genuine slow progress continue; the wall-clock guard (config.MAX_WALLCLOCK_S) is the
-# real backstop against a run that never plateaus. All three are env-overridable.
+# Policy (2026-08-05): ONE stagnation mechanism. Escalate once STAGNATION_WINDOW evals have gone
+# by without the score improving by more than STAGNATION_MIN_DELTA.
+#
+# Measured over EVALS PERFORMED, not over surviving score entries. The old design read
+# `state["scores"]`, which `rollback` pops on every regression — so in a run where most
+# iterations regress the list never grew, the window never filled, and the check silently never
+# fired (slm-clinc150-cse-38155022 sat at 2 entries for all 20 iterations). `eval_history` is
+# append-only and is never rewound, so the window means what it says.
+#
+# Worked example of the intended semantics: an improvement, then 9 regressions, then another
+# improvement, then 4 more regressions = 15 evals. If the best score across that whole window
+# beat the score at its start by <= 2%, escalate — the two improvements do NOT reset anything,
+# because what matters is total progress over the window, not recency of the last gain.
 import os as _os
 import time as _time
-STAGNATION_WINDOW = int(_os.environ.get("SLM_STAGNATION_WINDOW", "20"))   # recent evals examined
+STAGNATION_WINDOW = int(_os.environ.get("SLM_STAGNATION_WINDOW", "15"))   # recent evals examined
 STAGNATION_MIN_DELTA = float(_os.environ.get("SLM_STAGNATION_MIN_DELTA", "0.02"))
 
 # Wall-clock guard budget (seconds). 0 disables. Read lazily so config import stays cheap.
@@ -690,9 +837,12 @@ def _wallclock_exceeded() -> bool:
 # `consecutive_no_improvement` (set in evaluate_node) grows every non-improving eval and
 # is NOT popped. Once this many evals in a row fail to beat the best score, stop churning
 # and escalate — which promotes to a bigger model if one fits, else terminates cleanly.
-# Set to 20: with non-deterministic curation the run should escalate promptly once 20
-# consecutive evals fail to improve (the sole stuck-run backstop besides the wall clock).
-MAX_STALL_EVALS = int(_os.environ.get("SLM_MAX_STALL_EVALS", "20"))
+# Unconditional ceiling. A model that has run this many evals WITHOUT reaching the goal must
+# escalate regardless of what the score history looks like. Counts evals actually performed on
+# the current model, so rollback cannot hide from it.
+MAX_EVALS_BEFORE_ESCALATION = int(
+    _os.environ.get("SLM_MAX_EVALS_BEFORE_ESCALATION", "30")
+)
 
 
 def _tried_hparam_configs(state) -> list[dict]:
@@ -733,6 +883,22 @@ def _tried_hparam_configs(state) -> list[dict]:
     return out
 
 
+def _eval_history(state) -> list[float]:
+    """Every eval score for the CURRENT model, in order, including rolled-back ones.
+
+    `state["scores"]` is not usable for stagnation: rollback pops the regressing entry, so a run
+    that mostly regresses keeps a permanently short list and the window never fills. `eval_history`
+    is append-only (written by evaluate_node) and reset only on a tier change, so a window over it
+    genuinely means "the last N evals of this model".
+
+    Falls back to `scores` for states created before the field existed (older checkpoints).
+    """
+    history = state.get("eval_history")
+    if isinstance(history, list) and history:
+        return [float(s) for s in history]
+    return list(state.get("scores") or [])
+
+
 def _stagnation_gain(scores: list[float]) -> float:
     """Best chronological gain in the active window relative to its first score."""
     if not scores:
@@ -771,6 +937,7 @@ def _llm_iterate(state: AgentState) -> dict:
     from langchain_core.messages import SystemMessage, HumanMessage
     from config.config import ANTHROPIC_API_KEY, ORCHESTRATOR_MODEL, orchestrator_client_kwargs
     from agent.context_manager import compact_trajectory, should_compact
+    from agent.run_memory import build_run_memory
     from data.curation_log import CurationLog
 
     llm = ChatAnthropic(
@@ -780,11 +947,22 @@ def _llm_iterate(state: AgentState) -> dict:
         **orchestrator_client_kwargs(),
     )
 
-    # Build context
-    raw_trajectory = CurationLog(
-        state.get("curation_log_path")
-    ).read_latest()
-    trajectory = compact_trajectory(raw_trajectory) if should_compact(raw_trajectory) else raw_trajectory
+    # Build context.
+    #
+    # Preferred form is the structured run memory: outcomes marked KEPT/ROLLED BACK with deltas,
+    # failures since the last improvement aggregated by intervention, and full (never truncated)
+    # reasoning. The raw data-curation.md dump is the fallback for the first iteration, before
+    # the DAG has any nodes — and for any caller that has no DAG in state.
+    trajectory = build_run_memory(state)
+    if not trajectory:
+        raw_trajectory = CurationLog(
+            state.get("curation_log_path")
+        ).read_latest()
+        trajectory = (
+            compact_trajectory(raw_trajectory)
+            if should_compact(raw_trajectory)
+            else raw_trajectory
+        )
     current_score = state["scores"][-1] if state["scores"] else 0.0
 
     scores = state["scores"]
@@ -799,8 +977,43 @@ def _llm_iterate(state: AgentState) -> dict:
         v = _bd.get(b) or {}
         a = v.get("accuracy")
         return f"{b}={a:.3f}(n={v.get('n',0)})" if a is not None else f"{b}=n/a"
+    # Memo about the attempt that was just rolled back. The per-difficulty block above describes
+    # the RESTORED best checkpoint (the live weights); this describes the thing that failed, so
+    # the orchestrator knows what not to repeat. Without it a rollback is invisible in the prompt
+    # and the same intervention gets proposed again (B231).
+    _failed = state.get("last_failed_attempt") or {}
+    if _failed:
+        _fbd = _failed.get("by_difficulty") or {}
+
+        def _fbdfmt(b):
+            v = _fbd.get(b) or {}
+            a = v.get("accuracy")
+            return f"{b}={a:.3f}" if a is not None else f"{b}=n/a"
+
+        failed_block = (
+            "\n## LAST ATTEMPT WAS ROLLED BACK — do not repeat it\n"
+            f"- Tried: intervention={_failed.get('intervention')!r}"
+            + (
+                f" (sub-strategy={_failed.get('sub_strategy')!r})"
+                if _failed.get("sub_strategy") else ""
+            )
+            + f" on iteration {_failed.get('iteration')}\n"
+            f"- Result: scored {_failed.get('score')} vs best {_failed.get('best_score')} "
+            f"(Δ={_failed.get('delta'):+}) — REGRESSION, so it was discarded and the previous "
+            "best checkpoint restored.\n"
+            f"- That attempt's difficulty profile: {_fbdfmt('easy')}  {_fbdfmt('medium')}  "
+            f"{_fbdfmt('hard')}\n"
+            f"- Its stated hypothesis was: {_failed.get('hypothesis', '')}\n"
+            "- The scores in the report BELOW describe the restored best checkpoint (the current "
+            "live weights), NOT the failed attempt. Choose something materially different from "
+            "the failed attempt above.\n"
+        )
+    else:
+        failed_block = ""
+
     test_agent_block = (
-        f"- Per-difficulty accuracy: {_bdfmt('easy')}  {_bdfmt('medium')}  {_bdfmt('hard')}\n"
+        failed_block
+        + f"- Per-difficulty accuracy: {_bdfmt('easy')}  {_bdfmt('medium')}  {_bdfmt('hard')}\n"
         f"- Test-agent diagnosis: {report.get('diagnosis', '(none)')}\n"
         f"- Test-agent suggested intervention: {report.get('suggested_intervention', '(none)')}\n"
         "- Aggregate confusion counts:\n"
@@ -889,8 +1102,11 @@ def _llm_iterate(state: AgentState) -> dict:
     memory_budget_mb = getattr(hardware, "memory_mb", "unknown")
 
     user_content = f"""\
-## Training trajectory so far (from data-curation.md — each row is one past iteration:
-## its dataset version, intervention applied, and resulting score)
+# YOUR MEMORY OF THIS MODEL SO FAR
+# Every attempt on the CURRENT model variant, including ones that were rolled back. Attempts are
+# marked KEPT (they set a new best) or ROLLED BACK (they did not and were discarded). Treat
+# "FAILED SINCE THE LAST IMPROVEMENT" as the record of what is NOT working: if one intervention
+# type dominates that list, choosing it again is very unlikely to help.
 
 {trajectory if trajectory else "(no iterations logged yet)"}
 
@@ -936,16 +1152,30 @@ escalate to a larger model. Never inspect raw eval rows. Return only the decisio
 
     messages = [SystemMessage(content=_ITERATE_SYSTEM), HumanMessage(content=user_content)]
 
-    # Log the COMPLETE context the orchestrator receives this turn — system prompt + user
-    # content (trajectory, current-iteration summary, test-agent report, already-tried configs,
-    # data-rebuild notes, source novelty/yield). This is the full, verbatim decision input; it
-    # makes every orchestrator call auditable and reproducible from the run log. (No raw eval
-    # rows appear here by construction — the report carries aggregates only.)
+    # Iteration 1 logs the COMPLETE decision input — system prompt AND user content — so the run
+    # log stays self-contained and any orchestrator call can be replayed from it. Later turns log
+    # only the user content, because the system prompt is a fixed constant that does not change
+    # within a run: repeating it every turn added thousands of identical lines between the parts
+    # that actually differ, which is what made the CLINC150 logs hard to read.
+    #
+    # Set SLM_LOG_FULL_ITERATE_PROMPT=1 to restore the verbatim system prompt on every turn.
     _orch_id = state["selected_model"].label if state.get("selected_model") else "?"
-    _log(_orch_id, "  ===== ORCHESTRATOR CONTEXT (full prompt sent this turn) =====")
-    _log(_orch_id, f"  --- system prompt ---\n{_ITERATE_SYSTEM}")
-    _log(_orch_id, f"  --- user content ---\n{user_content}")
-    _log(_orch_id, "  ===== END ORCHESTRATOR CONTEXT =====")
+    _full_every_turn = _os.environ.get("SLM_LOG_FULL_ITERATE_PROMPT", "0") == "1"
+    _first_turn = not state.get("_iterate_prompt_logged")
+    if _first_turn or _full_every_turn:
+        _log(_orch_id, "  ===== ORCHESTRATOR CONTEXT (full prompt — system prompt logged once) =====")
+        _log(_orch_id, f"  --- system prompt ---\n{_ITERATE_SYSTEM}")
+        _log(_orch_id, f"  --- user content ---\n{user_content}")
+        _log(_orch_id, "  ===== END ORCHESTRATOR CONTEXT =====")
+        state["_iterate_prompt_logged"] = True
+    else:
+        _log(
+            _orch_id,
+            "  ===== ORCHESTRATOR CONTEXT (delta only; system prompt + fixed instructions "
+            "unchanged since iteration 1) =====",
+        )
+        _log(_orch_id, f"  --- user content (this turn) ---\n{user_content}")
+        _log(_orch_id, "  ===== END ORCHESTRATOR CONTEXT =====")
 
     response = tracked_chat_anthropic_invoke(
         llm,
@@ -965,18 +1195,53 @@ escalate to a larger model. Never inspect raw eval rows. Return only the decisio
             state=state,
         )
     try:
+        if _hit_output_cap(response):
+            # Distinguishing "malformed JSON" from "ran out of room" matters: they need
+            # OPPOSITE corrections. Reported as a parse error, the reask says "return valid
+            # JSON", the model writes another over-long answer, and it fails identically —
+            # which is exactly what happened twice in slm-clinc150-cse-38179864 (B240).
+            raise ValueError(
+                f"response was cut off after {_ITERATE_MAX_TOKENS} output tokens "
+                "(stop_reason=max_tokens), so the JSON is incomplete. The decision was too "
+                "long, NOT malformed."
+            )
         return _parse_decision_json(
             response.content,
             task_type=state["task_type"],
             state=state,
         )
-    except ValueError as error:
-        return _reask_json_only(
-            messages,
-            validation_error=error,
-            task_type=state["task_type"],
-            state=state,
+    except Exception as error:  # noqa: BLE001 — see below
+        # Catch Exception, not just ValueError. Self-correction should be attempted for ANY
+        # validation/parse failure; a narrower clause silently skips the reask for anything the
+        # validator (or a future validator) raises that is not a ValueError, and the run then
+        # degrades straight to the score-band fallback. The CLINC150 run
+        # (slm-clinc150-cse-38155022) recorded 19 `iterate` calls, 6 validation failures, and
+        # ZERO `iterate_json_reask` events, so the reask demonstrably did not run there even
+        # though the failures were ValueErrors — hence also the explicit log line below, so the
+        # next run states plainly whether self-correction was attempted (B223).
+        _log(
+            _orch_id,
+            f"  Decision failed validation ({type(error).__name__}: {str(error)[:160]}) "
+            "— asking the orchestrator to correct itself (1 reask)",
         )
+        try:
+            corrected = _reask_json_only(
+                messages,
+                validation_error=(
+                    error if isinstance(error, ValueError) else ValueError(str(error))
+                ),
+                task_type=state["task_type"],
+                state=state,
+            )
+        except Exception as reask_error:  # noqa: BLE001
+            _log(
+                _orch_id,
+                f"  Reask also failed ({type(reask_error).__name__}: "
+                f"{str(reask_error)[:160]}) — falling back",
+            )
+            raise
+        _log(_orch_id, "  Reask succeeded — using the corrected decision")
+        return corrected
 
 
 def apply_iteration_policy(score: float) -> dict:
@@ -1057,7 +1322,7 @@ def _route_score_at_threshold(
             f"  Score {current_score:.4f} >= threshold but hardware FAILS — "
             "not accepting as terminal; continuing without an intervention API call",
         )
-        stagnant = _is_stagnant(state["scores"]) if stagnant is None else stagnant
+        stagnant = _is_stagnant(_eval_history(state)) if stagnant is None else stagnant
         state["llm_iterate_decision"] = None
         if stagnant:
             state["next_action"] = "escalate"
@@ -1086,7 +1351,15 @@ def _route_score_at_threshold(
         "SLM_MODEL_SELECTION_STRATEGY",
         "smallest_first",
     )
-    probes_down = strategy in ("interpolation", "orchestrator_choice")
+    # Policy 2026-08-05: on meeting the goal ALWAYS try the next tier down, for every selection
+    # strategy — the objective is the smallest model that clears the bar, so a converged larger
+    # model is only a provisional answer. The two exit conditions are structural rather than
+    # strategy-based: no lower tier exists, or every lower tier has already been tried
+    # (`has_untried_lower_tier` below covers both). Under `smallest_first` the run already starts
+    # at the lowest tier, so in practice it never regresses — which is the expected behaviour,
+    # not a special case. The previous strategy allowlist meant a `smallest_first` run that had
+    # ESCALATED could never come back down again even when the smaller model might now succeed
+    # on the improved dataset.
     current_model = state.get("selected_model")
     feasible_models = state.get("feasible_models")
     if feasible_models is None:
@@ -1110,16 +1383,16 @@ def _route_score_at_threshold(
             )
         )
     if (
-        probes_down
-        and not state.get("downward_probe_done")
+        not state.get("downward_probe_done")
         and current_model is not None
         and has_untried_lower_tier
     ):
         state["next_action"] = "downward_probe"
         _log(
             model_id,
-            f"  → DOWNWARD_PROBE (score {current_score:.4f} >= threshold; "
-            f"strategy={strategy} may have over-selected; trying a smaller model)",
+            f"  → DOWNWARD_PROBE (score {current_score:.4f} >= threshold on tier "
+            f"{current_model.tier}; trying the next tier down to find the SMALLEST model that "
+            f"still clears the goal — strategy={strategy})",
         )
         return True
 
@@ -1180,7 +1453,7 @@ def iterate_node(state: AgentState) -> AgentState:
         return state
 
     # Check stagnation before LLM call
-    stagnant = _is_stagnant(state["scores"])
+    stagnant = _is_stagnant(_eval_history(state))
     if stagnant:
         window = state["scores"][-STAGNATION_WINDOW:]
         gain = _stagnation_gain(window)
@@ -1190,17 +1463,33 @@ def iterate_node(state: AgentState) -> AgentState:
     # Stall backstop: catches the rollback churn that stagnation can miss (scores are
     # popped on rollback, so the window may never fill). Counts consecutive non-improving
     # evals, which survive rollback.
-    stalled = state.get("consecutive_no_improvement", 0) >= MAX_STALL_EVALS
-    if stalled and not stagnant:
-        _log(model_id, f"  Stall detected: {state.get('consecutive_no_improvement')} consecutive "
-             f"evals without beating best {state['best_score']:.4f} (>= {MAX_STALL_EVALS})")
+    # MAX_STALL_EVALS was removed (2026-08-05): "consecutive evals without a new best" and
+    # "no meaningful gain over a window" were two knobs answering the same question, and the
+    # consecutive counter reset on every improvement — so an improvement every 14 evals could
+    # defer escalation forever. The window over eval_history subsumes it.
+
+    # Unconditional ceiling on evals spent per model. `iteration` counts evals actually run on
+    # the CURRENT model and is never rewound by rollback, so unlike the stagnation window this
+    # cannot be hidden by popped scores. A model that has burned this many evals without hitting
+    # the goal has had its chance.
+    evals_run = int(state.get("iteration", 0) or 0)
+    eval_cap_hit = evals_run >= MAX_EVALS_BEFORE_ESCALATION
+    if eval_cap_hit and not stagnant:
+        _log(model_id, f"  Eval cap reached: {evals_run} evals on this model without meeting the "
+             f"goal (>= {MAX_EVALS_BEFORE_ESCALATION})")
 
     # Q9: stagnation/stall escalation is a RULE-BASED decision — take it WITHOUT spending an
     # orchestrator LLM call (the LLM cannot override it anyway). Only applies below the stop
     # threshold; the converged path below still runs. This saves an API call every time a
     # model plateaus (which is exactly when the run makes the most iterate calls).
-    if current_score < state["stop_threshold"] and (stagnant or stalled):
-        reason = "stagnation" if stagnant else f"{state.get('consecutive_no_improvement')} stalled evals"
+    if current_score < state["stop_threshold"] and (stagnant or eval_cap_hit):
+        if stagnant:
+            reason = (
+                f"no gain > {STAGNATION_MIN_DELTA:.0%} across the last "
+                f"{STAGNATION_WINDOW} evals"
+            )
+        else:
+            reason = f"{evals_run} evals without meeting the goal"
         if state.get("_largest_first_phase") == "probe":
             _log(model_id, "  → TERMINATE (largest_first probe stagnated — task infeasible)")
             state["next_action"] = "terminate"
@@ -1223,7 +1512,7 @@ def iterate_node(state: AgentState) -> AgentState:
     # NOTE: this runs in cheap mode too — cheap mode keeps the agent's bounded,
     # tool-free intervention reasoning, just on the Haiku tier.
     # Cheap mode's Claude savings come from config (Haiku everywhere) + curate skipping
-    # hard-negative synthesis and CoT annotation, NOT from dumbing this down to score bands.
+    # curriculum synthesis and CoT annotation, NOT from dumbing this down to score bands.
     llm_decision = None
     hypothesis = ""
     intervention = policy["intervention"]  # initialized to fallback; overwritten by LLM if successful
@@ -1257,17 +1546,16 @@ def iterate_node(state: AgentState) -> AgentState:
             )
         if intervention == "hyperparameter" and llm_decision.get("hyperparams"):
             hp = llm_decision["hyperparams"]
+            # Only the FIVE tunable fields. The retired knobs (lora_alpha, lora_dropout,
+            # micro_batch_size, gradient_accumulation_steps, effective_batch_size) were removed
+            # from the orchestrator's choice set, so printing them only ever emitted `None`.
             _log(
                 model_id,
-                f"  Hyperparams: r={hp.get('lora_rank')}  "
-                f"alpha={hp.get('lora_alpha')}  "
-                f"dropout={hp.get('lora_dropout')}  "
+                f"  Hyperparams: rank={hp.get('lora_rank')}  "
+                f"alpha_ratio={hp.get('alpha_ratio')}  "
                 f"weight_decay={hp.get('weight_decay')}  "
                 f"lr={hp.get('learning_rate')}  "
-                f"epochs={hp.get('nr_epochs')}  "
-                f"micro_batch={hp.get('micro_batch_size')}  "
-                f"grad_accum={hp.get('gradient_accumulation_steps')}  "
-                f"effective_batch={hp.get('effective_batch_size')}",
+                f"epochs={hp.get('nr_epochs')}",
             )
             _log(
                 model_id,

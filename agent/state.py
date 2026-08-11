@@ -94,6 +94,14 @@ class AgentState(TypedDict):
     # test agent's per-difficulty scores + diagnosis from the latest eval.
     eval_difficulty: Optional[dict]        # {"easy":[...],"medium":[...],"hard":[...]}
     test_report: Optional[dict]            # {"overall":f,"by_difficulty":{...},"diagnosis":...}
+    # Memo describing the intervention that was just rolled back: what was tried, its score and
+    # delta, and its difficulty profile. `test_report` describes the CURRENT (restored) model, so
+    # this is the only record of the failed attempt and exists so the orchestrator can avoid
+    # repeating it (B227/B231). Cleared once a new attempt is evaluated.
+    last_failed_attempt: Optional[dict]
+    # Append-only per-model eval scores, including rolled-back ones. Stagnation is measured over
+    # this because rollback pops state["scores"]. Reset on tier change.
+    eval_history: Optional[list]
 
     # --- Post-convergence downward re-exploration ---
     downward_tiers_tried: list[int]        # tiers already re-probed downward (probe each once)

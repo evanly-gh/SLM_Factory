@@ -1,9 +1,10 @@
 # data/curriculum.py
+import json
 import logging
+import os
 import random
+import re
 from collections import Counter
-from agent.cost import tracked_anthropic_messages_create
-from config.config import TEACHER_MODEL_CLAUDE  # legacy hard-negative fallback only; never CoT
 
 logger = logging.getLogger(__name__)
 
@@ -98,12 +99,16 @@ def annotate_cot(
     if not need_idx or generate_fn is None:
         return list(examples)
 
-    from concurrent.futures import ThreadPoolExecutor
     annotated = list(examples)
     # The local synth server continuous-batches, so match the synth concurrency.
     max_workers = _synth_concurrency(len(need_idx))
-    with ThreadPoolExecutor(max_workers=max_workers) as pool:
-        outcomes = list(pool.map(lambda i: _annotate_one(examples[i]), need_idx))
+    outcomes = _progress_map(
+        lambda i: _annotate_one(examples[i]),
+        need_idx,
+        label="CoT annotation",
+        log=log,
+        workers=max_workers,
+    )
 
     backend_counts: Counter = Counter()
     for i, (result, backend) in zip(need_idx, outcomes):
@@ -119,6 +124,9 @@ def annotate_cot(
 def apply_quality_controls(
     dataset: list[dict],
     task_type: str = "classification",
+    *,
+    allowed_labels: set | None = None,
+    log=None,
 ) -> list[dict]:
     """
     Enforce quality controls from the paper (§2.3):
@@ -137,8 +145,37 @@ def apply_quality_controls(
     if not dataset:
         return dataset
 
+    # Every control reports what it removed and why. Quality control is the single biggest
+    # consumer of rows in this pipeline — it deleted ~1,500 of 1,549 synthesized rows in
+    # slm-clinc150-cse-38155022 — and previously did so completely silently, so a dataset
+    # arriving far under target looked inexplicable (B228).
+    def _report(stage: str, before: int, after: int, reason: str) -> None:
+        if log and after < before:
+            log(f"      [qc] {stage}: removed {before - after} row(s) — {reason}")
+
     if task_type == "classification":
+        before = len(dataset)
         clean = [e for e in dataset if "text" in e and "label" in e]
+        _report("schema", before, len(clean), "row missing a 'text' or 'label' field")
+
+        # 0. Label-space validation. A row whose label is not one of the task's established
+        # classes can never match an eval label, so it is pure training noise. This is where
+        # mined sources carrying raw integer class ids ("0"/"1"/"2") get removed (B222/B229).
+        if allowed_labels:
+            before = len(clean)
+            rejected = Counter(
+                str(e["label"]) for e in clean if str(e["label"]) not in allowed_labels
+            )
+            clean = [e for e in clean if str(e["label"]) in allowed_labels]
+            if rejected and log:
+                sample = ", ".join(
+                    f"{lab!r}x{cnt}" for lab, cnt in rejected.most_common(5)
+                )
+                log(
+                    f"      [qc] label-space: removed {before - len(clean)} row(s) — "
+                    f"label not in the task's {len(allowed_labels)} established classes "
+                    f"[{sample}]"
+                )
 
         # 1. Label balancing (single-label argmax — for multi_label the flag is on
         # the EvalSet, not here; we balance by the primary label field).
@@ -152,10 +189,20 @@ def apply_quality_controls(
                 if seen[ex["label"]] < max_allowed:
                     balanced.append(ex)
                     seen[ex["label"]] += 1
+            _report(
+                "label-balance", len(clean), len(balanced),
+                f"label over the cap of 3x the smallest class ({max_allowed} rows/label; "
+                f"smallest class has {min_count})",
+            )
             clean = balanced
 
+        before = len(clean)
         clean = _filter_length_outliers(clean)
+        _report("length-outlier", before, len(clean), "text longer than 3x the median length")
+
+        before = len(clean)
         clean = _dedup_surface_forms(clean)
+        _report("surface-dedup", before, len(clean), "near-duplicate text (Jaccard > 0.9)")
         return clean
 
     elif task_type == "NER":
@@ -242,7 +289,7 @@ def _dedup_surface_forms(
 
 
 def _synth_concurrency(n_tasks: int) -> int:
-    """How many hard-negative generations to run CONCURRENTLY against the synth endpoint.
+    """How many generation requests to run CONCURRENTLY against the synth endpoint.
 
     Synthesis is I/O-bound on the vLLM server, which continuous-batches concurrent requests
     (its --max-num-seqs). Firing them one-at-a-time was the single biggest wall-clock cost
@@ -258,229 +305,39 @@ def _synth_concurrency(n_tasks: int) -> int:
     return max(1, min(c, max(1, n_tasks)))
 
 
-def synthesize_hard_negatives(
-    examples: list[dict],
-    n: int,
-    anthropic_client=None,
-    task_type: str = "classification",
-    pattern_hint: str = "",
-    temperature: float = 1.0,
-    generate_fn=None,
-    source_label: str = "synth",
-) -> list[dict]:
+def _progress_map(fn, items: list, *, label: str, log, workers: int) -> list:
+    """Map ``fn`` over ``items`` (concurrently when possible), reporting coarse progress.
+
+    Synthesis issues one model call per row, so the per-call cost lines used to be the only
+    sign of life — thousands of them for one rebuild. A ~10-step progress line replaces that
+    with something a human can actually read while keeping the run observable.
     """
-    Generate hard negatives using the 2-for-1 rule (paper §2.3).
-
-    For each challenging case, returns BOTH the original gold example AND one
-    synthetic hard negative — a contrastive pair that teaches the model what
-    TO predict and what NOT to predict for similar surface forms.
-
-    Returns up to 2*n examples (n originals + n synthetics). Each synthetic example is
-    tagged with `_source=source_label` for data-lineage logging (B161).
-
-    Generation backend (B161): if `generate_fn` is provided (a
-    `generate(prompt, temperature, max_tokens) -> str` from the LOCAL vLLM synthesis
-    endpoint), it is used. Otherwise falls back to `anthropic_client` (legacy path / tests).
-
-    `temperature` controls generation diversity. curate_node rotates it across
-    successive data_rebuild rounds so a rebuild produces DIFFERENT negatives each time.
-    """
-    # Synthesis must be NON-FATAL (B161): a per-call failure (endpoint down, proxy 5xx,
-    # timeout) must SKIP that example, not crash curate. _gen returns None on failure; the
-    # loops skip synthetics when None, and bail early after too many consecutive failures
-    # (endpoint effectively dead) so we degrade to gold-only instead of hammering a dead server.
-    _fail_state = {"consecutive": 0, "aborted": False}
-    _MAX_CONSEC_FAILS = 3
-
-    def _gen(prompt: str, max_tokens: int):
-        if _fail_state["aborted"]:
-            return None
-        try:
-            if generate_fn is not None:
-                out = generate_fn(prompt, temperature, max_tokens)
-            else:
-                response = tracked_anthropic_messages_create(
-                    anthropic_client.messages,
-                    stage="hard_negative_synthesis",
-                    model=TEACHER_MODEL_CLAUDE,
-                    max_tokens=max_tokens,
-                    temperature=temperature,
-                    messages=[{"role": "user", "content": prompt}],
-                )
-                out = response.content[0].text.strip()
-            _fail_state["consecutive"] = 0
-            return out
-        except Exception as e:  # noqa: BLE001
-            _fail_state["consecutive"] += 1
-            if _fail_state["consecutive"] >= _MAX_CONSEC_FAILS:
-                _fail_state["aborted"] = True
-                logger.warning("synthesize_hard_negatives: %d consecutive generation failures "
-                               "(%s) — aborting synthesis, returning gold-only",
-                               _fail_state["consecutive"], str(e)[:80])
-            return None
-
+    total = len(items)
+    if total == 0:
+        return []
+    step = max(1, total // 10)
     results = []
 
-    if task_type == "classification":
-        # Use the full set of examples (all labels) as source material, not just
-        # the minority class. Generate a boundary-crossing counterexample for each:
-        # given an example with label X, synthesize one that superficially resembles
-        # it but belongs to a different label. This covers all failure modes, not just
-        # minority-class confusion.
-        all_labels = list({e.get("label") for e in examples if e.get("label")})
-        candidates = examples[:n]
-        pattern_hint = (
-            f"\nThe example should specifically exercise this failure mode: "
-            f"{pattern_hint}. Construct text that a model failing in that way "
-            f"would misclassify.\n"
-            if pattern_hint else ""
-        )
+    def _tick(done: int) -> None:
+        if log and (done % step == 0 or done == total):
+            log(f"      [synth] {label}: {done}/{total} ({100 * done // total}%)")
 
-        def _synth_one(ex):
-            src_label = ex.get("label", "unknown")
-            # Pick a target label different from the source
-            target_labels = [l for l in all_labels if l != src_label]
-            target_label = target_labels[0] if target_labels else src_label
-            prompt = (
-                f"You are generating a HARD NEGATIVE for a text classifier: a realistic "
-                f"example that superficially resembles the '{src_label}' class but genuinely "
-                f"belongs to the '{target_label}' class. The surface features should mislead "
-                f"toward '{src_label}' while the true meaning is unambiguously '{target_label}'."
-                f"{pattern_hint}\n\n"
-                f"Reference '{src_label}' example:\n{ex['text']}\n\n"
-                f"Output ONLY the new example text for the '{target_label}' class — no preamble, "
-                f"no explanation, no quotation marks, no label prefix."
-            )
-            generated_text = _gen(prompt, 200)
-            if generated_text:  # skip the synthetic on generation failure (non-fatal)
-                return ex, {"text": generated_text, "label": target_label, "_source": source_label}
-            return ex, None
-
-        # Run the 2-for-1 generations CONCURRENTLY (vLLM continuous-batches them). Order is
-        # preserved so each gold example stays adjacent to its synthetic counterpart.
-        workers = _synth_concurrency(len(candidates))
-        if workers > 1:
-            from concurrent.futures import ThreadPoolExecutor
-            with ThreadPoolExecutor(max_workers=workers) as pool:
-                pairs = list(pool.map(_synth_one, candidates))
-        else:
-            pairs = [_synth_one(ex) for ex in candidates]
-        for ex, synth in pairs:
-            results.append(ex)
-            if synth is not None:
-                results.append(synth)
-
-    elif task_type == "NER":
-        # Hard negatives for NER are HARDER-TO-TAG examples with CORRECT labels — a
-        # passage where the same entity mentions sit in a more ambiguous context, with
-        # the gold entity types the model SHOULD predict. (An earlier version asked for
-        # WRONG types and stored them as targets, which trains the model to mis-tag —
-        # negative transfer. We keep labels correct so the SFT signal is positive.)
-        candidates = examples[:n]
-        for ex in candidates:
-            original_entities = ex.get("entities", [])
-            valid_types = {
-                str(entity.get("type")).strip()
-                for entity in original_entities
-                if isinstance(entity, dict) and str(entity.get("type", "")).strip()
-            }
-            entity_desc = ", ".join(
-                f'"{e.get("text", "")}" ({e.get("type", "")})' for e in original_entities[:5]
-            ) if original_entities else "unknown entities"
-            prompt = (
-                f"You are generating a HARD training example for a named-entity recognizer. "
-                f"Rewrite the passage so the SAME entities appear in a more ambiguous or "
-                f"confusable context (e.g. a word that could read as either a company or a "
-                f"common noun), so their correct type is harder to infer from surface form "
-                f"alone — but keep each entity's CORRECT type unchanged.\n\n"
-                f"Original entities (text → correct type): {entity_desc}\n"
-                f"Original passage: {ex.get('text', '')}\n\n"
-                f"Aggregate pattern to emphasize: {pattern_hint or 'general ambiguity'}\n"
-                f"Reply with JSON only: {{\"text\": \"<rewritten passage>\", "
-                f"\"entities\": [{{\"text\": \"<span>\", \"type\": \"<CORRECT_TYPE>\"}}]}}\n"
-                f"The 'entities' list must contain the spans with their TRUE types (what the "
-                f"model SHOULD predict for the rewritten passage). JSON only, no prose."
-            )
-            raw = _gen(prompt, 400)
-            import json as _json, re as _re
-            results.append(ex)
-            if not raw:  # generation failed — keep gold, skip synthetic (non-fatal)
-                continue
-            try:
-                match = _re.search(r'\{.*\}', raw, _re.DOTALL)
-                parsed = _json.loads(match.group()) if match else None
-            except (TypeError, ValueError):
-                continue
-            if not isinstance(parsed, dict):
-                continue
-            rewritten = parsed.get("text")
-            entities = parsed.get("entities")
-            if (
-                not isinstance(rewritten, str)
-                or not rewritten.strip()
-                or not isinstance(entities, list)
-                or not entities
-                or not valid_types
-            ):
-                continue
-            valid_entities = all(
-                isinstance(entity, dict)
-                and isinstance(entity.get("text"), str)
-                and bool(entity["text"].strip())
-                and entity["text"] in rewritten
-                and isinstance(entity.get("type"), str)
-                and entity["type"].strip() in valid_types
-                for entity in entities
-            )
-            if not valid_entities:
-                continue
-            results.append({
-                "text": rewritten,
-                "entities": entities,
-                "_source": source_label,
-            })
-
-    elif task_type == "math_reasoning":
-        # SFT on wrong answers actively harms math models — skip wrong-answer negatives.
-        # Instead, return the gold examples as-is (CoT annotation in curate_node provides
-        # the real augmentation value for math tasks).
-        if pattern_hint:
-            logger.warning(
-                "[curriculum] Pattern-guided positive synthesis is not supported for "
-                "math_reasoning; "
-                "returning gold examples unchanged."
-            )
-        return list(examples[:n]) if n < len(examples) else list(examples)
-
-    elif task_type == "code_generation":
-        # Wrong-code SFT examples teach the model to produce bugs — skip.
-        if pattern_hint:
-            logger.warning(
-                "[curriculum] Pattern-guided positive synthesis is not supported for "
-                "code_generation; "
-                "returning gold examples unchanged."
-            )
-        return list(examples[:n]) if n < len(examples) else list(examples)
-
-    elif task_type == "generation":
-        # Rejected answers require a preference objective. Until one exists, open
-        # generation remains gold/CoT-only and this compatibility API returns anchors
-        # unchanged rather than turning plausible wrong answers into positive SFT targets.
-        if pattern_hint:
-            logger.warning(
-                "[curriculum] Pattern-guided positive synthesis is not supported for "
-                "generation without "
-                "verified-positive synthesis or preference training; returning gold "
-                "examples unchanged."
-            )
-        return list(examples[:n]) if n < len(examples) else list(examples)
-
+    if workers > 1:
+        from concurrent.futures import ThreadPoolExecutor
+        with ThreadPoolExecutor(max_workers=workers) as pool:
+            for done, result in enumerate(pool.map(fn, items), 1):
+                results.append(result)
+                _tick(done)
+    else:
+        for done, item in enumerate(items, 1):
+            results.append(fn(item))
+            _tick(done)
     return results
 
 
-# Task families for which "synthesis" means generating NEW CORRECT in-distribution
-# examples (verified where a verifier exists) rather than contrastive hard negatives.
-# Wrong-answer SFT harms these families, so they never receive contrastive negatives.
+# Task families whose rows carry a free-form answer rather than a label, so "synthesis" means
+# generating a whole NEW CORRECT in-distribution example (verified where a verifier exists)
+# in the anchor's JSON schema, rather than a new utterance for a known class.
 _GENERATION_FAMILY = frozenset({
     "math_reasoning",
     "code_generation",
@@ -491,7 +348,12 @@ _GENERATION_FAMILY = frozenset({
 
 
 def _new_example_prompt(anchor: dict, task_type: str) -> str:
-    """Prompt to generate ONE new, correct example in the anchor's exact schema."""
+    """Prompt to generate ONE new, correct example in the anchor's exact schema.
+
+    Generation-family only. The classification/NER path (`_synthesize_new_gold`) never asks the
+    teacher for a label — it copies the anchor's — so an out-of-vocabulary label is impossible
+    there by construction, and no label list needs to be stated.
+    """
     import json
 
     schema = {k: anchor.get(k) for k in anchor if not str(k).startswith("_")}
@@ -521,30 +383,198 @@ def _synthesize_new_correct(
     """
     import json
 
-    out: list[dict] = []
     anchors = list(examples)
+    if not anchors:
+        return []
     random.shuffle(anchors)
-    attempts = 0
-    max_attempts = max(1, n) * 4
-    while len(out) < n and attempts < max_attempts and anchors:
-        anchor = anchors[attempts % len(anchors)]
-        attempts += 1
+
+    def _one(anchor: dict) -> dict | None:
         prompt = _new_example_prompt(anchor, task_type)
         try:
-            raw = generate_fn(prompt, temperature=0.7, max_tokens=512)
-            row = json.loads(raw)
-        except Exception:
-            continue
+            row = json.loads(generate_fn(prompt, temperature=0.7, max_tokens=512))
+        except Exception:  # noqa: BLE001 — a failed generation is skipped, never fatal
+            return None
         if not isinstance(row, dict) or not row.get("text"):
-            continue
+            return None
         if verify_fn is not None and not verify_fn(row):
-            continue
+            return None
         row["_source"] = f"synth:{task_type}"
         row["_provenance"] = "synthetic_positive"
-        out.append(row)
+        return row
+
+    # Parallel, like every other generator in this module. This loop used to be SERIAL — one
+    # blocking generate_fn call at a time — while the classification path (_synthesize_new_gold)
+    # and annotate_cot both fan out over _progress_map. The synthesis server is configured for
+    # SLM_SYNTH_CONCURRENCY (8 by default) in-flight requests, so the generation family was
+    # using an eighth of the capacity it had already paid for: in
+    # slm-dialogsum-samsum-cse-38186914 vLLM sat at "Running: 1 reqs" and 21% GPU utilisation
+    # for hours while filling 2,678 rows, with no progress line to show it was alive (B252).
+    #
+    # Over-request by the same 4x the old attempt budget allowed, so rejects still leave enough
+    # accepted rows to reach n, then trim.
+    max_attempts = max(1, n) * 4
+    planned = [anchors[i % len(anchors)] for i in range(min(max_attempts, max(n * 2, n + 32)))]
+    produced = _progress_map(
+        _one,
+        planned,
+        label=f"new-correct synthesis ({task_type})",
+        log=log,
+        workers=_synth_concurrency(len(planned)),
+    )
+    out = [row for row in produced if row is not None][:n]
     if log:
-        log(f"  new-correct synthesis: {len(out)}/{n} kept ({attempts} attempts)")
+        log(f"  new-correct synthesis: {len(out)}/{n} kept ({len(planned)} attempts)")
     return out
+
+
+# How many rejected rows to quote in the log before summarising the rest.
+_VERIFY_LOG_LIMIT = int(os.environ.get("SLM_VERIFY_LOG_LIMIT", "10"))
+
+
+def _verify_synth_enabled() -> bool:
+    """Teacher label-verification of generated rows. On by default; set 0 to skip the pass."""
+    return os.environ.get("SLM_VERIFY_SYNTH", "1") == "1"
+
+
+def verify_generated_labels(rows: list[dict], *, generate_fn, log=None) -> list[dict]:
+    """Ask the teacher model to confirm each generated row really belongs to its assigned label.
+
+    Generation and verification are NOT the same task. Writing "an utterance that belongs to
+    class X" is open-ended; deciding "does this utterance belong to class X, yes or no" is the
+    classification task the reference model is already good at. So a self-check is cheap and
+    meaningfully better than nothing, even though it uses the same model.
+
+    Rows the teacher rejects are dropped, and its stated reason is logged so a bad *generator*
+    prompt is visible rather than silently absorbed. Any verification failure (unparseable reply,
+    endpoint error) KEEPS the row — the verifier must never be able to empty a dataset.
+    """
+    if not rows or generate_fn is None:
+        return rows
+
+    def _check(row: dict):
+        label = str(row.get("label"))
+        text = str(row.get("text") or "")
+        prompt = (
+            f"You are checking one training example for a text classifier.\n\n"
+            f"Utterance: {text}\n"
+            f"Proposed label: {label}\n\n"
+            f"Does this utterance genuinely belong to the '{label}' class? Answer strictly as "
+            f'JSON: {{"valid": true|false, "reason": "<max 15 words>"}}. '
+            f"Answer false if the utterance actually belongs to a different class, is "
+            f"incoherent, or mixes two intents."
+        )
+        try:
+            raw = generate_fn(prompt, 0.0, 120)
+        except Exception:  # noqa: BLE001 — verification must never be fatal
+            return row, True, "verifier unavailable (kept)"
+        match = re.search(r"\{.*\}", str(raw or ""), re.DOTALL)
+        if not match:
+            return row, True, "unparseable verifier reply (kept)"
+        try:
+            verdict = json.loads(match.group())
+        except json.JSONDecodeError:
+            return row, True, "unparseable verifier reply (kept)"
+        return row, bool(verdict.get("valid", True)), str(verdict.get("reason", ""))[:120]
+
+    workers = _synth_concurrency(len(rows))
+    results = _progress_map(
+        _check, rows, label="label verification", log=log, workers=workers
+    )
+    kept, rejected = [], []
+    for row, valid, reason in results:
+        (kept if valid else rejected).append((row, reason))
+
+    if log:
+        log(
+            f"      [verify] teacher validated {len(kept)}/{len(rows)} generated row(s); "
+            f"rejected {len(rejected)}"
+        )
+        for row, reason in rejected[:_VERIFY_LOG_LIMIT]:
+            text = " ".join(str(row.get("text") or "").split())[:80]
+            log(f"        REJECTED [{row.get('label')}] {text!r} — teacher: {reason}")
+        if len(rejected) > _VERIFY_LOG_LIMIT:
+            log(f"        ... and {len(rejected) - _VERIFY_LOG_LIMIT} more rejected")
+    return [row for row, _ in kept]
+
+
+def _synthesize_new_gold(
+    examples: list[dict],
+    *,
+    task_type: str,
+    n: int,
+    generate_fn,
+    log=None,
+) -> list[dict]:
+    """Generate ``n`` NEW CORRECT in-class examples, spread evenly over the label space.
+
+    The generated row keeps its anchor's label — the model is never asked to choose one — so
+    this grows in-class coverage without disturbing the class histogram, and an out-of-vocabulary
+    label is impossible by construction. Anchors are drawn round-robin across labels so rare
+    classes get the same attention as common ones.
+    """
+    if n <= 0 or not examples:
+        return []
+    by_label: dict[str, list[dict]] = {}
+    for row in examples:
+        label = row.get("label")
+        if label is not None and str(row.get("text") or "").strip():
+            by_label.setdefault(str(label), []).append(row)
+    if not by_label:
+        return []
+
+    rng = random.Random(20260804)
+    labels = sorted(by_label)
+    for bucket in by_label.values():
+        rng.shuffle(bucket)
+    anchors: list[dict] = []
+    depth = 0
+    while len(anchors) < n:
+        progressed = False
+        for label in labels:
+            bucket = by_label[label]
+            if depth < len(bucket):
+                anchors.append(bucket[depth])
+                progressed = True
+                if len(anchors) == n:
+                    break
+        if not progressed:
+            break
+        depth += 1
+
+    def _gold_one(anchor: dict) -> dict | None:
+        label = str(anchor.get("label"))
+        prompt = (
+            f"Write ONE new, realistic user utterance that belongs to the '{label}' class "
+            f"of a text classifier. It must be genuinely NEW and phrased differently from the "
+            f"reference — not a paraphrase, not a copy — while unambiguously belonging to "
+            f"'{label}'.\n\n"
+            f"Reference '{label}' example:\n{anchor.get('text', '')}\n\n"
+            f"Output ONLY the new utterance — no preamble, no explanation, no quotation marks, "
+            f"no label prefix."
+        )
+        try:
+            text = generate_fn(prompt, 1.0, 200)
+        except Exception:  # noqa: BLE001 — a failed generation is skipped, never fatal
+            return None
+        text = str(text or "").strip()
+        if not text:
+            return None
+        return {
+            "text": text,
+            "label": anchor.get("label"),
+            "_source": "synth",
+            "_provenance": "synthetic_positive",
+        }
+
+    workers = _synth_concurrency(len(anchors))
+    produced = _progress_map(
+        _gold_one,
+        anchors,
+        label=f"new gold ({task_type}, {len(labels)} labels)",
+        log=log,
+        workers=workers,
+    )
+    return [row for row in produced if row is not None]
 
 
 def synthesize_examples(
@@ -556,24 +586,31 @@ def synthesize_examples(
     verify_fn=None,
     log=None,
 ) -> list[dict]:
-    """Unified, task-adaptive synthesis entry (redesign 2026-07-31).
+    """Unified, task-adaptive synthesis entry.
 
-    - classification / NER: contrastive hard negatives (2-for-1), ungated.
+    - classification / NER: NEW GOLD (in-class) examples only, spread across the label space
+      and then label-verified by the teacher model.
     - generation-family (math/code/generation/multilingual/structured): NEW CORRECT
       in-distribution examples, verified when a ``verify_fn`` is supplied.
 
-    Returns synthetic (and, for hard negatives, anchor) rows in the same format as the
-    real data. Non-fatal: an unavailable/failing backend yields fewer rows, never raises.
+    Returns synthetic rows in the same format as the real data. Non-fatal: an unavailable or
+    failing backend yields fewer rows, never raises.
     """
     if n <= 0 or not examples:
         return []
     if task_type in ("classification", "NER"):
-        return synthesize_hard_negatives(
+        rows = _synthesize_new_gold(
             examples,
-            n,
             task_type=task_type,
+            n=n,
             generate_fn=generate_fn,
+            log=log,
         )
+        if rows and _verify_synth_enabled():
+            rows = verify_generated_labels(rows, generate_fn=generate_fn, log=log)
+        if log:
+            log(f"      [synth] requested {n} new-gold row(s) -> kept {len(rows)}")
+        return rows
     if task_type in _GENERATION_FAMILY:
         return _synthesize_new_correct(
             examples,

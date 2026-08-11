@@ -12,6 +12,7 @@ import time
 from pathlib import Path
 
 from agent.cost import tracked_anthropic_messages_create, tracked_exa_call
+from agent.llm_text import MIN_THINKING_SAFE_MAX_TOKENS, response_text
 from data.loaders.dataset_integrity import (
     normalize_text,
     normalized_text_overlap,
@@ -611,6 +612,40 @@ def mine_additional_real_rows(
     paid_rounds_used = 0
     paid_budget_exhausted = False
 
+    # Label space already established by the run's own data. A mined classification source whose
+    # labels are disjoint from this is unusable: its rows can never match an eval label, so they
+    # are pure noise in the curriculum. This bites when a mined dataset stores its intent column
+    # as a plain integer rather than a ClassLabel — `DeepPavlov/clinc150` types `label` as
+    # `Value('int64')`, so the ClassLabel `.names` resolution below has nothing to resolve and the
+    # raw ids ("0", "1", "2") were written straight into training data (B222).
+    _known_labels = {
+        str(row.get("label"))
+        for row in (existing_rows or [])
+        if isinstance(row, dict) and row.get("label") is not None
+    }
+
+    def _labels_are_usable(train: list, stage: str) -> bool:
+        if task_type != "classification" or not _known_labels:
+            return True
+        mined_labels = {
+            str(row.get("label"))
+            for row in train
+            if isinstance(row, dict) and row.get("label") is not None
+        }
+        if not mined_labels:
+            return True
+        overlap = mined_labels & _known_labels
+        if overlap:
+            return True
+        sample = sorted(mined_labels)[:5]
+        log(
+            f"      [mine] REJECTED {stage} source: none of its {len(mined_labels)} label(s) "
+            f"{sample} exist in the run's {len(_known_labels)}-label space — most likely raw "
+            "class ids from a non-ClassLabel column. Merging them would inject unmatchable "
+            "labels into training (B222)."
+        )
+        return False
+
     def accept(result, meta: dict, stage: str) -> int:
         nonlocal candidate_rows, rejected_sources
         if not result:
@@ -636,6 +671,9 @@ def mine_additional_real_rows(
             return 0
 
         candidate_rows += len(train)
+        if not _labels_are_usable(train, stage):
+            rejected_sources += 1
+            return 0
         accepted = 0
         source_id = (
             f"{records[0].get('kind', 'source')}:{records[0].get('id', '?')}"
@@ -902,8 +940,8 @@ def _peek_hf_dataset(hf_id: str, log=print):
         try:
             splits = get_dataset_split_names(hf_id, cfg) if cfg is not None else get_dataset_split_names(hf_id)
             train_split = "train" if "train" in splits else splits[0]
-            ds = (load_dataset(hf_id, cfg, split=f"{train_split}[:2]", trust_remote_code=True)
-                  if cfg else load_dataset(hf_id, split=f"{train_split}[:2]", trust_remote_code=True))
+            ds = (load_dataset(hf_id, cfg, split=f"{train_split}[:2]")
+                  if cfg else load_dataset(hf_id, split=f"{train_split}[:2]"))
             sample = {k: (str(v)[:200]) for k, v in ds[0].items()}
             return cfg, list(splits), ds.column_names, sample, ds.features
         except Exception as e:
@@ -939,10 +977,10 @@ def _llm_map_dataset(hf_id, cfg, splits, columns, sample_row, task_type, plan, l
             client.messages,
             stage="acquire_schema_mapping",
             model=ORCHESTRATOR_MODEL,
-            max_tokens=400,
+            max_tokens=MIN_THINKING_SAFE_MAX_TOKENS,
             messages=[{"role": "user", "content": prompt}],
         )
-        raw = resp.content[0].text.strip()
+        raw = response_text(resp)
         import json as _json, re as _re
         m = _re.search(r"\{.*\}", raw, _re.DOTALL)
         obj = _json.loads(m.group()) if m else {}
@@ -969,8 +1007,8 @@ def _materialize_from_mapping(hf_id, cfg, splits, mapping, task_type, max_train,
     tr, te = _mapped_split_names(splits, mapping)
 
     def _load(split, n):
-        return (load_dataset(hf_id, cfg, split=f"{split}[:{n}]", trust_remote_code=True)
-                if cfg else load_dataset(hf_id, split=f"{split}[:{n}]", trust_remote_code=True))
+        return (load_dataset(hf_id, cfg, split=f"{split}[:{n}]")
+                if cfg else load_dataset(hf_id, split=f"{split}[:{n}]"))
 
     def _convert(ds):
         out = []
@@ -1806,7 +1844,7 @@ def synthesize_seed_examples(plan: dict, task_type: str, n_needed: int,
             model=ORCHESTRATOR_MODEL, max_tokens=4096, temperature=1.0,
             messages=[{"role": "user", "content": prompt}],
         )
-        raw = resp.content[0].text.strip()
+        raw = response_text(resp)
         m = _re.search(r'\{.*\}', raw, _re.DOTALL)
         parsed = _json.loads(m.group()) if m else {}
         candidates = parsed.get("examples", []) if isinstance(parsed, dict) else []
@@ -1977,7 +2015,7 @@ def _annotate_ner_entities(
                     client.messages,
                     stage="acquire_ner_annotation",
                     model=ORCHESTRATOR_MODEL,
-                    max_tokens=400,
+                    max_tokens=MIN_THINKING_SAFE_MAX_TOKENS,
                     messages=[{"role": "user", "content": prompt}],
                 )
             except Exception as exc:  # noqa: BLE001
@@ -1995,7 +2033,7 @@ def _annotate_ner_entities(
                 stats["retried"] += 1
                 continue
 
-            raw = response.content[0].text.strip()
+            raw = response_text(response)
             match = _re.search(r"\[.*\]", raw, _re.DOTALL)
             if not match:
                 if attempt >= max_attempts:

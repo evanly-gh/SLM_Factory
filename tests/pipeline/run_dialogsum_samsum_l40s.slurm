@@ -1,7 +1,8 @@
 #!/bin/bash
-#SBATCH --job-name=slm-dialogsum-samsum-ckpt
-#SBATCH --account=intelligentsystems
-#SBATCH --partition=ckpt
+#SBATCH --job-name=slm-dialogsum-samsum-l40s
+#SBATCH --account=gpu-l40s-intelligentsystems
+#SBATCH --partition=gpu-l40s
+#SBATCH --qos=normal
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --gres=gpu:l40s:2
@@ -10,7 +11,7 @@
 #SBATCH --time=7-00:00:00
 #SBATCH --requeue
 #SBATCH --signal=B:USR1@7200
-#SBATCH --output=/mmfs1/gscratch/intelligentsystems/evanly/SLM_Factory/logs/slurm/slm-dialogsum-samsum-ckpt-%j.out
+#SBATCH --output=/mmfs1/gscratch/intelligentsystems/evanly/SLM_Factory/logs/slurm/slm-dialogsum-samsum-l40s-%j.out
 #
 # CURATED BENCHMARK: dialogsum_samsum (task_type=generation, metric judge_mean_0_1).
 # SLM_BENCHMARK_TASK pins the deterministic DialogSum + SAMSum summarization loader instead of
@@ -18,9 +19,9 @@
 # datasets are pulled live from HuggingFace on the compute node (public, no token). Generation is
 # judge-scored by the co-located local Qwen judge (no cloud judge calls).
 #
-# Allocated for the preemptible ckpt partition: 2x L40S (synth server on GPU0, pipeline on GPU1 —
-# the auto-2gpu profile in _l40s_task_body.sh) with the --requeue + USR1 checkpoint contract, so a
-# preemption checkpoints and re-queues rather than losing the run.
+# Dedicated gpu-l40s-intelligentsystems quota: 2x L40S (synth server on GPU0, pipeline on GPU1 —
+# the auto-2gpu profile in _l40s_task_body.sh). --requeue + USR1 checkpoint contract is a safety
+# net against node failure/maintenance.
 export SLM_CUDA_ISOLATION=1
 export SLM_BENCHMARK_TASK=dialogsum_samsum
 export TASK="Fine tune a small model for dialogue summarization (DialogSum and SAMSum chat/meeting transcripts), targeting deployment on my Samsung Galaxy S24 Ultra with 12GB RAM and 256GB storage"

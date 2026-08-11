@@ -111,6 +111,66 @@ def test_eval_setup_enforces_normalized_train_test_separation(tmp_path, monkeypa
         eval_setup.eval_setup_node(_state())
 
 
+# The curated SLM_BENCHMARK_TASK path bypasses web_acquire, and therefore also bypasses its
+# Stage-0 `remove_normalized_train_overlap`. Official benchmark splits are not guaranteed
+# disjoint — CLINC150 ships "what's your designation" in *both* splits under two different
+# intents — so without Stage-0 the Layer-1 firewall turns a source-data quirk into a hard
+# run-ending raise. Decontaminate like the autonomous path: drop the train row, never the
+# official test row.
+
+def test_named_benchmark_path_removes_train_rows_overlapping_official_test(monkeypatch, capsys):
+    leaked = {"text": " What's Your  Designation ", "label": "what_is_your_name"}
+    kept = {"text": "set an alarm for 6am", "label": "alarm"}
+    test_rows = [{"text": "what's your designation", "label": "user_name"}]
+
+    def fake_registry():
+        return {
+            "clinc150": (
+                lambda max_train, max_test: ([leaked, kept], test_rows),
+                "classification",
+                "CLINC150 (clinc_oos/plus)",
+            )
+        }
+
+    monkeypatch.setattr(eval_setup, "_named_benchmark_loaders", fake_registry)
+
+    meta: dict = {}
+    train_examples, test_examples = eval_setup._load_named_benchmark(
+        "clinc150", {"task_type": "classification"}, meta
+    )
+
+    assert train_examples == [kept], "the overlapping train row must be dropped"
+    assert test_examples == test_rows, "official test rows must never be modified"
+    assert meta["overlap_removed_from_train"] == 1
+    assert "removed 1 train row" in capsys.readouterr().out
+
+
+def test_named_benchmark_path_reports_zero_removal_when_splits_are_clean(monkeypatch):
+    train_rows = [{"text": "set an alarm", "label": "alarm"}]
+    test_rows = [{"text": "what time is it", "label": "time"}]
+
+    monkeypatch.setattr(
+        eval_setup,
+        "_named_benchmark_loaders",
+        lambda: {
+            "clinc150": (
+                lambda max_train, max_test: (train_rows, test_rows),
+                "classification",
+                "CLINC150 (clinc_oos/plus)",
+            )
+        },
+    )
+
+    meta: dict = {}
+    train_examples, test_examples = eval_setup._load_named_benchmark(
+        "clinc150", {"task_type": "classification"}, meta
+    )
+
+    assert train_examples == train_rows
+    assert test_examples == test_rows
+    assert meta["overlap_removed_from_train"] == 0
+
+
 def test_eval_restriction_text_does_not_claim_unimplemented_repo_ban():
     root = Path(__file__).parents[2]
     curate_source = (root / "agent" / "nodes" / "curate.py").read_text()

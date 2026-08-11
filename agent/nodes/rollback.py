@@ -73,9 +73,33 @@ def rollback_node(state: AgentState) -> AgentState:
             if isinstance(encoded_eval, dict)
             else None
         )
-        state["test_report"] = deepcopy(
-            evaluation_state.get("test_report")
-        )
+        # The diagnosis IS rolled back, deliberately. After a rollback the live weights are the
+        # restored best checkpoint, so the per-difficulty scores and confusion pairs that describe
+        # the CURRENT model are the best node's — not the discarded attempt's. Judging the next
+        # intervention from the failed attempt's numbers would mean reasoning about a model that
+        # no longer exists.
+        #
+        # What the orchestrator additionally needs is a memo of what was just tried and why it
+        # failed, so it does not simply repeat it. That is `last_failed_attempt` below, which is
+        # NOT part of the restored state and is surfaced separately in the prompt (B227/B231).
+        restored_report = deepcopy(evaluation_state.get("test_report"))
+        failed_report = state.get("test_report") or {}
+        state["test_report"] = restored_report
+        state["last_failed_attempt"] = {
+            "iteration": pruned_node.get("iteration") if state["dag"] else None,
+            "intervention": pruned_node.get("intervention") if state["dag"] else None,
+            "sub_strategy": (
+                (((pruned_node.get("pi") or {}).get("D") or {}).get("plan") or {})
+                .get("strategy")
+                if state["dag"] else None
+            ),
+            "hypothesis": (pruned_node.get("hypothesis") if state["dag"] else "") or "",
+            "score": regressed_score,
+            "best_score": best_node["score"],
+            "delta": round(regressed_score - best_node["score"], 4),
+            # The failed attempt's own difficulty profile, kept ONLY as failure evidence.
+            "by_difficulty": deepcopy(failed_report.get("by_difficulty")),
+        }
         best_label = best_node.get("best_config", "restored best")
         best_hparams = dict(
             ((best_node.get("pi") or {}).get("H") or {})

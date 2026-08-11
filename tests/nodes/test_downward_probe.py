@@ -145,11 +145,10 @@ def test_tier0_model_skips_probe():
     assert out["downward_probe_done"] is True
 
 
-@patch("agent.nodes.downward_probe._should_reexplore_downward", return_value=True)
 @patch("agent.nodes.downward_probe._train_and_eval")
 @patch("agent.nodes.downward_probe._llm_choose_model")
 @patch("agent.nodes.downward_probe.filter_pool")
-def test_adopts_smaller_model_when_it_clears_threshold(mock_fp, mock_choose, mock_te, _dec):
+def test_adopts_smaller_model_when_it_clears_threshold(mock_fp, mock_choose, mock_te):
     from agent.nodes.downward_probe import downward_probe_node
 
     current = _model(tier=2, model_id="test/Big", quant="Q8_0")
@@ -207,11 +206,10 @@ def test_adopts_smaller_model_when_it_clears_threshold(mock_fp, mock_choose, moc
     ]
 
 
-@patch("agent.nodes.downward_probe._should_reexplore_downward", return_value=True)
 @patch("agent.nodes.downward_probe._train_and_eval")
 @patch("agent.nodes.downward_probe._llm_choose_model")
 @patch("agent.nodes.downward_probe.filter_pool")
-def test_keeps_current_when_smaller_fails_threshold(mock_fp, mock_choose, mock_te, _dec):
+def test_keeps_current_when_smaller_fails_threshold(mock_fp, mock_choose, mock_te):
     from agent.nodes.downward_probe import downward_probe_node
     smaller = _model(tier=1, model_id="test/Small")
     mock_fp.return_value = [smaller]
@@ -294,10 +292,7 @@ def test_downward_probe_skips_tier_already_trained_by_main_ladder(
         {"selector": tier1.selector, "baseline_f1": 0.5, "best_finetuned_f1": 0.6925},
     ]
 
-    with patch(
-        "agent.nodes.downward_probe._should_reexplore_downward", return_value=True
-    ):
-        out = downward_probe_node(state)
+    out = downward_probe_node(state)
 
     assert out["next_action"] == "terminate"
     mock_choose.assert_not_called()
@@ -325,10 +320,15 @@ def test_iterate_routes_to_downward_probe_on_success(_mock):
 
 @patch.dict("os.environ", {"SLM_MODEL_SELECTION_STRATEGY": "smallest_first"})
 @patch("agent.nodes.iterate._llm_iterate", side_effect=Exception("skip llm"))
-def test_iterate_skips_downward_probe_for_smallest_first(_mock):
-    # smallest_first already ends at the smallest model → no downward probe → terminate.
+def test_iterate_skips_downward_probe_at_the_lowest_tier(_mock):
+    """Policy 2026-08-05: regression is structural, not strategy-gated.
+
+    At tier 0 there is nothing below, so a converged run terminates. Under `smallest_first` the
+    run starts at tier 0, which is why it normally never regresses — but that is a consequence of
+    where it started, not a rule about the strategy.
+    """
     from agent.nodes.iterate import iterate_node
-    m = _model(tier=2)
+    m = _model(tier=0)
     state = {
         "selected_model": m, "scores": [0.95], "best_score": 0.95, "iteration": 3,
         "turn_budget": 1000, "stop_threshold": 0.90, "initial_stop_threshold": 0.90,
@@ -338,6 +338,21 @@ def test_iterate_skips_downward_probe_for_smallest_first(_mock):
     out = iterate_node(state)
     assert out["next_action"] == "terminate"
     _mock.assert_not_called()
+
+
+@patch("agent.nodes.iterate._llm_iterate", side_effect=Exception("skip llm"))
+def test_iterate_probes_down_after_escalation_even_under_smallest_first(_mock):
+    """A smallest_first run that ESCALATED must be able to come back down again."""
+    from agent.nodes.iterate import iterate_node
+    m = _model(tier=2)
+    state = {
+        "selected_model": m, "scores": [0.95], "best_score": 0.95, "iteration": 3,
+        "turn_budget": 1000, "stop_threshold": 0.90, "initial_stop_threshold": 0.90,
+        "task_type": "classification", "last_eval": None, "hw_gating_enabled": False,
+        "downward_probe_done": False,
+    }
+    out = iterate_node(state)
+    assert out["next_action"] == "downward_probe"
 
 
 @patch("agent.nodes.iterate._llm_iterate", side_effect=Exception("skip llm"))
@@ -532,10 +547,6 @@ def test_downward_probe_tracks_and_adopts_multiple_successful_tiers():
     with (
         patch("agent.nodes.downward_probe.filter_pool", return_value=candidates),
         patch(
-            "agent.nodes.downward_probe._should_reexplore_downward",
-            return_value=True,
-        ) as gate,
-        patch(
             "agent.nodes.downward_probe._llm_choose_model",
             side_effect=choose_candidate,
         ),
@@ -553,7 +564,6 @@ def test_downward_probe_tracks_and_adopts_multiple_successful_tiers():
         out = downward_probe_node(state)
 
     assert [call.args[0].tier for call in train_eval.call_args_list] == [2, 1, 0]
-    assert [call.args[1] for call in gate.call_args_list] == [3, 2, 1]
     assert out["downward_tiers_tried"] == [0, 1, 2]
     assert out["selected_model"].tier == 0
     assert out["best_weights_ref"] == "/tier-0/ckpt"
@@ -588,10 +598,6 @@ def test_downward_probe_records_failed_attempt_before_exiting():
             return_value=[lower, current],
         ),
         patch(
-            "agent.nodes.downward_probe._should_reexplore_downward",
-            return_value=True,
-        ),
-        patch(
             "agent.nodes.downward_probe._llm_choose_model",
             return_value=lower,
         ),
@@ -618,51 +624,6 @@ def test_downward_probe_records_failed_attempt_before_exiting():
     ]
 
 
-def test_downward_gate_fatal_error_preserves_converged_result(
-    capsys,
-):
-    from agent.llm_errors import FatalLLMError
-    from agent.nodes.downward_probe import downward_probe_node
-
-    current = _model(tier=2, model_id="test/Current", quant="Q8_0")
-    lower = _model(tier=1, model_id="test/Lower")
-    state = _state(current)
-    original_weights = state["best_weights_ref"]
-    original_score = state["best_score"]
-    with (
-        patch(
-            "agent.nodes.downward_probe.filter_pool",
-            return_value=[lower, current],
-        ),
-        patch(
-            "agent.nodes.downward_probe._should_reexplore_downward",
-            side_effect=FatalLLMError("credit balance is too low"),
-        ),
-        patch("agent.nodes.downward_probe._llm_choose_model") as choose,
-        patch("agent.nodes.downward_probe._train_and_eval") as train_eval,
-    ):
-        out = downward_probe_node(state)
-
-    choose.assert_not_called()
-    train_eval.assert_not_called()
-    assert out["selected_model"] is current
-    assert out["best_weights_ref"] == original_weights
-    assert out["best_score"] == original_score
-    assert out["downward_probe_done"] is True
-    assert out["next_action"] == "terminate"
-    assert out["downward_probe_history"]["attempts"] == []
-    assert out["downward_probe_history"]["termination"] == {
-        "stage": "reexploration_gate",
-        "result": "skipped_error",
-        "target_tier": None,
-        "candidate_selectors": [],
-        "reason": "FatalLLMError: credit balance is too low",
-    }
-    rendered = capsys.readouterr().out
-    assert "optional downward re-exploration skipped" in rendered
-    assert "credit balance is too low" in rendered
-
-
 def test_downward_model_chooser_fatal_error_preserves_converged_result(
     capsys,
 ):
@@ -678,10 +639,6 @@ def test_downward_model_chooser_fatal_error_preserves_converged_result(
         patch(
             "agent.nodes.downward_probe.filter_pool",
             return_value=[lower, current],
-        ),
-        patch(
-            "agent.nodes.downward_probe._should_reexplore_downward",
-            return_value=True,
         ),
         patch(
             "agent.nodes.downward_probe._llm_choose_model",
@@ -710,33 +667,6 @@ def test_downward_model_chooser_fatal_error_preserves_converged_result(
     assert "provider permission denied" in rendered
 
 
-def test_downward_probe_exits_when_orchestrator_gate_is_false():
-    from agent.nodes.downward_probe import downward_probe_node
-
-    current = _model(tier=2, model_id="test/Current")
-    lower = _model(tier=1, model_id="test/Lower")
-    with (
-        patch(
-            "agent.nodes.downward_probe.filter_pool",
-            return_value=[lower, current],
-        ),
-        patch(
-            "agent.nodes.downward_probe._should_reexplore_downward",
-            return_value=False,
-        ) as gate,
-        patch("agent.nodes.downward_probe._llm_choose_model") as choose,
-        patch("agent.nodes.downward_probe._train_and_eval") as train_eval,
-    ):
-        out = downward_probe_node(_state(current))
-
-    gate.assert_called_once()
-    choose.assert_not_called()
-    train_eval.assert_not_called()
-    assert out["selected_model"] is current
-    assert out["downward_probe_done"] is True
-    assert out["next_action"] == "terminate"
-
-
 def test_downward_probe_step_checkpoints_choice_before_training():
     from agent.nodes.downward_probe import downward_probe_step_node
 
@@ -746,10 +676,6 @@ def test_downward_probe_step_checkpoints_choice_before_training():
         patch(
             "agent.nodes.downward_probe.filter_pool",
             return_value=[lower, current],
-        ),
-        patch(
-            "agent.nodes.downward_probe._should_reexplore_downward",
-            return_value=True,
         ),
         patch(
             "agent.nodes.downward_probe._llm_choose_model",
@@ -771,7 +697,7 @@ def test_downward_probe_step_checkpoints_choice_before_training():
     assert out["downward_probe_done"] is False
 
 
-def test_downward_probe_pending_retry_skips_gate_and_model_api():
+def test_downward_probe_pending_retry_skips_the_model_choice_api():
     from agent.nodes.downward_probe import downward_probe_step_node
 
     current = _model(tier=2, model_id="test/Current")
@@ -792,7 +718,6 @@ def test_downward_probe_pending_retry_skips_gate_and_model_api():
             "agent.nodes.downward_probe.filter_pool",
             return_value=[lower, current],
         ),
-        patch("agent.nodes.downward_probe._should_reexplore_downward") as gate,
         patch("agent.nodes.downward_probe._llm_choose_model") as choose,
         patch(
             "agent.nodes.downward_probe._train_and_eval",
@@ -801,7 +726,6 @@ def test_downward_probe_pending_retry_skips_gate_and_model_api():
     ):
         out = downward_probe_step_node(state)
 
-    gate.assert_not_called()
     choose.assert_not_called()
     train_eval.assert_called_once_with(
         lower,
@@ -813,3 +737,33 @@ def test_downward_probe_pending_retry_skips_gate_and_model_api():
     assert out["downward_probe_history"]["attempts"][0]["adopted"] is True
     assert out["downward_probe_history"]["attempts"][0]["H"] == _fixed_probe_h()
     assert out["selected_model"] is lower
+
+
+def test_downward_probe_is_unconditional_when_a_lower_tier_is_untried():
+    """Policy 2026-08-05: no orchestrator gate — an untried lower tier is always probed.
+
+    The gate used to spend an API call to sometimes decline the one thing the run exists to
+    determine (the smallest model that clears the goal). Only structural conditions stop it.
+    """
+    from agent.nodes.downward_probe import downward_probe_node
+
+    current = _model(tier=2, model_id="test/Current")
+    lower = _model(tier=1, model_id="test/Lower")
+    with (
+        patch(
+            "agent.nodes.downward_probe.filter_pool",
+            return_value=[lower, current],
+        ),
+        patch(
+            "agent.nodes.downward_probe._llm_choose_model", return_value=lower
+        ) as choose,
+        patch(
+            "agent.nodes.downward_probe._train_and_eval",
+            return_value=("/lower/ckpt", EvalResult(f1=0.80, per_class={}, failures=[])),
+        ) as train_eval,
+    ):
+        downward_probe_node(_state(current))
+
+    # It proceeded to pick and train a lower-tier candidate instead of declining.
+    choose.assert_called_once()
+    train_eval.assert_called_once()

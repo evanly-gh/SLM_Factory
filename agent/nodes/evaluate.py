@@ -60,7 +60,7 @@ def _build_or_reuse_gguf(weights_ref: str, model_id: str, quant: str, mlabel: st
 
     cleanup_path = None
     try:
-        _log(mlabel, f"  Quantizing to {quant} GGUF for honest accuracy eval (llama.cpp)...")
+        _log(mlabel, f"  ── STEP 1/2: QUANTIZE → {quant} GGUF (llama.cpp; no scoring yet) ──")
         is_remote_base = (
             weights_ref == model_id and not os.path.exists(weights_ref)
         )
@@ -71,6 +71,7 @@ def _build_or_reuse_gguf(weights_ref: str, model_id: str, quant: str, mlabel: st
             source_path = merge_for_quantization(
                 weights_ref,
                 os.path.join("artifacts", "merged", model_id_safe, wkey),
+                base_model_id=model_id,
             )
             cleanup_path = source_path
         gguf_path = quantize_from_model_spec(source_path, gguf_dir, quant)
@@ -81,9 +82,9 @@ def _build_or_reuse_gguf(weights_ref: str, model_id: str, quant: str, mlabel: st
             raise
         _log(
             mlabel,
-            f"  GGUF built and load-validated: {gguf_path} — "
-            "scoring via llama-cpp-python",
+            f"  ── STEP 2/2: RUN EVAL on the quantized GGUF via llama-cpp-python ──",
         )
+        _log(mlabel, f"     GGUF built and load-validated: {gguf_path}")
         return gguf_path
     except QuantizationInfrastructureError:
         raise
@@ -192,7 +193,10 @@ def evaluate_node(state: AgentState) -> AgentState:
     baseline_result = None
     baseline_gguf_path = None
     if state["iteration"] == 1:
-        _log(mlabel, "Measuring zero-shot baseline (base model, no adapter)...")
+        _log(mlabel, "")
+        _log(mlabel, "=" * 78)
+        _log(mlabel, "  BASELINE EVAL — untrained base model, no adapter (reference point)")
+        _log(mlabel, "=" * 78)
         try:
             baseline_quant = state["selected_model"].quant
             if baseline_quant is not None:
@@ -256,7 +260,14 @@ def evaluate_node(state: AgentState) -> AgentState:
     scored = {}
     gguf_by_label = {}
     for label, weights_ref in pending.items():
-        _log(mlabel, f"Evaluating config '{label}' (weights: {weights_ref})")
+        _log(mlabel, "")
+        _log(mlabel, "=" * 78)
+        _log(
+            mlabel,
+            f"  ITERATION {state['iteration']} EVAL — fine-tuned config '{label}'",
+        )
+        _log(mlabel, "=" * 78)
+        _log(mlabel, f"  weights: {weights_ref}")
         quant = state["selected_model"].quant
         gguf_path = None
         # Build + score the ACTUAL quantized GGUF (honest per-quant accuracy) when EITHER
@@ -298,6 +309,14 @@ def evaluate_node(state: AgentState) -> AgentState:
 
     prev_best = state["best_score"]
     delta = current_score - prev_best
+
+    # Append-only record of every eval on the CURRENT model, including ones that will be rolled
+    # back. Stagnation is measured over this rather than state["scores"], which rollback pops —
+    # see agent/nodes/iterate.py::_eval_history. Reset on tier change by escalate/downward_probe.
+    state["eval_history"] = list(state.get("eval_history") or []) + [current_score]
+    # The rollback memo describes the PREVIOUS failed attempt. A fresh eval supersedes it, so
+    # clear it here; rollback_node re-populates it if this eval also regresses.
+    state["last_failed_attempt"] = None
 
     # Update state
     is_new_best = current_score > state["best_score"]
@@ -499,7 +518,14 @@ def evaluate_node(state: AgentState) -> AgentState:
         best_config=best_label,
         eval_result=best_result,
         score_band=policy["band"],
-        next_intervention=policy["intervention"],
+        # The intervention ACTUALLY EXECUTED for this iteration, not the score-band policy's
+        # guess. The curation log is what the orchestrator reads back as its own history, and
+        # `agent/context_manager._extract_iteration_summary` surfaces this field as
+        # `intervention=...` in the compacted trajectory. Writing the policy guess here meant the
+        # orchestrator was told it had run `hyperparameter` on iterations 4-8 of
+        # slm-clinc150-cse-38155022 when the DAG shows all five were `data_rebuild/synthesize` —
+        # i.e. its memory of what it had already tried was factually wrong (B237).
+        next_intervention=dag_intervention,
         hypothesis=state.get("last_hypothesis", ""),
         eval_firewall=curation.get("eval_firewall"),
         model_id=model_id,

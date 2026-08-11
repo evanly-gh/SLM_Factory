@@ -3,6 +3,7 @@ import json
 import gc
 import sys
 import weakref
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
@@ -672,12 +673,27 @@ def test_early_stop_failure_reloads_fresh_model_and_full_training_rows(
     assert cleanup_probes[0] == (None, True)
 
 
+def _record_merge_write(mock_model):
+    """Make a mocked save_pretrained_merged actually emit a weight file.
+
+    merge_for_quantization now rejects an empty merge directory outright (B219), so a mock that
+    writes nothing would look like the unsloth_zoo silent no-op it is designed to catch.
+    """
+    mock_model.save_pretrained_merged.side_effect = (
+        lambda dest, _tokenizer, **_kwargs: (
+            Path(dest).mkdir(parents=True, exist_ok=True),
+            (Path(dest) / "model.safetensors").write_bytes(b"merged"),
+        )
+    )
+    return mock_model
+
+
 def test_merge_for_quantization_loads_qwen35_base_locally_then_adapter(
     tmp_path,
 ):
     language_loader = MagicMock()
     vision_loader = MagicMock()
-    adapter_model = MagicMock()
+    adapter_model = _record_merge_write(MagicMock())
     tokenizer = MagicMock()
     unsloth_mock = MagicMock(
         FastLanguageModel=language_loader,
@@ -768,7 +784,7 @@ def test_merge_for_quantization_loads_qwen35_base_locally_then_adapter(
 
 def test_merge_for_quantization_keeps_full_local_checkpoint_path(tmp_path):
     language_loader = MagicMock()
-    model = MagicMock()
+    model = _record_merge_write(MagicMock())
     tokenizer = MagicMock()
     language_loader.from_pretrained.return_value = (model, tokenizer)
     unsloth_mock = MagicMock(
@@ -799,3 +815,119 @@ def test_merge_for_quantization_keeps_full_local_checkpoint_path(tmp_path):
         trust_remote_code=True,
     )
     model.save_pretrained_merged.assert_called_once()
+
+
+# QLoRA trains on a 4-bit base, and Unsloth silently rewrites the adapter's
+# base_model_name_or_path to its own pre-quantized mirror (e.g. Qwen/Qwen3-0.6B becomes
+# unsloth/qwen3-0.6b-unsloth-bnb-4bit). Merging *that* with save_method="merged_16bit" makes
+# unsloth_zoo emit only a UserWarning and write nothing at all, so the caller must be able to
+# pin the merge to the canonical 16-bit base it actually selected.
+
+def _merge_fixture(tmp_path, recorded_base):
+    checkpoint = tmp_path / "adapter"
+    checkpoint.mkdir()
+    (checkpoint / "adapter_config.json").write_text(
+        json.dumps({"base_model_name_or_path": recorded_base}), encoding="utf-8"
+    )
+    (checkpoint / "adapter_model.safetensors").write_bytes(b"lora")
+    (checkpoint / "tokenizer.json").write_text(
+        json.dumps({"model": {"type": "BPE"}}), encoding="utf-8"
+    )
+    snapshot = tmp_path / "snapshots" / "sixteenbit"
+    snapshot.mkdir(parents=True)
+    (snapshot / "model.safetensors").write_bytes(b"weights")
+    (snapshot / "tokenizer.json").write_text(
+        json.dumps({"model": {"type": "BPE"}}), encoding="utf-8"
+    )
+    return checkpoint, snapshot
+
+
+def test_merge_for_quantization_pins_merge_to_explicit_16bit_base(tmp_path):
+    checkpoint, snapshot = _merge_fixture(
+        tmp_path, "unsloth/qwen3-0.6b-unsloth-bnb-4bit"
+    )
+    model, tokenizer = _record_merge_write(MagicMock()), MagicMock()
+    language_loader = MagicMock()
+    staged_base = None
+
+    def load_local_adapter(**kwargs):
+        nonlocal staged_base
+        staged_base = json.loads(
+            (Path(kwargs["model_name"]) / "adapter_config.json").read_text(
+                encoding="utf-8"
+            )
+        )["base_model_name_or_path"]
+        return model, tokenizer
+
+    language_loader.from_pretrained.side_effect = load_local_adapter
+    unsloth_mock = MagicMock(
+        FastLanguageModel=language_loader, FastVisionModel=MagicMock()
+    )
+    output_dir = tmp_path / "quant"
+
+    with (
+        patch.dict(sys.modules, {"unsloth": unsloth_mock}),
+        patch(
+            "training.lora_trainer.resolve_cached_hf_snapshot",
+            return_value=str(snapshot),
+        ) as resolve_snapshot,
+        patch("training.lora_trainer.verify_hf_model_snapshot"),
+    ):
+        merge_for_quantization(
+            str(checkpoint), str(output_dir), base_model_id="Qwen/Qwen3-0.6B"
+        )
+
+    # The canonical 16-bit id is resolved, NOT the 4-bit mirror the adapter recorded.
+    resolve_snapshot.assert_called_once_with("Qwen/Qwen3-0.6B")
+    assert staged_base == str(snapshot)
+    model.save_pretrained_merged.assert_called_once_with(
+        str(output_dir / "merged"), tokenizer, save_method="merged_16bit"
+    )
+
+
+def test_merge_for_quantization_without_explicit_base_uses_adapter_record(tmp_path):
+    checkpoint, snapshot = _merge_fixture(tmp_path, "Qwen/Qwen3-0.6B")
+    model, tokenizer = _record_merge_write(MagicMock()), MagicMock()
+    language_loader = MagicMock(
+        from_pretrained=MagicMock(return_value=(model, tokenizer))
+    )
+    unsloth_mock = MagicMock(
+        FastLanguageModel=language_loader, FastVisionModel=MagicMock()
+    )
+
+    with (
+        patch.dict(sys.modules, {"unsloth": unsloth_mock}),
+        patch(
+            "training.lora_trainer.resolve_cached_hf_snapshot",
+            return_value=str(snapshot),
+        ) as resolve_snapshot,
+        patch("training.lora_trainer.verify_hf_model_snapshot"),
+    ):
+        merge_for_quantization(str(checkpoint), str(tmp_path / "quant"))
+
+    resolve_snapshot.assert_called_once_with("Qwen/Qwen3-0.6B")
+
+
+def test_merge_for_quantization_reports_silent_empty_merge_actionably(tmp_path):
+    """An empty merge dir must name the 4-bit-base cause, not just 'snapshot is incomplete'."""
+    checkpoint, snapshot = _merge_fixture(
+        tmp_path, "unsloth/qwen3-0.6b-unsloth-bnb-4bit"
+    )
+    model, tokenizer = MagicMock(), MagicMock()
+    # save_pretrained_merged is a no-op, exactly as unsloth_zoo behaves on a 4-bit base.
+    language_loader = MagicMock(
+        from_pretrained=MagicMock(return_value=(model, tokenizer))
+    )
+    unsloth_mock = MagicMock(
+        FastLanguageModel=language_loader, FastVisionModel=MagicMock()
+    )
+
+    with (
+        patch.dict(sys.modules, {"unsloth": unsloth_mock}),
+        patch(
+            "training.lora_trainer.resolve_cached_hf_snapshot",
+            return_value=str(snapshot),
+        ),
+        pytest.raises(RuntimeError, match="wrote no files"),
+    ):
+        merge_for_quantization(str(checkpoint), str(tmp_path / "quant"))

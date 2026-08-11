@@ -63,8 +63,11 @@ def test_graph_iterate_routes_only_supported_actions():
 
 def test_removed_route_tokens_absent_from_active_code_docs_and_tests():
     root = Path(__file__).resolve().parents[2]
+    # NOTE: "surgical" was un-forbidden on 2026-08-05. The token previously named a removed
+    # ROUTE; it now names a synthesize sub-strategy (`surgical_synthesize`), which is a
+    # deliberate reintroduction of the concept under the data_rebuild plan rather than a
+    # resurrection of the old route.
     forbidden = (
-        "sur" + "gical",
         "targeted_" + "patterns",
     )
     offenders = []
@@ -74,8 +77,12 @@ def test_removed_route_tokens_absent_from_active_code_docs_and_tests():
                 continue
             if "docs/superpowers/plans" in path.as_posix():
                 continue
-            # Historical bug records intentionally name removed routes.
+            # Historical records intentionally name removed routes: BUGS.md documents why they
+            # were removed, and the dated notes under docs/Evan's Notes/ are a running log of
+            # design discussions rather than a description of the live pipeline.
             if path == root / "docs" / "BUGS.md":
+                continue
+            if "docs/Evan's Notes" in path.as_posix():
                 continue
             text = path.read_text(encoding="utf-8")
             for token in forbidden:

@@ -245,3 +245,42 @@ def test_failed_or_crashed_reservation_cannot_repeat_on_resume(
     assert first["paid_rounds_used"] == 1
     assert second["paid_rounds_used"] == 0
     assert second["paid_budget_exhausted"] is True
+
+
+# B222: a mined classification source whose labels are disjoint from the run's established label
+# space is unusable — its rows can never match an eval label. This happens when the source stores
+# its intent column as a plain int (DeepPavlov/clinc150 uses Value('int64'), not ClassLabel), so
+# the raw ids leak through as labels "0"/"1"/"2".
+
+def test_mined_source_with_disjoint_integer_labels_is_rejected():
+    def local(_plan, _task_type, _max_train, _max_test, log, meta):
+        meta.update({"source": "int-labelled source", "source_records": []})
+        return ([{"text": "can i make a reservation", "label": "0"},
+                 {"text": "what is the weather", "label": "1"}], [])
+
+    with patch("data.loaders.web_acquire.load_local_dataset", local), \
+         patch("data.loaders.web_acquire.load_benchmark_dataset",
+               lambda *a, **k: ([], [])):
+        rows, report = _call(
+            existing_rows=[{"text": "already present", "label": "accept_reservations"}],
+            max_paid_rounds=0,
+        )
+
+    assert rows == [], "rows whose labels exist in no label space must not be merged"
+    assert report["rejected_sources"] >= 1
+
+
+def test_mined_source_sharing_the_label_space_is_still_accepted():
+    def local(_plan, _task_type, _max_train, _max_test, log, meta):
+        meta.update({"source": "good source", "source_records": []})
+        return ([{"text": "book me a table tonight", "label": "accept_reservations"}], [])
+
+    with patch("data.loaders.web_acquire.load_local_dataset", local), \
+         patch("data.loaders.web_acquire.load_benchmark_dataset",
+               lambda *a, **k: ([], [])):
+        rows, _ = _call(
+            existing_rows=[{"text": "already present", "label": "accept_reservations"}],
+            max_paid_rounds=0,
+        )
+
+    assert [r["text"] for r in rows] == ["book me a table tonight"]

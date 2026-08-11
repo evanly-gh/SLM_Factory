@@ -16,11 +16,11 @@ def test_generation_family_produces_new_correct_rows():
         verify_fn=lambda row: row.get("answer") == "4",
     )
     assert len(out) == 1
-    assert out[0]["answer"] == "4"  # correct, not a wrong-answer negative
+    assert out[0]["answer"] == "4"  # correct, never a wrong answer as a positive target
     assert out[0].get("_source", "").startswith("synth:")
 
 
-def test_classification_delegates_to_hard_negatives():
+def test_classification_delegates_to_new_gold():
     seed = [{"text": "win a free prize now", "label": "spam"}]
     out = curriculum.synthesize_examples(
         seed,

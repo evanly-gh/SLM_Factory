@@ -14,6 +14,11 @@ import os
 import re
 
 from agent.cost import tracked_anthropic_messages_create
+from agent.llm_text import (
+    MIN_THINKING_SAFE_MAX_TOKENS,
+    describe_empty_text,
+    response_text,
+)
 from agent.state import AgentState
 from config.android_pool import (
     METRIC_COMPARABILITY_CAVEAT,
@@ -140,12 +145,14 @@ def orchestrator_choice_node(state: AgentState) -> AgentState:
             client.messages,
             stage="model_selection",
             model=ORCHESTRATOR_MODEL,
-            max_tokens=256,
+            max_tokens=MIN_THINKING_SAFE_MAX_TOKENS,
             system=_CHOOSE_SYSTEM,
             messages=[{"role": "user", "content": prompt}],
         )
-        first_block = resp.content[0]
-        raw = first_block.text.strip() if isinstance(first_block, anthropic.types.TextBlock) else ""
+        raw = response_text(resp)
+        if not raw:
+            print(f"[model_selection:orchestrator_choice] orchestrator produced no text: "
+                  f"{describe_empty_text(resp)}")
         chosen_id, reason = _parse_choice(raw)
         match = resolve_model_selector(feasible, chosen_id)
         if match is not None:

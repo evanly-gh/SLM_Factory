@@ -21,15 +21,22 @@ Roles
 - CoT teacher        : the local Qwen3.6 synth model, and ONLY that model — there is
                        no cloud CoT fallback (paper §2.3/§2.5).
 
-Model options (Anthropic, as of 2026-07)
+Model options (Anthropic, as of 2026-08)
 ----------------------------------------
     claude-opus-4-8       most capable; slowest/most expensive — hardest reasoning
-    claude-sonnet-5       strong general default (newer than sonnet-4-6)
-    claude-sonnet-4-6     current pipeline default; good cost/quality balance
+    claude-sonnet-5       CURRENT PIPELINE DEFAULT — $2/$10 per MTok introductory through
+                          2026-08-31, then $3/$15 (i.e. same as sonnet-4-6 afterwards).
+                          1M context at standard pricing, 128k max output.
+    claude-sonnet-4-6     previous default; $3/$15, functionally superseded by sonnet-5
     claude-haiku-4-5      fast/cheap; good for high-volume orchestrator calls
     claude-fable-5        specialized; see model card before use
-Full dated IDs (e.g. claude-haiku-4-5-20251001) also work. Prefer the undated
-alias so you always get the latest snapshot of a tier.
+From the 4.6 generation onward the dateless id IS the pinned snapshot (not a moving
+alias), so `claude-sonnet-5` always refers to one fixed model.
+
+NOTE on the 1M context window: since 2026-03-13 the full 1M window is generally
+available on 4.6-and-later at STANDARD pricing — there is no long-context surcharge and
+the `context-1m-2025-08-07` beta header is ignored. SLM_ORCHESTRATOR_1M is therefore
+vestigial for these models; it is kept only for older ids.
 
 CoT backend
 -----------
@@ -45,11 +52,12 @@ EXA_API_KEY = os.environ["EXA_API_KEY"]
 
 # --- Orchestrator: the single model that drives every planning/decision call ---
 # Override per-run with SLM_ORCHESTRATOR_MODEL without editing this file.
-ORCHESTRATOR_MODEL = os.environ.get("SLM_ORCHESTRATOR_MODEL", "claude-sonnet-4-6")
+ORCHESTRATOR_MODEL = os.environ.get("SLM_ORCHESTRATOR_MODEL", "claude-sonnet-5")
 
-# --- Legacy hard-negative compatibility path (curriculum.py) only ---
-# NOT reachable from CoT generation, which is Qwen3.6-only. Kept so the legacy hard-negative
-# helper can still fall back to the orchestrator tier when explicitly invoked.
+# --- Legacy Claude teacher tier: no live consumer ---
+# NOT reachable from CoT generation or curriculum synthesis, both of which are Qwen3.6-only.
+# Retained solely because `agent/checkpoint.py` snapshots this name in the run config, so
+# deleting it would change the checkpoint schema.
 TEACHER_MODEL_CLAUDE = os.environ.get("SLM_TEACHER_MODEL_CLAUDE", ORCHESTRATOR_MODEL)
 
 # --- Cheap mode (SLM_CHEAP=1, or `python run.py --cheap`) ---
@@ -60,10 +68,10 @@ TEACHER_MODEL_CLAUDE = os.environ.get("SLM_TEACHER_MODEL_CLAUDE", ORCHESTRATOR_M
 # intervention decision itself. Cheap mode slashes Claude spend two ways:
 #   1. Forces the cheapest Anthropic model tier (Haiku) for the orchestrator and
 #      legacy Claude teacher path. The required judge remains local Qwen3.6.
-#   2. Skips the two bulk pure-Claude GENERATION passes in curate_node (read via SLM_CHEAP):
-#        - hard-negative synthesis (~1 LLM call per negative, per rebuild, per tier), and
-#        - CoT teacher annotation.
-#      Training then runs on gold-only data (still real, Exa-acquired).
+#   2. Skips the two bulk GENERATION passes in curate_node (read via SLM_CHEAP):
+#        - curriculum synthesis (~1 call per generated row, per rebuild, per tier), and
+#        - CoT annotation.
+#      Training then runs on real acquired data only, with no synthetic top-up.
 # iterate_node's decision loop is deliberately NOT disabled — cheap ≠ dumb; we want the
 # real EXPAND reasoning, just on Haiku. Nodes read os.environ["SLM_CHEAP"] directly so
 # checking the flag needs no API-key-bearing config import.
@@ -106,46 +114,30 @@ MODEL_SELECTION_STRATEGY = os.environ.get(
     "SLM_MODEL_SELECTION_STRATEGY", "smallest_first"
 )
 
-# --- Target dataset size per task type (single source of truth for curate + eval_setup) ---
-# Total examples the curriculum aims for (gold = 65%, hard = 35%). Grounded in the paper's
-# §4.3 quality-over-quantity guidance (classification/NER 100–200; generation 500–3,000) and
-# its findings that 173 > 348 (HumanEval) and 500 selected > 2,000 random (SAMSum) — i.e.
-# these are UPPER bounds on *curated-quality* data, not counts to fill with noise. Adjusted
-# 2026-07-15 down from a flat 1000 for the generation-family (B155):
-#   NER 300→200, math_reasoning 1000→700, code_generation 1000→300, generation 1000→600.
-DATASET_SIZE_BY_TYPE = {
-    "classification":             150,   # paper: 100–200
-    "multi_label_classification": 300,   # label co-occurrence needs coverage
-    "NER":                        200,   # paper: 100–200 (entity diversity handled by controls)
-    "structured_extraction":      400,   # schema field coverage + negatives
-    "math_reasoning":             700,   # verified verbose CoT quality dominates raw count
-    "code_generation":            300,   # paper: 173 curated > 348 on HumanEval
-    "multilingual":               400,   # language-pair coverage
-    "generation":                 600,   # paper: 500 agent-selected > 2,000 random
-}
-
-# --- Data-size targets: floors, ceiling, and orchestrator override ---
-# The orchestrator (task_planner) chooses the curriculum + eval example targets per run,
-# biased UP for obscure/less-popular benchmarks (less pretraining exposure ⇒ more data
-# needed to instill, per the fine-tuning sample-size research). Whatever it picks is clamped
-# to [floor, ceiling]:
+# --- Data-size targets: floor, ceiling, and per-tier sizing ---
+# The per-task `DATASET_SIZE_BY_TYPE` table was REMOVED on 2026-08-05. Every value in it
+# (classification 150, NER 200, generation 600, …) sat far below CURRICULUM_SIZE_FLOOR, so it was
+# clamped away on every code path — it only created the impression that per-task sizes were being
+# honoured. Sizing is now computed per model tier by `agent/data_sizing.py` from two measured
+# signals: task novelty (1 − zero-shot baseline) and model capacity (inverse parameter count),
+# then clamped to [CURRICULUM_SIZE_FLOOR, DATA_SIZE_CEILING].
 #   - CURRICULUM_SIZE_FLOOR: never train on fewer than this (small on-device models need
-#     more data than 8B models — selection→instillation regime shift). Set to 3000 as the
-#     per-task floor: curricula are synth-filled up to this size when real data + synthesis
-#     fall short, so every task trains on ≥3000 rows regardless of DATASET_SIZE_BY_TYPE.
+#     more data than 8B models — selection→instillation regime shift). Curricula are
+#     synth-filled toward the target, though quality control may land the final dataset below it.
 #   - EVAL_SET_SIZE: held-out eval floor. Larger eval sets give statistically reliable
 #     metrics — F1 CIs under-cover below n≈100; per-class macro-F1 needs ≥30–50/class or a
 #     3-example rare class swings it wildly (the main source of the earlier score oscillation).
 #   - DATA_SIZE_CEILING: hard cap so an over-eager target can't blow the wall clock.
-# DATASET_SIZE_BY_TYPE (above) is now only the FALLBACK when the planner gives no number.
 CURRICULUM_SIZE_FLOOR = int(os.environ.get("SLM_CURRICULUM_FLOOR", "5000"))
 EVAL_SET_SIZE = int(os.environ.get("SLM_EVAL_SET_SIZE", "800"))
 DATA_SIZE_CEILING = int(os.environ.get("SLM_DATA_CEILING", "25000"))
 
-# --- Local hard-negative / balancing synthesis model (contamination-safe, no Claude) ---
-# Served by a local vLLM OpenAI-compatible endpoint (see scripts/serve_synth.slurm). The
-# pipeline hits SYNTH_ENDPOINT for hard-negative + rare-class synthesis instead of the
-# orchestrator API, so synthetic data is fully local and its provenance is a model we own.
+# --- Local curriculum-synthesis model (contamination-safe, no Claude) ---
+# Served by a vLLM OpenAI-compatible endpoint co-located with the run on its own GPU, launched
+# by tests/pipeline/_l40s_task_body.sh and exported as SLM_SYNTH_ENDPOINT. The
+# pipeline hits SYNTH_ENDPOINT for training-example synthesis, label verification, and CoT
+# annotation instead of the orchestrator API, so synthetic data is fully local and its
+# provenance is a model we own.
 # If the endpoint is unreachable, curate logs a warning and proceeds gold-only (never Claude).
 SYNTH_ENDPOINT = os.environ.get("SLM_SYNTH_ENDPOINT", "")            # e.g. http://g3107:8000/v1
 SYNTH_MODEL = os.environ.get("SLM_SYNTH_MODEL", "Qwen/Qwen3.6-35B-A3B")
