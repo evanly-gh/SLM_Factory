@@ -79,7 +79,10 @@ def _iteration_records(progression: list[dict]) -> tuple[list[dict], dict]:
             by_diff = report.get("by_difficulty") or {}
             comp = (((node.get("pi") or {}).get("D") or {}).get("composition")) or {}
             records.append({
-                "global_idx": len(records),
+                # 1-based: iterations are counted from 1 everywhere else in the run (logs, DAG,
+                # curation entries), and a 0-based axis made matplotlib pad the left edge into
+                # negative territory, showing an "iteration -0.5" that does not exist.
+                "global_idx": len(records) + 1,
                 "iteration": node.get("iteration"),
                 "selector": entry.get("selector"),
                 "tier": entry.get("tier"),
@@ -94,6 +97,14 @@ def _iteration_records(progression: list[dict]) -> tuple[list[dict], dict]:
                 "total": int(comp.get("total_examples", 0) or 0),
                 "hypothesis": (node.get("hypothesis") or "").strip(),
                 "intervention": (node.get("intervention") or "").strip(),
+                # "data_rebuild" alone does not say what actually changed. The rebuild plan
+                # records which sub-strategy ran (resample / acquire / synthesize), and those
+                # are three very different interventions.
+                "substrategy": (
+                    ((((node.get("pi") or {}).get("D") or {}).get("plan")) or {})
+                    .get("strategy")
+                    or ""
+                ).strip(),
             })
 
     meta = {
@@ -172,6 +183,21 @@ def _mark_tiers(ax, records: list[dict], boundaries: list[int]) -> None:
             )
 
 
+def _iteration_axis(ax, xs) -> None:
+    """Label the x-axis as whole-numbered iterations.
+
+    Iterations are a counting index, so matplotlib's default float locator was wrong twice
+    over: it invented fractional ticks ("1.5", "2.5") for iterations that cannot exist, and
+    its automatic margin pushed the left edge below the first iteration.
+    """
+    from matplotlib.ticker import MaxNLocator
+
+    ax.set_xlabel("iteration")
+    ax.xaxis.set_major_locator(MaxNLocator(integer=True, min_n_ticks=1))
+    if xs:
+        ax.set_xlim(min(xs) - 0.5, max(xs) + 0.5)
+
+
 def _plot_accuracy(ax, records, meta, stop_threshold) -> None:
     xs = [r["global_idx"] for r in records]
     ys = [_nan(r["score"]) for r in records]
@@ -187,7 +213,7 @@ def _plot_accuracy(ax, records, meta, stop_threshold) -> None:
             label=f"threshold {stop_threshold:.3f}",
         )
     _mark_tiers(ax, records, meta.get("tier_boundaries") or [])
-    ax.set_xlabel("iteration")
+    _iteration_axis(ax, xs)
     ax.set_ylabel(meta["metric_name"])
     ax.set_title(f"Accuracy across iterations — {meta.get('selector') or ''}".strip(" —"))
     ax.set_ylim(0.0, 1.0)
@@ -210,7 +236,7 @@ def _plot_difficulty(ax, records, meta) -> None:
         label = f"{band} (n={n})" if n is not None else band
         ax.plot(xs, ys, marker="o", color=colors[band], label=label)
     _mark_tiers(ax, records, meta.get("tier_boundaries") or [])
-    ax.set_xlabel("iteration")
+    _iteration_axis(ax, xs)
     ax.set_ylabel("accuracy")
     ax.set_title("Accuracy by difficulty (easy / medium / hard)")
     ax.set_ylim(0.0, 1.0)
@@ -223,39 +249,98 @@ def _plot_composition(ax, records) -> None:
     gold = [r["n_gold"] for r in records]
     gen = [r["n_generated"] for r in records]
     src = [r["n_source"] for r in records]
+    # The three attributed buckets do NOT always sum to the dataset total: rows added by the
+    # synth-fill top-up are recorded under an "unattributed" strategy, and in
+    # slm-clinc150-cse-38180646 that was 2,063 of 5,758 rows at iteration 1 — more than a third
+    # of the curriculum, absent from the chart. Show the remainder as its own band so the stack
+    # height really is the dataset size, which is what makes a separate "total" series redundant.
+    other = [max(0, r["total"] - g - e - s) for r, g, e, s in zip(records, gold, gen, src)]
     bottom_gen = gold
     bottom_src = [g + e for g, e in zip(gold, gen)]
+    bottom_other = [g + e + s for g, e, s in zip(gold, gen, src)]
     ax.bar(xs, gold, color="#1f77b4", label="gold")
     ax.bar(xs, gen, bottom=bottom_gen, color="#ff7f0e", label="synthetic (generated)")
     ax.bar(xs, src, bottom=bottom_src, color="#9467bd", label="mined (source)")
-    totals = [r["total"] for r in records]
-    if any(totals):
-        ax2 = ax.twinx()
-        ax2.plot(xs, totals, color="0.3", linestyle="--", marker=".", label="total")
-        ax2.set_ylabel("total examples")
-        ax2.legend(fontsize=8, loc="lower right")
-    ax.set_xlabel("iteration")
+    if any(other):
+        ax.bar(xs, other, bottom=bottom_other, color="#bbbbbb", label="synth-fill (unattributed)")
+    # No separate "total" series: the stack height IS the total, so plotting it again drew a
+    # line exactly along the top of the bars and added a legend entry for information already
+    # on screen. (An earlier version put it on a twin right-hand axis, which was worse — the
+    # different scale made it look like an unrelated quantity.)
+    _iteration_axis(ax, xs)
     ax.set_ylabel("rows")
     ax.set_title("Dataset composition per iteration")
     ax.grid(True, alpha=0.3, axis="y")
+    # Bars run to the top of the axes, so reserve headroom rather than letting the legend sit
+    # on top of the first stack.
+    stack_tops = [g + e + s + o for g, e, s, o in zip(gold, gen, src, other)]
+    if any(stack_tops):
+        ax.set_ylim(0, max(stack_tops) * 1.18)
     ax.legend(fontsize=8, loc="upper left")
 
 
 def _write_hypotheses(records, out_path: Path, meta: dict) -> None:
+    """Write the per-iteration decision table, forward-looking.
+
+    The DAG stores a node's ``hypothesis`` as the rationale that PRODUCED that node, so
+    iteration 1 (built by cold-start, not by an orchestrator decision) had an empty cell and
+    every rationale appeared one row below the result that motivated it. Here the column is
+    shifted to read forward instead: the row for iteration N shows the score N achieved and the
+    hypothesis the orchestrator then formed to try to beat it — which is what a reader actually
+    wants when scanning for "what did it try next, and did it work".
+    """
+    from agent.nodes.iterate import HYPOTHESIS_MAX_CHARS
+
+    metric = meta["metric_name"]
+    baseline = meta.get("baseline_f1")
+    baseline_text = "n/a" if baseline is None else f"{baseline:.4f}"
     lines = [
         f"# Orchestrator hypotheses — {meta.get('selector') or 'run'}",
         "",
-        "One row per iteration: the score, the intervention chosen, and the orchestrator's",
-        "free-text rationale for that iteration.",
+        f"- **Untrained baseline ({metric}):** {baseline_text} — the zero-shot score of the "
+        "selected base model before any fine-tuning; every iteration below is measured against "
+        "this starting point.",
+    ]
+    scored = [r["score"] for r in records if r["score"] is not None]
+    if scored:
+        lines.append(f"- **Best achieved ({metric}):** {max(scored):.4f} over {len(records)} iteration(s).")
+    lines += [
         "",
-        "| iter | " + meta["metric_name"] + " | intervention | hypothesis |",
+        "Each row: the score that iteration achieved, the intervention it then chose, and the",
+        "data_rebuild sub-strategy that intervention actually ran. The decision is FORWARD-looking",
+        "— it is what the orchestrator decided to try NEXT after seeing that row's score.",
+        "",
+        "Full reasoning is given below the table rather than in a cell. Hypotheses run to "
+        f"{HYPOTHESIS_MAX_CHARS} characters and are never truncated (B238), which a markdown "
+        "table cannot display legibly.",
+        "",
+        f"| iter | {metric} | next intervention | sub-strategy |",
         "|---|---|---|---|",
     ]
-    for r in records:
-        score = "n/a" if r["score"] is None else f"{r['score']:.3f}"
-        hyp = (r["hypothesis"] or "—").replace("|", "\\|").replace("\n", " ")
-        interv = (r["intervention"] or "—").replace("|", "\\|").replace("\n", " ")
-        lines.append(f"| {r['iteration']} | {score} | {interv} | {hyp} |")
+
+    def _clean(value: str) -> str:
+        return (value or "—").replace("|", "\\|").replace("\n", " ")
+
+    reasoning: list[tuple[int, str]] = []
+    for position, record in enumerate(records):
+        score = "n/a" if record["score"] is None else f"{record['score']:.3f}"
+        # The decision recorded on the NEXT node is the one this iteration's score produced.
+        nxt = records[position + 1] if position + 1 < len(records) else None
+        if nxt is None:
+            interv = sub = "— (run ended here)"
+        else:
+            interv = _clean(nxt["intervention"])
+            sub = _clean(nxt.get("substrategy")) if nxt["intervention"] == "data_rebuild" else "—"
+            if (nxt["hypothesis"] or "").strip():
+                reasoning.append((record["iteration"], nxt["hypothesis"].strip()))
+        lines.append(f"| {record['iteration']} | {score} | {interv} | {sub} |")
+
+    lines += ["", "## Reasoning in full", ""]
+    if reasoning:
+        for iteration, hypothesis in reasoning:
+            lines += [f"**After iteration {iteration} it reasoned:**", "", hypothesis, ""]
+    else:
+        lines.append("(no orchestrator reasoning recorded for this run)")
     out_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
@@ -338,8 +423,49 @@ def generate_run_graphics(
         if stop_threshold is None:
             stop_threshold = disk_threshold
 
-    records, meta = _iteration_records(progression)
     out = _resolve_out_dir(run_dir, out_dir)
+    out.mkdir(parents=True, exist_ok=True)
+
+    written: list[Path] = []
+    # Top level = the whole run, every tier on one axis.
+    written.extend(_render_set(_iteration_records(progression), out, stop_threshold))
+
+    # Per tier. A run escalates through several models and each one has its own baseline,
+    # difficulty profile and hypothesis chain; collapsing them onto shared axes hides the
+    # trajectory of every model but the last. One subdirectory per tier keeps both views.
+    for entry in progression:
+        if entry.get("kind") != "model_trajectory" or not (entry.get("dag") or []):
+            continue
+        tier_records, tier_meta = _iteration_records([entry])
+        if not tier_records:
+            continue
+        written.extend(
+            _render_set(
+                (tier_records, tier_meta),
+                out / _tier_dir_name(entry),
+                stop_threshold,
+            )
+        )
+
+    return written
+
+
+def _tier_dir_name(entry: dict) -> str:
+    """Filesystem-safe ``tier<N>_<selector>`` label for one model's subdirectory."""
+    tier = entry.get("tier", "x")
+    selector = str(entry.get("selector") or entry.get("model_id") or "unknown")
+    for bad, good in (("/", "_"), ("@", "__"), (":", "_"), (" ", "")):
+        selector = selector.replace(bad, good)
+    return f"tier{tier}_{selector}"
+
+
+def _render_set(
+    records_and_meta: tuple[list, dict],
+    out: Path,
+    stop_threshold: float | None,
+) -> list[Path]:
+    """Write the full artifact set for one trajectory into ``out``."""
+    records, meta = records_and_meta
     out.mkdir(parents=True, exist_ok=True)
 
     written: list[Path] = []

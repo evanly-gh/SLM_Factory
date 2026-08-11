@@ -493,7 +493,7 @@ def test_resume_config_fingerprint_covers_state_affecting_runtime_settings(
     monkeypatch.setenv("SLM_EVAL_MAX_NEW_TOKENS_APPS", "1024")
     monkeypatch.setenv("SLM_APPS_PROBLEM_TIMEOUT_S", "5")
     monkeypatch.setenv("SLM_STAGNATION_WINDOW", "41")
-    monkeypatch.setenv("SLM_MAX_STALL_EVALS", "42")
+    monkeypatch.setenv("SLM_MAX_EVALS_BEFORE_ESCALATION", "42")
     monkeypatch.setenv("SLM_REQUIRE_SYNTH", "1")
     monkeypatch.setenv("SLM_AGENT_FIRST_DATASET_DISCOVERY", "1")
     snapshot = runtime_config_snapshot("cold_start")
@@ -503,7 +503,9 @@ def test_resume_config_fingerprint_covers_state_affecting_runtime_settings(
     assert snapshot["SLM_EVAL_MAX_NEW_TOKENS_APPS"] == "1024"
     assert snapshot["SLM_APPS_PROBLEM_TIMEOUT_S"] == "5"
     assert snapshot["SLM_STAGNATION_WINDOW"] == "41"
-    assert snapshot["SLM_MAX_STALL_EVALS"] == "42"
+    assert snapshot["SLM_MAX_EVALS_BEFORE_ESCALATION"] == "42"
+    # The deleted stall counter must no longer be fingerprinted (B232).
+    assert "SLM_MAX_STALL_EVALS" not in snapshot
     assert snapshot["SLM_REQUIRE_SYNTH"] == "1"
     assert snapshot["SLM_AGENT_FIRST_DATASET_DISCOVERY"] == "1"
     for key in (

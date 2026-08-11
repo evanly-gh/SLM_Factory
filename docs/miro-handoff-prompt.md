@@ -188,9 +188,8 @@ checkpoint + JSON mirror · cost ledger
 
 A second entry chain that replaces swimlane 1 and then **joins the identical loop**:
 
-`trace_ingest` → `taxonomy_construct` (LLM clusters failures) → `live_confirm` (re-runs the
-deployed model to confirm failures are systematic) → `parent_awareness` (builds a regression set
-and a replay buffer) → `curate` → (same loop)
+`trace_ingest` → `live_confirm` (re-runs the deployed model to confirm failures are systematic)
+→ `parent_awareness` (builds a regression set and a replay buffer) → `curate` → (same loop)
 
 Mark this whole chain with a warning badge: **"not runnable end-to-end — requires an eval set the
 graph never builds."**
@@ -256,7 +255,7 @@ flowchart LR
     CU -->|plan space exhausted| T5([TERMINATE: plans exhausted])
 
     subgraph PROD["Production mode — NOT RUNNABLE"]
-        TI[trace_ingest] --> TX[taxonomy_construct<br/>LLM] --> LC[live_confirm] --> PA[parent_awareness]
+        TI[trace_ingest] --> LC[live_confirm] --> PA[parent_awareness]
     end
     PA --> CU
 
@@ -264,7 +263,6 @@ flowchart LR
     style ESC fill:#ffe0b2
     style DP fill:#ffe0b2
     style TA fill:#ffe0b2
-    style TX fill:#ffe0b2
     style RB fill:#e1bee7
     style RG fill:#e1bee7
     style PROD fill:#ffcdd2

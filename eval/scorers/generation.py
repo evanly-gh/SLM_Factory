@@ -12,6 +12,50 @@ from eval.judge_client import LocalJudgeClient
 
 GENERATE_PROMPT = "Answer the following question:\n\n{text}"
 
+# Fallback instruction for free-form generation. It suits a question-answering or math task,
+# which is what it was written for, and it is actively WRONG for anything else in the family:
+# on DialogSum it told the model to "answer" a chat transcript that asks nothing, so the model
+# continued the conversation instead of summarizing it (B250). A dataset that is not
+# question-answering must therefore state its own instruction via `_instruction` on its rows.
+DEFAULT_GENERATION_INSTRUCTION = "Answer the following question:"
+
+# Rows carry the instruction under a leading underscore so it is treated as metadata: it is
+# excluded from the JSON schema shown to the synthesis teacher, so generated rows cannot invent
+# or reword it.
+INSTRUCTION_FIELD = "_instruction"
+
+
+def resolve_generation_instruction(rows) -> str:
+    """The single instruction shared by every row of one dataset.
+
+    Resolved ONCE per dataset rather than per row, and deliberately so: synthetic rows are built
+    fresh and do not carry `_instruction`, so a per-row lookup would silently give real and
+    synthetic rows different prompts within the same training set. Taking the first instruction
+    present makes the whole set consistent.
+
+    This mirrors how classification stays consistent — `build_classify_prompt` derives the label
+    list from whichever rows the caller holds, so training and eval agree without either side
+    having to be told. Generation now derives its instruction the same way.
+    """
+    for row in rows or []:
+        if isinstance(row, dict):
+            instruction = str(row.get(INSTRUCTION_FIELD) or "").strip()
+            if instruction:
+                return instruction
+    return DEFAULT_GENERATION_INSTRUCTION
+
+
+def build_generation_prompt(text: str, instruction: str) -> str:
+    """The ONE generation prompt. Used by the eval harness AND the trainer.
+
+    Before this existed the two built their inputs independently: eval wrapped the text in
+    "Answer the following question:", while training passed the bare text with no instruction at
+    all. The model was therefore fine-tuned on one input distribution and scored on another —
+    the train/serve skew that `build_classify_prompt` had already been introduced to prevent on
+    the classification side (B250).
+    """
+    return f"{instruction}\n\n{text}"
+
 CODE_GENERATE_PROMPT = (
     "Solve the Python programming task below. Return only executable Python code, "
     "without Markdown fences or prose explanation. If you include concise "
@@ -173,8 +217,9 @@ def build_code_prompt(example: dict) -> str:
 
 def build_prompts(eval_set: EvalSet) -> list[str]:
     if eval_set.task_type != "code_generation":
+        instruction = resolve_generation_instruction(eval_set.all)
         return [
-            GENERATE_PROMPT.format(text=example.get("text", ""))
+            build_generation_prompt(example.get("text", ""), instruction)
             for example in eval_set.all
         ]
     return [build_code_prompt(example) for example in eval_set.all]
@@ -200,10 +245,50 @@ def _extract_code(raw: str) -> str:
     return fenced[0][1].strip()
 
 
+# CoT-annotated training targets are `<reasoning>...</reasoning>\n\n<answer>` (see
+# training/lora_trainer.py::_training_turn), so a model trained on them emits the reasoning
+# inline. Tolerant of whitespace/case and of a missing opening tag, which small models drop.
+_REASONING_BLOCK_RE = re.compile(
+    r"\s*<\s*reasoning\s*>.*?<\s*/\s*reasoning\s*>\s*",
+    flags=re.IGNORECASE | re.DOTALL,
+)
+_ORPHAN_REASONING_CLOSE_RE = re.compile(
+    r"^.*?<\s*/\s*reasoning\s*>\s*", flags=re.IGNORECASE | re.DOTALL
+)
+
+
+def split_reasoning(raw: str) -> tuple[str, str]:
+    """Split a raw generation into ``(reasoning, answer)``.
+
+    Both halves are kept by the caller: the reasoning is real signal for diagnosing HOW the model
+    reached an answer, and discarding it at the source would make that unrecoverable. It simply
+    must not reach the judge, which is asked "how good is this summary?" — handing it a
+    `<reasoning>` block guarantees a poor score for output that may contain a fine summary.
+
+    Math and code never needed this because their extractors already pull one specific thing (the
+    final number, the fenced code block). Judge-scored generation extracts nothing, so the whole
+    string was being graded (B251).
+    """
+    text = raw or ""
+    match = _REASONING_BLOCK_RE.search(text)
+    if match:
+        reasoning = match.group(0)
+        answer = (text[: match.start()] + text[match.end():]).strip()
+        # A model that emits ONLY reasoning has no answer to judge; keep the text rather than
+        # hand the judge an empty string, which would score 0 and hide the real failure.
+        return reasoning.strip(), (answer or text.strip())
+    orphan = _ORPHAN_REASONING_CLOSE_RE.match(text)
+    if orphan:
+        answer = text[orphan.end():].strip()
+        if answer:
+            return orphan.group(0).strip(), answer
+    return "", text.strip()
+
+
 def extract_predictions(raw_outputs: list[str], eval_set: EvalSet) -> list[str]:
     if eval_set.task_type == "code_generation":
         return [_extract_code(raw) for raw in raw_outputs]
-    return [raw.strip() for raw in raw_outputs]
+    return [split_reasoning(raw)[1] for raw in raw_outputs]
 
 
 def _final_answer(value: str) -> str:

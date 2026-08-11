@@ -13,7 +13,6 @@ import copy
 import logging
 import os
 from agent.checkpoint import run_training_atomically
-from agent.cost import tracked_anthropic_messages_create
 from agent.state import AgentState
 from config.android_pool import filter_pool, resolve_model_selector
 from training.hparams import (
@@ -45,67 +44,6 @@ DOWNWARD_PROBE_H, _ = normalize_hyperparams({
     "gradient_accumulation_steps": 1,
     "effective_batch_size": 8,
 })
-
-
-def _should_reexplore_downward(state, n_lower_tiers: int) -> bool:
-    """Orchestrator decision: given the trajectory (tiers tried, steps, margin above goal),
-    is a lower-tier attempt worth it? LLM-driven with a safe heuristic fallback.
-
-    Heuristic: attempt if there is an untried lower tier AND we converged with some margin
-    (a comfortable win suggests a smaller model might also clear the goal)."""
-    if n_lower_tiers <= 0:
-        return False
-    best = state.get("best_score", 0.0)
-    threshold = state.get("stop_threshold", 0.9)
-    margin = best - threshold
-    iters = state.get("iteration", 0)
-    tiers_tried = len(state.get("escalation_history") or []) + 1
-
-    try:
-        import anthropic
-        from config.config import ORCHESTRATOR_MODEL, ANTHROPIC_API_KEY, orchestrator_client_kwargs
-        client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY, **orchestrator_client_kwargs())
-        prompt = (
-            f"An on-device fine-tuning run just CONVERGED. Decide whether to try a SMALLER "
-            f"(lower-RAM) model that might also reach the goal, to save device resources.\n"
-            f"- Converged score: {best:.4f}  (goal {threshold:.4f}, margin {margin:+.4f})\n"
-            f"- Tiers/models tried so far: {tiers_tried}\n"
-            f"- Iterations on the winning model: {iters}\n"
-            f"- Untried lower tiers available: {n_lower_tiers}\n"
-            f"A larger margin above the goal suggests a smaller model may also succeed. "
-            f"Reply STRICT JSON only: {{\"reexplore\": true|false, \"reason\": \"<one sentence>\"}}"
-        )
-        resp = tracked_anthropic_messages_create(
-            client.messages,
-            stage="downward_probe",
-            model=ORCHESTRATOR_MODEL,
-            max_tokens=120,
-            messages=[{"role": "user", "content": prompt}],
-        )
-        import json as _json
-        import re as _re
-        raw = resp.content[0].text.strip()
-        m = _re.search(r"\{.*\}", raw, _re.DOTALL)
-        obj = _json.loads(m.group()) if m else {}
-        # Require a REAL JSON boolean. `bool(obj.get("reexplore"))` accepted the string
-        # "false" as True, so a model that declined in JSON-string form would still trigger a
-        # full train+eval probe — a decision that contradicted its own logged reason.
-        raw_decision = obj.get("reexplore")
-        if not isinstance(raw_decision, bool):
-            raise ValueError(
-                "reexplore must be a JSON boolean (true/false), got "
-                f"{type(raw_decision).__name__}: {raw_decision!r}"
-            )
-        decision = raw_decision
-        _plog(f"orchestrator downward-re-exploration decision: {decision} — {obj.get('reason','')}")
-        return decision
-    except Exception as e:  # noqa: BLE001
-        from agent.llm_errors import raise_if_fatal
-        raise_if_fatal(e, "downward_probe")
-        decision = margin >= 0.03
-        _plog(f"orchestrator decision unavailable ({str(e)[:60]}); heuristic reexplore={decision} "
-              f"(margin {margin:+.4f})")
-        return decision
 
 
 def _train_and_eval(
@@ -396,16 +334,15 @@ def downward_probe_step_node(state: AgentState) -> AgentState:
             f"Final: {current.model_id} [{current.quant or 'bf16'}]"
         )
         return _finish_probe(state)
-    try:
-        should_reexplore = _should_reexplore_downward(state, len(lower_tiers))
-    except Exception as exc:
-        return skip_optional_error("reexploration_gate", exc)
-    if not should_reexplore:
-        _plog(
-            "orchestrator declined further downward re-exploration — "
-            "keeping current model"
-        )
-        return _finish_probe(state)
+    # Policy 2026-08-05: downward re-exploration is UNCONDITIONAL. It used to be gated on an
+    # orchestrator "is this worth trying?" call, which spent an API call to sometimes decline the
+    # one thing the run exists to determine — the smallest model that clears the goal. The only
+    # stopping conditions are now structural: no untried lower tier (handled above), or the lower
+    # tier failing to clear the goal (handled below, which keeps the last passing tier).
+    _plog(
+        f"{len(lower_tiers)} untried lower tier(s) below tier {cur_tier} — probing the next one "
+        "down (unconditional: the goal is the SMALLEST model that clears the bar)"
+    )
     target_tier = lower_tiers[0]
     candidates = [model for model in feasible if model.tier == target_tier]
     try:

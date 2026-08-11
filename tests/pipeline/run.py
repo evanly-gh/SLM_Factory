@@ -64,7 +64,7 @@ parser.add_argument(
     "--cheap",
     action="store_true",
     help="Cheap mode: use Haiku for Anthropic orchestration and skip curate's "
-    "hard-negative synthesis + CoT annotation (gold-only training). Keeps "
+    "curriculum synthesis + CoT annotation (real acquired data only). Keeps "
     "the local Qwen3.6 judge, agent intervention decisions, and Exa data "
     "research. Minimizes Claude spend on runs that may crash.",
 )
@@ -503,8 +503,8 @@ log(f"judge model: {config.JUDGE_MODEL}  |  judge endpoint: "
     f"{config.JUDGE_ENDPOINT or '<unset>'}  |  provider: local")
 if config.CHEAP_MODE:
     log("CHEAP MODE ON: Haiku for Anthropic orchestration; local Qwen3.6 judge unchanged; "
-        "hard-negative synthesis + CoT annotation skipped (gold-only). Agent intervention "
-        "decisions + Exa data research KEPT.")
+        "curriculum synthesis + CoT annotation skipped (real acquired data only). Agent "
+        "intervention decisions + Exa data research KEPT.")
 log("")
 _PREGRAPH_RESTORED = bool(
     _IS_RESUME
@@ -769,8 +769,8 @@ def _run_synth_preflight():
     from data.synth_client import is_available as _synth_available
     endpoint = os.environ.get("SLM_SYNTH_ENDPOINT", "")
     if not endpoint:
-        log("  !! SLM_REQUIRE_SYNTH=1 but SLM_SYNTH_ENDPOINT is unset — start scripts/serve_synth.slurm "
-            "first (it writes logs/synth_endpoint.txt). Aborting.")
+        log("  !! SLM_REQUIRE_SYNTH=1 but SLM_SYNTH_ENDPOINT is unset — the task scripts export "
+            "it from the co-located vLLM server in tests/pipeline/_l40s_task_body.sh. Aborting.")
         _exit_preflight("SLM_REQUIRE_SYNTH=1 but SLM_SYNTH_ENDPOINT is unset")
     wait_s = float(os.environ.get("SLM_SYNTH_WAIT_S", "2400"))
     deadline = time.time() + wait_s

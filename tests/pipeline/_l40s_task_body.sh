@@ -10,8 +10,13 @@
 #   5+ GPUs: synth GPUs 0-3 at TP=4; pipeline GPU 4 (exclusive).
 # IDs are logical indices within the allocation. SLM_GPU_COUNT and the exported profile
 # settings below are operator-overridable, with validation before model setup.
-# ORCHESTRATOR: Sonnet with the 1M-token context beta (SLM_ORCHESTRATOR_1M=1). NON-cheap
-# (full hard-negative synthesis + CoT annotation + Sonnet decisions).
+# ORCHESTRATOR: claude-sonnet-5 — $2/$10 per MTok introductory through 2026-08-31 (then $3/$15,
+# i.e. sonnet-4-6 parity), 1M context at standard pricing. NON-cheap (full curriculum
+# synthesis + CoT annotation + Sonnet decisions). SLM_ORCHESTRATOR_1M is kept but is a no-op on
+# 4.6-and-later ids: the 1M window has been GA at standard rates since 2026-03-13 and the beta
+# header is ignored.
+# MODEL SELECTION: smallest_first — start at the smallest feasible model and escalate only on
+# failure, so the cheapest model that clears the bar wins.
 # no `-u`: lmod init references unbound LD_LIBRARY_PATH.
 set -eo pipefail
 export LD_LIBRARY_PATH="${LD_LIBRARY_PATH:-}"
@@ -83,9 +88,14 @@ _configure_gpu_profile() {
             default_profile="auto-2gpu"
             default_synth_ids="0"
             default_tp=1
-            default_utilization=0.82
-            default_max_num_seqs=16
-            default_concurrency=8
+            # The synth GPU is EXCLUSIVE in this profile (the pipeline trains on GPU 1), so the
+            # only claim on its memory is vLLM itself. At 0.82 the 35B fp8 weights left just
+            # 2.43 GiB of KV cache — 89,367 tokens, i.e. ~10.9x concurrency at full context —
+            # which capped the useful batch far below what the GPU could decode. 0.90 roughly
+            # triples the KV budget and is what makes the higher max-num-seqs below reachable.
+            default_utilization=0.90
+            default_max_num_seqs=64
+            default_concurrency=48
             default_pipeline_id=1
             ;;
         3)
@@ -195,12 +205,23 @@ SYNTH_LOG="$PROJ/logs/gpu_setup/synth-l40s-${SLM_GPU_PROFILE}-${SLURM_JOB_ID:-ma
 mkdir -p "$(dirname "$SYNTH_LOG")"
 # JOB-UNIQUE port (shared localhost namespace on multi-tenant nodes).
 SYNTH_PORT=$(( 20000 + (${SLURM_JOB_ID:-0} % 20000) ))
+# CUDA graphs are ON by default. Qwen3.6-35B-A3B activates only ~3B parameters per token, so
+# decode is dominated by per-layer kernel-launch overhead rather than by arithmetic, and
+# --enforce-eager (which disables torch.compile AND CUDA graphs) is exactly the wrong trade for
+# that shape: run 38245785 sustained 76 tok/s across 8 concurrent requests, ~9.5 tok/s per
+# sequence, on hardware that should do far better. Eager mode remains one variable away in case
+# graph capture misbehaves on the GDN hybrid layers.
+SYNTH_EAGER_FLAG=""
+if [ "${SLM_SYNTH_ENFORCE_EAGER:-0}" = "1" ]; then
+    SYNTH_EAGER_FLAG="--enforce-eager"
+fi
 echo "=== vLLM synth ($SYNTH_MODEL) TP=$SLM_SYNTH_TP on GPUs $SLM_SYNTH_GPU_IDS → localhost:$SYNTH_PORT → $SYNTH_LOG ==="
+echo "=== vLLM synth: max-num-seqs=$SLM_SYNTH_MAX_NUM_SEQS util=$SLM_SYNTH_GPU_UTILIZATION cuda-graphs=$([ -n "$SYNTH_EAGER_FLAG" ] && echo off || echo on) ==="
 CUDA_VISIBLE_DEVICES="$SLM_SYNTH_GPU_IDS" .venv_vllm/bin/vllm serve "$SYNTH_MODEL" \
     --host 127.0.0.1 --port "$SYNTH_PORT" \
     --tensor-parallel-size "$SLM_SYNTH_TP" --quantization fp8 \
     --gpu-memory-utilization "$SLM_SYNTH_GPU_UTILIZATION" --max-model-len 8192 \
-    --max-num-seqs "$SLM_SYNTH_MAX_NUM_SEQS" --gdn-prefill-backend triton --enforce-eager \
+    --max-num-seqs "$SLM_SYNTH_MAX_NUM_SEQS" --gdn-prefill-backend triton $SYNTH_EAGER_FLAG \
     --language-model-only --reasoning-parser qwen3 --served-model-name "$SYNTH_MODEL" \
     > "$SYNTH_LOG" 2>&1 &
 VLLM_PID=$!
@@ -261,11 +282,11 @@ export SLM_SYNTH_ENDPOINT="http://127.0.0.1:${SYNTH_PORT}/v1"
 # --- Run the pipeline (its own venv), pinned to the profile GPU; Sonnet-1M; NON-cheap ---
 source .venv_gpu/bin/activate
 export CUDA_VISIBLE_DEVICES="$SLM_PIPELINE_GPU_ID"
-export SLM_ORCHESTRATOR_MODEL="${SLM_ORCHESTRATOR_MODEL:-claude-sonnet-4-6}"   # Sonnet
+export SLM_ORCHESTRATOR_MODEL="${SLM_ORCHESTRATOR_MODEL:-claude-sonnet-5}"   # Sonnet 5
 export SLM_ORCHESTRATOR_1M=1                     # enable Sonnet's 1M-token context (beta)
 unset SLM_CHEAP                                  # NON-cheap: full synthesis + CoT + Sonnet
 export SLM_QUANT_EVAL=1
-export SLM_MODEL_SELECTION_STRATEGY="${SLM_MODEL_SELECTION_STRATEGY:-orchestrator_choice}"
+export SLM_MODEL_SELECTION_STRATEGY="${SLM_MODEL_SELECTION_STRATEGY:-smallest_first}"
 export SLM_SYNTH_WAIT_S=2400                     # preflight waits up to 40 min for the server
 export SLM_SYNTH_CONCURRENCY
 export SLM_MAX_SEQ_LENGTH="${SLM_MAX_SEQ_LENGTH:-4096}"

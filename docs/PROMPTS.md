@@ -13,19 +13,19 @@ below:
 | `stage` | Section | | `stage` | Section |
 |---|---|---|---|---|
 | `task_analysis` | [1.1](#11-task-analysis-and-run-planning) | | `cot_fallback` | [2.1](#21-cotimplementation-reasoning-annotation) |
-| `hardware_research` | [1.2](#12-hardware-resolution) | | `hard_negative_synthesis` | [2.2](#22-classification-hard-negative-generation), [2.3](#23-ner-hard-example-generation) |
-| `acquire_schema_mapping` | [1.3](#13-dataset-schema-mapping) | | `local_synthesis` | [2](#2-teacher-and-local-qwen-prompts) (transport) |
-| `acquire_seed_synthesis` | [1.4](#14-last-resort-seed-synthesis) | | `synth_preflight` | [2](#2-teacher-and-local-qwen-prompts) (transport) |
-| `acquire_ner_annotation` | [1.5](#15-web-acquired-ner-annotation) | | `generation_judge` | [3.1](#31-open-generation-semantic-judge) |
-| `acquire_dataset_discovery` | search input, not a prompt — [§6](#6-present-but-not-active) | | `generation_judge_preflight` | [3.1](#31-open-generation-semantic-judge) |
-| `acquire_exa` | search input, not a prompt — [§6](#6-present-but-not-active) | | `production_taxonomy` | [5.1](#51-failure-taxonomy) |
-| `model_selection` | [1.6](#16-initial-orchestrator-model-choice) | | `delegate_task` | [§6](#6-present-but-not-active) — no call sites |
-| `escalate` | [1.7](#17-escalation-and-downward-candidate-choice) | | `iterate_web_search` | [§6](#6-present-but-not-active) — no call sites |
+| `hardware_research` | [1.2](#12-hardware-resolution) | | `local_synthesis` | [2](#2-teacher-and-local-qwen-prompts) (transport) |
+| `acquire_schema_mapping` | [1.3](#13-dataset-schema-mapping) | | `synth_preflight` | [2](#2-teacher-and-local-qwen-prompts) (transport) |
+| `acquire_seed_synthesis` | [1.4](#14-last-resort-seed-synthesis) | | `generation_judge` | [3.1](#31-open-generation-semantic-judge) |
+| `acquire_ner_annotation` | [1.5](#15-web-acquired-ner-annotation) | | `generation_judge_preflight` | [3.1](#31-open-generation-semantic-judge) |
+| `acquire_dataset_discovery` | search input, not a prompt — [§6](#6-present-but-not-active) | | `delegate_task` | [§6](#6-present-but-not-active) — no call sites |
+| `acquire_exa` | search input, not a prompt — [§6](#6-present-but-not-active) | | `iterate_web_search` | [§6](#6-present-but-not-active) — no call sites |
+| `model_selection` | [1.6](#16-initial-orchestrator-model-choice) | | | |
+| `escalate` | [1.7](#17-escalation-and-downward-candidate-choice) | | | |
 | `downward_probe` | [1.8](#18-downward-re-exploration-decision) | | | |
 | `iterate` | [1.9](#19-iterationexpand-decision) | | | |
 | `iterate_json_reask` | [1.10](#110-tool-free-json-re-ask) | | | |
 
-Prompts with no cost stage (they run on the SLM being trained, not a provider): [§4](#4-slm-training-and-evaluation-prompts), [§5.2](#52-live-confirmation).
+Prompts with no cost stage (they run on the SLM being trained, not a provider): [§4](#4-slm-training-and-evaluation-prompts), [§5.1](#51-live-confirmation).
 
 ---
 
@@ -194,7 +194,7 @@ the run** rather than falling back — see [`PIPELINE.md` §2](PIPELINE.md#2-glo
     [`PIPELINE.md` §7.1](PIPELINE.md#71-data_rebuild) for why.
   - **Three** rebuild strategies (`resample`, `acquire`, `synthesize`) with per-field
     bounded/stepped ranges. No task-type or score gating — any strategy is valid for any task
-    (redesign 2026-07-31); `synthesize` is task-adaptive (hard negatives for classification/NER,
+    (redesign 2026-07-31); `synthesize` is task-adaptive (new gold in-class rows for classification/NER,
     new correct examples for generation-family). **One availability gate:** when the whole train
     pool is already in the curriculum, `resample` is removed from the menu — the validator/fallback
     redirect it to `synthesize` and the prompt carries a "resample unavailable this turn" note,
@@ -237,13 +237,13 @@ with `top_p=0.8`, `top_k=20`, caller-supplied temperature and token limit. Trans
 stages: `synth_preflight` (reachability) and `local_synthesis` (generation); both are recorded at
 $0 as local-provider cost events.
 
-`agent/nodes/curate.py` uses local `SYNTH_MODEL` first and **never falls back to Claude for hard
-negatives.** CoT is authored **only** by the local Qwen3.6 synth endpoint — there is no cloud CoT
+`agent/nodes/curate.py` uses local `SYNTH_MODEL` and **never falls back to Claude for
+synthesis.** CoT is authored **only** by the local Qwen3.6 synth endpoint — there is no cloud CoT
 teacher; if the endpoint is unavailable the example is left CoT-less.
 
 > **Neither completed run produced a single synthetic row.** The ledgers contain only
-> `synth_preflight` events (8/9 failed in NER, 18/43 in math) and zero
-> `hard_negative_synthesis` events. Everything in this section is therefore
+> `synth_preflight` events (8/9 failed in NER, 18/43 in math) and no generation events at all.
+> Everything in this section is therefore
 > **implemented but unexercised in production** — see
 > [B200](BUGS.md#b200--synthesis-has-never-executed-at-scale-both-completed-runs-were-gold-only).
 
@@ -262,55 +262,39 @@ teacher; if the endpoint is unavailable the example is left CoT-less.
 - **Improve:** verify answer consistency, reject leakage when the prompt forbade it, and record
   backend/model/prompt-version per annotation.
 
-### 2.2 Classification hard-negative generation
+### 2.2 Task-adaptive synthesis (redesign 2026-07-31)
 
-- **Code:** `data/curriculum.py::synthesize_hard_negatives`, classification branch.
-- **Purpose:** produce text that superficially resembles the source class but genuinely belongs
-  to another — a contrastive pair.
-- **In:** source text/label, **the first alternate target label**, and an aggregate
-  `pattern_hint` from the rebuild plan.
-- **Out:** raw text only for the target class (explicitly: no preamble, no quotes, no label
-  prefix).
-- **Validation:** any non-empty text is *assigned* the target label by code. Quality controls
-  later dedup and cap label imbalance. The 2-for-1 result carries a real source anchor **and** a
-  generated row; curate reports `n_hard_source` and `n_hard_generated` separately.
-- **Cost/parallelism:** generations run concurrently (vLLM continuous-batches them); order is
-  preserved so each anchor stays adjacent to its synthetic counterpart. Three consecutive
-  failures abort synthesis and degrade to gold-only.
-- **Critique:** semantic membership in the target class is **not verified**. Picking the first
-  alternate label can overproduce one class on multiclass tasks. The prompt is a **hardcoded
-  f-string** — the only orchestrator-controlled inputs are `pattern_hint` (one sentence) and
-  `temperature`.
-- **Improve:** choose the target from the observed confusion pair; require an independent label
-  verifier; reject near-copies before admitting them as gold.
-
-### 2.3 NER hard-example generation
-
-- **Code:** `data/curriculum.py::synthesize_hard_negatives`, NER branch.
-- **Purpose:** rewrite a passage into a more ambiguous context while preserving correct entity
-  types.
-- **In:** original passage plus up to five entity text/type pairs.
-- **Out:** JSON object with rewritten text and typed spans.
-- **Validation:** greedy object parse, then **strict**: malformed JSON, empty entity lists, spans
-  absent from the rewritten text, and types absent from the source row are all discarded. Source
-  anchors and rewrites are accounted separately.
-- **Critique:** span/type integrity is enforced, but nothing confirms the rewrite preserved the
-  intended difficulty.
-
-### 2.4 Open generation, math, and code: task-adaptive *new-correct* synthesis (redesign 2026-07-31)
-
-- **Code:** `data/curriculum.py::synthesize_examples` → `_synthesize_new_correct` for the
-  generation family; `synthesize_hard_negatives` still serves classification/NER.
-- **Behavior:** synthesis is **ungated** for all task types. For math/code/generation it generates
-  **new, correct, in-distribution** examples in the same schema as the anchors (via
-  `_new_example_prompt`), verified by a `verify_fn` where one exists (math answer / code tests),
-  and kept only if they pass. It never writes a wrong answer as a positive SFT target.
-- **Safety property (preserved):** contrastive *wrong-answer* pairs are still confined to
-  classification/NER; generation-family synthesis is correct-only.
-- **Consequence:** every family now has a synthesis path and curricula are synth-filled to the
-  target size; unverifiable generation rows fall back to standard quality controls.
-- **Improve:** stronger verifiers (full execution harness for code, symbolic checks for math)
-  and a preference/ranking objective for open generation.
+- **Code:** `data/curriculum.py::synthesize_examples`, which dispatches to `_synthesize_new_gold`
+  (classification/NER) or `_synthesize_new_correct` (generation family, prompt built by
+  `_new_example_prompt`).
+- **Purpose:** top the curriculum up to its target size with rows that are **correct by
+  construction**. Synthesis is ungated — every task family has a path — and it never writes a
+  wrong answer as a positive SFT target.
+- **Classification/NER branch:** one new in-class example per anchor, with anchors drawn
+  round-robin across labels so rare classes get the same attention as common ones.
+  - *In:* the anchor's label and its text as a single reference example.
+  - *Out:* raw text only (explicitly: no preamble, no explanation, no quotes, no label prefix).
+  - *Validation:* the generated row **inherits the anchor's label** — the model is never asked to
+    choose one — so an out-of-vocabulary label is impossible by construction and the class
+    histogram is left undisturbed. Rows are then label-verified (below).
+- **Generation-family branch** (math, code, generation, multilingual, structured extraction):
+  - *In:* the anchor row reduced to its public keys, serialized as the target JSON schema.
+  - *Out:* one JSON object with the same keys and value types.
+  - *Validation:* a `verify_fn` where one exists (math answer / code tests); rows are kept only
+    if they pass. Unverifiable rows fall back to standard quality controls.
+- **Label verification:** `verify_generated_labels` asks the same local model, at temperature 0,
+  whether each generated row genuinely belongs to its assigned label, answering strict
+  `{"valid": bool, "reason": "<max 15 words>"}`. Rejections are dropped with their stated reason
+  logged, so a bad *generator* prompt is visible rather than silently absorbed. Any verification
+  failure — unparseable reply or endpoint error — **keeps** the row, so the verifier can never
+  empty a dataset. Disable with `SLM_VERIFY_SYNTH=0`.
+- **Cost/parallelism:** generations and verifications both run concurrently (vLLM
+  continuous-batches them) at `_synth_concurrency` workers, tunable via `SLM_SYNTH_CONCURRENCY`
+  (default 16).
+- **Critique:** verification reuses the generator's own model, so correlated blind spots survive;
+  deciding "does this belong to class X" is nonetheless a much easier task than writing the row.
+- **Improve:** stronger verifiers (full execution harness for code, symbolic checks for math), an
+  independent verification model, and a preference/ranking objective for open generation.
 
 ---
 
@@ -397,25 +381,7 @@ Notes:
 
 ## 5. Production prompts
 
-### 5.1 Failure taxonomy
-
-- **Code:** `agent/nodes/production/taxonomy.py::taxonomy_construct_node`, inline system + user
-  prompts.
-- **Purpose:** cluster up to **40** sampled failed traces into 3–8 categories, each labeled
-  `fixable` (by training data) or external.
-- **In:** total/sample counts plus full sampled trace JSON with stable indices. The sampled
-  window and the tagged window are now the same 40 — they previously mismatched (20 shown, 50
-  tagged), leaving silently untagged traces.
-- **Out:** strict JSON — clusters with counts, root causes, boolean fixability, trace indices,
-  and a summary.
-- **Validation:** greedy object parse, or a raw-summary fallback. Code does **not** enforce
-  unique/complete indices, recompute counts, type-check `fixable`, or validate cluster names.
-- **Critique:** raw deployed inputs/outputs are untrusted prompt content. The prompt demands a
-  partition; the implementation accepts overlaps and omissions.
-- **Improve:** schema-validate, deterministically repair or reject invalid partitions, recompute
-  counts from indices, and delimit traces as untrusted data.
-
-### 5.2 Live confirmation
+### 5.1 Live confirmation
 
 - **Code:** `agent/nodes/production/live_confirm.py::live_confirm_node`
 - **Purpose:** re-run each prescreened failure through deployed model M0 to confirm it is
@@ -431,7 +397,7 @@ Notes:
 - **Improve:** store the rendered prompt plus task/parser metadata per trace, replay through the
   same scorer, and separate infrastructure errors from real failures.
 
-### 5.3 Production training prompts
+### 5.2 Production training prompts
 
 The production graph routes confirmed examples through the **same** shared `curate` → `train` →
 `evaluate` → `iterate` nodes, so every prompt above applies unchanged.
@@ -451,9 +417,6 @@ expressed or validated as a contract. **Tracked as
 - **`agent/tools/web_search.py::web_search`** (cost stage `iterate_web_search`) — an
   `@tool`-decorated Exa wrapper, bound to no LLM and never invoked. Same for the other three
   decorated tools. [B23](BUGS.md)
-- **Legacy Claude hard-negative backend** — the fallback inside `synthesize_hard_negatives` is
-  reachable only by external/legacy callers that omit `generate_fn`. `curate_node` always
-  supplies local Qwen or skips synthesis.
 - **Exa search strings** (`acquire_dataset_discovery`, `acquire_exa`, and
   `use_autoprompt=True`) — search *inputs*, not generation prompts, so they are outside this
   inventory even though they are cost-tracked.
@@ -464,9 +427,8 @@ expressed or validated as a contract. **Tracked as
 
 1. **Unify train/eval builders** for NER and general/math generation (classification and code
    already share one). This is the only remaining train/serve parity gap.
-2. **Typed JSON-schema validation** for planner, hardware, downward-probe, acquisition, and
-   taxonomy outputs. `iterate` already has the strictest validator in the repo; the others do
-   not.
+2. **Typed JSON-schema validation** for planner, hardware, downward-probe, and acquisition
+   outputs. `iterate` already has the strictest validator in the repo; the others do not.
 3. **Validate NER annotation output** at acquisition so a failed call cannot become an
    empty-entity gold row. [B203](BUGS.md#b203--_annotate_ner_entities-does-not-re-validate-spans-or-types)
 4. **Verified-positive or preference-objective augmentation** for open generation, math, and

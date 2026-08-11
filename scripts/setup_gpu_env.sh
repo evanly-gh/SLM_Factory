@@ -36,6 +36,10 @@ uv pip install "timm"
 # iterate_node's LLM per-iteration decision; without it every iteration silently
 # falls back to score-band rules (see BUGS B112).
 uv pip install "langgraph>=0.2.0" "anthropic>=0.40.0" "exa-py" "python-dotenv" "langchain-anthropic"
+# matplotlib: run.py renders the end-of-run trajectory graphics. It is declared in
+# requirements.txt but was never installed here, so every cluster run ended with
+# "graphics: skipped (ModuleNotFoundError: No module named 'matplotlib')" (see BUGS B215).
+uv pip install "matplotlib>=3.7.0"
 
 # --- Quantized-accuracy eval deps (config.QUANT_ACCURACY_EVAL / SLM_QUANT_EVAL=1) ---
 # gguf: needed by llama.cpp's convert_hf_to_gguf.py. llama-cpp-python: CPU-side GGUF

@@ -68,11 +68,11 @@ passes through a guard that can divert to `END` (see [§2](#2-global-guards)).
 
 ### Production mode
 
-Replaces the three cold-start entry nodes with four; the loop from `curate` onward is the
-same code.
+Replaces the three cold-start entry nodes with three others; the loop from `curate` onward is
+the same code.
 
 ```
-(entry) ──▶ trace_ingest ──▶ taxonomy_construct ──▶ live_confirm ──▶ parent_awareness ──▶ curate ──▶ (same loop)
+(entry) ──▶ trace_ingest ──▶ live_confirm ──▶ parent_awareness ──▶ curate ──▶ (same loop)
 ```
 
 ### Exact routing table
@@ -83,8 +83,7 @@ same code.
 | `task_analysis` | `_route_before` | `eval_setup`, `END` |
 | `eval_setup` | `_route_before` | `model_selection`, `END` |
 | `model_selection` | `_route_before` | `curate`, `END` |
-| `trace_ingest` | `_route_before` | `taxonomy_construct`, `END` |
-| `taxonomy_construct` | `_route_before` | `live_confirm`, `END` |
+| `trace_ingest` | `_route_before` | `live_confirm`, `END` |
 | `live_confirm` | `_route_before` | `parent_awareness`, `END` |
 | `parent_awareness` | `_route_before` | `curate`, `END` |
 | `curate` | `_route_before` | `train`, `END` |
@@ -138,9 +137,12 @@ consulted by every router — so termination is checked on both sides of every e
 | `MAX_TURNS_MAIN` | 1500 | `config/config.py` | Cumulative node executions; also the LangGraph `recursion_limit` |
 | `MAX_WALLCLOCK_S` | `14*3600` | `config/config.py` | 0 disables. Requeue scripts set 0 and let Slurm `USR1` drive rollover |
 | `turn_budget` | 1500 cold / 500 prod | `AgentState` | Charged at 2 turns per iteration (`curate` + `train`) |
-| `STAGNATION_WINDOW` | 20 | `agent/nodes/iterate.py` | Evals examined by the stagnation test |
+| `STAGNATION_WINDOW` | 15 | `agent/nodes/iterate.py` | Evals examined by the stagnation test (over the append-only `eval_history`, so rollback cannot reset it) |
 | `STAGNATION_MIN_DELTA` | 0.02 | `agent/nodes/iterate.py` | Minimum window gain that counts as progress |
-| `MAX_STALL_EVALS` | 20 | `agent/nodes/iterate.py` | Consecutive non-improving evals before escalation (sole stuck-run backstop) |
+| `MAX_EVALS_BEFORE_ESCALATION` | 30 | `agent/nodes/iterate.py` | Unconditional ceiling: escalate after this many evals on one model without meeting the goal |
+| `SLM_SURGICAL_SYNTH_SHARE` | 0.20 | `agent/nodes/curate.py` | Share of a `synthesize` budget spent on confused pairs rather than balanced fill |
+| `SLM_SURGICAL_MAX_PAIRS` | 5 | `agent/nodes/curate.py` | Most confusion pairs targeted per rebuild |
+| curriculum target | per-tier | `agent/data_sizing.py` | `clamp(5000 × (0.5 + novelty) × size_factor, 5000, 25000)`; recomputed on every tier change |
 | `CURRICULUM_SIZE_FLOOR` | 3000 | `config/config.py` | Per-task floor; curricula are synth-filled up to this |
 | `EVAL_SET_SIZE` | 800 | `config/config.py` | Eval floor; below n≈100 F1 CIs under-cover |
 | `DATA_SIZE_CEILING` | 10000 | `config/config.py` | Hard cap on both targets (also the `target_rows` upper clamp) |
@@ -148,8 +150,11 @@ consulted by every router — so termination is checked on both sides of every e
 | `MAX_PAID_ACQUIRE_ROUNDS_PER_RUN` | 9 | `agent/data_rebuild.py` | Exa spend ceiling for the whole run |
 | `MAX_PAID_ACQUIRE_ROUNDS_PER_PLAN` | 3 | `agent/data_rebuild.py` | Per data-rebuild plan |
 
-`STAGNATION_*`, `MAX_STALL_EVALS`, and both size targets are env-overridable
-(`SLM_STAGNATION_WINDOW`, `SLM_MAX_STALL_EVALS`, `SLM_CURRICULUM_SIZE`, `SLM_EVAL_SET_SIZE`, …).
+`STAGNATION_*`, `MAX_EVALS_BEFORE_ESCALATION`, and both size targets are env-overridable
+(`SLM_STAGNATION_WINDOW`, `SLM_MAX_EVALS_BEFORE_ESCALATION`, `SLM_CURRICULUM_SIZE`,
+`SLM_EVAL_SET_SIZE`, …). **`MAX_STALL_EVALS` was removed on 2026-08-05** — it answered the same
+question as the stagnation window and reset on every improvement, so an improvement every 14
+evals could defer escalation indefinitely.
 
 **Wall-clock accounting across resumes.** `_wallclock_elapsed_s()` =
 `SLM_RUN_ELAPSED_S` (seconds completed in prior requeue segments) + `now − SLM_RUN_START_TS`.
@@ -514,7 +519,7 @@ answer.
 | 1 | `turn_budget` and `(iteration+1)*2 >= turn_budget` | → `terminate` | no |
 | 2 | `_wallclock_exceeded()` | → `terminate` | no |
 | 3 | `score >= stop_threshold` | `_route_score_at_threshold` (below) | no |
-| 4 | `score < threshold` **and** (stagnant or stalled) | → `escalate`, or `terminate` for a `largest_first` probe | **no** |
+| 4 | `score < threshold` **and** (stagnant or eval-cap reached) | → `escalate`, or `terminate` for a `largest_first` probe | **no** |
 | 5 | otherwise | `_llm_iterate` | yes (1, + ≤1 reask) |
 | 6 | after a threshold adjustment | re-run `_route_score_at_threshold` | no |
 | 7 | `hyperparameter` | → `train` | — |
@@ -538,7 +543,15 @@ The lower-tier test unions `downward_tiers_tried` with
 union, the probe could re-select a tier whose true best score is already known and retrain it
 with a single fixed config that has no reason to beat the real search.
 
-**Stagnation vs stall — two different guards, both needed:**
+**Stagnation — ONE guard (2026-08-05), plus an unconditional ceiling:**
+
+Stagnation is measured over `state["eval_history"]`, which is append-only and includes
+rolled-back evals. It is NOT measured over `state["scores"]`, which `rollback` pops on every
+regression — that older design meant a mostly-regressing run never filled the window and the
+check silently never fired. Improvements inside the window do not reset it; only cumulative
+gain above `STAGNATION_MIN_DELTA` avoids escalation.
+
+*(historical note below)*
 
 - `_is_stagnant(scores)` — requires ≥50 scores, then `max(window) − window[0] <
   STAGNATION_MIN_DELTA`. Declines and below-origin oscillation count as no progress. A
@@ -551,10 +564,33 @@ with a single fixed config that has no reason to beat the real search.
 **Step 4 spends no API call by design.** Escalation on stagnation is a rule the LLM cannot
 override, and plateauing is exactly when a run makes the most `iterate` calls.
 
-**Step 5 — the LLM decision.** One tool-free `ORCHESTRATOR_MODEL` call carrying the compacted
-trajectory (`agent/context_manager.py::compact_trajectory` when `should_compact`), the
-test-agent report, tried `(dataset, H)` identities *including pruned ones*, tried rebuild-plan
-identities with yield status, source novelty, and remaining budgets.
+**Step 5 — the LLM decision.** One tool-free `ORCHESTRATOR_MODEL` call carrying the **run memory**
+(`agent/run_memory.py::build_run_memory`), the test-agent report, tried `(dataset, H)` identities
+*including pruned ones*, tried rebuild-plan identities with yield status, source novelty, and
+remaining budgets.
+
+Run memory is built from `state["dag"]`, which is append-only and marks discarded attempts
+`pruned` rather than deleting them, so rolled-back iterations stay visible even though
+`state["scores"]` pops them. It is per-model: `escalate` resets the DAG on a tier change, matching
+the escalation policy's scope. Four sections:
+
+| Section | Contents |
+|---|---|
+| `MOST RECENT ITERATION` | full detail: intervention, delta, `KEPT`/`ROLLED BACK`, per-bucket accuracy, top confusions, full reasoning |
+| `WHAT WORKED` | every kept improvement with its delta and full reasoning |
+| `FAILED SINCE THE LAST IMPROVEMENT` | aggregated by intervention/sub-strategy, the `MAX_DETAILED_FAILURES` (5) most recent narrated in full, plus an explicit "prefer a DIFFERENT intervention type" conclusion when one dominates |
+| `SURGICAL SPEND` | per confusion pair: targeted when, movement, and `EXHAUSTED`/`improving`/`RESOLVED` |
+
+Sub-strategy is shown only for `data_rebuild`: `pi.D.plan` persists across iterations, so labelling
+a `hyperparameter` node with the last rebuild's strategy would credit it with a data change it
+never made (B239).
+
+Nothing in the block is character-truncated — it is bounded by how many attempts are narrated in
+full. The orchestrator's hypothesis is capped only by `HYPOTHESIS_MAX_CHARS` (2000,
+`SLM_HYPOTHESIS_MAX_CHARS`), and exceeding it logs a warning rather than cutting silently (B238).
+
+`agent/context_manager.py::compact_trajectory` remains as the fallback for iteration 1, before the
+DAG has any nodes.
 
 - A `tool_calls` response is never executed or reflected back — it triggers `_reask_json_only`
   from the original bounded context, so a tool-use block cannot open a side channel.
@@ -669,7 +705,7 @@ no task-type or score gating:
 |---|---|
 | `resample` | Reshuffle / re-draw rows from the existing pool (entropy-seeded). **Gated:** redirected to `synthesize` when the whole pool is already in the curriculum (`resample_pool_exhausted`) — a reshuffle there adds no novelty. |
 | `acquire` | Add new rows from the same or a new provenance (bounded real-source mining: local → deterministic benchmark → paid Exa) |
-| `synthesize` | Task-adaptive synthetic generation — hard negatives for classification/NER, new *correct* in-distribution examples for math/code/generation |
+| `synthesize` | Task-adaptive synthetic generation — new *in-class gold* rows for classification/NER, new *correct* in-distribution examples for math/code/generation |
 
 Regardless of strategy, the curriculum is **synth-filled up to `target_rows`** when real data
 falls short (covers the initial curriculum and every rebuild); if synthesis is unavailable it
@@ -905,12 +941,11 @@ Removed pool-wide: `CHIP_SCALE_FACTORS`, `tok_s_snapdragon_*`, `peak_memory_mb`,
 
 ## 10. Production mode
 
-`mode="production"` (paper §2.6). Four entry nodes, then the identical shared loop.
+`mode="production"` (paper §2.6). Three entry nodes, then the identical shared loop.
 
 | Node | Symbol | Behavior |
 |---|---|---|
 | `trace_ingest` | `production/trace_ingest.py` | Loads judged traces from `state["traces"]` or `traces.jsonl`; partitions `T_fail`/`T_pass`; seeds `train_examples` from `T_fail` corrected outputs |
-| `taxonomy_construct` | `production/taxonomy.py` | One `ORCHESTRATOR_MODEL` call clusters up to **40** sampled failures into 3–8 categories, each labeled `fixable` or external. The sampled window and the tagged window are the same 40 — they previously mismatched (20 shown, 50 tagged) |
 | `live_confirm` | `production/live_confirm.py` | Pre-screens by the `cluster` **key** (traces with `cluster=None` are kept as unclassified, not dropped), then **re-runs M0** on each candidate and keeps only failures M0 still reproduces. Inference errors count conservatively as confirmed |
 | `parent_awareness` | `production/parent_awareness.py` | Regression set `R` = stratified sample of passing traces (≥50, or half); replay buffer `D_replay` = 15% of the parent dataset (paper's 10–20%) |
 
@@ -1003,15 +1038,14 @@ recommendations, not behavior.** No code was changed to produce this list.
 | # | Gap | Evidence |
 |---|---|---|
 | 1 | **Production mode cannot start.** `curate_node` raises when `eval_set is None`, and the production graph has no node that builds one. A caller must pre-populate it; nothing validates that at graph entry. | `curate.py` guard vs `graph.py` production branch |
-| 2 | **Open generation and math/code have no augmentation strategy.** `synthesize_hard_negatives` returns gold anchors unchanged for `generation`, and warns and returns originals for math/code. Never writing rejected answers as positive SFT is correct — but it leaves those families with real-data sampling/mining and optional CoT only. | `data/curriculum.py` generation/math/code branches |
-| 3 | **Gold-only degradation on a dead synth endpoint.** `curate` logs a warning and proceeds without synthesis. The driver's preflight (phase 7) blocks *at startup*, but an endpoint that dies mid-run degrades silently. | `curate.py::_synthesize_positive_rows` |
-| 4 | **Synthesis has never actually run at scale.** Both completed runs show only `synth_preflight` events in the cost ledger — 8/9 failed (NER), 18/43 failed (math) — and **zero** `hard_negative_synthesis` events. Every claim about synthesis quality is therefore untested in production. | `logs/runs/*/cost.json` |
-| 5 | **Generation scorer mislabels its metric.** The average LLM-judge score is reported in the `"f1"` field. | `eval/scorers/generation.py:592` |
-| 6 | **`delegate_task` and the four `@tool`-decorated tools have zero call sites.** No sub-agent or tool-using path is reachable from either graph. | `agent/tools/` |
-| 7 | **No baseline/SOTA survey.** Design §2.4 stage 3 calls for a web-search survey of published baselines at plan time; `task_analysis` relies on the planner LLM's own recall. | `task_analysis.py` |
-| 8 | **`_annotate_ner_entities` does not re-validate spans.** Contrary to its prompt, returned spans are not rechecked as exact substrings and types are not allow-listed at that call site. A parse failure becomes an empty-entity gold row, indistinguishable from a genuine negative. | `web_acquire.py::_annotate_ner_entities` |
-| 9 | **`_should_reexplore_downward` coerces with `bool(...)`.** A JSON string `"false"` would evaluate true. | `downward_probe.py` |
-| 10 | **Live confirmation does not replay the serving prompt.** It sends `trace["input"]` raw and compares by exact string, which is wrong for most classification/NER/generation outputs. | `production/live_confirm.py` |
+| 2 | **Gold-only degradation on a dead synth endpoint.** `curate` logs a warning and proceeds without synthesis. The driver's preflight (phase 7) blocks *at startup*, but an endpoint that dies mid-run degrades silently. | `curate.py::_synthesize_positive_rows` |
+| 3 | **Synthesis has never actually run at scale.** Both completed runs show only `synth_preflight` events in the cost ledger — 8/9 failed (NER), 18/43 failed (math) — and **no generation events at all**. Every claim about synthesis quality is therefore untested in production. | `logs/runs/*/cost.json` |
+| 4 | **Generation scorer mislabels its metric.** The average LLM-judge score is reported in the `"f1"` field. | `eval/scorers/generation.py:592` |
+| 5 | **`delegate_task` and the four `@tool`-decorated tools have zero call sites.** No sub-agent or tool-using path is reachable from either graph. | `agent/tools/` |
+| 6 | **No baseline/SOTA survey.** Design §2.4 stage 3 calls for a web-search survey of published baselines at plan time; `task_analysis` relies on the planner LLM's own recall. | `task_analysis.py` |
+| 7 | **`_annotate_ner_entities` does not re-validate spans.** Contrary to its prompt, returned spans are not rechecked as exact substrings and types are not allow-listed at that call site. A parse failure becomes an empty-entity gold row, indistinguishable from a genuine negative. | `web_acquire.py::_annotate_ner_entities` |
+| 8 | **`_should_reexplore_downward` coerces with `bool(...)`.** A JSON string `"false"` would evaluate true. | `downward_probe.py` |
+| 9 | **Live confirmation does not replay the serving prompt.** It sends `trace["input"]` raw and compares by exact string, which is wrong for most classification/NER/generation outputs. | `production/live_confirm.py` |
 
 ### 12.2 Recommended interventions (none implemented)
 
@@ -1088,8 +1122,8 @@ unmeasured. Doubles as the source of truth for "which tiers the main ladder trie
 
 **Phase 2 flags** — `quantize_enabled`, `hw_gating_enabled`
 
-**Production** — `mode`, `deployed_model_ref`, `traces`, `failure_taxonomy`, `regression_set`,
-`replay_buffer`, `turn_budget`
+**Production** — `mode`, `deployed_model_ref`, `traces`, `regression_set`, `replay_buffer`,
+`turn_budget`
 
 **Graph internals** — `_graph_steps` (durable cumulative node count),
 `_wallclock_terminated_before`

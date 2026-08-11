@@ -16,6 +16,7 @@ eval set, measured by the system in eval_setup (see agent/threshold.py).
 import json
 import re
 from agent.cost import tracked_anthropic_messages_create
+from agent.llm_text import MIN_THINKING_SAFE_MAX_TOKENS, response_text
 from config.android_pool import (
     METRIC_COMPARABILITY_CAVEAT,
     format_capability_metrics,
@@ -111,7 +112,7 @@ held-out EVAL set. Ground this in fine-tuning sample-size research and two facto
   2. On-device small models (this pool is sub-4B) sit in the "instillation" regime and need
      MORE data than an 8B would for the same task.
 Bias UP for obscure/less-popular tasks. Give integer counts:
-- "curriculum_size": total training examples to curate (gold + hard negatives).
+- "curriculum_size": total training examples to curate (real gold + synthetic gold).
 - "eval_size": held-out evaluation examples (bigger = statistically more reliable macro-F1).
 Name your popularity/complexity judgment in "rationale" (e.g. "niche biomedical NER, little
 public data → large curriculum 3000"). The system clamps both to safe floors/ceiling.
@@ -247,10 +248,10 @@ def plan_task(description: str, anthropic_client=None, log=print, model_pool=Non
         anthropic_client.messages,
         stage="task_analysis",
         model=ORCHESTRATOR_MODEL,
-        max_tokens=1024,
+        max_tokens=max(1024, MIN_THINKING_SAFE_MAX_TOKENS),
         messages=[{"role": "user", "content": prompt}],
     )
-    plan = _extract_json(resp.content[0].text)
+    plan = _extract_json(response_text(resp))
 
     if plan.get("task_type") not in _VALID:
         raise ValueError(f"Planner returned invalid task_type: {plan.get('task_type')!r}")

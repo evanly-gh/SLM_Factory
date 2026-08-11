@@ -82,8 +82,8 @@ def load_xlam_bfcl(max_train: int = 2000, max_test: int = 800) -> tuple[list[dic
     # BFCL exposes several categories; the simple/parallel splits match the AST scorer. Fall
     # back to the train split slice if a dedicated test split is unavailable.
     try:
-        raw_test = load_dataset(BFCL_ID, split=f"test[:{max_test}]", trust_remote_code=True)
+        raw_test = load_dataset(BFCL_ID, split=f"test[:{max_test}]")
     except (ValueError, KeyError):
-        raw_test = load_dataset(BFCL_ID, split=f"train[:{max_test}]", trust_remote_code=True)
+        raw_test = load_dataset(BFCL_ID, split=f"train[:{max_test}]")
     test = convert_xlam_rows(raw_test)
     return train, test

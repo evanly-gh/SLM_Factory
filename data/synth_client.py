@@ -1,10 +1,10 @@
 """
-Local synthesis client (B161): hard-negative / rare-class synthesis via a LOCAL vLLM
+Local synthesis client (B161): training-example synthesis and CoT annotation via a LOCAL vLLM
 OpenAI-compatible endpoint serving Qwen3.6-35B-A3B (config.SYNTH_ENDPOINT), instead of the
 Claude orchestrator API.
 
 Why local: (1) no Claude cost, (2) fully reproducible + contamination-safe (a model we own),
-(3) the 35B is strong enough for contrastive example generation. If the endpoint is not
+(3) the 35B is strong enough for in-distribution example generation. If the endpoint is not
 configured or unreachable, callers get None and degrade gracefully (gold-only) — they must
 NEVER silently fall back to Claude for synthesis.
 
@@ -28,6 +28,22 @@ def _endpoint_config():
     return SYNTH_ENDPOINT, SYNTH_MODEL, SYNTH_API_KEY
 
 
+def _connection_pool_size() -> int:
+    """Keep-alive slots to hold open, sized to the synthesis fan-out.
+
+    Synthesis fans out over a thread pool of SLM_SYNTH_CONCURRENCY workers sharing one client.
+    httpx keeps only 20 connections alive by default, so once concurrency exceeds that the
+    surplus workers pay a fresh TCP handshake on every single row. Holding one slot per worker
+    (plus headroom) makes the pool a non-event instead of a per-call tax.
+    """
+    import os
+    try:
+        concurrency = int(os.environ.get("SLM_SYNTH_CONCURRENCY", "16"))
+    except (TypeError, ValueError):
+        concurrency = 16
+    return max(32, concurrency + 8)
+
+
 def _make_client(timeout: float):
     """OpenAI client for the LOCAL endpoint with proxy DISABLED (trust_env=False). Compute
     nodes often export HTTP(S)_PROXY for internet access, which a Squid proxy then applies to
@@ -36,7 +52,12 @@ def _make_client(timeout: float):
     from openai import OpenAI
     import httpx
     endpoint, model, api_key = _endpoint_config()
-    http_client = httpx.Client(trust_env=False, timeout=timeout)
+    pool = _connection_pool_size()
+    http_client = httpx.Client(
+        trust_env=False,
+        timeout=timeout,
+        limits=httpx.Limits(max_connections=pool, max_keepalive_connections=pool),
+    )
     return OpenAI(base_url=endpoint, api_key=api_key or "EMPTY", timeout=timeout,
                   http_client=http_client), model
 

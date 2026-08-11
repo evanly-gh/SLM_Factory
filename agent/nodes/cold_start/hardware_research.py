@@ -22,6 +22,7 @@ import os
 import re
 
 from agent.cost import tracked_anthropic_messages_create, tracked_exa_call
+from agent.llm_text import MIN_THINKING_SAFE_MAX_TOKENS, response_text
 from config.android_pool import KNOWN_CHIPS, HardwareConstraints
 
 # Valid chipset vocabulary. Previously derived from CHIP_SCALE_FACTORS, a table of
@@ -86,10 +87,133 @@ def _extract_json(text: str) -> dict:
         return json.loads(m.group())
 
 
-def _lookup_local_db(description: str, log) -> str | None:
+# --- Deterministic budget model -------------------------------------------------------------
+# When the device IS in the CSV every number we need is already known, so there is nothing for an
+# LLM to resolve — and letting it resolve anyway made the step non-reproducible (two runs on the
+# identical S24 Ultra row produced storage budgets of 204,800 MB and 153,600 MB, a 33% swing in a
+# hard gate on model selection). These constants make the same inputs always yield the same
+# budgets. Override per-run if a target device behaves differently.
+ANDROID_OS_OVERHEAD_MB = int(os.environ.get("SLM_HW_OS_OVERHEAD_MB", "2048"))
+# Runtime cost beyond the weight file itself: KV cache, activations, tokenizer, llama.cpp/ORT
+# arena and fragmentation headroom. Held out of the RAM budget so a variant that *just* fits its
+# weights is not selected and then OOMs the moment it starts decoding.
+INFERENCE_RUNTIME_OVERHEAD_MB = int(os.environ.get("SLM_HW_RUNTIME_OVERHEAD_MB", "1024"))
+# Fraction of TOTAL storage a model file may occupy. Phones are rarely empty; this leaves room
+# for the OS image, apps and user data without pretending the disk is free.
+STORAGE_BUDGET_FRACTION = float(os.environ.get("SLM_HW_STORAGE_FRACTION", "0.60"))
+
+
+def _deterministic_budgets(ram_mb: int, storage_mb: int) -> dict:
+    """Derive the two hard gates from raw device specs, with no model call.
+
+    usable_ram_mb = total RAM − OS/foreground overhead − inference runtime overhead
+    storage_budget_mb = a fixed fraction of total storage
+    """
+    usable_ram = max(
+        0, int(ram_mb) - ANDROID_OS_OVERHEAD_MB - INFERENCE_RUNTIME_OVERHEAD_MB
+    )
+    storage_budget = max(0, int(int(storage_mb) * STORAGE_BUDGET_FRACTION))
+    return {
+        "usable_ram_mb": usable_ram,
+        "storage_budget_mb": storage_budget,
+        "rationale": (
+            f"deterministic: usable RAM = {int(ram_mb)}MB total "
+            f"− {ANDROID_OS_OVERHEAD_MB}MB OS/foreground "
+            f"− {INFERENCE_RUNTIME_OVERHEAD_MB}MB inference runtime (KV cache, activations, "
+            f"allocator headroom) = {usable_ram}MB; storage budget = "
+            f"{STORAGE_BUDGET_FRACTION:.0%} of {int(storage_mb)}MB = {storage_budget}MB"
+        ),
+    }
+
+
+def _compact(value: str) -> str:
+    """Lowercase, strip every non-alphanumeric character: 'Snapdragon 8 Gen 3' -> 'snapdragon8gen3'."""
+    return re.sub(r"[^a-z0-9]+", "", str(value or "").lower())
+
+
+def _closest_reference_chip(chipset: str) -> str | None:
+    """Map a vendor chipset string onto a known reference chip, with no LLM call.
+
+    Compares compacted forms so spacing and punctuation cannot defeat the match — the vendor
+    writes "Qualcomm Snapdragon 8 Gen 3" while the reference id is "snapdragon_8gen3", which share
+    only the token "snapdragon" and so failed a token-overlap test. Longest match wins, so
+    'snapdragon_8gen3' is preferred over a shorter id that also happens to be a substring.
+    """
+    if not chipset:
+        return None
+    haystack = _compact(chipset)
+    if not haystack:
+        return None
+    best = None
+    for chip in REFERENCE_CHIPS:
+        needle = _compact(chip)
+        if needle and needle in haystack:
+            if best is None or len(needle) > len(_compact(best)):
+                best = chip
+    return best
+
+
+def _exact_local_device(description: str, log) -> dict | None:
+    """Resolve the device fully deterministically when the CSV gives an unambiguous match.
+
+    Returns a complete hardware dict (same shape the LLM path produces) or None to fall through
+    to Exa + Claude research. Requires an unambiguous top match with usable RAM/storage/chipset —
+    anything doubtful defers to the research path rather than guessing.
+    """
+    rows = _local_db_rows(description, log)
+    if not rows:
+        return None
+    top_score, row = rows[0]
+    # Ambiguous when a second candidate ties the top score: two different phones matched the
+    # description equally well, so picking one silently would be a guess.
+    if len(rows) > 1 and rows[1][0] == top_score:
+        log(
+            f"      [hw] Local DB match ambiguous ({row.get('device')!r} vs "
+            f"{rows[1][1].get('device')!r} both scored {top_score}) — deferring to research"
+        )
+        return None
+    try:
+        ram_mb = int(float(row.get("ram_mb") or 0))
+        storage_mb = int(float(row.get("storage_mb") or 0))
+    except (TypeError, ValueError):
+        return None
+    if ram_mb <= 0 or storage_mb <= 0:
+        log("      [hw] Local DB row missing RAM/storage — deferring to research")
+        return None
+    chipset = (row.get("chipset") or "").strip()
+    reference_chip = _closest_reference_chip(chipset)
+    if reference_chip is None:
+        log(
+            f"      [hw] Chipset {chipset!r} does not map to a known reference chip "
+            "— deferring to research"
+        )
+        return None
+    budgets = _deterministic_budgets(ram_mb, storage_mb)
+    log(
+        f"      [hw] EXACT local-DB hit: {row.get('device')} — resolved deterministically, "
+        "no Exa/Claude call"
+    )
+    return {
+        "device": row.get("device"),
+        "chipset": chipset or None,
+        "ram_gb": round(ram_mb / 1024),
+        "storage_gb": round(storage_mb / 1024),
+        "reference_chip": reference_chip,
+        **budgets,
+    }
+
+
+def _local_db_rows(description: str, log) -> list[tuple[int, dict]]:
+    """Scored CSV rows for the description, best first. Shared by both resolution paths."""
+    snippets = _lookup_local_db(description, log, _return_rows=True)
+    return snippets or []
+
+
+def _lookup_local_db(description: str, log, _return_rows: bool = False):
     """Fuzzy-match device name against the local Kaggle phone specs CSV.
 
     Returns a formatted string of matching rows, or None if no match or DB not found.
+    With ``_return_rows`` returns the scored ``(score, row)`` list instead, best first.
     """
     csv_path = os.path.abspath(_DEVICES_CSV)
     if not os.path.exists(csv_path):
@@ -146,10 +270,12 @@ def _lookup_local_db(description: str, log) -> str | None:
 
         if not matches:
             log(f"      [hw] No match in local DB for keywords: {keywords[:6]}")
-            return None
+            return [] if _return_rows else None
 
         # Sort by score (descending), take top 3
         matches.sort(key=lambda x: -x[0])
+        if _return_rows:
+            return matches
         top = matches[:3]
 
         snippets = []
@@ -166,7 +292,7 @@ def _lookup_local_db(description: str, log) -> str | None:
 
     except Exception as e:
         log(f"      [hw] Local DB lookup failed ({e})")
-        return None
+        return [] if _return_rows else None
 
 
 def _exa_snippets(description: str, log) -> str:
@@ -191,8 +317,22 @@ def _exa_snippets(description: str, log) -> str:
 def research_device(description: str, anthropic_client=None, log=print):
     """Resolve a device description into HardwareConstraints.
 
-    Pipeline: local DB → Exa fallback → Claude LLM resolve.
+    Pipeline: EXACT local DB hit → deterministic Python (no API calls at all).
+              Otherwise: local DB snippets or Exa web search → Claude LLM resolve.
+
+    The deterministic path exists because a CSV hit already contains every number needed; the
+    LLM was only reformatting known data, and doing so non-reproducibly.
     """
+    from config.config import (
+        HW_LATENCY_TTFT_MS, HW_POWER_WATTS, HW_MIN_TOK_S, HW_FALLBACK_CHIP,
+    )
+
+    # Stage 0: fully deterministic resolution when the device is unambiguously in the CSV.
+    exact = _exact_local_device(description, log)
+    if exact is not None:
+        exact["spec_source"] = "local_db_exact"
+        return _finalize_hardware(exact, log)
+
     if anthropic_client is None:
         import anthropic
         from config.config import ANTHROPIC_API_KEY, orchestrator_client_kwargs
@@ -200,30 +340,26 @@ def research_device(description: str, anthropic_client=None, log=print):
 
     from config.config import ORCHESTRATOR_MODEL
 
-    # Stage 1: try local device DB first (no API cost)
+    # Stage 1: partial/ambiguous local match — keep the rows as context for the LLM.
     snippets = _lookup_local_db(description, log)
     source = "local_db"
 
-    # Stage 2: Exa web search fallback
+    # Stage 2: Exa web search fallback — ONLY when the device is not in the DB.
     if snippets is None:
-        log("      [hw] Falling back to Exa web search...")
+        log("      [hw] Device not in local DB — falling back to Exa web search...")
         snippets = _exa_snippets(description, log)
         source = "exa"
-
-    from config.config import (
-        HW_LATENCY_TTFT_MS, HW_POWER_WATTS, HW_MIN_TOK_S, HW_FALLBACK_CHIP,
-    )
 
     # Stage 3: LLM resolve — device-specific values only (RAM, storage, chip).
     try:
         resp = tracked_anthropic_messages_create(
             anthropic_client.messages,
             stage="hardware_research",
-            model=ORCHESTRATOR_MODEL, max_tokens=700,
+            model=ORCHESTRATOR_MODEL, max_tokens=MIN_THINKING_SAFE_MAX_TOKENS,
             messages=[{"role": "user", "content": _PROMPT.format(
                 chips=REFERENCE_CHIPS, description=description, snippets=snippets)}],
         )
-        info = _extract_json(resp.content[0].text)
+        info = _extract_json(response_text(resp))
         info["spec_source"] = source
     except Exception as e:
         # An API failure here is fatal: the hardware budget is a HARD gate on which
@@ -238,6 +374,15 @@ def research_device(description: str, anthropic_client=None, log=print):
         info = {"device": description, "usable_ram_mb": 3000, "storage_budget_mb": 1500,
                 "reference_chip": HW_FALLBACK_CHIP, "rationale": "fallback defaults",
                 "spec_source": "defaults"}
+
+    return _finalize_hardware(info, log)
+
+
+def _finalize_hardware(info: dict, log):
+    """Turn a resolved spec dict into HardwareConstraints. Shared by both resolution paths."""
+    from config.config import (
+        HW_LATENCY_TTFT_MS, HW_POWER_WATTS, HW_MIN_TOK_S, HW_FALLBACK_CHIP,
+    )
 
     # reference_chip is device-specific (parsed from the description); fall back to
     # the configured anchor only when it cannot be resolved. latency/power/min_tok_s

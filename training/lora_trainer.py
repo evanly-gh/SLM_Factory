@@ -281,6 +281,7 @@ def _training_turn(
     example: dict,
     task_type: str,
     classification_labels: list[str],
+    generation_instruction: str = "",
 ) -> tuple[str, str, str]:
     """Return (user prompt, assistant target, plain-text fallback marker)."""
     if task_type == "classification":
@@ -312,9 +313,16 @@ def _training_turn(
             "Answer",
         )
     if task_type in ("generation", "math_reasoning"):
-        user_message = example.get(
-            "text",
-            example.get("prompt", ""),
+        from eval.scorers.generation import build_generation_prompt
+
+        # Same builder the eval harness uses. Training used to pass the BARE text here while
+        # eval wrapped it in an instruction, so the model was fine-tuned on one input shape and
+        # scored on another (B250). Importing the eval-side builder — rather than reproducing
+        # the format — is what makes the two incapable of drifting, exactly as the
+        # classification branch above does with build_classify_prompt.
+        user_message = build_generation_prompt(
+            example.get("text", example.get("prompt", "")),
+            generation_instruction,
         )
         raw_answer = example.get(
             "answer",
@@ -365,12 +373,19 @@ def _build_completion_only_rows(
         if task_type == "classification"
         else []
     )
+    # Resolved once over the training rows, the same way `labels` is above and the same way the
+    # eval harness resolves it over the eval rows — so both sides land on the dataset's own
+    # instruction without either being told what it is.
+    from eval.scorers.generation import resolve_generation_instruction
+
+    generation_instruction = resolve_generation_instruction(raw_rows)
     rows = []
     for row_index, example in enumerate(raw_rows):
         user_message, assistant_message, fallback_marker = _training_turn(
             example,
             task_type,
             labels,
+            generation_instruction,
         )
         if not assistant_message:
             raise ValueError(
@@ -1047,11 +1062,21 @@ def _purge_trainer_checkpoints(output_dir: str) -> None:
             _shutil.rmtree(checkpoint_dir, ignore_errors=True)
 
 
-def merge_for_quantization(checkpoint_path: str, output_dir: str) -> str:
+def merge_for_quantization(
+    checkpoint_path: str,
+    output_dir: str,
+    base_model_id: str | None = None,
+) -> str:
     """
     Merge LoRA adapters into the base model weights and save as a full HF checkpoint.
     Required before GGUF quantization — GGUF cannot be produced from adapter-only checkpoints.
     Returns path to the merged HF checkpoint directory.
+
+    ``base_model_id`` pins the merge to a canonical 16-bit base. QLoRA loads a 4-bit base, and
+    Unsloth rewrites the adapter's ``base_model_name_or_path`` to its own pre-quantized mirror
+    (``Qwen/Qwen3-0.6B`` becomes ``unsloth/qwen3-0.6b-unsloth-bnb-4bit``). Merging that mirror
+    with ``merged_16bit`` makes unsloth_zoo emit a UserWarning and write **nothing**, so callers
+    that know the real model id must pass it here (see BUGS B219).
     """
     from unsloth import FastLanguageModel, FastVisionModel
     from agent.logging_setup import quiet_ml_logging
@@ -1075,6 +1100,13 @@ def merge_for_quantization(checkpoint_path: str, output_dir: str) -> str:
                 f"Adapter config {adapter_config} has no valid "
                 "base_model_name_or_path"
             )
+        if base_model_id and base_model_id.strip():
+            if base_model_id != base_identity:
+                print(
+                    f"      [merge] pinning merge base to {base_model_id!r} "
+                    f"(adapter recorded {base_identity!r})"
+                )
+            base_identity = base_model_id
 
         local_base = resolve_cached_hf_snapshot(base_identity)
         loader = (
@@ -1131,6 +1163,16 @@ def merge_for_quantization(checkpoint_path: str, output_dir: str) -> str:
             merged_dir,
             tokenizer,
             save_method="merged_16bit",
+        )
+    # unsloth_zoo refuses a 16-bit merge from a 4-bit base by warning and returning without
+    # writing anything, so an empty directory here means the merge silently no-opped rather
+    # than that some file went missing. Say so, instead of leaving the opaque
+    # "snapshot is incomplete" from verify_hf_model_snapshot as the only clue (B219).
+    if not any(os.scandir(merged_dir)):
+        raise RuntimeError(
+            f"save_pretrained_merged wrote no files to {merged_dir}. This is the unsloth_zoo "
+            "no-op for a 16-bit merge from a quantized base — check the adapter's "
+            "base_model_name_or_path and pass base_model_id to pin a 16-bit base."
         )
     verify_hf_model_snapshot(merged_dir)
     return merged_dir

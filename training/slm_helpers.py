@@ -185,6 +185,35 @@ def _is_adapter_only_checkpoint(path: str) -> bool:
     return has_adapter_cfg and not has_full_weights
 
 
+def _assert_adapter_is_live(model, weights_ref: str) -> None:
+    """Refuse to score a LoRA adapter that cannot change a single logit.
+
+    LoRA computes ``B @ A``, and B is zero-initialised, so an adapter whose B matrices are ALL
+    zero contributes exactly nothing. That failure is invisible from the outside: inference
+    runs, produces fluent output, and scores — just the BASE model's score, reported as the
+    fine-tuned one. In run 38303490 it cost five iterations and two orchestrator decisions
+    before anyone noticed the trajectory was 0.5414 four times in a row, bit for bit.
+
+    Checking is a few microseconds against a load that takes seconds, so it is always on.
+    """
+    b_params = [
+        param for name, param in model.named_parameters() if "lora_B" in name
+    ]
+    if not b_params:
+        raise RuntimeError(
+            f"Adapter checkpoint {weights_ref!r} loaded with NO lora_B parameters attached — "
+            f"the adapter is not present in the module tree, so inference would silently "
+            f"score the base model."
+        )
+    if not any(param.detach().float().abs().sum().item() > 0 for param in b_params):
+        raise RuntimeError(
+            f"Adapter checkpoint {weights_ref!r} attached {len(b_params)} lora_B tensors and "
+            f"every one is ZERO, which makes the adapter mathematically an identity: eval "
+            f"would score the base model and report it as fine-tuned. Either the checkpoint "
+            f"never trained, or the loader failed to populate it from disk."
+        )
+
+
 def _configure_inference_tokenizer(tokenizer):
     """Configure deterministic decoder-only batching on the text tokenizer."""
     tokenizer.padding_side = "left"
@@ -287,7 +316,16 @@ def _load_inference_model(
                 load_in_4bit=False,
                 trust_remote_code=True,
             )
-            model.load_adapter(weights_ref)
+            # PeftModel.from_pretrained, NOT model.load_adapter (B254). On an Unsloth-patched
+            # model, `load_adapter` builds the LoRA modules and marks them active but never
+            # populates them from the checkpoint: measured 0 of 186 lora_B tensors non-zero,
+            # against 186 of 186 for the same file through PeftModel. Because LoRA initializes
+            # B to zeros, that adapter is exactly an identity — eval silently scored the BASE
+            # model and reported it as fine-tuned.
+            from peft import PeftModel
+
+            model = PeftModel.from_pretrained(model, weights_ref)
+            _assert_adapter_is_live(model, weights_ref)
         else:
             model, tokenizer = _Loader.from_pretrained(
                 model_name=weights_ref,

@@ -331,12 +331,28 @@ def _cost_log_line(event: CostEvent) -> str:
     )
 
 
+# Local (self-hosted vLLM) calls are always $0 and are made per synthesized row, so echoing one
+# console line each buries the run log: a single CLINC150 run emitted 4,203 `local_synthesis`
+# lines plus a `synth_preflight` line per readiness poll. They are still appended to
+# cost-events.jsonl and still counted in the end-of-run summary, so nothing is lost for auditing —
+# only the console echo is dropped. Paid providers (anthropic/exa) always print, and any local
+# FAILURE still prints because a failing local call is diagnostic.
+_LOG_LOCAL_COST_EVENTS = os.environ.get("SLM_LOG_LOCAL_COST_EVENTS", "0") == "1"
+
+
+def _should_echo_cost_event(event: CostEvent) -> bool:
+    if _LOG_LOCAL_COST_EVENTS:
+        return True
+    return not (event.provider == "local" and event.status == "success")
+
+
 def record_cost_event(
     event: CostEvent, path: str | os.PathLike | None = None
 ) -> CostEvent:
-    """Append and log one event."""
+    """Append every event to the ledger; echo the interesting ones to the console."""
     _append_jsonl(_resolve_event_path(path), event.to_dict())
-    print(_cost_log_line(event), flush=True)
+    if _should_echo_cost_event(event):
+        print(_cost_log_line(event), flush=True)
     return event
 
 

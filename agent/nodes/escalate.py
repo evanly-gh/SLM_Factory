@@ -64,6 +64,11 @@ def _llm_choose_model(
     correct in both directions since all candidates already satisfy the hardware budget.
     """
     from config.config import ORCHESTRATOR_MODEL, ANTHROPIC_API_KEY, orchestrator_client_kwargs
+    from agent.llm_text import (
+        MIN_THINKING_SAFE_MAX_TOKENS,
+        describe_empty_text,
+        response_text,
+    )
     import anthropic
 
     if not candidates:
@@ -116,12 +121,13 @@ def _llm_choose_model(
             client.messages,
             stage="escalate",
             model=ORCHESTRATOR_MODEL,
-            max_tokens=256,
+            max_tokens=MIN_THINKING_SAFE_MAX_TOKENS,
             system=_CHOOSE_SYSTEM,
             messages=[{"role": "user", "content": prompt}],
         )
-        first_block = resp.content[0]
-        raw = first_block.text.strip() if isinstance(first_block, anthropic.types.TextBlock) else ""
+        raw = response_text(resp)
+        if not raw:
+            log(f"  Orchestrator produced no text: {describe_empty_text(resp)}")
         chosen_id, reason = _parse_choice(raw)
         match = resolve_model_selector(candidates, chosen_id)
         if match is not None:
@@ -296,6 +302,9 @@ def escalate_node(state: AgentState) -> AgentState:
 
     state["selected_model"] = chosen
     state["scores"] = []
+    # Stagnation is per-model: a new tier starts with a clean eval history so the previous
+    # model's plateau cannot immediately escalate the new one.
+    state["eval_history"] = []
     state["dag"] = []
     state["iteration"] = 0
     state["lifetime_best_score"] = max(

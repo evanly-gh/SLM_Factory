@@ -6,6 +6,7 @@ from contextlib import contextmanager
 from types import SimpleNamespace
 
 import pytest
+import torch
 from unittest.mock import patch, MagicMock
 from training.slm_helpers import infer_batch_gguf
 from training.lora_trainer import TrainingOutput
@@ -518,6 +519,12 @@ def test_inference_prefetches_base_and_weights_before_language_loader():
 
 
 def test_adapter_only_loader_loads_base_then_applies_adapter(tmp_path):
+    """The adapter must be attached with PeftModel, not model.load_adapter (B254).
+
+    `load_adapter` builds the LoRA modules on an Unsloth-patched model but leaves every
+    lora_B tensor at its zero init, which makes the adapter an identity and silently scores
+    the base model.
+    """
     from training.slm_helpers import _load_inference_model
 
     checkpoint = tmp_path / "adapter"
@@ -525,14 +532,22 @@ def test_adapter_only_loader_loads_base_then_applies_adapter(tmp_path):
     (checkpoint / "adapter_config.json").write_text("{}", encoding="utf-8")
     (checkpoint / "adapter_model.safetensors").write_bytes(b"adapter")
 
-    model = MagicMock()
-    model.generation_config = SimpleNamespace(max_length=40960)
+    base = MagicMock()
     tokenizer = MagicMock()
     tokenizer.pad_token = "<pad>"
     tokenizer.pad_token_id = 0
     loader = MagicMock()
-    loader.from_pretrained.return_value = (model, tokenizer)
+    loader.from_pretrained.return_value = (base, tokenizer)
     unsloth_mock = MagicMock(FastLanguageModel=loader)
+
+    # A PEFT-wrapped model whose adapter weights actually loaded.
+    peft_model = MagicMock()
+    peft_model.generation_config = SimpleNamespace(max_length=40960)
+    peft_model.named_parameters.return_value = iter(
+        [("base.layers.0.q_proj.lora_B.weight", torch.tensor([[0.25]]))]
+    )
+    peft_mock = MagicMock()
+    peft_mock.PeftModel.from_pretrained.return_value = peft_model
 
     with (
         patch("training.slm_helpers._inference_cache", {}),
@@ -540,7 +555,7 @@ def test_adapter_only_loader_loads_base_then_applies_adapter(tmp_path):
         patch("training.lora_trainer._ensure_model_cached"),
         patch("training.lora_trainer.is_multimodal_model", return_value=False),
         patch("agent.logging_setup.quiet_ml_logging"),
-        patch.dict(sys.modules, {"unsloth": unsloth_mock}),
+        patch.dict(sys.modules, {"unsloth": unsloth_mock, "peft": peft_mock}),
     ):
         loaded_model, loaded_tokenizer = _load_inference_model(
             str(checkpoint),
@@ -548,7 +563,7 @@ def test_adapter_only_loader_loads_base_then_applies_adapter(tmp_path):
             512,
         )
 
-    assert loaded_model is model
+    assert loaded_model is peft_model
     assert loaded_tokenizer is tokenizer
     loader.from_pretrained.assert_called_once_with(
         model_name="base-model",
@@ -556,8 +571,44 @@ def test_adapter_only_loader_loads_base_then_applies_adapter(tmp_path):
         load_in_4bit=False,
         trust_remote_code=True,
     )
-    model.load_adapter.assert_called_once_with(str(checkpoint))
-    loader.for_inference.assert_called_once_with(model)
+    peft_mock.PeftModel.from_pretrained.assert_called_once_with(base, str(checkpoint))
+    base.load_adapter.assert_not_called()
+    loader.for_inference.assert_called_once_with(peft_model)
+
+
+def test_adapter_only_loader_rejects_an_inert_adapter(tmp_path):
+    """An all-zero lora_B must abort the eval instead of scoring the base model."""
+    from training.slm_helpers import _load_inference_model
+
+    checkpoint = tmp_path / "adapter"
+    checkpoint.mkdir()
+    (checkpoint / "adapter_config.json").write_text("{}", encoding="utf-8")
+    (checkpoint / "adapter_model.safetensors").write_bytes(b"adapter")
+
+    tokenizer = MagicMock()
+    tokenizer.pad_token = "<pad>"
+    tokenizer.pad_token_id = 0
+    loader = MagicMock()
+    loader.from_pretrained.return_value = (MagicMock(), tokenizer)
+    unsloth_mock = MagicMock(FastLanguageModel=loader)
+
+    peft_model = MagicMock()
+    peft_model.named_parameters.return_value = iter(
+        [("base.layers.0.q_proj.lora_B.weight", torch.zeros(2, 2))]
+    )
+    peft_mock = MagicMock()
+    peft_mock.PeftModel.from_pretrained.return_value = peft_model
+
+    with (
+        patch("training.slm_helpers._inference_cache", {}),
+        patch("training.slm_helpers._cache_order", []),
+        patch("training.lora_trainer._ensure_model_cached"),
+        patch("training.lora_trainer.is_multimodal_model", return_value=False),
+        patch("agent.logging_setup.quiet_ml_logging"),
+        patch.dict(sys.modules, {"unsloth": unsloth_mock, "peft": peft_mock}),
+        pytest.raises(RuntimeError, match="ZERO"),
+    ):
+        _load_inference_model(str(checkpoint), "base-model", 512)
 
 
 def test_train_returns_training_output():

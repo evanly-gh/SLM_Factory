@@ -6,15 +6,38 @@
 > the orchestrator with no task/score gating. Curation is now **non-deterministic**
 > (entropy-seeded sampling; the plan-identity dedup, untried-plan rotation, and
 > `DataRebuildPlanSpaceExhausted` were removed). Synthesis is **ungated** and **task-adaptive**
-> (hard negatives for classification/NER; new *correct* examples for math/code/generation) and
-> **synth-fills** every curriculum up to the target size. Per-task floor is ≥3000; escalation
-> fires after 20 non-improving evals. Sections below marked *(pre-redesign)* describe the old
-> model and are retained for history.
+> and **synth-fills** every curriculum up to the target size.
+>
+> **UPDATE 2026-08-05 — escalation policy.** ONE mechanism: escalate after
+> `STAGNATION_WINDOW` (15) evals without a gain greater than `STAGNATION_MIN_DELTA` (2%),
+> measured over an append-only eval history so rollback cannot reset it, plus an
+> unconditional ceiling at `MAX_EVALS_BEFORE_ESCALATION` (30) evals. `MAX_STALL_EVALS` was
+> deleted. Curriculum floor is 5000, ceiling 25000.
+>
+> **UPDATE 2026-08-05 — dataset sizing is now per-tier and deterministic.** `DATASET_SIZE_BY_TYPE`
+> was deleted (every value sat below the floor and was clamped away). `agent/data_sizing.py`
+> computes the target from two measured signals — task novelty (`1 − zero_shot_baseline`) and model
+> capacity (inverse parameter count) — clamped to [5000, 25000], recomputed on entry to every tier:
+>
+> ```
+> target = clamp(5000 × (0.5 + novelty) × clamp(1e9/n_params, 0.5, 2.0), 5000, 25000)
+> ```
+>
+> A bigger model therefore gets a SMALLER target. Override with `SLM_CURRICULUM_SIZE`.
+>
+> **UPDATE 2026-08-05 — `synthesize` splits into fill and surgical.** `surgical_synthesize` spends
+> `SLM_SURGICAL_SYNTH_SHARE` (default 20%) of the plan's `synth_rows` on the top
+> `SLM_SURGICAL_MAX_PAIRS` (5) confusion pairs, budgeted **proportionally to each pair's confusion
+> count** and clamped to 10–100 rows per pair. Anchors come from the **gold** class (the one the
+> model should have predicted). A pair that was targeted before and whose count did not fall is
+> logged `EXHAUSTED` and skipped. The remainder is `fill` — balanced across the whole label space.
+>
+> Sections below marked *(pre-redesign)* describe the old model and are retained for history.
 
 A walkthrough of three tightly-related parts of the pipeline:
 
 1. How the `data_rebuild` intervention works, including synthetic data generation.
-2. Whether the system builds a failure taxonomy, and what the failure analysis is used for.
+2. How the system analyzes failures, and what that analysis is used for.
 3. Every token cap in the repo and the rationale behind each.
 
 ---
@@ -62,27 +85,32 @@ run crashed on exhaustion, `agent/nodes/curate.py:547-560`).
 
 ### Where synthetic data is actually generated
 
-Synthesis is gated to **classification and NER only** (`TARGETED_SYNTH_TASK_TYPES`),
-entered via `_synthesize_positive_rows` (`agent/nodes/curate.py:361-438`) →
-`synthesize_hard_negatives` (`data/curriculum.py:419-636`).
+Entered via `_synthesize_positive_rows` (plan `synthesize` strategy) or
+`_synth_fill_to_target` (top-up), both in `agent/nodes/curate.py`, then
+`data/curriculum.py::synthesize_examples`.
 
 **The backend is a LOCAL vLLM endpoint serving Qwen3.6-35B-A3B, *not* Claude**
 (`data/synth_client.py:1-13`) — chosen for zero Claude cost, reproducibility, and
 contamination safety. It runs in non-thinking mode (`enable_thinking=False`,
 `top_p=0.80`, `top_k=20`).
 
-The generation logic implements the paper's **"2-for-1 rule"** — for each hard case it
-emits both the original gold example *and* one synthetic contrastive example:
+**Gold-only generation (2026-08-05).** For every task family, synthesis produces NEW CORRECT
+in-distribution examples. A generated row **inherits its label from a real anchor row** rather
+than being assigned one by the model, so an out-of-vocabulary or mismatched label is impossible
+by construction:
 
-- **classification** (`data/curriculum.py:482-529`): given text labeled X, generate a
-  *hard negative* that superficially resembles X but genuinely belongs to another label.
-- **NER** (`data/curriculum.py:531-599`): rewrite passages so the same entities sit in
-  more ambiguous context, **keeping correct types** (an earlier version that flipped
-  types caused negative transfer — see the comment at `data/curriculum.py:531-536`).
-  Output is validated: spans must be exact substrings, types must be in the valid set.
-- **math/code/generation**: explicitly **not** synthesized — wrong-answer SFT harms
-  these. Instead they get **chain-of-thought annotation** (`annotate_cot`,
-  `data/curriculum.py:66-207`).
+- **classification / NER** — `_synthesize_new_gold`: anchors are drawn **round-robin across the
+  label space** (so rare classes get equal attention), and the model is asked for one new
+  utterance of the *same* class as its anchor.
+- **math/code/generation** — `_synthesize_new_correct`: new correct instances in the anchor's
+  JSON schema, kept only if a supplied `verify_fn` accepts them. Wrong-answer SFT harms these
+  families. They also get **chain-of-thought annotation** (`annotate_cot`).
+
+**Teacher label verification** (`verify_generated_labels`, on by default, `SLM_VERIFY_SYNTH=0`
+to disable). Every generated classification row is shown back to the teacher model, which
+answers `{"valid": bool, "reason": str}`. Rejected rows are dropped and the teacher's reason is
+logged. Verification failures (unparseable reply, endpoint error) KEEP the row — the verifier
+can never empty a dataset.
 
 ### The "honest attribution" invariant
 
@@ -97,8 +125,8 @@ legitimately no-ops, it's rewritten to `base_fill` and logged in `allocation_fal
 For `mine_new_real_source` and initial setup, `data/loaders/web_acquire.py` walks:
 local bundle → deterministic benchmark loaders (GSM8K, CoNLL, BC5CDR…) → agentic HF
 discovery via Exa + orchestrator column-mapping → bounded Exa web scrapes →
-**last-resort gold synthesis via the Claude orchestrator** (distinct from hard-negative
-synthesis).
+**last-resort gold synthesis via the Claude orchestrator** (distinct from the local curriculum
+synthesis above).
 
 Everything runs through an **eval firewall** (`_exclude_eval_rows`, applied at mining,
 synthesis, and final write) to prevent contamination, and output is atomically written to
@@ -106,32 +134,18 @@ synthesis, and final write) to prevent contamination, and output is atomically w
 
 ---
 
-## 2. Failure taxonomy: designed, removed, and replaced
+## 2. Failure analysis: the "test-data agent"
 
-**A taxonomy was designed and documented but removed before it ever ran. A
-lighter-weight replacement runs instead.**
+### What it produces
 
-### The designed-but-deleted taxonomy
-
-Docs describe a `taxonomy_construct` node that clustered failed production traces into
-3–8 categories, each labeled `{fixable, external}` (`docs/PAPER.md:195`,
-`docs/PIPELINE.md:928`, `docs/PROMPTS.md:392-408`). **But the implementing files don't
-exist** — there's no `agent/nodes/production/` directory. It was part of a "production
-mode" scrapped on 2026-07-29 because it was never runnable end-to-end
-(`agent/graph.py:12-15`; the graph now rejects any mode but `cold_start`).
-
-### What actually runs: the "test-data agent"
-
-The live replacement is `agent/nodes/test_agent.py`, explicitly flagged as *"replaces
-failure-taxonomy"* (`agent/nodes/iterate.py:776-777`). It's a **contamination
+Failure analysis lives in `agent/nodes/test_agent.py`. It's a **contamination
 firewall**: it reports only aggregate numbers, never raw failing examples. It produces
 three things:
 
 1. **Difficulty bucketing** (easy/medium/hard) by base-model capability gradient — easy =
    both smallest & largest base models pass; hard = neither
    (`agent/nodes/test_agent.py:47-88`).
-2. **A confusion table** — the closest thing to a taxonomy data structure: top-8
-   `(gold, predicted)` pairs per task type in a `Counter`
+2. **A confusion table** — top-8 `(gold, predicted)` pairs per task type in a `Counter`
    (`agent/nodes/test_agent.py:180-216`).
 3. **A rule-based diagnosis → intervention** (`agent/nodes/test_agent.py:130-170`): easy
    bucket < 0.6 → `data_rebuild`; easy solid but medium/hard weak → `hyperparameter`;
@@ -143,15 +157,11 @@ three things:
   diagnosis + confusion pairs feed the orchestrator prompt, driving the next intervention
   and even letting the LLM lower `stop_threshold` if a failure reflects genuine capacity
   limits.
-- **Reporting** (`data/curation_log.py:82-102`): top confusion pairs are written to a
-  markdown section literally named `taxonomy_section`.
-- **Targeted curriculum synthesis** (`data/curriculum.py:482-509`):
-  `synthesize_hard_negatives` takes a `pattern_hint` describing the failure mode and
-  generates hard negatives that exercise it — the surviving piece of the "failure →
-  targeted data" idea.
-
-(Separately, `agent/llm_errors.py` classifies *API/infra* errors for fail-fast — that's
-operational error handling, not a model-failure taxonomy.)
+- **Reporting** (`data/curation_log.py:82-102`): top confusion pairs are written to the
+  curation log under an "Aggregate confusion counts" heading.
+- **Targeted curriculum synthesis** (`agent/nodes/curate.py::_surgical_synthesize`): the top
+  confusion pairs set the budget for extra in-class gold rows, so synthesis effort follows the
+  evidence about which decision boundaries the model is actually getting wrong.
 
 ---
 
@@ -199,8 +209,8 @@ it via the table above.
 
 ### Synthetic-data generation caps
 
-- **Local synth default 200 tokens** (`data/synth_client.py:177,188`) — hard negatives are
-  short texts; 200 keeps them tight and fast under continuous batching.
+- **Local synth default 200 tokens** (`data/synth_client.py:177,188`) — generated classification
+  rows are short texts; 200 keeps them tight and fast under continuous batching.
 - **CoT authoring 512 tokens** (`data/curriculum.py:147`) — reasoning chains need room. This is
   the only CoT path: the local Qwen3.6 synth endpoint. There is no cloud CoT fallback; if it is
   unreachable the example is left CoT-less.

@@ -522,11 +522,6 @@ def test_downward_choice_injects_sourced_qwen35_capability_contract():
         patch.object(downward_probe, "filter_pool", return_value=[candidate]),
         patch.object(
             downward_probe,
-            "_should_reexplore_downward",
-            return_value=True,
-        ),
-        patch.object(
-            downward_probe,
             "_train_and_eval",
             return_value=("/candidate/checkpoint", failed_probe),
         ),
@@ -591,11 +586,6 @@ def test_downward_probe_reuses_shared_chooser_and_honors_exact_quant_selector():
             return_value=_selector_response(wanted.selector),
         ),
         patch.object(downward_probe, "filter_pool", return_value=siblings),
-        patch.object(
-            downward_probe,
-            "_should_reexplore_downward",
-            return_value=True,
-        ),
         patch.object(
             downward_probe,
             "_train_and_eval",

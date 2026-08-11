@@ -2917,3 +2917,947 @@ headroom rides along in the existing `task_analysis` call.
   changed production files parse; the affected test subset matches the pre-change pass/fail baseline
   (remaining failures are pre-existing: missing `langgraph-checkpoint-sqlite`, Windows cp1252
   `read_text()`, and absent local dataset bundles).
+
+---
+
+## B213 — CLINC150 loader's bare `clinc_oos` repo id crashed `eval_setup` under huggingface_hub 1.x
+
+- **Where:** `data/loaders/clinc150.py` (`HF_ID`); surfaced through
+  `agent/nodes/cold_start/eval_setup.py::_load_named_benchmark`.
+- **Found:** 2026-08-04, first real CLINC150 run on the dedicated L40S partition
+  (`slm-clinc150-l40s-38084400`) died 300.6 s in, at the `eval_setup` node, 0 iterations.
+- **Symptom.**
+  ```
+  huggingface_hub.errors.HfUriError: Invalid HF URI
+  'hf://datasets/clinc_oos@155b9c710419136e17307b80d0a13e68cd46b4ec/.huggingface.yaml'.
+  Repository id must be 'namespace/name', got 'clinc_oos'.
+  ```
+- **Root cause.** `HF_ID = "clinc_oos"` was a *legacy canonical* (namespace-less) dataset name.
+  `huggingface_hub` 1.23.0 / `datasets` 4.3.0 resolve every dataset reference by constructing an
+  `hf://datasets/<id>@<rev>/...` URI, and `parse_hf_uri` hard-rejects any repo id without a
+  `namespace/name` pair. The canonical alias still resolves through `HfApi.dataset_info`
+  (`clinc_oos` → `clinc/clinc_oos`), which is why the id looked valid and why nothing caught it:
+  **the failure is at load time on the compute node, and the loader's unit test only covered the
+  pure `convert_clinc150_rows` converter, never the repo id.** CLINC150 was the only one of the six
+  curated loaders using a bare name — the other five were already namespaced.
+- **Fix.** `HF_ID = "clinc/clinc_oos"`. Verified live: the `plus` config loads, `intent` is a
+  151-name `ClassLabel` (150 intents + `oos`), splits 15250/3100/5500.
+- **Regression guard.** New parametrized `test_curated_loader_repo_ids_are_namespaced` in
+  `tests/test_benchmark_loaders.py` asserts every repo-id constant across all six curated loaders
+  (`HF_ID`, `DIALOGSUM_ID`, `SAMSUM_ID`, `XLAM_ID`, `BFCL_ID`) is exactly `namespace/name`. It
+  failed only on clinc150 before the fix.
+- **Status:** 🟢 fixed.
+
+---
+
+## B214 — CLINC150 head-sliced an intent-grouped split, loading 33 of 151 intents
+
+- **Where:** `data/loaders/clinc150.py` (`load_clinc150._conv`).
+- **Found:** 2026-08-04, immediately after the B213 fix, while verifying the loader end to end.
+  A 120-row smoke load returned only **2 distinct labels**, which does not happen if a split is
+  shuffled.
+- **Root cause.** CLINC150's HF splits are **grouped by intent** — all ~100 rows of intent 61,
+  then the next intent, and so on. The loader asked for `split=f"{split_name}[:{limit}]"`, a
+  *prefix* of that grouped order. At the run's real sizes this yielded:
+
+  | split | requested | intents covered (of 151) |
+  |---|---|---|
+  | train | `train[:3250]` | **33** |
+  | test | `test[:800]` | **27** |
+
+  So the model would have trained on 33 intents and been scored on a partly disjoint 27, over a
+  mismatched label space, with `oos` present or absent by accident of ordering. Downstream
+  label-coverage stratification in `build_eval_set` cannot repair this: it round-robins over the
+  labels *present in the pool*, and the missing 118 intents were never loaded.
+- **Why it was invisible.** This is a silent data-quality failure, not a crash — the run would
+  have burned GPU-days and converged to a meaningless macro-F1. The loader's only test covered
+  the pure `convert_clinc150_rows` converter, which never sees the split.
+- **Fix.** Read each split **in full**, then sample with a new pure
+  `stratified_by_label(rows, limit, seed=0)` that draws round-robin across labels (seeded shuffle
+  within each label bucket, so a requeued run rebuilds the identical curriculum).
+- **Verified live** at the real run sizes: train 3250 rows / **151 labels**, test 800 rows /
+  **151 labels**, zero test labels missing from train, `oos` present in both, 21–22 rows per label
+  in train, and byte-identical output across repeated calls.
+- **Regression guard.** Three tests in `tests/test_benchmark_loaders.py`: full label coverage,
+  determinism/bounds, and a source guard asserting `load_clinc150` never head-slices and does call
+  `stratified_by_label`.
+- **Status:** 🟢 fixed.
+
+---
+
+## B215 — `matplotlib` declared but never installed into `.venv_gpu`, so every run skipped graphics
+
+- **Where:** `scripts/setup_gpu_env.sh`; surfaced at the tail of `tests/pipeline/run.py`.
+- **Found:** 2026-08-04, in the `slm-clinc150-l40s-38084400` log:
+  `graphics: skipped (ModuleNotFoundError: No module named 'matplotlib')`.
+- **Root cause.** `matplotlib>=3.7.0` is declared in both `requirements.txt` and `pyproject.toml`,
+  but `setup_gpu_env.sh` installs its dependency set explicitly package-by-package and never
+  included it. The GPU venv is built from that script, not from the requirements file, so the
+  declaration had no effect — environment drift between the declared and the actual venv.
+- **Impact.** Cosmetic only: the graphics block is deliberately fail-safe (`except Exception` after
+  the run has already finished), so it logged and moved on. But no cluster run has ever produced
+  its end-of-run trajectory plots.
+- **Fix.** Installed `matplotlib 3.11.1` into `.venv_gpu`, and added the `uv pip install
+  "matplotlib>=3.7.0"` line to `setup_gpu_env.sh` so a rebuilt venv keeps it. Verified it imports
+  under the headless `Agg` backend.
+- **Status:** 🟢 fixed.
+
+---
+
+## B216 — ⚪ the 7-day walltime silently defers every job past a cluster maintenance reservation
+
+- **Where:** operational, not a code defect. All `tests/pipeline/run_*_l40s.slurm`
+  (`#SBATCH --time=7-00:00:00`) on Hyak's `gpu-l40s` partition.
+- **Found:** 2026-08-04, submitting `slm-clinc150-l40s` (job 38102039). The job sat `PENDING`
+  with `Reason=Resources` and `StartTime=2026-08-12T09:00:01` — **eight days out**, and exactly
+  one second after a maintenance reservation ended.
+- **What happens.** `scontrol show reservation August11_Maintenance` covers
+  `g[3090-3137]` — *every* L40S node — from `2026-08-11T09:00` to `2026-08-12T09:00`
+  (`Flags=MAINT,FLEX,OVERLAP,IGNORE_JOBS,SPEC_NODES,ALL_NODES,MAGNETIC`). A 7-day job cannot be
+  placed unless it both acquires a node *and* completes before the reservation opens. Once the
+  latest feasible start slips past `reservation_start − walltime`, the backfill scheduler stops
+  trying to fit the job before the window and parks it at reservation end. Nothing warns you: the
+  reason stays the generic `Resources`, and the only tell is a `StartTime` sitting suspiciously
+  one second after a reservation boundary.
+- **Workaround used.** `scontrol update job=<id> TimeLimit=5-00:00:00`. After two scheduling
+  cycles the estimate moved from `2026-08-12T09:00` to *imminent* on `g3100`. Walltime can only be
+  **reduced** by a non-admin, so the recovery is in-place; raising it again requires resubmission.
+- **Why the scripts still request 7 days.** That is the documented weeklong contract
+  (`docs/PIPELINE.md`, asserted by `test_task_slurm_scripts.py`), and the `--requeue` + USR1
+  checkpoint machinery is designed to roll a long run across segments anyway. Shortening the
+  walltime is the correct *situational* response near a maintenance window, not a new default.
+- **Operator check before every submission:**
+  ```bash
+  scontrol show reservation | grep -A2 -i maint     # any window on your nodes?
+  scontrol show job <id> | grep -E "StartTime|TimeLimit"
+  ```
+  A `StartTime` landing exactly at a reservation's `EndTime` means the walltime, not contention,
+  is the blocker — reduce `TimeLimit` until the estimate moves.
+- **Status:** ⚪ documented; no code change. Recurs at every cluster maintenance window.
+
+---
+
+## B235 — ⚪ `synthesize` split into fill and surgical sub-strategies
+
+- **Where:** `agent/nodes/curate.py` (`_surgical_synthesize`, `_synthesize_positive_rows`).
+- **Added:** 2026-08-05 on Evan's instruction.
+- **Motivation.** The orchestrator names specific confusion pairs in its hypothesis every turn
+  (`change_ai_name↔change_user_name`, `change_language→translate`) and that information was
+  **thrown away** — `curate_node` never passed `pattern_hint` into synthesis, so the generator had
+  no idea which failure it was meant to attack.
+- **Design.** `SLM_SURGICAL_SYNTH_SHARE` (default 0.20) of the plan's `synth_rows` goes to the top
+  `SLM_SURGICAL_MAX_PAIRS` (5) pairs. Per-pair budget is **proportional to confusion count**
+  (`round(TOTAL × count / Σcounts)`, clamped 10–100) so effort follows the evidence rather than
+  being split evenly. Anchors are drawn from the **gold** class — the one the model should have
+  predicted — and produce in-class GOLD rows, never contrastive negatives (removed, B231).
+- **Per-pair effectiveness.** `state["surgical_pair_history"]` records the confusion count at the
+  time each pair was targeted. If a pair is targeted again and its count has NOT fallen, it is
+  logged `EXHAUSTED` and skipped. Without this the run keeps spending on a pair that is not
+  responding — precisely the loop `slm-clinc150-cse-38155022` was stuck in (B224).
+- **Naming note.** The token `surgical` was previously forbidden by
+  `test_data_rebuild_routing.py` because it named a ROUTE removed in the 2026-07-31 redesign. The
+  guard was relaxed deliberately: this is a synthesize sub-strategy under the data_rebuild plan,
+  not a resurrection of the old route.
+- **Status:** ⚪ implemented; 5 tests in `tests/nodes/test_surgical_synthesis.py`.
+
+---
+
+## B234 — per-task dataset-size table deleted; sizing is now deterministic and per-tier
+
+- **Where:** `config/config.py` (`DATASET_SIZE_BY_TYPE`, removed), new `agent/data_sizing.py`,
+  `agent/nodes/curate.py`, `agent/nodes/cold_start/task_analysis.py`.
+- **Changed:** 2026-08-05.
+- **Problem.** `DATASET_SIZE_BY_TYPE` (classification 150, NER 200, generation 600, …) was dead
+  code that *looked* live: every value sat far below `CURRICULUM_SIZE_FLOOR`, so it was clamped
+  away on every path. It created the impression that per-task sizes were being honoured when the
+  effective target was always the floor. The target was also computed ONCE and reused across
+  escalations, so a 4B model trained on a target sized for a 0.6B one.
+- **Fix.** Deleted the table. `agent/data_sizing.py` computes the target from two MEASURED signals:
+  ```
+  novelty     = 1 − zero_shot_baseline_f1        # empirical, not an LLM guess
+  size_factor = clamp(1e9 / n_params, 0.5, 2.0)  # smaller model -> more data
+  target      = clamp(5000 × (0.5 + novelty) × size_factor, 5000, 25000)
+  ```
+  Recomputed whenever the selected model changes, hooked in `curate_node` so initial selection,
+  escalation and downward regression are all covered by one call site. `SLM_CURRICULUM_SIZE`
+  overrides. Worked example: Qwen3-0.6B on CLINC150 (baseline 0.3152) → 9,873 rows; the same task
+  on a 4B model → 5,000.
+- **Deliberately NOT an LLM decision.** The orchestrator cannot estimate novelty from a task
+  description; the zero-shot baseline measures the same quantity empirically and is already
+  computed every run.
+- **Status:** 🟢 implemented; 8 tests in `tests/test_data_sizing.py`.
+
+---
+
+## B236 — downward tier regression made unconditional and strategy-independent
+
+- **Where:** `agent/nodes/iterate.py` (convergence routing), `agent/nodes/downward_probe.py`.
+- **Changed:** 2026-08-05.
+- **Two gates removed.**
+  1. `probes_down = strategy in ("interpolation", "orchestrator_choice")` meant a
+     `smallest_first` run could never regress — even after it had ESCALATED, so it could not come
+     back down when the smaller model might now succeed on an improved dataset.
+  2. `_should_reexplore_downward` spent an orchestrator API call to decide whether trying a
+     smaller model was "worth it" — i.e. it could decline the one thing the run exists to
+     determine. Deleted (61 lines).
+- **Policy now.** On meeting the goal, ALWAYS probe the next tier down. The only stopping
+  conditions are structural: no lower tier exists, or every lower tier has already been tried. If
+  the lower tier fails to clear the goal, the last passing tier is kept (existing behaviour).
+  Under `smallest_first` the run starts at tier 0, so it still never regresses — a consequence of
+  where it starts, not a rule about the strategy.
+- **Status:** 🟢 implemented; `tests/nodes/test_downward_probe.py` (28 tests) updated.
+
+---
+
+## B231 — ⚪ contrastive hard-negative synthesis removed; gold-only + teacher verification
+
+- **Where:** `data/curriculum.py` (`synthesize_hard_negatives`, now deleted), `synthesize_examples`.
+- **Decision date:** 2026-08-05, on Evan's instruction after reviewing the generated rows.
+- **Why.** The generator was asked for text that "superficially resembles class A but genuinely
+  belongs to class B". For intent classification the intent IS the surface meaning, so the
+  instruction is close to self-contradictory and the model produced incoherent hybrids. Of the 17
+  synthetic rows that survived into training in `slm-clinc150-cse-38155022`, roughly **10 were
+  mislabelled or nonsense** — `"what ingredients do i need to book a flight from new york to
+  london"`, `"my dough seems to have been blocked for no reason"`, `"set the oven alarm for 30
+  minutes"` filed as `recipe`. Compounding it, every negative was filed under a different label
+  than its anchor, so they skewed the class histogram straight into the label-balancing control
+  (B221) which then deleted them.
+- **Removed:** `synthesize_hard_negatives` (235 lines incl. the classification blend prompt, the
+  NER rewrite prompt, math/code guards, 2-for-1 pairing and the Claude fallback),
+  `_hard_negative_ratio`, `SLM_SYNTH_HARD_NEGATIVE_RATIO`, the `hard_negative_synthesis` cost
+  stage, and `tests/test_curriculum_hardneg.py`. Live docs updated; dated records left intact.
+- **Replacement.** `_synthesize_new_gold` only — a generated row inherits its label from a real
+  anchor, so it cannot be mislabelled the same way — followed by `verify_generated_labels`, a
+  teacher pass that answers `{"valid", "reason"}` per row. Rejections are logged with the
+  teacher's reason. Mechanical verification failures KEEP the row so a broken verifier can never
+  empty a dataset.
+- **Rejected alternative (important).** Mining hard negatives from the model's own confusion
+  matrix — i.e. taking held-out eval rows it got wrong and training on them — was proposed and
+  **correctly rejected by Evan as test-set leakage**. It would inflate the eval score without
+  improving the model and would defeat the four-layer eval firewall. Not implemented anywhere.
+- **Status:** ⚪ deliberate design change.
+
+---
+
+## B232 — escalation collapsed to one mechanism, measured over an append-only eval history
+
+- **Where:** `agent/nodes/iterate.py`, `agent/nodes/evaluate.py`, `agent/nodes/escalate.py`.
+- **Found/changed:** 2026-08-05.
+- **Problem.** Two knobs answered the same question. `MAX_STALL_EVALS` counted *consecutive* evals
+  without a new best and **reset on every improvement**, so an improvement every 14 evals could
+  defer escalation indefinitely. `STAGNATION_WINDOW` read `state["scores"]`, which `rollback` pops,
+  so in a mostly-regressing run the window never filled and the test never fired at all.
+- **Fix.** `MAX_STALL_EVALS` deleted. Stagnation is now the single mechanism and is measured over
+  new append-only `state["eval_history"]` — written by `evaluate_node` for every eval including
+  rolled-back ones, reset only on a tier change. Escalate when the best score in the last
+  `STAGNATION_WINDOW` (15) evals fails to beat that window's first score by more than
+  `STAGNATION_MIN_DELTA` (2%). `MAX_EVALS_BEFORE_ESCALATION` (30) remains as an unconditional
+  ceiling.
+- **Semantics (tested):** an improvement, 9 regressions, another improvement, 4 regressions = 15
+  evals; if total gain across the window is under 2% it escalates. Improvements do not reset the
+  window — only cumulative progress does.
+- **Status:** 🟢 implemented.
+
+---
+
+## B227 — SUPERSEDED by B233; see below
+
+## B227 — rollback overwrote the eval diagnosis, so the orchestrator never saw the failure it was reacting to
+
+- **Where:** `agent/nodes/rollback.py` (restore block), consumed by `agent/nodes/iterate.py`
+  prompt assembly.
+- **Found:** 2026-08-05, tracing why `Hard-bucket accuracy is 0.683` appeared 163 times in
+  `slm-clinc150-cse-38155022`.
+- **Root cause.** `rollback_node` restored the best DAG node's `evaluation_state` wholesale,
+  including `state["test_report"]`. Iterations 3-19 all regressed, so each of them reverted the
+  diagnosis to iteration 2's. The orchestrator is asked "what should we change next?" immediately
+  after a regression — and was shown the report of a run that had SUCCEEDED.
+- **Evidence.** The prompt's per-difficulty line read
+  `easy=0.963(n=214) medium=0.894(n=444) hard=0.683(n=142)` in **18 of 19 turns**, while the test
+  agent recomputed fresh values every eval (`hard=` 0.493, 0.408, 0.585, 0.310, 0.134, 0.549,
+  0.197...). Log line 3704 computed `hard=0.408`; the next prompt at line 4064 showed `hard=0.683`.
+  **All three difficulty buckets were frozen, not just hard.** The per-bucket scoring itself is
+  correct — only the copy handed to the orchestrator was stale.
+- **Second-order effect — this also explains the intervention imbalance.** The frozen report
+  carried `suggested_intervention: data_rebuild`, shown in **18 of 19** prompts, while the live
+  test agent emitted "Tune hyperparameters" **21 times**. The orchestrator chose `data_rebuild`
+  15 times not from bias but because it was repeatedly told to.
+- **Fix.** Rollback now writes the restored copy to `restored_test_report` and leaves
+  `test_report` describing the eval that just ran. `agent/state.py` documents both fields.
+- **Status:** 🟢 fixed.
+
+---
+
+## B233 — rollback diagnosis: reverted B227, added an explicit failed-attempt memo instead
+
+- **Where:** `agent/nodes/rollback.py`, `agent/nodes/evaluate.py`, `agent/nodes/iterate.py`,
+  `agent/state.py`.
+- **Changed:** 2026-08-05, superseding B227.
+- **Why B227 was wrong.** B227 stopped rollback from restoring `test_report`, so the orchestrator
+  would see the failed attempt's numbers. But after a rollback the LIVE WEIGHTS are the restored
+  best checkpoint — so the per-difficulty scores and confusion pairs that describe the current
+  model genuinely are the best node's. B227 would have had the orchestrator reason about a model
+  that no longer existed.
+- **What was actually missing** was not fresh numbers but any signal that the previous attempt had
+  been discarded, and what it was. In `slm-clinc150-cse-38155022` 17 consecutive attempts were
+  rolled back and the prompt never said so once.
+- **Current design.** `test_report` is restored from the best node (original behaviour). Rollback
+  additionally writes `state["last_failed_attempt"]` — intervention, sub-strategy, score, delta,
+  the failed attempt's difficulty profile, and its hypothesis — which is rendered at the TOP of the
+  report block under `## LAST ATTEMPT WAS ROLLED BACK — do not repeat it`, with an explicit note
+  that the scores below describe the restored checkpoint rather than the failure. `evaluate_node`
+  clears the memo on the next eval so it can never go stale.
+- **Status:** 🟢 implemented (B227 reverted).
+
+---
+
+## B229 — no per-row label-space validation; junk labels could enter training from any source
+
+- **Where:** `data/curriculum.py::apply_quality_controls`, wired from `agent/nodes/curate.py`.
+- **Found:** 2026-08-05, follow-up to B222.
+- **Gap.** B222 added a guard at the acquisition boundary, but it was per-SOURCE and only fired on
+  *total* disjointness — a source with 90% valid labels and 10% junk would pass with the junk
+  included, and synthetic rows bypassed it entirely.
+- **Fix.** Quality control now takes `allowed_labels`, derived from the **frozen eval set** (the
+  exact classes the model is scored against), and drops any classification row whose label is not
+  in that set — regardless of provenance. Logged with the rejected labels and counts.
+- **Status:** 🟢 fixed.
+
+---
+
+## B228 — ⚪ quality control removed ~1,500 rows silently, with no reason and no under-target warning
+
+- **Where:** `data/curriculum.py::apply_quality_controls`, `agent/nodes/curate.py`.
+- **Found:** 2026-08-05.
+- **Finding.** QC is the largest consumer of rows in the pipeline — it deleted roughly 1,501 of
+  1,549 synthesized rows in `slm-clinc150-cse-38155022` — and reported nothing at all. A dataset
+  written at 3,461 against a 5,000 target looked inexplicable without reading artifacts.
+- **Fix (observability only, no behaviour change).** Each control now reports its removals and the
+  reason (`schema`, `label-space`, `label-balance`, `length-outlier`, `surface-dedup`), plus a
+  total, plus an explicit warning when the finished dataset is under target explaining that
+  synth-fill runs *before* QC and there is no refill afterwards.
+- **Deliberately NOT changed:** no post-QC refill, and no per-rebuild dataset versioning — being
+  under target is acceptable as long as it is stated, and versioning every intermediate costs too
+  much storage. This also withdraws the versioning recommendation in B225.
+- **Status:** 🟢 fixed (reporting); under-target behaviour intentionally retained.
+
+---
+
+## B226 — escalation policy drifted from its documented value; window could never fire
+
+- **Where:** `agent/nodes/iterate.py` (`STAGNATION_WINDOW`, `MAX_STALL_EVALS`), plus
+  `tests/nodes/test_iterate_stall.py` and `tests/config/test_curation_config.py`.
+- **Found:** 2026-08-04, investigating why `slm-clinc150-cse-38155022` ran 17 non-improving evals
+  on tier 0 without ever escalating.
+- **Two separate defects.**
+  1. **Drift.** `tests/nodes/test_iterate_stall.py` asserted `STAGNATION_WINDOW == 50` ("raised to
+     50 in B161") while the code default was `20`. Five tests had been failing continuously as a
+     result — the intended policy and the running policy had silently diverged.
+  2. **The window is structurally unreachable in a regressing run.** `rollback.py:40` pops the
+     regressing score, so `state["scores"]` only ever retains improvements. In this run it stayed
+     at **2 entries** for all 20 iterations, so `_is_stagnant` (which requires
+     `len(scores) >= STAGNATION_WINDOW`) could never evaluate, and the prompt kept reporting a
+     healthy `Recent chronological gain (last 2 evals): 0.0472`. Only
+     `consecutive_no_improvement` — which rollback does not touch — actually bit, and it reached
+     17 against a limit of 20.
+- **Fix (policy set deliberately, 2026-08-04).**
+  - `STAGNATION_WINDOW = 15`, `STAGNATION_MIN_DELTA = 0.02` — escalate after 15 evals that gained
+    less than 2%.
+  - `MAX_STALL_EVALS = 15` — escalate after 15 consecutive non-improving evals.
+  - **New `MAX_EVALS_BEFORE_ESCALATION = 30`** (`SLM_MAX_EVALS_BEFORE_ESCALATION`) — an
+    unconditional ceiling that counts `state["iteration"]`, i.e. evals actually performed, so it
+    **cannot be defeated by rollback popping scores**. Any model that burns 30 evals without
+    reaching the goal escalates.
+- **Tests:** the five drifted assertions now encode the real policy, and two new cases cover the
+  ceiling firing at 30 with a deliberately tiny score history, and not firing at 29.
+- **Status:** 🟢 fixed.
+
+---
+
+## B225 — the winning dataset contained ZERO synthetic rows, and intermediates are overwritten
+
+- **Where:** `agent/nodes/curate.py` artifact write (`dataset_v{N}.jsonl`).
+- **Found:** 2026-08-04 log audit of `slm-clinc150-cse-38155022`.
+- **Finding.** The final artifact `dataset_v2.jsonl` — the dataset behind the converged 0.8971
+  result — contains **3,249 `train_anchor` + 160 `mined_real` + 17 untagged, and no `synthetic`
+  rows at all**, even though `data_sources.json` records 790 cumulative synthesized rows. Iteration
+  20 was a resample-only rebuild, so it discarded the synthetic material entirely.
+- **Compounding problem.** The version counter did not advance past 2: the same
+  `dataset_v2.jsonl` path was rewritten at 17+ points in the run, so every intermediate dataset
+  (including the mixed-provenance ones that scored 0.86+) is **unrecoverable**. Only the first and
+  last states survive on disk.
+- **Why it matters.** It undercuts attribution: the headline result cannot be credited to
+  synthesis, and no earlier dataset can be re-examined or re-run.
+- **Status:** 🔴 open. Datasets should be versioned per rebuild (or content-hashed) rather than
+  overwriting a single filename.
+
+---
+
+## B224 — the orchestrator's context replays stale hypotheses, freezing its diagnosis
+
+- **Where:** `agent/nodes/iterate.py` prompt assembly (trajectory + curation-log history).
+- **Found:** 2026-08-04 log audit.
+- **Finding.** The phrase `Hard-bucket accuracy is 0.683` appears **163 times** in the run log.
+  The test agent *did* compute fresh numbers each eval (`hard=` values across the run include
+  0.683, 0.493, 0.549, 0.641, 0.761), but the orchestrator's own prior hypotheses are replayed
+  verbatim into every subsequent prompt. An early figure therefore keeps reappearing long after it
+  is wrong, and by late iterations the context contains dozens of restatements of one stale number
+  against a single fresh one.
+- **Consequence.** The orchestrator kept diagnosing the same confusion pairs and chose
+  `data_rebuild/synthesize` in 15 of 19 decisions, while the test agent's own suggestion was
+  `hyperparameter`. Its context was dominated by its own echo rather than by new evidence.
+- **Status:** 🔴 open. Candidate fixes: summarise rather than replay old hypotheses, cap replayed
+  history to the last N, or strip stale metrics from replayed text and present current metrics once
+  in a dedicated block.
+
+---
+
+## B221 — classification hard negatives all targeted ONE label, so quality control deleted them
+
+- **Where:** `data/curriculum.py::synthesize_hard_negatives` (classification branch).
+- **Found:** 2026-08-04, auditing `dataset_v1.jsonl` from the converged CLINC150 run
+  `slm-clinc150-cse-38155022`.
+- **Root cause.** The target class for each hard negative was chosen as
+  `target_label = target_labels[0]` — *the same label for every example in the batch*, since
+  `target_labels` is rebuilt in a stable order for each source label. On a 151-intent task the
+  entire synthesis budget therefore landed on one or two classes.
+- **Evidence.** Of the synth-fill rows that survived into the written dataset, **39 were labelled
+  `recipe` and 9 `book_flight` — 2 labels out of 151**, against a real-row distribution of a flat
+  21–22 rows per label.
+- **Downstream effect (the expensive part).** `apply_quality_controls` enforces "no label more
+  than 3x the smallest". A pile of ~1,500 rows on one label is exactly what that rule exists to
+  delete, so synth-fill added **1,549 rows toward the 5,000 target and only 48 survived** — the
+  dataset was written at 3,461. The synthesis compute, and the orchestrator's repeated
+  `synthesize` interventions, were largely wasted.
+- **Secondary defect found alongside.** `all_labels` was built from a `set`, whose iteration order
+  varies per process, so the "always the first label" choice was also **not reproducible across a
+  requeue** despite the pipeline's determinism contract.
+- **Fix.** `all_labels` is now `sorted(...)`, and each example draws its target from a seeded
+  `random.Random(20260804)` across the full label space, so hard negatives spread over all
+  classes and reproduce across a requeue.
+- **Not fixed (documented):** nothing verifies that a generated hard negative actually *belongs*
+  to its assigned target class. One surviving row reads
+  `label=recipe, text="what is the best way to make a reservation for a table at red robin"` —
+  that is a reservation query stored as a `recipe` training label, i.e. injected label noise. A
+  verifier (or a round-trip check with the reference model) is the real fix.
+- **Status:** 🟢 targeting fixed; ⚪ label-correctness verification still open.
+
+---
+
+## B222 — mined DeepPavlov/clinc150 rows carried unmapped integer labels into the curriculum
+
+- **Where:** `data/loaders/web_acquire.py` acquisition path (`mine_additional_real_rows` →
+  schema mapping), surfaced in `agent/nodes/curate.py` composition.
+- **Found:** 2026-08-04, same dataset audit.
+- **Symptom.** The 164 rows mined from `hf:DeepPavlov/clinc150/train` were written with labels
+  **`"0"` (60), `"1"` (60), `"2"` (44)** instead of intent names — visible in the curation log's
+  label histogram as three bogus classes sitting alongside the 151 real intents.
+- **Root cause.** The mined source exposes its intent column as integer class ids. The curated
+  `data/loaders/clinc150.py` resolves those through the HF `ClassLabel` feature names
+  (`_resolve_intent_names`), but the generic acquisition path has no equivalent step, so the raw
+  ids were stringified and used verbatim.
+- **Impact.** 164 of 3,461 training rows (~5%) carry labels that exist in no real label space,
+  and they inflate the apparent class count. They cannot match any eval label, so they are pure
+  noise in the curriculum.
+- **Why the existing resolution missed it.** `web_acquire._convert` *does* try
+  `ds.features[lcol].names` to turn integer ids into names — but `DeepPavlov/clinc150` types its
+  label column as `Value('int64')`, **not** a `ClassLabel`, so there are no `.names` to read and
+  the ids are unrecoverable from the dataset itself.
+- **Fix (2026-08-04).** `mine_additional_real_rows` now derives the run's established label space
+  from `existing_rows` and rejects any mined classification source whose labels are **entirely
+  disjoint** from it, logging the reason and the offending sample labels. Overlapping sources are
+  unaffected. Two regression tests cover reject-and-accept.
+- **Status:** 🟢 fixed (rejected rather than remapped — remapping needs an external id→name table
+  the source does not provide).
+
+---
+
+## B220 — curate passed `plan_identity=""`, so the first *paid* acquisition round killed the run
+
+- **Where:** `agent/nodes/curate.py::curate_node` (the `strategy == "acquire"` branch) →
+  `data/loaders/web_acquire.py::mine_additional_real_rows` →
+  `data/acquisition_budget.py::reserve_paid_acquisition`.
+- **Found:** 2026-08-04, run `slm-clinc150-cse-38154619`, 594 s in:
+  ```
+  ValueError: plan_identity must be non-empty
+  ```
+- **Root cause — a contract split by a refactor.** The 2026-07-31 data-curation redesign removed
+  plan-identity *dedup* from `agent/data_rebuild.py` ("no plan-identity dedup, no untried-plan
+  rotation"), and curate was left passing a literal `plan_identity=""` with the comment
+  "(no plan seed anymore)". But the **durable paid-acquisition ledger was never part of that
+  redesign**: it still meters spend in two tiers — `MAX_PAID_ACQUIRE_ROUNDS_PER_PLAN = 3` inside
+  `MAX_PAID_ACQUIRE_ROUNDS_PER_RUN = 9` — and therefore still requires a per-plan key, rejecting
+  an empty one outright. One side dropped plan identities; the other still depends on them.
+- **Why it stayed hidden this long.** The empty string is inert until mining actually reaches a
+  *paid* round. `mine_additional_real_rows` first tries local bundles, then curated benchmarks, and
+  only falls through to paid discovery when **both** are rejected. In this run every local
+  candidate was rejected in turn (`apps`, `bc5cdr`, `emotion`, `go_emotions`, `gsm8k`, `mbpp`,
+  `samsum` — "no explicit benchmark or strong task+label+schema match"), so it reached the paid
+  path and died. It is also **strategy-dependent**: curate picks `resample`/`acquire`/`synthesize`
+  non-deterministically from an entropy seed, so only `acquire` runs can hit it. The prior run
+  (38151989) never took this branch, which is why it got all the way to the GGUF merge instead.
+- **Fix.** New `agent/data_rebuild.plan_budget_identity(plan)` returns a content-addressed
+  `plan-<sha256[:16]>` over the canonical `_PLAN_FIELDS`; curate passes it. This restores the
+  ledger's per-plan bucket **without** reintroducing dedup: re-picking an identical plan keeps
+  drawing down the same allowance (which is the point of a per-plan cap), while a materially
+  different plan gets a fresh one. Plans carry no seed, so equal plans always hash equally.
+  `hashlib` was already imported in `data_rebuild.py` and unused — a leftover from the removed
+  dedup.
+- **Regression guard.** `tests/nodes/test_data_rebuild_plan.py` covers stability, key-order
+  independence, content-addressing, and acceptance by the real `reserve_paid_acquisition` guard;
+  new `tests/nodes/test_curate_acquire_budget.py` fails if curate ever passes an empty identity
+  again.
+- **Status:** 🟢 fixed.
+
+---
+
+## B219 — LoRA merge silently wrote nothing: QLoRA's 4-bit base can't do a `merged_16bit` merge
+
+- **Where:** `training/lora_trainer.py::merge_for_quantization`, called from
+  `agent/nodes/evaluate.py::_build_or_reuse_gguf`.
+- **Found:** 2026-08-04, run `slm-clinc150-l40s-38151989` — the first run to get past `eval_setup`.
+  It trained Qwen3-0.6B, measured a real zero-shot baseline (F1 0.3152), calibrated the Qwen goal
+  to 0.8918, then died after 1694 s building the Q4_K_M GGUF for the fine-tuned adapter:
+  ```
+  QuantizationInfrastructureError: Failed to build required Q4_K_M GGUF for Qwen/Qwen3-0.6B:
+  snapshot is incomplete; no nonempty model weight file or weight index
+  ```
+- **Root cause.** The error message points at a missing file, but the merge directory was not
+  incomplete — it was **completely empty**. The real cause is one buried warning:
+  ```
+  unsloth_zoo/saving_utils.py:2922: UserWarning: Base model should be a 16bits or mxfp4 base
+  model for a 16bit model merge. Use `save_method=forced_merged_4bit` instead
+  ```
+  The chain:
+  1. LoRA training runs as **QLoRA** (`load_in_4bit=config.lora_rank is not None`).
+  2. Unsloth transparently swaps in its own pre-quantized mirror and records *that* as the
+     adapter's base — `Qwen/Qwen3-0.6B` becomes **`unsloth/qwen3-0.6b-unsloth-bnb-4bit`**. This
+     string appears nowhere in the repo; it is injected by Unsloth.
+  3. `merge_for_quantization` faithfully resolved the adapter's recorded base — the 4-bit mirror —
+     and asked for `save_method="merged_16bit"`.
+  4. `unsloth_zoo` refuses that combination by **emitting a UserWarning and returning without
+     writing a single byte**. No exception. The empty directory then failed
+     `verify_hf_model_snapshot` with a message describing the symptom, not the cause.
+- **Why the guard didn't help.** `verify_hf_model_snapshot` is a *snapshot integrity* check, so it
+  reported "no nonempty model weight file" — indistinguishable from a truncated download. Nothing
+  distinguished "the writer no-opped" from "a file is missing", which is what made this expensive
+  to trace.
+- **Fix (two parts).**
+  1. `merge_for_quantization` takes an optional `base_model_id` that **pins the merge to the
+     canonical 16-bit base**, overriding whatever mirror Unsloth recorded; `evaluate.py` passes the
+     `model_id` it already has. Merging QLoRA deltas into the 16-bit original is the standard QLoRA
+     merge, and it is what the pipeline wants before an honest Q4_K_M quantization — merging into a
+     4-bit base would double-quantize.
+  2. An explicit empty-directory check after `save_pretrained_merged` raises an actionable
+     `RuntimeError` naming the no-op, so this can never again present as a missing-file error.
+- **Verified:** `Qwen/Qwen3-0.6B` resolves and passes `verify_hf_model_snapshot` from the shared
+  cache (`model.safetensors` present), so the pinned base is available offline on the compute node.
+- **Regression guard.** Three tests in `tests/training/test_lora_trainer.py`: the explicit-base pin
+  resolves the canonical id (not the adapter's 4-bit mirror), the default path still honours the
+  adapter record, and a no-op `save_pretrained_merged` raises the actionable error. The two
+  pre-existing merge tests now write a weight file from their mocks, since a mock that writes
+  nothing is exactly the failure being guarded against.
+- **Status:** 🟢 fixed.
+
+---
+
+## B218 — ⚪ six "idle" Hyak GPU nodes are unschedulable: absent from `topology.conf`
+
+- **Where:** cluster-side (Hyak `klone`), not this repo. Affects `gpu-l40s`, `ckpt-g2`, `ckpt-all`.
+- **Found:** 2026-08-04, while `slm-clinc150` sat `PENDING` on a saturated quota although `sinfo`
+  showed three fully idle L40S nodes (24 free GPUs).
+- **Symptom.** `sinfo` reports the nodes `idle`, `avail=up`, `Reason=none`, `AllocTRES=` empty, with
+  hardware and `Partitions=` byte-identical to nodes that work. Yet every allocation is refused —
+  even a bare 1-CPU, 4 GB, 5-minute job. `srun --test-only` reports the misleading
+  `Requested node configuration is not available`; only a real `sbatch` prints the true cause:
+  ```
+  sbatch: error: Batch job submission failed: Requested topology configuration is not available
+  ```
+- **Root cause.** The cluster runs `TopologyPlugin=topology/tree`. Expanding every `Nodes=` range in
+  `scontrol show topology` yields 553 nodes — and **g3132–g3137 are not among them**. Slurm will not
+  place a job on a node missing from the topology tree. The split is exact:
+
+  | Nodes | In topology tree | Schedulable |
+  |---|---|---|
+  | g3100–g3131 | yes | yes |
+  | **g3132–g3137** | **no** | **no** |
+
+  Every node that looks idle-but-unusable is precisely the set missing from the tree. Control test:
+  the same pinned submission to `g3113` (in the tree) queues normally.
+- **Stranded capacity:** g3134–g3137 = **32 idle L40S**, plus g3132 = **8 idle H200**.
+- **Second-order effect.** The backfill estimator does *not* apply the topology filter, so
+  `StartTime`/`SchedNodeList` estimates happily point at `g3134`. Those estimates are unreachable
+  and churn every scheduling cycle — do not trust a projected start on g3132–g3137.
+- **Not user-fixable.** New hardware was racked and registered but `topology.conf` was never
+  updated. Requires a Hyak admin to add the nodes and reconfigure. Report to Hyak support.
+- **Detection one-liner:**
+  ```bash
+  scontrol show topology | grep -oP 'Nodes=\K\S+' | while read r; do scontrol show hostnames "$r"; done | sort -u > /tmp/topo.txt
+  comm -23 <(sinfo -h -N -o "%N" | sort -u) /tmp/topo.txt   # registered but not in topology
+  ```
+- **Status:** ⚪ external/cluster-side. Documented so the team stops chasing phantom idle GPUs.
+
+---
+
+## B217 — the curated `SLM_BENCHMARK_TASK` path skipped Stage-0 decontamination, so a source-data duplicate was fatal
+
+- **Where:** `agent/nodes/cold_start/eval_setup.py::_load_named_benchmark`.
+- **Found:** 2026-08-04, run `slm-clinc150-l40s-38102039` — the resubmission after B213/B214.
+  It cleared the loader (B213/B214 confirmed fixed, graphics rendered per B215) and then died at
+  the same node, 288.7 s in, with a *different* error:
+  ```
+  ValueError: eval_setup normalized train/test overlap: 1 training row(s) match held-out eval text
+  ```
+- **Root cause — two things combined.**
+  1. **The source data is genuinely dirty.** CLINC150 ships the utterance
+     `"what's your designation"` in **both** official splits, under **two different intents**:
+     `what_is_your_name` in train, `user_name` in test. That is an annotation inconsistency in
+     the upstream dataset, not something the pipeline created.
+  2. **The curated path had no Stage-0 filter.** There are three ways data enters `eval_setup`,
+     and only two decontaminate:
+
+     | Path | Stage-0 `remove_normalized_train_overlap`? | Result on a dirty split |
+     |---|---|---|
+     | autonomous `acquire_dataset` | ✅ yes (`web_acquire.py`) | drops train row, logs, continues |
+     | shared bundle | ✅ yes (sealed at build time) | rejected at bundle build |
+     | **curated `SLM_BENCHMARK_TASK`** | ❌ **no** | **fatal raise** |
+
+     So the curated path fell straight through to the Layer-1 firewall — whose own comment says it
+     exists to catch "mocked or future loaders that bypass bundle/Stage-0 checks". It was doing its
+     job; the bypass was the bug.
+- **Why it only appeared now.** B214 masked it. The old head-slice loaded 33 of 151 intents and
+  happened not to include `what_is_your_name`. Reading the full split surfaced a latent defect that
+  would have hit **any** of the six curated benchmarks with a duplicated row.
+- **Fix.** `_load_named_benchmark` now applies the same Stage-0 `remove_normalized_train_overlap`
+  as the autonomous path, logs `Stage-0 normalized overlap removal for <key>: removed N train
+  row(s); official test rows unchanged`, and records `overlap_removed_from_train` in
+  `acquire_meta`. **Held-out test rows are authoritative and never modified — only the train row is
+  dropped.** The Layer-1 firewall raise is deliberately left intact as the backstop.
+- **Verified live:** train 3250 → 3249 (1 removed), test 800 unchanged, remaining overlap **0**,
+  and label coverage preserved at **151/151** in both splits with no test label missing from train.
+- **Regression guard.** Two tests in `tests/nodes/test_eval_setup_dataset_meta.py`: the removal /
+  meta / log path, and a clean-split case asserting `overlap_removed_from_train == 0`. The existing
+  `test_eval_setup_enforces_normalized_train_test_separation` still passes, proving the backstop
+  raise survives for loaders that bypass Stage-0.
+- **Status:** 🟢 fixed.
+## B237 — orchestrator's trajectory reported the wrong intervention for past iterations
+- **Symptom.** The compacted training trajectory sent to the orchestrator labelled iterations 4–8
+  of `slm-clinc150-cse-38155022` as `intervention=hyperparameter`. The DAG (`hypotheses.md`),
+  which is authoritative, records all five as `data_rebuild / synthesize`.
+- **Impact.** The orchestrator's memory of *what it had already tried* was factually wrong, so the
+  standing instruction to avoid repeating unsuccessful interventions could not be satisfied — it
+  believed it had been tuning hyperparameters while it had in fact run `synthesize` five times.
+  This compounds B224 (frozen diagnosis replayed as stale prose) and helps explain the 15×
+  `synthesize` imbalance, since the history understated how often that sub-strategy had been used.
+- **Root cause.** `evaluate_node` computed `dag_intervention = state["last_intervention"] or
+  policy["intervention"]` and used it correctly for the DAG, but then passed
+  `next_intervention=policy["intervention"]` — the *score-band policy's suggestion*, not the
+  executed intervention — to `CurationLog.append`. `context_manager._extract_iteration_summary`
+  surfaces that field as `intervention=` in the compacted trajectory, so the guess reached the
+  orchestrator as history.
+- **Fix.** Pass `dag_intervention` to the curation log so the DAG and the trajectory agree on a
+  single source of truth. Comment added at the call site explaining that this field is read back
+  as the orchestrator's own history.
+- **Status:** 🟢 fixed. 27 related tests pass.
+
+## B238 — the orchestrator's hypothesis was truncated in five places, worst at the source
+- **Symptom.** Every long hypothesis in `slm-clinc150-cse-38155022` landed at exactly **240
+  characters**, ending mid-word: `...cancel→freeze_a`, `...change_langua`,
+  `...account_blocked→EX`. Fourteen of the twenty iterations were cut this way.
+- **Impact.** The hypothesis is the orchestrator's causal reasoning and the densest signal in the
+  run. The cut consistently landed *inside the confusion-pair list* — the actionable part — so
+  what survived was the generic preamble (`Hard-bucket accuracy is 0.683 (n=142)...`) and what was
+  lost was the specific evidence. This is a direct contributor to the stale-`0.683` repetition
+  (B224): the reusable content was destroyed and only the boilerplate was carried forward.
+- **Root cause.** Five independent cuts, applied in sequence:
+  1. `agent/nodes/iterate.py::_validate_decision_json` — `hypothesis.strip()[:240]`. **The source
+     cut**: everything downstream (console log, `data-curation.md`, `dag.json`, the next prompt)
+     inherited it. Silent — no warning was ever emitted.
+  2. `agent/data_rebuild.py` — `_plain_text(hypothesis, maximum=240)`.
+  3. `agent/data_rebuild.py` — combined `pattern_hint`/hypothesis clause `[:240]`.
+  4. `agent/context_manager.py::_extract_iteration_summary` — a further `[:100]` on the
+     already-severed text, so replayed history was a 100-char fragment.
+  5. `agent/nodes/iterate.py` rollback memo — `[:200]` on the failed attempt's hypothesis.
+- **Second defect, same function.** `_extract_iteration_summary` read fields with
+  `re.search(rf'{label}:\s*(.+)')`. Because `\s*` matches newlines, an **empty** field captured
+  the next non-empty line of the document. Iteration 1 has no orchestrator hypothesis, so its
+  summary rendered as `- Iter 1: ... — ### Hardware profile (Phase 1: theoretical)` — a markdown
+  heading presented to the model as its own past reasoning. Affected every field, not just
+  hypothesis.
+- **Fix.** Single named bound `HYPOTHESIS_MAX_CHARS = 2000` (`SLM_HYPOTHESIS_MAX_CHARS`), shared
+  by iterate and data_rebuild; `pattern_hint` keeps a separate 1200-char bound because it steers
+  synthesis prompts. Cuts 4 and 5 removed outright. Truncation now **logs a warning** instead of
+  happening silently. Field reads are anchored with `re.MULTILINE` so an empty field stays empty.
+- **Tests.** 10 in `tests/test_hypothesis_integrity.py`, including a regression test that an empty
+  hypothesis never captures the following heading.
+- **Status:** 🟢 fixed.
+
+## B239 — orchestrator prompt replaced the raw curation-log dump with structured run memory
+- **Symptom (not a crash — an information defect).** The trajectory pasted into every iterate call
+  was a dump of `data-curation.md`. A new best (iteration 2) and a rolled-back attempt
+  (iteration 6) rendered **identically**: no outcome marker, no delta, no grouping. Seventeen
+  consecutive failures appeared as seventeen unrelated rows, so the actual pattern —
+  `data_rebuild/synthesize` tried fifteen times and never once kept — was present but invisible.
+- **Fix.** New `agent/run_memory.py`, built from `state["dag"]` (append-only; rollback marks nodes
+  `pruned` rather than deleting them, so discarded attempts remain visible even though
+  `state["scores"]` pops them). Four sections: **MOST RECENT ITERATION** in full detail,
+  **WHAT WORKED** (kept improvements with deltas and full reasoning), **FAILED SINCE THE LAST
+  IMPROVEMENT** (aggregated by intervention/sub-strategy, with an explicit "prefer a DIFFERENT
+  intervention type" conclusion when one dominates), and **SURGICAL SPEND** per confusion pair.
+  Bounding is by how many attempts are narrated in full, never by cutting a hypothesis.
+  Falls back to the old dump when the DAG is empty (first iteration).
+- **Sub-defect found while validating against the real DAG.** `pi.D.plan` persists across
+  iterations, so a `hyperparameter` node still carries the plan from the last rebuild and rendered
+  as `hyperparameter/acquire` — crediting a data strategy to an iteration that never touched the
+  data. Same false-memory class as B237. Sub-strategy is now only shown for `data_rebuild`.
+- **Tests.** 22 in `tests/test_run_memory.py`. Verified by rendering the real
+  `slm-clinc150-cse-38155022` DAG at iteration 19.
+- **Status:** 🟢 fixed.
+
+## B240 — orchestrator decisions discarded because the response hit the output ceiling
+- **Symptom.** The first `iterate` call of `slm-clinc150-cse-38179864` returned **exactly 1536**
+  output tokens (`tokens=5360->1536`) — `_ITERATE_MAX_TOKENS` — so the JSON was cut mid-string.
+  The reask returned exactly 1536 again and failed identically.
+- **Impact.** The orchestrator had chosen `data_rebuild`; both attempts were discarded and the
+  score-band fallback executed `hyperparameter` instead. Its actual decision never ran.
+- **Root cause (regression from B238).** Removing the silent 240-char hypothesis truncation
+  removed the only pressure keeping responses short, while the output ceiling stayed at 1536 and
+  the prompt had never stated any length expectation. The previous run peaked at 1,154 output
+  tokens and never hit the ceiling. The run-memory block was NOT a contributor — it reduced input
+  from 7,836 to 5,360 tokens at the same point.
+- **Second defect: the reask could not fix it.** A `max_tokens` cutoff surfaced as "no parseable
+  JSON", so the reask said "return valid JSON" — a format instruction for a length problem. The
+  model rewrote another over-long answer and hit the same wall.
+- **Fix.** `_ITERATE_MAX_TOKENS` 1536 → 4096 (`SLM_ITERATE_MAX_TOKENS`). The prompt now states a
+  ~150-word hypothesis target AND the hard output ceiling, substituted from the constants so they
+  cannot drift. `_hit_output_cap()` detects `stop_reason=max_tokens` before parsing and raises a
+  length-specific error; the reask branches on it and asks for a shorter answer with a concrete
+  word budget. `HYPOTHESIS_MAX_CHARS` raised to 4000 and demoted to a pure runaway guard —
+  length is managed by prompting, not truncation.
+- **Tests.** 12 in `tests/test_output_budget.py`.
+- **Status:** 🟢 fixed.
+
+## B241 — deterministic curriculum sizing silently collapsed to the floor
+- **Symptom.** `[sizing] curriculum target for Qwen/Qwen3-0.6B [Q4_K_M]: 5000 — no baseline yet,
+  assuming neutral novelty 0.50; unknown params -> size factor 1.00`. Both inputs to a two-input
+  formula were missing, so the result was always the floor.
+- **Impact.** Reproduced the exact defect `DATASET_SIZE_BY_TYPE` was deleted for (B234): sizing
+  that appears task-adaptive but always clamps to the floor.
+- **Root cause 1.** `resize_curriculum_for_tier` read `getattr(model, "params")` /
+  `getattr(model, "n_params")`. `ModelSpec` has neither; it exposes `est_params_b` (parameters in
+  BILLIONS, derived from weight size ÷ the quant's bytes-per-param). Result was always `None`.
+- **Root cause 2.** The zero-shot baseline is measured by the first `evaluate`, which runs AFTER
+  the first `curate`. Sizing was keyed on model change only, so tier 0 used the neutral novelty
+  0.5 forever and never revisited it once the real measurement existed.
+- **Trap in the fix.** `est_params_b` is a METHOD, not a property (unlike `selector`), so a plain
+  `getattr` returns a truthy bound method and `float()` on it raises — silently degrading to the
+  same neutral factor. Caught only by printing the resolved value.
+- **Fix.** `_params_for_model()` calls `est_params_b` when callable and converts billions →
+  absolute. The curate hook is keyed on `f"{selector}|baseline={baseline_is_known(state)}"`, so
+  the target is recomputed once the baseline exists. Verified against the real ModelSpec:
+  0.84B params → factor 1.19; target **5,952** before the baseline, **7,052** after.
+- **Status:** 🟢 fixed.
+
+## B242 — extraction-failure sentinel consumed surgical synthesis budget
+- **Symptom.** `__EXTRACTION_FAILED__` appears as a `predicted` value in the confusion pairs, so
+  pairs like `alarm -> __EXTRACTION_FAILED__ (5)` became top surgical targets (observed in
+  `slm-clinc150-cse-38155022`).
+- **Impact.** The sentinel is not a class — it means the model emitted a string outside the label
+  vocabulary entirely. Such a pair names no decision boundary to sharpen, so the budget spent on
+  it teaches nothing about the confusion, and it distorts per-pair effectiveness tracking.
+- **Fix.** `_surgical_synthesize` drops pairs whose `predicted` is the sentinel and logs the
+  count. They remain in the report for diagnosis — this only stops them consuming targeted budget.
+  The remedy for out-of-vocabulary output is format adherence, which ordinary in-class training
+  already provides.
+- **Status:** 🟢 fixed.
+
+## B244 — defense-in-depth re-validation rejected the validator's own output (real cause of B223)
+- **Symptom.** `LLM call failed (ValueError('hyperparameter field(s) no longer tunable:
+  batch_size ..., effective_batch_size ..., gradient_accumulation_steps ..., lora_alpha ...,
+  lora_dropout ..., micro_batch_size ...')); using test-agent suggestion: hyperparameter`, with
+  **no preceding "Decision failed validation" line and no reask**.
+- **The error message was false.** The orchestrator never proposed those six fields. They are
+  exactly the keys `training.hparams.normalize_hyperparams` DERIVES from the tunable five.
+- **Root cause.** `_validate_decision_json` stored the NORMALIZED hyperparams back into
+  `validated["hyperparams"]`. Normalization returns the trainer's full shape, so the decision
+  came back carrying all six derived keys. `iterate_node` then re-validates that decision as
+  defense in depth (`allow_internal=True`), and the retired-key check rejected them. Every
+  `hyperparameter` decision died this way, deterministically.
+- **Why no reask ever ran.** The failure happens in `iterate_node`'s outer re-validation, which
+  is *outside* the try/except in `_llm_iterate` that triggers self-correction. This is the actual
+  explanation for the B223 observation of "6 validation failures and ZERO `iterate_json_reask`
+  events" — widening that clause from `ValueError` to `Exception` could not help, because the
+  throw was never inside the block.
+- **Impact.** Whenever the orchestrator chose `hyperparameter`, its decision was silently
+  replaced by the test-agent/score-band fallback. Present in `slm-clinc150-cse-38155022` and
+  `slm-clinc150-cse-38180646`; the latter's convergence at 0.8952 therefore came from an
+  orchestrator that was only ever permitted to run data rebuilds.
+- **Fix (at the source).** The decision now carries ONLY the five knobs the orchestrator actually
+  chooses — `lora_rank`, `alpha_ratio`, `weight_decay`, `learning_rate`, `nr_epochs` — via
+  `_decided_hyperparams()`. Nothing downstream needs more: `train._build_config` calls
+  `normalize_hyperparams` itself at the point of use, so the derived shape is rebuilt where it is
+  consumed. The retired-key rejection stays unconditional, because the decision can no longer
+  contain those keys. No special case, no `allow_internal` exemption.
+- **Second defect fixed by the same change.** `normalize_hyperparams` drops `alpha_ratio` from its
+  output, so the decision log had been printing `alpha_ratio=None`. The decision now records the
+  SNAPPED ratio reconstructed from alpha/rank, i.e. what was actually applied.
+- **A wrong fix that was tried and rejected.** Filtering the derived keys out after normalizing
+  looks equivalent and is not: dropping `lora_alpha` while `alpha_ratio` is absent makes the next
+  normalization re-derive alpha at the DEFAULT ratio of 2. Measured drift in 4 of 6 rank/ratio
+  combinations (rank=32 ratio=4 gives alpha 128, becomes 64).
+- **Tests.** 13 in `tests/test_revalidation_roundtrip.py`, including a parametrized guard that the
+  ratio round-trips through re-validation and the trainer re-derives the exact alpha for every
+  rank/ratio pair. `tests/test_expanded_lora_search.py` updated to assert the decision-facing
+  shape.
+- **Status:** 🟢 fixed.
+
+## B245 — run graphics used a 0-based, fractionally-ticked iteration axis and a redundant total
+- **Symptom.** All three charts labelled the x-axis "iteration" but plotted a 0-based index with
+  matplotlib's default float locator, producing ticks at `-0.5, 0.0, 0.5, 1.0, 1.5 ...` — a
+  negative iteration and half iterations, none of which exist. The dataset-composition chart also
+  drew a dashed "total" series along the top of the stacked bars, restating the stack height.
+- **Fix.** `global_idx` is now 1-based, matching the numbering used in the logs, the DAG and the
+  curation log. A shared `_iteration_axis()` helper applies `MaxNLocator(integer=True)` and pins
+  the limits to the data range on all three charts. The total series is removed; headroom is
+  reserved above the bars so the legend no longer overlaps the first stack.
+- **Status:** 🟢 fixed.
+
+## B246 — the fixed system prompt was re-logged verbatim on every orchestrator turn
+- **Symptom.** `SLM_LOG_FULL_ITERATE_PROMPT` defaulted to `1`, so each iterate call dumped the
+  entire (constant) system prompt plus the user content. In `slm-clinc150-cse-38155022` that is
+  most of a 23,900-line log, and it buries the per-turn content that actually differs.
+- **Fix.** Default flipped to `0`. Iteration 1 still logs the complete prompt so the run log stays
+  self-contained and replayable; later turns log only the changing user content. Set
+  `SLM_LOG_FULL_ITERATE_PROMPT=1` to restore per-turn verbatim logging.
+- **Status:** 🟢 fixed.
+
+## B247 — the orchestrator could override the deterministic curriculum size
+- **Symptom.** In `slm-clinc150-cse-38180646` the curriculum dropped from 5,758 rows to 2,998
+  between iterations 2 and 3. Not QC (2 rows removed total) and not a synth-fill failure (fill
+  reached 2,998 of 3,000): the orchestrator's rebuild plan asked for `target_rows: 3000` while
+  `agent.data_sizing` had computed **7,053** for that tier. Its hypothesis said "synth_rows and
+  target_rows are scaled down from the prior aggressive round".
+- **Root cause.** Two authorities for one quantity. Curriculum size is supposed to be a
+  deterministic per-tier computation from the measured zero-shot baseline and the model's
+  parameter count (B234/B241), but `target_rows` remained a free field on the data_rebuild plan,
+  and the plan value won. The deterministic number therefore only ever applied to the first
+  curate, before any plan existed.
+- **Fix.** `target_rows` is removed from `_PLAN_FIELDS` and is no longer read from the payload;
+  `normalize_data_rebuild_plan` stores the caller's deterministic value verbatim. The prompt no
+  longer lists it in the schema examples and states plainly that it is not the orchestrator's to
+  set. A stray `target_rows` in a plan is IGNORED rather than rejected — the model may emit it
+  from habit, and a hard error would cost a reask round-trip (or the decision) over a value that
+  is discarded anyway. Every other unknown plan key is still an error.
+- **Tests.** `test_orchestrator_cannot_override_the_deterministic_target` and
+  `test_target_rows_is_not_an_orchestrator_field` in `tests/nodes/test_data_rebuild_plan.py`;
+  the two tests asserting the old clamping behaviour were rewritten.
+- **Status:** 🟢 fixed.
+
+## B248 — synth-fill rows were reported as "unattributed" and were invisible in the chart
+- **Symptom.** `composition=[{'strategy': 'resample', 'rows': 3248}, {'strategy': 'synthesize',
+  'rows': 447}, {'strategy': 'unattributed', 'rows': 2063}]` — over a third of the iteration-1
+  curriculum filed under a bucket that reads like a pipeline defect.
+- **Root cause.** `_synth_fill_to_target` tags its rows `_provenance="synthetic_fill"` but never
+  sets `_strategy_origin`, which is the field the composition report groups by. Untagged rows
+  fall through to the `"unattributed"` default.
+- **Chart consequence.** `dataset_composition.png` plots gold / generated / mined, which are
+  derived from the same untagged counts, so those 2,063 rows appeared nowhere. The chart also
+  drew a "total (= stack height)" line whose label was FALSE precisely because of this gap — the
+  stack summed to 3,695 against a total of 5,758.
+- **Fix.** The chart now renders the remainder (`total - gold - generated - mined`) as an
+  explicit "synth-fill (unattributed)" band, so the stack height really is the dataset size —
+  which is what makes a separate total series redundant rather than merely duplicative.
+- **Status:** 🟡 chart fixed; tagging `_strategy_origin` at the synth-fill call site is still
+  worth doing so the composition report names the bucket honestly.
+
+## B249 — SAMSum dataset withdrawn from the Hub; DialogSum run died in cold start
+- **Symptom.** `slm-dialogsum-samsum-cse-38186256` FAILED after 6m48s, in `eval_setup`, before a
+  model was ever selected: `DatasetNotFoundError: Dataset 'Samsung/samsum' doesn't exist on the
+  Hub or cannot be accessed.` DialogSum loaded fine; only the SAMSum half failed.
+- **Root cause.** External, not a code defect: `Samsung/samsum` and the bare `samsum` alias were
+  both withdrawn from the HuggingFace Hub. Probed and confirmed — both raise
+  DatasetNotFoundError; `knkarthick/samsum` resolves.
+- **Fix.** `SAMSUM_ID = "knkarthick/samsum"`, the same owner as the DialogSum mirror already in
+  use. It exposes the identical `dialogue`/`summary` columns and the same split sizes (14,731
+  train / 819 test), so `convert_samsum_rows` is unchanged. Verified end to end: the loader
+  returns well-formed `{text, answer, label}` rows from both halves.
+- **Worth noting.** The curated-benchmark loaders pull live from the Hub at run time, so any of
+  the six can break this way without a code change. This one cost only 7 minutes because it fails
+  in cold start, but the failure mode is worth remembering when a benchmark suddenly stops.
+- **Status:** 🟢 fixed.
+
+## B250 — generation eval prompt described the wrong task, and training used a different one
+- **Symptom.** On DialogSum the model continued the conversation instead of summarizing it.
+  Against gold `"Shelly is volunteering at a food shelter and asks if others do..."` it produced
+  `"Shelly: How about you? Any volunteer work? Tracy: Nah. Not into that."` — a next dialogue
+  turn. Same for the other sampled rows.
+- **Root cause 1 — the prompt never states the task.** `eval/scorers/generation.py` wrapped every
+  non-code generation row in the hardcoded constant `"Answer the following question:\n\n{text}"`.
+  A dialogue transcript asks no question and the word "summarize" appears nowhere, so continuing
+  the chat is the only reasonable reading. The constant is task-AGNOSTIC: one string for the
+  whole generation family (summarization, math, multilingual, structured extraction), never
+  derived from the task, the benchmark or the loader. It reads as though written for
+  question-answering and silently became the prompt for everything else.
+- **Root cause 2 — train/serve skew.** `training/lora_trainer.py::_training_turn` built the
+  generation input INDEPENDENTLY and passed the **bare text with no instruction at all**. So the
+  model would be fine-tuned on one input distribution and scored on another. Classification has
+  no such gap: both sides call the same `build_classify_prompt`.
+- **Knock-on.** The judge-calibrated threshold is set from a baseline measured with a prompt that
+  actively misleads the model, so the target itself was wrong.
+- **Fix.** One shared builder, `build_generation_prompt(text, instruction)`, called by BOTH the
+  eval harness and the trainer — importing it rather than reproducing the format is what makes
+  drift impossible. The instruction is carried on the rows as `_instruction` and resolved by
+  `resolve_generation_instruction(rows)`, which each side runs over its own rows exactly as the
+  trainer already derives `labels` for classification.
+  - Resolved once per DATASET, not per row: synthetic rows are built fresh and carry no
+    `_instruction`, so a per-row lookup would give real and synthetic rows different prompts
+    inside one training set.
+  - The field is underscore-prefixed so `_new_example_prompt` excludes it from the schema shown
+    to the synthesis teacher, which therefore cannot invent or reword it.
+  - `DEFAULT_GENERATION_INSTRUCTION` keeps the old wording, so math/QA behaviour is unchanged and
+    only datasets that opt in are affected.
+- **DialogSum instruction.** "Summarize the following conversation in one to three sentences.
+  Write only the summary — do not continue the conversation or reply to it." The second sentence
+  targets the observed failure directly.
+- **Tests.** 11 in `tests/test_generation_prompt_parity.py`, including an assertion that the
+  trainer and eval harness emit byte-identical prompts.
+- **Status:** 🟢 fixed.
+
+## B251 — the judge scored the chain-of-thought along with the answer
+- **Symptom (latent, found while diagnosing a slow run).** CoT annotation is applied to
+  `math_reasoning`, `code_generation` AND `generation`, and `_training_turn` builds the target as
+  `<reasoning>...</reasoning>\n\n<answer>`. Math and code are unaffected because their extractors
+  pull one specific thing (`_final_answer`, `_extract_code`). Generation's extractor was
+  `raw.strip()` — so the ENTIRE string, reasoning block included, was handed to an LLM judge
+  asked "how good is this summary?".
+- **Impact.** A model that produced a perfect summary preceded by its reasoning would still score
+  badly, because the judged text looks nothing like the reference. This depresses every
+  judge-scored generation number, including the threshold calibration.
+- **Fix.** `split_reasoning(raw) -> (reasoning, answer)` in `eval/scorers/generation.py`;
+  `extract_predictions` now returns the ANSWER only, so the judge sees just that. Tolerant of
+  case/whitespace variants and of a dropped opening tag (small models often emit only the closing
+  one), and it keeps the full text when the model produced reasoning and nothing else — an empty
+  prediction would score 0 and hide the real failure.
+- **The reasoning is separated, not discarded.** `eval/harness.py::_attach_reasoning_to_failures`
+  records it on each failure so a bad answer can be traced to bad reasoning rather than bad
+  phrasing. It is never sent to the judge.
+- **Tests.** 14 in `tests/test_cot_answer_split.py`.
+- **Status:** 🟢 fixed.
+
+## B252 — generation-family synthesis ran serially at 1/8 of the configured concurrency
+- **Symptom.** `slm-dialogsum-samsum-cse-38186914` sat on one line —
+  `SYNTH-FILL (top-up to target): have 3628 row(s), need 2678 more to reach target 6306` — for
+  over two hours with no further output, looking hung. vLLM was healthy but reported
+  `Running: 1 reqs, Waiting: 0 reqs` at 18 tok/s with GPU 0 at 21% utilisation.
+- **Root cause.** `_synthesize_new_correct` (the generation/math/code path) was a plain `while`
+  loop issuing ONE blocking `generate_fn` call at a time. Every other generator in the module —
+  `_synthesize_new_gold` for classification, and `annotate_cot` — fans out over `_progress_map`
+  with `_synth_concurrency` workers. The server is launched for 8 concurrent requests
+  (`SLM_SYNTH_CONCURRENCY`), so this path used an eighth of capacity already paid for. For
+  contrast, CoT annotation on the same server ran at `Running: 8 reqs` and 138 tok/s.
+- **Second defect.** The loop emitted no progress line until it finished, so a multi-hour phase
+  was indistinguishable from a hang. `_progress_map` logs every ~10%.
+- **Fix.** Rewritten over `_progress_map` with `_synth_concurrency` workers, over-requesting to
+  absorb rejects and trimming to `n`. Verified with an instrumented fake generator: peak
+  in-flight concurrency 16, previously 1.
+- **Status:** 🟢 fixed.

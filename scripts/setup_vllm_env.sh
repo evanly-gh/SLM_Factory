@@ -1,8 +1,8 @@
 #!/bin/bash
 # Build a SEPARATE venv for the vLLM synthesis server (B161). Kept apart from .venv_gpu
 # because vLLM pins specific torch/transformers versions that can conflict with the Unsloth
-# training stack. The server runs as its own SLURM job (scripts/serve_synth.slurm); the
-# training jobs only talk to it over HTTP, so the environments never need to coexist.
+# training stack. The task scripts launch the server from this venv on its own GPU and talk to
+# it over HTTP, so the two environments never need to coexist in one interpreter.
 set -euo pipefail
 export PATH="$HOME/.local/bin:$PATH"
 export UV_CACHE_DIR="${UV_CACHE_DIR:-/mmfs1/gscratch/intelligentsystems/evanly/.uv-cache}"
