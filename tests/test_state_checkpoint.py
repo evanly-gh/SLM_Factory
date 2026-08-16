@@ -53,7 +53,7 @@ def _state(tmp_path: Path) -> dict:
     )
     rebuild_plan = normalize_data_rebuild_plan(
         {
-            "strategy": "resample",
+            "strategy": "synthesize",
             "target_rows": 64,
         },
         task_type="classification",
@@ -65,7 +65,7 @@ def _state(tmp_path: Path) -> dict:
         "data_rebuild_plan_identity": _PLAN_ID,
         "rebuild_config": {"target_rows": 64, "seed": 19},
         "strategy_composition": [{
-            "strategy": "resample",
+            "strategy": "synthesize",
             "rows": 1,
         }],
         "plan_yield": {"status": "novel", "novel_rows": 1},

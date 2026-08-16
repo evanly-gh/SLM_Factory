@@ -13,22 +13,42 @@ LEGACY_TASK_SCRIPTS = (
     "run_ner_l40s.slurm",
 )
 
-# The six curated-benchmark pipeline scripts: 2x L40S on gpu-l40s-intelligentsystems, each
-# pinning one deterministic loader via SLM_BENCHMARK_TASK. Value = (benchmark key, task_type).
+# The curated-benchmark pipeline scripts: 2x L40S on gpu-l40s-intelligentsystems, each pinning one
+# deterministic loader via SLM_BENCHMARK_TASK. Value = (benchmark key, task_type).
 # Kept in lockstep with agent/nodes/cold_start/eval_setup.py::NAMED_BENCHMARK_TASK_TYPES.
+# `coedit` and `medqa` were removed 2026-08-15 by decision; neither had ever produced a run.
 L40S_BENCHMARK_SCRIPTS = {
     "run_clinc150_l40s.slurm": ("clinc150", "classification"),
     "run_routerbench_l40s.slurm": ("routerbench", "classification"),
-    "run_medqa_l40s.slurm": ("medqa", "classification"),
     "run_dialogsum_samsum_l40s.slurm": ("dialogsum_samsum", "generation"),
     "run_xlam_bfcl_l40s.slurm": ("xlam_bfcl", "function_call"),
-    "run_coedit_l40s.slurm": ("coedit", "diff"),
+    # Added 2026-08-15: LlamaPIE when-to-respond (arXiv:2505.04066), vendored bundle, no live fetch.
+    "run_proactive_listening_l40s.slurm": ("proactive_listening", "classification"),
+    # Added 2026-08-13 alongside the registry entries. These exist on BOTH accounts because the
+    # shared CSE queue was priority-starved (28th of 53 pending, projected start 35h out) while
+    # the dedicated quota had 5 free GPUs; running on whichever frees first is the point.
+    "run_calendar_json_l40s.slurm": ("calendar_json", "function_call"),
+    "run_ner_bc5cdr_l40s.slurm": ("ner_bc5cdr", "NER"),
 }
 
 L40S_TASK_SCRIPTS = (
     *LEGACY_TASK_SCRIPTS,
     *L40S_BENCHMARK_SCRIPTS,
 )
+
+# The overnight-campaign scripts on the shared CSE account (2026-08-13). Same pipeline body and
+# same benchmark keys, but gpu-l40s-cse caps wall-clock at 24h instead of 7 days, so these rely
+# on the USR1 checkpoint-and-requeue contract to cross the boundary rather than treating it as a
+# failure. They are a SEPARATE family from the `_l40s` scripts on purpose: a 24h preemptible-ish
+# regime produces numbers that are not directly comparable with the weeklong dedicated runs, and
+# keeping the filenames distinct keeps that visible.
+CSE_BENCHMARK_SCRIPTS = {
+    "run_xlam_bfcl_cse.slurm": ("xlam_bfcl", "function_call"),
+    "run_calendar_json_cse.slurm": ("calendar_json", "function_call"),
+    "run_ner_bc5cdr_cse.slurm": ("ner_bc5cdr", "NER"),
+    "run_routerbench_cse.slurm": ("routerbench", "classification"),
+    "run_proactive_listening_cse.slurm": ("proactive_listening", "classification"),
+}
 
 
 def _sbatch_directives(source: str) -> dict[str, str]:
@@ -151,14 +171,19 @@ def test_legacy_task_scripts_have_weeklong_requeue_contract():
 
 # --- Curated-benchmark l40s scripts (the six loaders on 2x L40S) ----------------
 
-def test_l40s_benchmark_scripts_cover_exactly_the_six_curated_loaders():
+def test_l40s_benchmark_scripts_cover_exactly_the_curated_loaders():
     # The scripts on disk must match the mapping (no orphans, none missing), and each key must be
-    # one of the six benchmarks (guards against a typo'd SLM_BENCHMARK_TASK that run.py rejects).
+    # a real benchmark (guards against a typo'd SLM_BENCHMARK_TASK that run.py rejects hours
+    # later, inside a job that has already allocated GPUs).
+    from agent.nodes.cold_start.eval_setup import NAMED_BENCHMARK_TASK_TYPES
+
     on_disk = {p.name for p in PIPELINE_DIR.glob("run_*_l40s.slurm")} - set(LEGACY_TASK_SCRIPTS)
     assert on_disk == set(L40S_BENCHMARK_SCRIPTS)
-    expected_keys = {"clinc150", "routerbench", "medqa",
-                     "dialogsum_samsum", "xlam_bfcl", "coedit"}
+    expected_keys = {"clinc150", "routerbench", "dialogsum_samsum", "xlam_bfcl",
+                     "calendar_json", "ner_bc5cdr", "proactive_listening"}
     assert {key for key, _ in L40S_BENCHMARK_SCRIPTS.values()} == expected_keys
+    for key, task_type in L40S_BENCHMARK_SCRIPTS.values():
+        assert NAMED_BENCHMARK_TASK_TYPES[key][0] == task_type, key
 
 
 def test_l40s_benchmark_scripts_use_2xl40s_on_int_sys_with_requeue_contract():
@@ -179,6 +204,50 @@ def test_l40s_benchmark_scripts_use_2xl40s_on_int_sys_with_requeue_contract():
         assert "gpu:a40" not in source.lower(), filename
         assert "gpu:a100" not in source.lower(), filename
         assert "partition=ckpt" not in source, filename
+
+
+def test_cse_scripts_match_the_registry_and_use_the_24h_requeue_contract():
+    from agent.nodes.cold_start.eval_setup import NAMED_BENCHMARK_TASK_TYPES
+
+    on_disk = {p.name for p in PIPELINE_DIR.glob("run_*_cse.slurm")}
+    assert on_disk == set(CSE_BENCHMARK_SCRIPTS)
+
+    for filename, (key, task_type) in CSE_BENCHMARK_SCRIPTS.items():
+        source = (PIPELINE_DIR / filename).read_text(encoding="utf-8")
+        directives = _sbatch_directives(source)
+        assert directives["account"] == "gpu-l40s-cse", filename
+        assert directives["partition"] == "gpu-l40s", filename
+        assert directives["gres"] == "gpu:l40s:2", filename
+        # gpu-l40s-cse enforces MaxWall=1-00:00:00; anything longer is rejected at submit.
+        assert directives["time"] == "24:00:00", filename
+        # The checkpoint signal must fire with enough margin to publish the atomic
+        # JSON + SQLite checkpoint before the scheduler kills the job.
+        assert "#SBATCH --signal=B:USR1@7200" in source, filename
+        assert "#SBATCH --requeue" in source, filename
+        assert f"export SLM_BENCHMARK_TASK={key}" in source, filename
+        assert "export SLM_CUDA_ISOLATION=1" in source, filename
+        assert "_l40s_task_body.sh" in source, filename
+        # Registry lockstep: a typo'd key here is rejected by run.py at startup, hours after
+        # submission and after the vLLM server has already been paid for.
+        assert key in NAMED_BENCHMARK_TASK_TYPES, filename
+        assert NAMED_BENCHMARK_TASK_TYPES[key][0] == task_type, filename
+
+
+def test_every_registry_key_has_a_loader():
+    """The registry and the loader table are two dicts that must not drift; a key present in one
+    and absent from the other fails only at run time, inside a job that has already allocated
+    GPUs."""
+    from agent.nodes.cold_start.eval_setup import (
+        NAMED_BENCHMARK_TASK_TYPES,
+        _named_benchmark_loaders,
+    )
+
+    registry = _named_benchmark_loaders()
+    assert set(registry) == set(NAMED_BENCHMARK_TASK_TYPES)
+    for key, (loader, task_type, label) in registry.items():
+        assert callable(loader), key
+        assert task_type == NAMED_BENCHMARK_TASK_TYPES[key][0], key
+        assert label, key
 
 
 def test_l40s_benchmark_scripts_log_to_logs_slurm():
@@ -460,17 +529,35 @@ def test_pipeline_task_scripts_log_to_logs_slurm():
         assert "/logs/slurm/" in output, f"{name} must log to logs/slurm/, got {output}"
 
 
-def test_every_slurm_script_runs_on_the_int_sys_l40s_allocation():
-    """One allocation, one configuration. The gpu-l40s-cse and ckpt-g2 variants existed to dodge
-    a saturated quota, but they ran the same pipeline under a different wall clock and a
-    different preemption regime, which made run-to-run numbers incomparable."""
+def test_every_slurm_script_runs_on_a_sanctioned_l40s_allocation():
+    """Two allocations, both 2x L40S on the same partition, and nothing else.
+
+    This test used to require `gpu-l40s-intelligentsystems` everywhere. The reason was sound —
+    the old gpu-l40s-cse and ckpt-g2 variants ran the same pipeline under a different wall clock
+    and a preemptible regime, which made their numbers incomparable with the dedicated runs — but
+    it is a reason to keep the two families SEPARATE and clearly labelled, not to forbid the
+    second one. The 2026-08-13 campaign runs on CSE because the dedicated quota was saturated.
+
+    What still must not reappear is a third configuration: a different GPU type, a different
+    partition, a preemptible ckpt account, or a script nobody has accounted for.
+    """
     scripts = sorted(REPO_ROOT.glob("**/*.slurm"))
-    assert {p.name for p in scripts} == set(L40S_TASK_SCRIPTS)
+    accounted = set(L40S_TASK_SCRIPTS) | set(CSE_BENCHMARK_SCRIPTS)
+    assert {p.name for p in scripts} == accounted
     for path in scripts:
-        directives = _sbatch_directives(path.read_text(encoding="utf-8"))
-        assert directives["account"] == "gpu-l40s-intelligentsystems", path.name
+        source = path.read_text(encoding="utf-8")
+        directives = _sbatch_directives(source)
+        assert directives["account"] in {
+            "gpu-l40s-intelligentsystems", "gpu-l40s-cse"}, path.name
         assert directives["partition"] == "gpu-l40s", path.name
         assert directives["gres"] == "gpu:l40s:2", path.name
+        assert "gpu:a40" not in source.lower(), path.name
+        assert "gpu:a100" not in source.lower(), path.name
+        assert "partition=ckpt" not in source, path.name
+        # The CSE account is the only place a 24h cap is legitimate; a weeklong request there is
+        # rejected at submit time, and a 24h request on the dedicated account is a mistake.
+        expected_wall = "24:00:00" if directives["account"].endswith("-cse") else "7-00:00:00"
+        assert directives["time"] == expected_wall, path.name
 
 
 def test_task_body_writes_synth_log_to_gpu_setup_and_creates_the_dir():

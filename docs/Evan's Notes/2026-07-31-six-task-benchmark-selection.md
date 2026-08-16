@@ -7,6 +7,14 @@ eval harness gets built for each against the current pipeline.
 **Companion to:** [2026-07-28-task-suite-benchmark-research.md](2026-07-28-task-suite-benchmark-research.md)
 (the 18→6 survivor analysis this re-frames onto the 3-category structure).
 
+> **Update 2026-08-12.** The category reasoning here still holds. The **availability** claim in
+> §1 does not: "verify a live public dataset exists for each" was checked against dataset pages,
+> not against an actual `load_dataset` call, and two of the six do not survive one. xLAM is a
+> gated repo; BFCL ships 52 category-named JSON files that no split pattern resolves; RouterBench
+> ships only `.pkl`. Rows 3 and 5 of the §1 table are therefore not runnable as specified. Two
+> tasks are also being added — BC5CDR NER and a calendar NL→JSON task — taking the suite to
+> eight. See [2026-08-12-two-new-tasks-and-loader-blockers.md](2026-08-12-two-new-tasks-and-loader-blockers.md).
+
 ---
 
 ## 0. The binding constraint

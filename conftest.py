@@ -42,3 +42,9 @@ os.environ.setdefault("EXA_API_KEY", "test-placeholder")
 # any test that simulates an unreachable endpoint would otherwise sit there for ten minutes.
 # Setting the wait to 0 keeps the FAIL-vs-degrade decision under test while removing the sleep.
 os.environ.setdefault("SLM_SYNTH_MIDRUN_WAIT_S", "0")
+
+# Stretch goals are OFF by default under pytest. Every convergence path now asks the orchestrator
+# whether to raise the accuracy goal, which is a live Anthropic call; the many existing tests that
+# assert terminal routing on a threshold-clearing score would each make one. Tests that exercise
+# raising turn it on explicitly and patch the call.
+os.environ.setdefault("SLM_THRESHOLD_RAISE", "0")

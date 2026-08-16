@@ -725,7 +725,12 @@ def test_paid_callsites_use_central_tracking_wrappers():
     iterate = (root / "agent" / "nodes" / "iterate.py").read_text()
     assert "llm.invoke(" not in iterate
     assert "llm_final.invoke(" not in iterate
-    assert iterate.count("tracked_chat_anthropic_invoke(") == 2
+    # Three billed call sites: the intervention decision, its JSON-only reask, and the
+    # stretch-goal question asked when a score meets the accuracy goal. Asserting the exact
+    # count is the point of this guard — a new paid call must be added here deliberately.
+    assert iterate.count("tracked_chat_anthropic_invoke(") == 3
+    for stage in ('stage="iterate"', 'stage="threshold_raise"'):
+        assert stage in iterate, f"missing billing stage {stage}"
 
 
 def test_no_cloud_cot_teacher_config_or_curriculum_residue():

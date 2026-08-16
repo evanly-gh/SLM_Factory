@@ -110,9 +110,31 @@ def orchestrator_client_kwargs() -> dict:
 #   "largest_first"       — probe largest for feasibility, then start smallest
 #   "interpolation"       — 3-probe scaling curve, pick closest to RAM target
 #   "orchestrator_choice" — LLM picks based on task context (no probing)
+#   "single_model"        — NAIVE BASELINE: orchestrator picks one model and the run stays on it.
+#                           No escalation on failure, no downward regression on success.
 MODEL_SELECTION_STRATEGY = os.environ.get(
     "SLM_MODEL_SELECTION_STRATEGY", "smallest_first"
 )
+
+# Strategies that pin the run to ONE model for its whole life. This is the ablation control for
+# "what does the model ladder actually buy?": everything else in the loop (hyperparameter search,
+# data rebuilds, rollback, the accuracy goal) still runs, but the model never changes. It is
+# deliberately close to the naive human workflow — pick a model, pick data, tune, train — so the
+# ladder's contribution is the difference between this and the other strategies.
+_SINGLE_MODEL_STRATEGIES = frozenset({"single_model"})
+
+
+def model_ladder_enabled(strategy: str | None = None) -> bool:
+    """False when the run is pinned to one model, so escalation and regression are both off.
+
+    Read through this rather than comparing strategy strings at each gate — there are three of
+    them (stagnation escalation, eval-cap escalation, post-convergence downward probe) and a
+    missed one silently reintroduces the ladder.
+    """
+    name = strategy if strategy is not None else os.environ.get(
+        "SLM_MODEL_SELECTION_STRATEGY", MODEL_SELECTION_STRATEGY
+    )
+    return str(name) not in _SINGLE_MODEL_STRATEGIES
 
 # --- Data-size targets: floor, ceiling, and per-tier sizing ---
 # The per-task `DATASET_SIZE_BY_TYPE` table was REMOVED on 2026-08-05. Every value in it

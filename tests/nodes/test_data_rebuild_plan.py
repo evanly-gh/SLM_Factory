@@ -4,7 +4,7 @@ from agent import data_rebuild as dr
 
 
 def test_only_three_strategies():
-    assert dr.DATA_REBUILD_STRATEGIES == ("resample", "acquire", "synthesize")
+    assert dr.DATA_REBUILD_STRATEGIES == ("acquire", "synthesize")
 
 
 # The 2026-07-31 redesign dropped plan-identity *dedup*, but the durable paid-acquisition
@@ -118,7 +118,7 @@ def test_orchestrator_cannot_override_the_deterministic_target():
     silently beat the computed 7053 and cut the curriculum nearly in half (B247).
     """
     plan = dr.normalize_data_rebuild_plan(
-        {"strategy": "resample", "target_rows": 5000},
+        {"strategy": "synthesize", "target_rows": 5000},
         task_type="classification",
         hypothesis="x",
         target_rows=7053,

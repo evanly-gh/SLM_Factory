@@ -289,6 +289,21 @@ def evaluate_node(state: AgentState) -> AgentState:
     if not scored:
         raise RuntimeError("evaluate_node: no configs were scored — train_node did not populate _pending_weights_refs")
 
+    # Best FINE-TUNED score on this model's first iteration, captured here — before the zero-shot
+    # baseline joins `scored` as a candidate below. It cannot be recovered later from
+    # state["scores"][0], because when the baseline wins iteration 1 that entry IS the baseline, so
+    # the two are indistinguishable downstream. Reported between Baseline and Best FT so one round
+    # of fine-tuning can be separated from everything the orchestrated search added on top.
+    if state["iteration"] == 1:
+        first_ft = max(result.f1 for _, result in scored.values())
+        baselines = state.get("model_baselines") or []
+        for entry in baselines:
+            if entry.get("selector", entry.get("model_id")) == selector:
+                entry["first_finetuned_f1"] = first_ft
+                break
+        state["model_baselines"] = baselines
+        _log(mlabel, f"  First fine-tuned score = {first_ft:.4f}")
+
     # Count the ZERO-SHOT baseline as a candidate (B161): if fine-tuning didn't beat the
     # base model, KEEP the base model. This prevents reporting a fine-tune that is WORSE
     # than zero-shot (e.g. the 4B collapsed 0.64→0.27 and its good baseline was lost), and
@@ -366,7 +381,13 @@ def evaluate_node(state: AgentState) -> AgentState:
         def _fmt(b):
             v = _bd.get(b, {})
             a = v.get("accuracy")
-            return f"{b}={a:.3f}(n={v.get('n',0)})" if a is not None else f"{b}=n/a"
+            if a is not None:
+                return f"{b}={a:.3f}(n={v.get('n',0)})"
+            # `n/a` alone read as a measurement failure. It is a structural fact: no eval row landed
+            # in this bucket. On a format-bound task neither the smallest nor the largest model can
+            # produce the output contract zero-shot, so nothing separates them and `medium` is empty
+            # by construction — that happened on all 8 BC5CDR reports (B275).
+            return f"{b}=n/a(n=0, no eval row in this bucket)"
         _log(mlabel, f"  [test_agent] overall={report['overall']:.4f}  "
                      f"{_fmt('easy')}  {_fmt('medium')}  {_fmt('hard')}")
         _log(mlabel, f"  [test_agent] diagnosis: {report['diagnosis']}")

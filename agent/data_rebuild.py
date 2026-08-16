@@ -25,7 +25,13 @@ from typing import Any
 
 
 DATA_REBUILD_SCHEMA_VERSION = 2
-DATA_REBUILD_STRATEGIES = ("resample", "acquire", "synthesize")
+# `resample` was REMOVED as an orchestrator-selectable strategy on 2026-08-16. It re-drew rows from
+# the pool the curriculum was already built from, so it could only ever change WHICH gold rows were
+# present, never add information — and the plan-yield numbers bore that out (one traced rebuild:
+# 3,308 resampled rows, 122 of them novel). The universal resample-FILL that assembles every
+# curriculum from the train pool is unaffected and still runs; what is gone is the orchestrator
+# spending a turn, a training run and an eval on a reshuffle as if it were an intervention.
+DATA_REBUILD_STRATEGIES = ("acquire", "synthesize")
 # Mirrors agent.nodes.iterate.HYPOTHESIS_MAX_CHARS (imported lazily to avoid a circular import).
 # The rebuild plan carries the same reasoning text, so capping it here at the old 240 would have
 # re-severed what the source fix restores. `pattern_hint` additionally steers synthesis prompts,
@@ -205,7 +211,7 @@ def _integer(
     return int(snapped)
 
 
-def _normalized_difficulty(raw: Any) -> dict[str, float]:
+def _normalized_difficulty(raw: Any, populated: set[str] | None = None) -> dict[str, float]:
     supplied = raw is not None
     if raw is None:
         raw = {"easy": 0.2, "medium": 0.3, "hard": 0.5}
@@ -226,13 +232,31 @@ def _normalized_difficulty(raw: Any) -> dict[str, float]:
             upper=1.0,
             step=0.001,
         ))
+    # Zero out buckets with NO eval rows and redistribute their weight (B275). A bucket can be
+    # structurally empty — on a format-bound task neither the smallest nor the largest model can
+    # produce the output contract zero-shot, so nothing lands in `medium` — and the BC5CDR run spent
+    # `medium=0.25` of its curriculum budget against an empty set for its whole life.
+    if populated is not None:
+        values = [
+            value if bucket in populated else 0.0
+            for value, bucket in zip(values, _DIFFICULTY_BUCKETS)
+        ]
+
     total = sum(values)
     if total <= 0:
-        if supplied:
+        if supplied and populated is None:
             raise ValueError(
                 "data_rebuild requires at least one positive difficulty weight"
             )
-        values, total = [0.2, 0.3, 0.5], 1.0
+        # All weight landed on empty buckets (or none was supplied): spread evenly over the
+        # buckets that actually have rows, and fall back to the default split if we know nothing.
+        if populated:
+            values = [
+                1.0 if bucket in populated else 0.0 for bucket in _DIFFICULTY_BUCKETS
+            ]
+            total = sum(values)
+        else:
+            values, total = [0.2, 0.3, 0.5], 1.0
 
     # Twenty 0.05 units apportioned by largest remainder — bounded, snapped, sums to 1.
     scaled = [value / total * 20 for value in values]
@@ -308,6 +332,7 @@ def normalize_data_rebuild_plan(
     remaining_acquire_rounds: int = MAX_PAID_ACQUIRE_ROUNDS_PER_RUN,
     forbidden_eval_texts: list[str] | tuple[str, ...] | set[str] = (),
     resample_available: bool = True,
+    populated_buckets: set[str] | None = None,
 ) -> dict[str, Any]:
     """Validate and normalize one bounded, single-strategy data-rebuild plan.
 
@@ -349,9 +374,10 @@ def normalize_data_rebuild_plan(
             f"data_rebuild.strategy {strategy!r} must be one of "
             + ", ".join(DATA_REBUILD_STRATEGIES)
         )
-    # The whole pool is already in the curriculum ⇒ resample can add no novel rows.
-    # Redirect to synthesize (new synthetic material) instead of running a no-op reshuffle.
-    if strategy == "resample" and not resample_available:
+    # Historical plans (and checkpoints resumed from before 2026-08-16) may still name `resample`.
+    # Accept and redirect rather than failing a resumed run: synthesize is what the old
+    # pool-exhausted path already redirected to.
+    if strategy == "resample":
         strategy = "synthesize"
 
     hint_value = raw.get("pattern_hint")
@@ -421,7 +447,9 @@ def normalize_data_rebuild_plan(
             lower=0,
             upper=allowed_rounds,
         ),
-        "difficulty_buckets": _normalized_difficulty(raw.get("difficulty_buckets")),
+        "difficulty_buckets": _normalized_difficulty(
+            raw.get("difficulty_buckets"), populated=populated_buckets
+        ),
         "confusion_pairs": _confusion_pairs(raw.get("confusion_pairs")),
         "pattern_hint": pattern_hint,
     }
@@ -494,10 +522,7 @@ def _fallback_strategy_from_signal(
     easy, medium, hard = acc("easy"), acc("medium"), acc("hard")
     confusion = report.get("confusion_pairs") or []
 
-    weights = {"resample": 1.0, "acquire": 1.0, "synthesize": 1.0}
-    if not resample_available:
-        # Pool fully in the curriculum ⇒ reshuffling adds nothing; take resample off the menu.
-        weights.pop("resample", None)
+    weights = {"acquire": 1.0, "synthesize": 1.0}
     # Failing even the easy bucket => the data/labels are wrong; bring in new material.
     if easy is not None and easy < 0.6:
         weights["acquire"] += 2.0

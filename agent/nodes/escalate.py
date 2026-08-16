@@ -274,6 +274,12 @@ def escalate_node(state: AgentState) -> AgentState:
     _baseline_f1 = next((e.get("baseline_f1") for e in baselines
                          if e.get("selector", e.get("model_id"))
                          in (current_selector, current_id)), None)
+    # Same None-not-0.0 rule as the baseline above: this tier's first fine-tuned score, so the
+    # Model Improvement Report can separate what one round of fine-tuning bought from what the
+    # iteration loop added, for every tier and not just the final one.
+    _first_ft = next((e.get("first_finetuned_f1") for e in baselines
+                      if e.get("selector", e.get("model_id"))
+                      in (current_selector, current_id)), None)
     history = list(state.get("escalation_history") or [])
     history.append({
         "selector": current_selector,
@@ -281,6 +287,7 @@ def escalate_node(state: AgentState) -> AgentState:
         "quant": getattr(current_model, "quant", None),
         "tier": current_tier,
         "baseline_f1": _baseline_f1,
+        "first_finetuned_f1": _first_ft,
         "best_score": state["best_score"],
         "iterations": state["iteration"],
         "scores": list(state.get("scores") or []),

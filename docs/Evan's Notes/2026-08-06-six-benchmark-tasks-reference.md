@@ -9,6 +9,44 @@ text used at every stage (synthesis, verification, eval, and LLM-as-judge).
 Companion docs: `2026-07-31-six-task-benchmark-selection.md` (why these six were chosen) and
 `docs/PROMPTS.md` (older prompt inventory — parts of it are now stale, see the last section).
 
+> **Update 2026-08-12.** Two tasks are being added to the suite — BC5CDR NER (promoted from the
+> autonomous path) and a calendar NL→JSON task — and **two of the six below cannot load their
+> data**: `xlam_bfcl` (xLAM is gated, BFCL has no resolvable data files) and `routerbench`
+> (pickle-only, plus the loader reads a column the benchmark does not have). Verified live
+> against `datasets 4.3.0`. Everything in this note about scoring, prompts and the eval firewall
+> is still correct. See `2026-08-12-two-new-tasks-and-loader-blockers.md`.
+
+> **Update 2026-08-16 — read this first.** The suite is now **seven** tasks, reorganised by what
+> fine-tuning is expected to buy (in-distribution / format-bound / out-of-distribution).
+> **`coedit` and `medqa` are REMOVED** by decision; **`proactive_listening`** (LlamaPIE
+> interrupt/wait, arXiv:2505.04066) is added with a vendored dataset. Two corrections to the scoring
+> described below:
+>
+> - **Classification prompts and extraction changed** (B271). The row text is now fenced and declared
+>   to be DATA, because RouterBench rows are themselves instructions and the base models obeyed them
+>   ("Print only a single choice from A/B/C/D", "请仅回复楚辞名") instead of classifying. Extraction no
+>   longer scans a whole paragraph for a label substring, so every zero-shot classification baseline
+>   measured before 2026-08-16 is **not comparable** with numbers measured after.
+> - **`[baseline] reference X` and `Baseline F1` are DIFFERENT MODELS** — the teacher and the student
+>   respectively. A previous note wrongly reported this as a contradiction.
+>
+> Full detail: `2026-08-16-extraction-collapse-tier-confounds-and-synthetic-data-verdict.md`.
+
+> **Update 2026-08-15.** The registry now holds **eight** tasks — both loaders above are fixed and
+> `medqa` / `coedit` joined the suite (though neither has produced a run log yet). Full source and
+> local-path inventory for all eight, with a verbatim example row each, is in
+> `2026-08-15-routerbench-contamination-qc-audit-and-stretch-goals.md` §4. Three corrections to this
+> note's framing:
+>
+> - **`routerbench` is labelling a 7B model, and cannot be made to label ours.** The routing boundary
+>   is `mistralai/mistral-7b-chat`; the smallest correctness column in the benchmark is 7B, against a
+>   0.6B–4B pool. See §3 of the 08-15 note for the full candidate table and the two relabelling routes.
+> - **`routerbench`'s curriculum is 34% contaminated** by a foreign dataset with LLM-fabricated
+>   labels (B259), which also causes the `length-outlier` QC filter to delete ~48% of the real
+>   benchmark data (B260). The QC thresholds are not at fault.
+> - **`calendar_json`'s eval half is fetched live from GitHub and never cached**, so past results are
+>   not reproducible against an upstream change.
+
 ---
 
 ## 1. The registry
@@ -49,9 +87,28 @@ that no Slurm script on any other account can reappear.
 path (`run_math_l40s.slurm`, `run_ner_l40s.slurm`, and the classification fallback at
 `eval_setup.py:319`). They still work, they're just not part of this benchmark suite.
 
+> **Update 2026-08-12.** BC5CDR NER is being promoted into the suite as `ner_bc5cdr`, and a new
+> `calendar_json` format-bound task is being added, so this paragraph and the table above will
+> both need amending once those land. BC5CDR is the one task here with a frozen offline bundle
+> (`data/local/bc5cdr`, 5,096 train / 5,865 test rows) — more gold than its live loader returns.
+
 All six pull live from HuggingFace at load time — nothing is pre-materialized under `data/local/`
 for them. The offline bundles that `scripts/download_datasets.py` produces cover a different set
 of tasks entirely.
+
+That live pull is a real dependency, not a formality. As of 2026-08-12, under `datasets 4.3.0`,
+`clinc150` / `dialogsum_samsum` / `coedit` / `medqa` still resolve, while `xlam_bfcl` and
+`routerbench` do not:
+
+| Source | Failure |
+|---|---|
+| `Salesforce/xlam-function-calling-60k` | `DatasetNotFoundError` — gated, needs an accepted license and an `HF_TOKEN` in the Slurm env |
+| `gorilla-llm/Berkeley-Function-Calling-Leaderboard` | `DataFilesNotFoundError` — 52 `BFCL_v3_*.json` files, none matching a split pattern |
+| `withmartian/routerbench` | `DataFilesNotFoundError` — ships only `.pkl`, which `datasets` cannot read |
+
+Only `clinc150` and `dialogsum_samsum` have ever produced a run log; the other four loaders are
+unit-tested on in-memory samples, so their pure converters pass while the live `load_dataset`
+calls beneath them have never once executed.
 
 ---
 
@@ -471,6 +528,13 @@ Source:
 | routerbench | binary routing | `withmartian/routerbench` | `text`, `label` | minority-class F1 | no |
 | medqa | 4-way MCQ | `GBaker/MedQA-USMLE-4-options` | `text`, `label` | macro-F1 | no |
 
+Two more are being added (2026-08-12), both reusing scorers that already exist:
+
+| Task | Type | Source | Row fields | Metric | Judge? |
+|---|---|---|---|---|---|
+| ner_bc5cdr | NER (Chemical, Disease) | `tner/bc5cdr` / `data/local/bc5cdr` | `text`, `entities` | span-F1 (exact `(text,type)` multiset) | no |
+| calendar_json | function calling (fixed schema) | TOPv2 `reminder` → SGD `Calendar_1` | `text`, `answer`, `tools`, `label` | AST arg match (+ format_valid) | no |
+
 So: one of six uses an LLM judge at eval time. Three of six use judge-free structural verifiers
 (two of those with an explicit format-vs-content split). A second, separate model-graded step —
 the teacher label verifier — runs during synthesis for the classification tasks.
@@ -487,3 +551,6 @@ Flagging these so they don't mislead later:
   (`lora_trainer.py::_training_turn`) differ slightly — the training version omits the "Reply with
   [] if there are no entities" clause. NER isn't one of the six, but it's the same class of
   train/serve skew that B250 was, so it's worth fixing before NER is used again.
+  **2026-08-12: still unfixed, and NER is now being re-run — fix it first.**
+- Section 1's claim that the six "still work" and "all six pull live from HuggingFace" was true
+  when written and is not true now for `xlam_bfcl` and `routerbench`. Corrected inline above.

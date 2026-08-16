@@ -46,7 +46,14 @@ _THRESHOLD_FIELDS = frozenset({"new_threshold", "reason"})
 # cap was lifted, the very first iterate call of slm-clinc150-cse-38179864 hit 1536 exactly, the
 # reask hit it again, and the orchestrator's chosen `data_rebuild` was discarded in favour of the
 # score-band fallback's `hyperparameter` (B240).
-_ITERATE_MAX_TOKENS = int(__import__("os").environ.get("SLM_ITERATE_MAX_TOKENS", "4096"))
+# 4096 was too small for the WRONG reason: the decision JSON is ~520 tokens, but max_tokens
+# bounds THINKING PLUS answer, and a measured iterate call spent 1923 tokens thinking before
+# writing 520 of JSON. The prompt's length instruction cannot help — the model neither sees nor
+# budgets its own thinking — so 38 of 69 calls in run 38303490 were truncated mid-object and
+# reasked. Output is billed on tokens actually generated, never on the cap, so a high ceiling
+# costs nothing and simply stops the truncation. Anthropic requires this parameter (it cannot be
+# omitted); claude-sonnet-5 permits up to 128000.
+_ITERATE_MAX_TOKENS = int(__import__("os").environ.get("SLM_ITERATE_MAX_TOKENS", "20000"))
 
 # Runaway guard ONLY — deliberately far above any legitimate hypothesis. Length is managed by
 # telling the orchestrator its budget in the prompt (see HYPOTHESIS_TARGET_WORDS), not by cutting
@@ -678,19 +685,19 @@ that each non-trivial field value is responding to.
 
 Data-rebuild payload constraints (how to set each from the failure analysis):
 - strategy: EXACTLY ONE of — pick by WHERE the failure is:
-    "resample"   -> buckets are roughly balanced / the pool is adequate and only needs
-                    rebalancing or a fresh draw (no strong single failing region).
-                    NOTE: resample only reshuffles the EXISTING pool. When the whole pool
-                    is already in the curriculum a reshuffle adds nothing, so if the prompt
-                    tells you resample is unavailable this turn, pick acquire or synthesize
-                    (a resample plan would be auto-redirected to synthesize anyway).
     "acquire"    -> the DATA is wrong or too thin: the EASY bucket is failing, or prior
-                    source novelty/yield was low — bring in new real rows.
+                    source novelty/yield was low — bring in new real rows from the task's
+                    own benchmark, local bundles, or (bounded) paid discovery.
     "synthesize" -> a specific hard/confusable region is failing: MEDIUM/HARD buckets are
                     weak or confusion pairs dominate — generate targeted new rows there.
+                    Generation is anchored to a real row and INHERITS its label, so it grows
+                    coverage of a class you are already failing; it cannot invent a class.
+  There is no "resample" option. Re-drawing from the pool the curriculum was already built
+  from cannot add information, and every rebuild already refills from that pool for you.
+  If neither strategy fits the evidence, prefer a hyperparameter intervention instead.
 - target_rows is NOT yours to set and must NOT appear in your plan. The curriculum size is
   computed deterministically for the current model from its measured zero-shot baseline and
-  parameter count; the system synth-fills to that number for you.
+  parameter count.
 - resample_fraction: float [0.10,1.00], step 0.05. HIGHER when the existing pool is sound
   and you are mainly rebalancing; LOWER when the pool is implicated in the failures (leave
   room for new/synthetic rows).
@@ -1278,6 +1285,326 @@ def _log(model_id: str, msg: str):
     print(f"[iterate][{model_id}] {msg}")
 
 
+# ---------------------------------------------------------------------------
+# Stretch goals: raising the accuracy target when a model converges quickly
+# ---------------------------------------------------------------------------
+# A goal derived from the teacher's zero-shot score (or from the 0.80 floor when the teacher scored
+# below it) is a floor on ambition, not a ceiling. BC5CDR cleared 0.8000 in five iterations and 81
+# minutes and stopped; the floor had set the bar, not the task's difficulty, and the run had hours
+# of budget left. When a score clears the goal the orchestrator is now asked whether the goal should
+# be raised, and it is told how quickly the goal was reached so "converged on iteration 2" and
+# "converged on iteration 40" can be treated differently.
+#
+# TERMINATION. Raises are a RATCHET: each one must exceed the run's high-water mark
+# (`max_stop_threshold`) by at least _THRESHOLD_RAISE_MIN_STEP, and THRESHOLD_CEILING caps the top.
+# So the number of raises in a run is bounded by (ceiling - initial) / min_step, and each one
+# additionally requires the model to actually clear the previous goal first. Every pre-existing
+# budget (turn budget, wall clock, graph steps, stagnation, eval cap) still applies unchanged, so
+# repeated raising cannot produce a run that fails to terminate.
+_THRESHOLD_RAISE_MIN_STEP = 0.005
+
+_THRESHOLD_RAISE_SYSTEM = """You set the accuracy goal for an agentic fine-tuning run.
+
+The model just MET its accuracy goal. Your only decision: should the goal be RAISED so the run
+keeps pushing, or is this run finished?
+
+Raise the goal when the model reached it EASILY — few iterations, a large margin above the goal, a
+still-rising trajectory, or plenty of remaining budget. The point is to find the model's real
+ceiling rather than stopping at a bar that turned out to be soft. This matters most when the goal
+came from a FLOOR rather than from the teacher's own measured score: a floored goal reflects what we
+refused to go below, not what the task actually permits.
+
+Do NOT raise when the model barely scraped over the line, when the trajectory is noisy or falling,
+when it took many iterations to get here, or when little budget remains. A raise you cannot justify
+just burns compute and ends the run on a failure note.
+
+Reply with STRICT JSON, no prose:
+{"raise_goal": true, "new_threshold": <float>, "reason": "<one sentence>"}
+or
+{"raise_goal": false, "reason": "<one sentence>"}
+
+Constraints on new_threshold: strictly greater than the current goal by at least %(min_step)s, at
+most %(ceiling)s, and it must be plausibly reachable — aim near what the trajectory suggests is
+achievable, not at the ceiling by reflex."""
+
+
+def _threshold_raise_enabled() -> bool:
+    import os as _os
+
+    if _os.environ.get("SLM_THRESHOLD_RAISE", "1") == "0":
+        return False
+    # Cheap mode exists to keep API spend near zero; a stretch goal is an optimisation, not a
+    # correctness requirement, so it is the right thing to drop there.
+    return _os.environ.get("SLM_CHEAP") != "1"
+
+
+def _llm_threshold_raise(
+    state: AgentState,
+    current_score: float,
+    model_id: str,
+) -> dict | None:
+    """Ask the orchestrator whether the met accuracy goal should be raised.
+
+    A small, focused call rather than a field on the main intervention decision: the intervention
+    prompt is only built for BELOW-threshold scores, and at convergence the only open question is
+    the goal itself. Returns the validated decision dict, or None when the call fails or is
+    unavailable — a failure always means "do not raise", never a broken run.
+    """
+    from langchain_anthropic import ChatAnthropic
+    from langchain_core.messages import SystemMessage, HumanMessage
+    from config.config import (
+        ANTHROPIC_API_KEY,
+        ORCHESTRATOR_MODEL,
+        orchestrator_client_kwargs,
+    )
+    from agent.llm_text import MIN_THINKING_SAFE_MAX_TOKENS
+    from agent.threshold import THRESHOLD_CEILING, describe_threshold_provenance
+
+    threshold = float(state["stop_threshold"])
+    calibration = state.get("threshold_calibration") or {}
+    history = _eval_history(state)
+    iteration = int(state.get("iteration", 0) or 0)
+    turn_budget = int(state.get("turn_budget", 0) or 0)
+    turns_used = (iteration + 1) * 2
+    raises = list(state.get("threshold_raises") or [])
+
+    ceiling_headroom = THRESHOLD_CEILING - threshold
+    if ceiling_headroom < _THRESHOLD_RAISE_MIN_STEP:
+        _log(
+            model_id,
+            f"  Stretch goal: already within {_THRESHOLD_RAISE_MIN_STEP} of the "
+            f"{THRESHOLD_CEILING} ceiling — not asking to raise",
+        )
+        return None
+
+    user_content = "\n".join([
+        f"Task type            : {state.get('task_type')}",
+        f"Model                : {model_id}",
+        f"Current accuracy goal: {threshold:.4f}",
+        f"Goal provenance      : {describe_threshold_provenance(calibration)}",
+        f"Score just achieved  : {current_score:.4f} "
+        f"(margin +{current_score - threshold:.4f} above the goal)",
+        f"Iterations used      : {iteration}",
+        f"Score trajectory     : {[f'{s:.4f}' for s in history[-12:]]}",
+        f"Budget               : {turns_used}/{turn_budget or 'unbounded'} turns used"
+        + (
+            f"; {turn_budget - turns_used} turns remain"
+            if turn_budget
+            else ""
+        ),
+        f"Ceiling              : {THRESHOLD_CEILING} (hard cap)",
+        f"Minimum raise step   : {_THRESHOLD_RAISE_MIN_STEP}",
+        f"Previous raises       : {len(raises)}"
+        + (
+            " — " + "; ".join(
+                f"{r.get('from')}→{r.get('to')} at iteration {r.get('iteration')}"
+                for r in raises[-4:]
+            )
+            if raises
+            else " (none yet)"
+        ),
+        "",
+        "Should the accuracy goal be raised? JSON only.",
+    ])
+
+    system = _THRESHOLD_RAISE_SYSTEM % {
+        "min_step": _THRESHOLD_RAISE_MIN_STEP,
+        "ceiling": THRESHOLD_CEILING,
+    }
+    try:
+        llm = ChatAnthropic(
+            model=ORCHESTRATOR_MODEL,
+            anthropic_api_key=ANTHROPIC_API_KEY,
+            max_tokens=MIN_THINKING_SAFE_MAX_TOKENS,
+            **orchestrator_client_kwargs(),
+        )
+        response = tracked_chat_anthropic_invoke(
+            llm,
+            [SystemMessage(content=system), HumanMessage(content=user_content)],
+            stage="threshold_raise",
+            model=ORCHESTRATOR_MODEL,
+        )
+        return _validate_threshold_raise(
+            _loads_json_object(_coerce_to_text(response.content))
+        )
+    except ValueError:
+        # A malformed or unusable stretch-goal reply is not worth a reask: declining to raise is
+        # always a safe outcome, and the goal the run was calibrated against is already banked.
+        raise
+    except Exception as exc:  # noqa: BLE001 - a failed stretch-goal call must never break a run
+        raise_if_fatal(exc, "threshold_raise")
+        _log(
+            model_id,
+            f"  Stretch-goal call failed ({exc!r}); keeping goal at {threshold:.4f}",
+        )
+        return None
+
+
+def _loads_json_object(text: str) -> dict:
+    """Parse a single JSON object out of an LLM reply, tolerating fences and surrounding prose."""
+    text = (text or "").strip()
+    if text.startswith("```"):
+        text = re.sub(r"^```[a-zA-Z]*\n?", "", text)
+        text = re.sub(r"\n?```$", "", text).strip()
+    if not text:
+        raise ValueError("empty response — no JSON object returned")
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        match = re.search(r"\{.*\}", text, re.DOTALL)
+        if not match:
+            raise ValueError(f"no JSON object found in response: {text[:160]!r}") from None
+        try:
+            return json.loads(match.group())
+        except json.JSONDecodeError as exc:
+            raise ValueError(f"unparseable JSON in response: {exc}") from exc
+
+
+def _validate_threshold_raise(decision: object) -> dict | None:
+    """Validate the stretch-goal JSON. Returns None for a well-formed decline."""
+    if not isinstance(decision, dict):
+        raise ValueError("threshold-raise decision must be a JSON object")
+    if not decision.get("raise_goal"):
+        return None
+    new_threshold = decision.get("new_threshold")
+    if (
+        isinstance(new_threshold, bool)
+        or not isinstance(new_threshold, (int, float))
+        or not math.isfinite(float(new_threshold))
+    ):
+        raise ValueError(
+            "threshold-raise new_threshold must be a finite numeric value"
+        )
+    reason = decision.get("reason")
+    if not isinstance(reason, str) or not reason.strip():
+        raise ValueError("threshold-raise requires a non-empty reason")
+    return {
+        "raise_goal": True,
+        "new_threshold": float(new_threshold),
+        "reason": reason.strip()[:240],
+    }
+
+
+def _bank_convergence(
+    state: AgentState,
+    current_score: float,
+    model_id: str,
+) -> None:
+    """Record that this run cleared an accuracy goal, before any raise can move the bar.
+
+    Without this, raising the goal could convert a genuine success into a reported failure: a run
+    that converged at 0.81 against 0.80, then raised to 0.87 and finished at 0.83, would print
+    "budget exhausted" despite having met the goal it was actually calibrated against.
+    """
+    threshold = float(state["stop_threshold"])
+    banked = state.get("convergence_banked")
+    if isinstance(banked, dict) and float(banked.get("threshold", 0.0)) >= threshold:
+        return
+    state["convergence_banked"] = {
+        "threshold": round(threshold, 4),
+        "score": round(float(current_score), 4),
+        "iteration": int(state.get("iteration", 0) or 0),
+        "selector": getattr(state.get("selected_model"), "selector", None),
+    }
+    _log(
+        model_id,
+        f"  ✓ GOAL MET and banked: {current_score:.4f} >= {threshold:.4f} at iteration "
+        f"{state.get('iteration', 0)} — this result stands even if a stretch goal is missed",
+    )
+
+
+def _maybe_raise_threshold(
+    state: AgentState,
+    current_score: float,
+    model_id: str,
+) -> bool:
+    """Bank the convergence, then ask the orchestrator whether to raise the goal.
+
+    Returns True when the goal was raised, in which case the caller must NOT treat the score as
+    terminal — the run continues against the new goal.
+    """
+    from agent.threshold import THRESHOLD_CEILING
+
+    _bank_convergence(state, current_score, model_id)
+    if not _threshold_raise_enabled():
+        return False
+
+    # At most one stretch-goal call per iteration. iterate_node routes through here twice — once
+    # before the intervention call and once after, because a threshold ADJUSTMENT can make the same
+    # score converge. Without this guard, an orchestrator that lowered the goal would immediately
+    # be asked to raise it again on the same score, in the same turn.
+    iteration = int(state.get("iteration", 0) or 0)
+    if state.get("_threshold_raise_asked_iteration") == iteration:
+        return False
+    state["_threshold_raise_asked_iteration"] = iteration
+
+    threshold = float(state["stop_threshold"])
+    high_water = max(
+        float(state.get("max_stop_threshold", 0.0) or 0.0),
+        threshold,
+    )
+    state["max_stop_threshold"] = high_water
+
+    _log(
+        model_id,
+        f"  Goal {threshold:.4f} met with {current_score:.4f} at iteration "
+        f"{state.get('iteration', 0)} — asking the orchestrator whether to raise it",
+    )
+    try:
+        decision = _llm_threshold_raise(state, current_score, model_id)
+    except ValueError as exc:
+        _log(model_id, f"  Stretch-goal decision invalid ({exc}); keeping the goal")
+        return False
+    if decision is None:
+        return False
+
+    proposed = float(decision["new_threshold"])
+    # The ratchet. Clamping to the high-water mark rather than the current goal means a goal that
+    # was LOWERED earlier in the run cannot be used to re-raise into the same band repeatedly.
+    minimum = high_water + _THRESHOLD_RAISE_MIN_STEP
+    if proposed < minimum:
+        _log(
+            model_id,
+            f"  Stretch goal DECLINED: proposed {proposed:.4f} does not exceed the run's "
+            f"high-water goal {high_water:.4f} by the minimum step "
+            f"{_THRESHOLD_RAISE_MIN_STEP} — keeping {threshold:.4f}",
+        )
+        return False
+    raised = round(min(proposed, THRESHOLD_CEILING), 4)
+    if raised <= threshold:
+        return False
+
+    reason = decision["reason"]
+    _log(
+        model_id,
+        f"  ▲ RAISING accuracy goal {threshold:.4f} → {raised:.4f} "
+        f"(ceiling {THRESHOLD_CEILING}, score was {current_score:.4f}, iteration "
+        f"{state.get('iteration', 0)}). Reason: {reason}",
+    )
+    state["stop_threshold"] = raised
+    state["max_stop_threshold"] = raised
+    state["threshold_raises"] = list(state.get("threshold_raises") or []) + [{
+        "from": round(threshold, 4),
+        "to": raised,
+        "score_at_raise": round(float(current_score), 4),
+        "iteration": int(state.get("iteration", 0) or 0),
+        "reason": reason,
+    }]
+    return True
+
+
+def _ladder_enabled(strategy: str | None = None) -> bool:
+    """False under a single-model strategy, which pins the run to one model for its whole life.
+
+    Consulted at all three ladder gates — stagnation escalation, eval-cap escalation, and the
+    post-convergence downward probe. Reading the strategy at each site independently is how one of
+    them ends up missed, so they all go through here.
+    """
+    from config.config import model_ladder_enabled
+
+    return model_ladder_enabled(strategy)
+
+
 def _route_score_at_threshold(
     state: AgentState,
     current_score: float,
@@ -1286,13 +1613,23 @@ def _route_score_at_threshold(
     *,
     stagnant: bool | None = None,
 ) -> bool:
-    """Route a threshold-clearing score without an intervention-model call.
+    """Route a threshold-clearing score.
 
     Returns True when routing is complete. A hardware-blocked score is not an
     acceptable convergence result, but it is still handled deterministically so
     an auth/quota failure cannot break a run after the accuracy goal was reached.
+
+    Meeting the goal is no longer automatically terminal: the goal is banked and the orchestrator
+    is asked whether to RAISE it (see _maybe_raise_threshold). A raise returns False so the caller
+    treats the score as below-threshold again and the run keeps training against the new goal.
     """
     if current_score < state["stop_threshold"]:
+        return False
+
+    # Ask about a stretch goal BEFORE the downward-probe/terminate decision. Both of those treat
+    # the goal as settled, and if the bar is about to move the whole convergence question reopens:
+    # probing for a smaller model that clears a goal we are about to abandon wastes a tier.
+    if _maybe_raise_threshold(state, current_score, model_id):
         return False
 
     if state.get("_largest_first_phase") == "probe":
@@ -1324,7 +1661,14 @@ def _route_score_at_threshold(
         )
         stagnant = _is_stagnant(_eval_history(state)) if stagnant is None else stagnant
         state["llm_iterate_decision"] = None
-        if stagnant:
+        if stagnant and not _ladder_enabled():
+            state["next_action"] = "terminate"
+            state["last_intervention"] = "terminate"
+            state["last_hypothesis"] = (
+                "hardware-blocked convergence stagnated; single_model pins the run to one model"
+            )
+            _log(model_id, "  → TERMINATE (hw-blocked + stagnation; single_model — no escalation)")
+        elif stagnant:
             state["next_action"] = "escalate"
             state["last_intervention"] = "escalate"
             state["last_hypothesis"] = "hardware-blocked convergence stagnated"
@@ -1386,6 +1730,9 @@ def _route_score_at_threshold(
         not state.get("downward_probe_done")
         and current_model is not None
         and has_untried_lower_tier
+        # `single_model` answers "can THIS model do it", not "what is the smallest model that can".
+        # Probing downward would replace the chosen model and destroy the comparison.
+        and _ladder_enabled(strategy)
     ):
         state["next_action"] = "downward_probe"
         _log(
@@ -1495,11 +1842,24 @@ def iterate_node(state: AgentState) -> AgentState:
             state["next_action"] = "terminate"
             state["_largest_first_phase"] = "done"
             state["last_hypothesis"] = "largest_first probe could not clear the goal"
+            state["last_intervention"] = "escalate"
+        elif not _ladder_enabled():
+            # The naive baseline: this model had its chance and did not clear the goal. Report that
+            # honestly rather than reaching for a bigger model, because the whole point of the
+            # strategy is to measure one model's ceiling under the loop.
+            _log(
+                model_id,
+                f"  → TERMINATE ({reason}) — single_model pins the run to one model, so there is "
+                f"no escalation. Best score on this model stands as the result.",
+            )
+            state["next_action"] = "terminate"
+            state["last_intervention"] = "terminate"
+            state["last_hypothesis"] = f"single_model: {reason}, no escalation available"
         else:
             _log(model_id, f"  → ESCALATE ({reason}) — skipped LLM intervention call to save API cost")
             state["next_action"] = "escalate"
             state["last_hypothesis"] = f"escalate on {reason}"
-        state["last_intervention"] = "escalate"
+            state["last_intervention"] = "escalate"
         return state
 
     # Resample availability for THIS turn: if the whole train pool is already in the

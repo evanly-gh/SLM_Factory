@@ -33,11 +33,13 @@ DIFF_PROMPT = (
 _GIT_TIMEOUT_S = 10.0
 
 
+def build_diff_prompt(example: dict) -> str:
+    """The single-row prompt builder, shared by the eval harness and the trainer (see B250)."""
+    return DIFF_PROMPT.format(text=example.get("text", ""), src=example.get("src", ""))
+
+
 def build_prompts(eval_set: EvalSet) -> list[str]:
-    return [
-        DIFF_PROMPT.format(text=ex.get("text", ""), src=ex.get("src", ""))
-        for ex in eval_set.all
-    ]
+    return [build_diff_prompt(ex) for ex in eval_set.all]
 
 
 _FENCE_LANGS = ("diff", "patch", "")

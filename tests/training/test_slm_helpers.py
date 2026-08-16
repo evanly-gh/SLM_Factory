@@ -165,12 +165,25 @@ class _FakeModel:
 @contextmanager
 def _local_cached_inference(model, tokenizer, *, fake_torch=None):
     fake_torch = fake_torch or _FakeTorch()
-    max_seq_length = int(os.environ.get("SLM_MAX_SEQ_LENGTH", "4096"))
-    cache_key = ("/weights", "model-id", max_seq_length)
+    # The context ceiling is per task type, and the cache is keyed on it, so a fixture that
+    # assumed one global value silently missed the cache and tried a real model load. Seed every
+    # ceiling the production table can produce so the fixture stays task-agnostic.
+    from training.slm_helpers import _DEFAULT_MAX_SEQ_LENGTH, _TASK_MAX_SEQ_LENGTH
+
+    override = os.environ.get("SLM_MAX_SEQ_LENGTH")
+    lengths = (
+        {int(override)}
+        if override is not None
+        else set(_TASK_MAX_SEQ_LENGTH.values()) | {_DEFAULT_MAX_SEQ_LENGTH}
+    )
+    cache = {
+        ("/weights", "model-id", length): (model, tokenizer) for length in sorted(lengths)
+    }
+    cache_key = next(iter(cache))
     with (
         patch("training.cuda_isolation.isolation_enabled", return_value=False),
-        patch("training.slm_helpers._inference_cache", {cache_key: (model, tokenizer)}),
-        patch("training.slm_helpers._cache_order", [cache_key]),
+        patch("training.slm_helpers._inference_cache", cache),
+        patch("training.slm_helpers._cache_order", list(cache)),
         patch.dict(sys.modules, {"torch": fake_torch}),
         patch("agent.timing.record_timing_event") as timing,
     ):
@@ -855,11 +868,11 @@ def test_infer_and_single_item_batch_have_identical_prompt_and_output():
 @pytest.mark.parametrize(
     ("task_type", "prompt_count", "expected_batch_sizes"),
     [
-        ("classification", 17, [16, 1]),
-        ("NER", 5, [4, 1]),
-        ("generation", 5, [4, 1]),
-        ("math_reasoning", 5, [4, 1]),
-        ("code_generation", 5, [4, 1]),
+        ("classification", 33, [32, 1]),
+        ("NER", 17, [16, 1]),
+        ("generation", 17, [16, 1]),
+        ("math_reasoning", 17, [16, 1]),
+        ("code_generation", 17, [16, 1]),
     ],
 )
 def test_infer_batch_uses_task_aware_defaults(

@@ -50,11 +50,14 @@ def test_seed_is_entropy_based_not_derived():
     assert curate._entropy_seed() != curate._entropy_seed()
 
 
-def test_resample_produces_dataset(monkeypatch, tmp_path):
+def test_curate_produces_dataset_from_the_train_pool(monkeypatch, tmp_path):
+    """The resample-FILL that assembles every curriculum still works after `resample` was removed as
+    an orchestrator-selectable strategy (2026-08-16). Without it there would be no gold rows at all,
+    now that synth-fill is gone too."""
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("SLM_CHEAP", "1")  # avoid CoT/synth network paths
     rows = [{"text": f"row {i}", "label": "a" if i % 2 else "b"} for i in range(30)]
-    plan = _plan("resample")
+    plan = _plan("synthesize")
     out = curate_node(_state(plan, rows))
     path = out["current_dataset_path"]
     assert path and path.endswith("dataset_v1.jsonl")
@@ -62,7 +65,9 @@ def test_resample_produces_dataset(monkeypatch, tmp_path):
     assert len(written) > 0
     # Eval firewall: the held-out secret never appears in training data.
     assert all(EVAL_SECRET not in r.get("text", "") for r in written)
-    assert out["last_curation"]["strategy"] == "resample"
+    assert out["last_curation"]["strategy"] == "synthesize"
+    # Rows came from the pool via resample-fill, whatever the plan strategy was.
+    assert any(r.get("_strategy_origin") == "resample" for r in written)
 
 
 def test_curate_records_source_usage_and_run_accumulator(monkeypatch, tmp_path):
@@ -79,7 +84,7 @@ def test_curate_records_source_usage_and_run_accumulator(monkeypatch, tmp_path):
         }
         for i in range(30)
     ]
-    plan = _plan("resample")
+    plan = _plan("synthesize")
     out = curate_node(_state(plan, rows))
 
     usage = out["last_curation"]["source_usage"]

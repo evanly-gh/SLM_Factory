@@ -57,6 +57,37 @@ figure, which is expected: different eval slice, different prompt, non-thinking 
 No comparable published span-F1 with a stated protocol was located. Leave absent so the run
 uses the measured anchor.
 
+⚠ **2026-08-12: leaving this `n/a` had a cost.** With no row here the planner fell back to
+recall and set `stop_threshold=0.88` for `slm-ner-l40s-37531245`. The run reached **0.8628**
+(Qwen3.5-4B @ Q4_K_M, 900-row eval, exact `(text, type)` multiset match), never cleared the bar,
+and burned 44.8 h and $13.43 before crashing on an exhausted data-rebuild plan space. Our own
+measured figures, for calibration — these are pipeline measurements, not published SOTA, so they
+are deliberately **not** formatted as a registry row:
+
+| what | value |
+|---|---|
+| Qwen3.5-4B Q4_K_M, zero-shot | 0.0254 |
+| Qwen3.5-2B Q4_K_M, best fine-tuned (74 iters) | 0.8476 |
+| Qwen3.5-4B Q4_K_M, best fine-tuned (68 iters) | 0.8628 |
+
+Published encoder-class span-F1 on BC5CDR sits around 0.87–0.90 at ~110M params, but under
+exact-match protocols that do not demonstrably agree with `eval/metrics.py::entity_f1` — which is
+exactly why no row is asserted. Set the next NER run's threshold from the 0.8628 measured anchor,
+not from recall.
+
+### Calendar NL→JSON (function_call)
+
+| metric | value | model | params | source | checked |
+|---|---|---|---|---|---|
+| ast_arg_match | n/a | — | — | — | — |
+
+No benchmark with a comparable metric exists. SMCalFlow is the canonical calendar semantic-parsing
+task and reports **0.7375 exact-match program accuracy** on its hidden test set
+(https://microsoft.github.io/task_oriented_dialogue_as_dataflow_synthesis/, checked 2026-08-12),
+but that is Lispress program equality, not JSON argument matching, so it will not calibrate this
+pipeline and is recorded as context only. TOPv2 exact-match accuracy is likewise a bracket-parse
+metric. Use the measured anchor.
+
 ### BANKING77 (classification)
 
 | metric | value | model | params | source | checked |

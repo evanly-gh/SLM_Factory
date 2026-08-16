@@ -45,7 +45,7 @@ def test_wallclock_elapsed_includes_completed_resume_segments(monkeypatch):
         "intervention": "data_rebuild",
         "hypothesis": "malformed threshold should not escape",
         "data_rebuild": {
-            "strategy": "resample",
+            "strategy": "synthesize",
         },
         "threshold_adjustment": {
             "new_threshold": "not-a-number",

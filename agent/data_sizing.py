@@ -109,11 +109,25 @@ def resize_curriculum_for_tier(state, *, log=print) -> int:
         ceiling=DATA_SIZE_CEILING,
     )
     previous = state.get("curriculum_size_target")
-    state["curriculum_size_target"] = target
+    # RATCHET: the target is a floor to build UP to, never a reason to throw rows away. The
+    # formula is recomputed per tier from that tier's own baseline and parameter count, so a
+    # bigger model legitimately computes a SMALLER number — Qwen3-4B asked for 1961 (floored to
+    # 5000) after Qwen3.5-0.8B had asked for 5754. Applying that literally rebuilt the curriculum
+    # at 5000 and discarded 754 perfectly good rows that had already passed quality control. Rows
+    # leave the curriculum only through QC or the eval firewall (B257).
+    ratcheted = target
+    if previous and previous > target:
+        ratcheted = int(previous)
+    state["curriculum_size_target"] = ratcheted
     label = getattr(model, "label", None) or getattr(model, "model_id", "?")
-    change = f" (was {previous})" if previous and previous != target else ""
-    log(f"      [sizing] curriculum target for {label}: {target}{change} — {rationale}")
-    return target
+    change = f" (was {previous})" if previous and previous != ratcheted else ""
+    log(f"      [sizing] curriculum target for {label}: {ratcheted}{change} — {rationale}")
+    if ratcheted != target:
+        log(
+            f"      [sizing] held at {ratcheted} rather than shrinking to {target}: the target "
+            f"is a floor, and rows already curated are never discarded to meet a lower one"
+        )
+    return ratcheted
 
 
 def baseline_is_known(state) -> bool:

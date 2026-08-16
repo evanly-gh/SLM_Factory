@@ -354,7 +354,7 @@ def test_evaluate_node_uses_bf16_path_when_quant_none(mock_hw, mock_profile, moc
     state = _make_state(quant=None)
     plan = normalize_data_rebuild_plan(
         {
-            "strategy": "resample",
+            "strategy": "synthesize",
             "target_rows": 64,
         },
         task_type="classification",
@@ -371,7 +371,7 @@ def test_evaluate_node_uses_bf16_path_when_quant_none(mock_hw, mock_profile, moc
         "data_rebuild_plan": plan,
         "rebuild_config": {"target_rows": 64, "seed": 17},
         "strategy_composition": [{
-            "strategy": "resample",
+            "strategy": "synthesize",
             "rows": 12,
         }],
         "plan_yield": {"status": "novel", "novel_rows": 12},

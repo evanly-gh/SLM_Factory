@@ -25,37 +25,53 @@ SHARED_CONTENT_FILES = (
 SHARED_CHECKSUM_FILES = SHARED_CONTENT_FILES + ("manifest.json",)
 
 
-# Single source of truth for the six curated benchmarks' task types + human labels, keyed by the
+# Single source of truth for the curated benchmarks' task types + human labels, keyed by the
 # SLM_BENCHMARK_TASK value. Kept free of loader imports so callers (e.g. the driver deciding the
 # initial task_type) can read it without pulling `datasets` or any optional loader dependency.
+#
+# The suite is organised by what fine-tuning is expected to DO for each task:
+#   in-distribution — the base model already does the task; FT buys format discipline and modest
+#     accuracy. Good baseline, small delta.
+#   format-bound    — the base model knows the content but cannot produce the exact output
+#     contract. Near-zero baseline, large delta (BC5CDR: 0.0000 → 0.8098).
+#   out-of-distribution — the label is not a property of the input's surface form, so the base
+#     model has nothing to pattern-match. Low/noisy baseline, delta bounded by label noise.
+#
+# `coedit` and `medqa` were removed 2026-08-15 by decision — neither had ever produced a run.
 NAMED_BENCHMARK_TASK_TYPES: dict[str, tuple[str, str]] = {
-    "clinc150": ("classification", "CLINC150 (clinc_oos/plus)"),
+    # in-distribution
     "dialogsum_samsum": ("generation", "DialogSum + SAMSum"),
+    # format-bound
     "xlam_bfcl": ("function_call", "xLAM-60k / BFCL"),
-    "coedit": ("diff", "CoEdIT (grammarly/coedit)"),
+    "calendar_json": ("function_call", "Calendar NL→JSON (TOPv2 reminder / SGD Calendar_1)"),
+    "ner_bc5cdr": ("NER", "BC5CDR (Chemical/Disease spans)"),
+    # out-of-distribution
+    "clinc150": ("classification", "CLINC150 (clinc_oos/plus)"),
     "routerbench": ("classification", "RouterBench"),
-    "medqa": ("classification", "MedQA-USMLE-4-options"),
+    "proactive_listening": ("classification", "Proactive listening (LlamaPIE interrupt/wait)"),
 }
 
 
 def _named_benchmark_loaders() -> dict:
-    """Registry of the six curated benchmark loaders, selectable via SLM_BENCHMARK_TASK on the
+    """Registry of the curated benchmark loaders, selectable via SLM_BENCHMARK_TASK on the
     non-autonomous path. Each entry is (loader_callable, task_type, source_label). Imports are
     lazy so a missing optional dependency only breaks the benchmark that needs it. Task types /
     labels come from NAMED_BENCHMARK_TASK_TYPES so there is one source of truth."""
     from data.loaders.clinc150 import load_clinc150
     from data.loaders.dialogsum_samsum import load_dialogsum_samsum
     from data.loaders.xlam_bfcl import load_xlam_bfcl
-    from data.loaders.coedit import load_coedit
     from data.loaders.routerbench import load_routerbench
-    from data.loaders.medqa import load_medqa
+    from data.loaders.ner_bc5cdr import load_ner_bc5cdr
+    from data.loaders.calendar_json import load_calendar_json
+    from data.loaders.proactive_listening import load_proactive_listening
     loaders = {
         "clinc150": load_clinc150,
         "dialogsum_samsum": load_dialogsum_samsum,
         "xlam_bfcl": load_xlam_bfcl,
-        "coedit": load_coedit,
         "routerbench": load_routerbench,
-        "medqa": load_medqa,
+        "ner_bc5cdr": load_ner_bc5cdr,
+        "calendar_json": load_calendar_json,
+        "proactive_listening": load_proactive_listening,
     }
     return {
         key: (loaders[key], task_type, label)
@@ -114,6 +130,44 @@ class QwenBaselineUnavailableError(RuntimeError):
     """
 
 
+def _pin_label_space(state: AgentState, eval_set) -> None:
+    """Close the task's label vocabulary against the frozen eval set, once, before any curation.
+
+    Everything downstream (mining, LLM column mapping, synthesis, quality control) treats this as
+    authoritative and may only REMOVE rows that fall outside it — never extend it. See
+    `data/label_space.py` for why (B259: four hallucinated classes entered a two-class task).
+    """
+    from data.label_space import label_definitions_for, label_space_from_eval_set
+
+    labels = label_space_from_eval_set(eval_set, state["task_type"])
+    if not labels:
+        state["task_label_space"] = None
+        return
+    benchmark = os.environ.get("SLM_BENCHMARK_TASK") or ""
+    definitions = label_definitions_for(benchmark)
+    state["task_label_space"] = {
+        "labels": sorted(labels),
+        "definitions": definitions,
+        "benchmark": benchmark or None,
+        "source": "frozen_eval_set",
+    }
+    shown = sorted(labels)
+    print(
+        f"      [label-space] PINNED {len(shown)} class(es) from the frozen eval set: "
+        + (", ".join(repr(label) for label in shown[:12])
+           + (f", … (+{len(shown) - 12} more)" if len(shown) > 12 else ""))
+    )
+    print(
+        "      [label-space] this vocabulary is CLOSED — mined sources whose labels are not a "
+        "subset are rejected, and no LLM may introduce a new class"
+    )
+    if definitions:
+        print(
+            f"      [label-space] {len(definitions)} label definition(s) available for synthesis "
+            "and verification prompts (the teacher is told what each class MEANS, not just its name)"
+        )
+
+
 def _calibrate_qwen_goal_if_pending(state: AgentState, eval_set) -> None:
     """Complete the Qwen-3.6-baseline accuracy goal once the frozen E exists.
 
@@ -151,8 +205,19 @@ def _calibrate_qwen_goal_if_pending(state: AgentState, eval_set) -> None:
         )
 
     threshold, reason = threshold_from_endpoint_baseline(baseline.f1, floor=floor)
+    # Whether the FLOOR or the teacher's own measurement set the goal. A floored goal and a
+    # teacher-set goal print the same number, so without this flag a run that converged against a
+    # floor the teacher never reached is indistinguishable in the summary from one that matched a
+    # strong teacher. Recorded here, reported at end of run.
+    floored = float(baseline.f1) < float(floor)
     print(f"      [threshold] Qwen baseline {baseline.f1:.4f} → goal {threshold:.4f} "
-          f"(floor {floor:.2f})")
+          f"(floor {floor:.2f}) — "
+          + (
+              f"FLOOR WON: the teacher scored below {floor:.2f}, so the goal is the floor, "
+              f"not the teacher's {baseline.f1:.4f}"
+              if floored
+              else f"teacher's own score set the goal (above the {floor:.2f} floor)"
+          ))
 
     state["stop_threshold"] = threshold
     state["initial_stop_threshold"] = threshold
@@ -160,6 +225,7 @@ def _calibrate_qwen_goal_if_pending(state: AgentState, eval_set) -> None:
         "source": "qwen_baseline",
         "threshold": threshold,
         "floor": floor,
+        "floored": floored,
         "reason": reason,
         "pending": False,
         "measured_qwen": round(float(baseline.f1), 4),
@@ -287,6 +353,7 @@ def eval_setup_node(state: AgentState) -> AgentState:
                 "difficulty": _shared_diff or {},
             },
         )
+        _pin_label_space(state, eval_set)
         _calibrate_qwen_goal_if_pending(state, eval_set)
         return state
 
@@ -370,8 +437,19 @@ def eval_setup_node(state: AgentState) -> AgentState:
         multilingual=plan.get("multilingual", False),
     )
     state["eval_set"] = eval_set
-    print(f"      [eval_setup] eval set built: {len(eval_set.all)} examples "
-          f"(target {state.get('eval_size_target', 800)})")
+    _target = int(state.get("eval_size_target", 800) or 800)
+    print(f"      [eval_setup] eval set built: {len(eval_set.all)} examples (target {_target})")
+    # A short eval set is acceptable — some loaders simply have less held-out data than we asked
+    # for — but it must be stated, because it changes how the score should be read: fewer rows means
+    # more variance, and scores are then not directly comparable across tasks. `calendar_json` ran on
+    # 478 rows against a target of 800 and nothing said so.
+    if len(eval_set.all) < _target:
+        _short = _target - len(eval_set.all)
+        print(f"      [eval_setup] ⚠ EVAL SET IS SHORT: {len(eval_set.all)}/{_target} rows "
+              f"(short by {_short}, {len(eval_set.all) / _target:.0%} of target). Accepted — the "
+              f"loader's held-out split is the limit — but scores carry more variance than a "
+              f"full-size eval set and are not directly comparable to tasks that reached target.")
+    _pin_label_space(state, eval_set)
 
     # Difficulty-stratify the eval set for the test-data agent (B161): label each held-out
     # example easy/medium/hard by the base-model zero-shot capability gradient (smallest vs

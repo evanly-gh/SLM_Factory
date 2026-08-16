@@ -36,9 +36,17 @@ SFT_LOSS_CONTRACT_VERSION = 2  # explicit assistant/completion-only labels
 NON_THINKING_TEMPLATE_KWARGS = {"enable_thinking": False}
 
 
-def _configured_max_seq_length() -> int:
+def _configured_max_seq_length(task_type: str | None = None) -> int:
+    """Training-side context ceiling, matched to the eval-side per-task table.
+
+    Training and inference must agree: a row that fits training but not eval would be scored on
+    a truncated prompt. Both read training.slm_helpers.task_max_seq_length, so the two cannot
+    drift, and an explicit SLM_MAX_SEQ_LENGTH still overrides both.
+    """
+    from training.slm_helpers import task_max_seq_length
+
     try:
-        value = int(os.environ.get("SLM_MAX_SEQ_LENGTH", "4096"))
+        value = int(task_max_seq_length(task_type))
     except (TypeError, ValueError):
         value = 4096
     return min(max(value, 128), 32768)
@@ -296,11 +304,15 @@ def _training_turn(
             "Answer",
         )
     if task_type == "NER":
+        from eval.scorers.ner import NER_PROMPT
+
+        # Same builder the eval harness uses. The training prompt used to be a hand-copied
+        # near-duplicate that omitted the "Reply with [] if there are no entities" sentence, so
+        # the model was fine-tuned on one input shape and scored on another — the same class of
+        # skew as B250, and it went uncorrected through the whole 44.8h BC5CDR run
+        # (slm-ner-l40s-37531245). Importing makes the two incapable of drifting.
         return (
-            "Extract named entities from the text. "
-            "Reply with a JSON list of objects with \"text\" and \"type\" "
-            "keys.\n\n"
-            f"Text: {example['text']}",
+            NER_PROMPT.format(text=example["text"]),
             json.dumps(example.get("entities", [])),
             "Entities",
         )
@@ -342,6 +354,28 @@ def _training_turn(
             str(assistant_message),
             "Answer",
         )
+    if task_type in ("function_call", "diff"):
+        # The format-bound task types. Their SCORERS were built on 2026-08-01 but this function
+        # was never extended, so the pipeline could grade `function_call`/`diff` and could not
+        # train them: every run died here with "completion-only SFT does not support
+        # task_type=...". That is the real reason `xlam_bfcl` and `coedit` had never produced a
+        # run log, and it killed both function_call runs of the 2026-08-13 campaign
+        # (slm-xlam-bfcl-cse-38454799, slm-calendar-json-cse-38455147) after they had already
+        # loaded data and measured a baseline.
+        #
+        # Both targets are the gold string the scorer parses out of `answer`: a JSON call list for
+        # function_call, a unified diff for diff. Prompts are imported from the scorers for the
+        # same reason every other branch here imports them.
+        if task_type == "function_call":
+            from eval.scorers.function_call import build_function_call_prompt as _build
+        else:
+            from eval.scorers.diff import build_diff_prompt as _build
+        answer = example.get("answer", "")
+        if not str(answer).strip():
+            raise ValueError(
+                f"{task_type} training row has an empty 'answer'; there is no target to learn"
+            )
+        return (str(_build(example)), str(answer), "Answer")
     raise ValueError(
         f"completion-only SFT does not support task_type={task_type!r}"
     )
@@ -774,7 +808,7 @@ def _run_unsloth_training(
     from agent.logging_setup import quiet_ml_logging
     quiet_ml_logging()
 
-    max_seq_length = _configured_max_seq_length()
+    max_seq_length = _configured_max_seq_length(config.task_type)
     _ensure_model_cached(config.base_model)
 
     model, tokenizer = _load_training_model(config, max_seq_length)

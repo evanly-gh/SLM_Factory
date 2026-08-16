@@ -248,12 +248,20 @@ def _extract_code(raw: str) -> str:
 # CoT-annotated training targets are `<reasoning>...</reasoning>\n\n<answer>` (see
 # training/lora_trainer.py::_training_turn), so a model trained on them emits the reasoning
 # inline. Tolerant of whitespace/case and of a missing opening tag, which small models drop.
+# `reasoning` is what OUR training target uses; `think` is what the Qwen chat templates emit at
+# inference. Only the first was matched, so a Qwen model's `<think> </think>` prefix reached the
+# judge attached to an otherwise correct summary and was graded as part of it — see the tier-3
+# eval samples in run 38303490, e.g. "<think> </think> Shelly is volunteering at the food
+# shelter." The closing tag is matched independently of the opening one because a truncated or
+# confused model emits mismatched pairs such as `<think> </tool_call>`.
+_REASONING_TAGS = r"(?:reasoning|think)"
 _REASONING_BLOCK_RE = re.compile(
-    r"\s*<\s*reasoning\s*>.*?<\s*/\s*reasoning\s*>\s*",
+    rf"\s*<\s*{_REASONING_TAGS}\s*>.*?<\s*/\s*(?:{_REASONING_TAGS}|tool_call)\s*>\s*",
     flags=re.IGNORECASE | re.DOTALL,
 )
 _ORPHAN_REASONING_CLOSE_RE = re.compile(
-    r"^.*?<\s*/\s*reasoning\s*>\s*", flags=re.IGNORECASE | re.DOTALL
+    rf"^.*?<\s*/\s*(?:{_REASONING_TAGS}|tool_call)\s*>\s*",
+    flags=re.IGNORECASE | re.DOTALL,
 )
 
 

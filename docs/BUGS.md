@@ -3861,3 +3861,351 @@ headroom rides along in the existing `task_analysis` call.
   absorb rejects and trimming to `n`. Verified with an instrumented fake generator: peak
   in-flight concurrency 16, previously 1.
 - **Status:** 🟢 fixed.
+
+## B253 — `xlam_bfcl` cannot load either of its two datasets
+- **Symptom (2026-08-12).** Direct `load_dataset` calls on the cluster under `datasets 4.3.0`:
+  `Salesforce/xlam-function-calling-60k` raises `DatasetNotFoundError` ("is a gated dataset"), and
+  `gorilla-llm/Berkeley-Function-Calling-Leaderboard` raises `DataFilesNotFoundError`
+  ("No (supported) data files found").
+- **How it was found.** Auditing the four never-run benchmark loaders before scheduling the next
+  batch of runs. `xlam_bfcl` has no run log; it has never been executed against live HF.
+- **Root cause, part 1 — gating.** xLAM is `gated: auto`, i.e. click-through license. It needs an
+  accepted license on the account whose token is in the environment, and `HF_TOKEN` exported into
+  the Slurm env. `tests/pipeline/_l40s_task_body.sh` does not export one.
+- **Root cause, part 2 — file resolution.** BFCL ships 52 files named `BFCL_v3_simple.json`,
+  `BFCL_v3_parallel.json`, `BFCL_v3_multi_turn_base.json`, … None match the split-name patterns
+  `datasets` uses to auto-build a config, so `load_dataset(BFCL_ID, split="train[:N]")`
+  (`data/loaders/xlam_bfcl.py:85-87`) resolves nothing.
+- **Root cause, part 3 — the fallback doesn't catch it.** The guard is
+  `except (ValueError, KeyError)`; `DataFilesNotFoundError` is neither, so the run dies instead of
+  degrading.
+- **Root cause, part 4 — schema.** BFCL v3 stores prompts and gold answers in *separate* files
+  (`BFCL_v3_simple.json` vs a matching `possible_answer/` entry), and gold answers are lists of
+  acceptable values, not a single call. `convert_xlam_rows` reads `answers` off the same row, so
+  even a successful load would drop every row and hand `build_eval_set` an empty list.
+- **Why the tests passed.** `convert_xlam_rows` is a pure function unit-tested on in-memory
+  samples. Nothing exercises the `load_dataset` calls.
+- **Fix.** Accept the xLAM license + plumb `HF_TOKEN`; name BFCL files explicitly via
+  `load_dataset("json", data_files={...resolve/main/BFCL_v3_simple.json})`; add a BFCL converter
+  that joins prompts to `possible_answer`; widen the `except` to `Exception`.
+- **Status:** 🔴 open.
+
+## B254 — `routerbench` ships only pickles, and the loader reads a column that doesn't exist
+- **Symptom (2026-08-12).** `load_dataset("withmartian/routerbench", split="train[:5]")` raises
+  `DataFilesNotFoundError`.
+- **Root cause, part 1.** The repo contains exactly `routerbench_0shot.pkl`,
+  `routerbench_5shot.pkl`, `routerbench_raw.pkl` and a README. `datasets` has no pickle reader,
+  so `data/loaders/routerbench.py:77` fails on every split, and the
+  `except (ValueError, KeyError)` fallback at line 83 doesn't catch it either.
+- **Root cause, part 2 (latent, worse).** `_correctness` looks for a field literally named
+  `small_model_correct` (`routerbench.py:22`). RouterBench stores one correctness column per
+  candidate model, named after the model. With a working reader every row would still return
+  `None` and be dropped, yielding an empty dataset. The loader was written against an imagined
+  schema.
+- **Fix.** `huggingface_hub.hf_hub_download` + `pandas.read_pickle`, then choose a real model
+  column as the routing boundary and pass it as `small_model_key`. Part 2 is a schema decision —
+  which model counts as "small enough to keep on device" — not a mechanical fix.
+- **Status:** 🔴 open.
+
+## B255 — `tner/bc5cdr` is script-based and dead under `datasets>=4`; only the third fallback works
+- **Symptom (2026-08-12).** `load_dataset("tner/bc5cdr", ...)` raises
+  `RuntimeError: Dataset scripts are no longer supported, but found bc5cdr.py`.
+  `spyysalo/bc5cdr` raises `DatasetNotFoundError` — the repo is gone.
+- **Impact.** Candidates 1 and 2 of the `bc5cdr` ladder in `web_acquire.py:146-162` both fail.
+  Candidate 3 — the script-free raw-JSON path added for exactly this reason — **works**, verified
+  returning `['tags', 'tokens']`. So NER still runs, just after two failed attempts and a slow
+  cold fetch.
+- **Same class, elsewhere.** `AmazonScience/massive` and `iohadrubin/smcalflow` fail identically.
+  Any future loader pointed at a script-based repo is dead on arrival; check for a `.py` at the
+  repo root before wiring one up.
+- **Better fix than repairing the ladder.** `data/local/bc5cdr` already holds a checksummed
+  frozen bundle with **5,096 train / 5,865 test** rows — more gold than the live loader's 3,403,
+  which directly addresses the exhausted-plan-space crash that ended
+  `slm-ner-l40s-37531245`. Set `SLM_LOCAL_DATASET_DIR` and take rung 1 of the ladder.
+- **Status:** ⚪ design gap — works via fallback, but two of three candidates are permanently dead
+  and the ordering wastes a cold fetch on every run.
+
+## B259 — RouterBench acquire mines a foreign dataset and an LLM invents its labels
+- **Symptom (2026-08-15).** Every RouterBench rebuild after the first acquire round has QC delete
+  ~1,166 rows whose labels are `cloud` / `on_device` / `router` / `remote` — classes that do not
+  exist in a task whose label space is `{local, route}`. The out-of-vocabulary set *grows* through
+  the run: `cloud` only for iterations 1–9, `+on_device` at 10, `+router` at 20, `+remote` at 21.
+- **Root cause, part 1.** `web_acquire._BENCHMARK_ALIASES` has no `routerbench` entry, so Stage-0
+  fails on the benchmark the task is about (`No (supported) data files found in
+  withmartian/routerbench`, 21×) and agentic discovery substitutes
+  `anasnassar/llm-query-complexity-benchmark`.
+- **Root cause, part 2 (the real defect).** That dataset has **no routing labels at all** — its
+  columns are `text, source, subject, domain, ground_truth, id` and `ground_truth` is
+  `LOW`/`MEDIUM`/`HIGH` query-complexity over StackExchange/MMLU/PubMedQA. The `local`/`route`
+  labels are **invented by `_llm_map_dataset`** (`web_acquire.py:953-995`), which asks Claude for a
+  `label_map`; `_materialize_from_mapping` then applies `lmap.get(str(lab), lab)` — **unmapped values
+  pass through verbatim**. The mapping is re-requested per acquire round and is
+  non-deterministic, so each round can mint a *new* hallucinated class.
+- **Root cause, part 3 — the guard is per-source, not per-row.** `_labels_are_usable`
+  (`web_acquire.py:627-645`, added for B222) returns `True` on **any** overlap with the known label
+  space. Because Claude mapped some rows to `local`/`route`, the whole source passed and the
+  hallucinated classes rode along.
+- **Impact, measured.** `dataset_v10.jsonl` holds **1,155 foreign rows = 34% of the training set**,
+  labelled `local`/`route` split **579/576**. RouterBench's true base rate is **30/70**. The 50/50
+  split is the signature of fabricated labels. These rows survive QC because the label strings are
+  spelled correctly — this is worse than anything QC removes, and it is a plausible contributor to
+  the `route` mode collapse (§B261).
+- **Fix.** (a) add a `routerbench` alias so acquire uses the real pickle loader; (b) drop
+  out-of-vocabulary **rows** rather than passing a whole source on any overlap; (c) require an
+  explicit, validated `label_map` covering every source value, and reject rather than pass through.
+- **Status:** 🔴 open. Not changed mid-run (38493142 was live).
+
+## B260 — `length-outlier` QC is relative to the dataset's own median, so contamination makes it delete real data
+- **Symptom (2026-08-15).** RouterBench's `[qc] length-outlier` removals climb monotonically through
+  the run — 58 → 39 → 67 → 132 → 168 → 566 → … → **813 rows per rebuild**.
+- **Root cause.** The filter cuts anything longer than **3× the dataset's own median**
+  (`data/curriculum.py:254-264`). The rows B259 injects are short — median **75** characters against
+  real RouterBench's **715** — so they drag the median down and pull the cutoff with them:
+
+  | Version | mined rows | median | 3× cutoff | share of real RouterBench deleted |
+  |---|---|---|---|---|
+  | uncontaminated | 0 | 715 | 2145 | **0.6%** (216 / 36,497) |
+  | `v1` | 0 | 416 | 1248 | 9% |
+  | `v5` | 958 | 295 | 885 | 47% |
+  | `v10` | 1,155 | 269 | 807 | **48%** (17,667) |
+
+  Visible in the artifacts: `train_anchor` median length falls **572 → 432 → 396** across v1/v5/v10
+  while the pool it is sampled from never changes — the filter is eating the long MMLU/GSM8K/hellaswag
+  prompts, which are most of the real signal.
+- **Not label-biased.** Deleted rows are 32.6% `local` vs 29.9% overall, so it is near-uniform
+  destruction rather than skew. The problem is volume, not bias.
+- **Fix.** Compute the median over **trusted** rows only (train anchors), or make the bound absolute
+  and task-aware. The 3× ratio itself is fine — on clean data it removes 0.6%.
+- **Status:** 🔴 open. **The QC thresholds are not the bug**; B259 is. Fixing B259 makes this inert.
+
+## B261 — `route` mode collapse is scored 0.0000 and iterated through
+- **Symptom (2026-08-15).** Five RouterBench iterations show `easy=0.000 medium=0.000 hard=0.882`
+  with `F1=0.0000` (l40s 5539-5542, 6467, 6719, 11822, 14252; cse 8818-8821). The model answers
+  `route` for everything; the hard bucket is route-heavy, so aggregate difficulty looks healthy.
+- **Assessment.** The metric is **correct** — minority-class F1 rightly gives no credit for a
+  degenerate majority strategy, and plain accuracy would have flattered the same model with 63%. The
+  defect is that nothing detects the collapse: the orchestrator spends full train → quantize → eval
+  cycles on it.
+- **Fix.** Detect a single-class prediction distribution at eval time and surface it as its own
+  diagnosis rather than as a score of zero.
+- **Status:** 🔴 open.
+
+## B262 — `calendar_json` baseline disagrees with the iteration eval path (0.2176 vs 0.0000)
+- **Symptom (2026-08-15).** `slm-calendar-json-cse-38505239.out:95` reports
+  `[baseline] reference ast_arg_match=0.2176`; line 257 reports `Baseline F1 = 0.0000`, and lines
+  297-301 `F1=0.0000 failures=478/478`. Two numbers for the same model on the same eval set.
+- **Impact.** The orchestrator optimises against whichever zero it is shown. Compounded by the eval
+  set being **478 rows against a target of 800** (line 58), so calendar scores are not comparable to
+  the other tasks.
+- **Fix.** Reconcile the reference-endpoint path with the GGUF/llama.cpp scoring path; investigate the
+  eval-size shortfall separately.
+- **Status:** 🔴 open. Distinct from the known unguessable-year gold defect.
+
+## B263 — NER sample-prediction display never prints gold
+- **Symptom (2026-08-15).** `gold :` is blank on every NER row in both the baseline and fine-tuned
+  eval blocks (`slm-ner-bc5cdr-cse-38455148.out:258, 262, 266, 298, 302, 306`).
+- **Root cause.** The display reads a field NER rows do not carry — they hold `entities`, not
+  `label`/`answer`.
+- **Impact.** Cosmetic, but it removes the only human check of gold against prediction, and it is why
+  a legitimate `Baseline F1 = 0.0000` looked like instrumentation failure.
+- **Status:** 🔴 open.
+
+## B264 — orchestrator decision JSON truncated at 4,096 output tokens
+- **Symptom (2026-08-15).** 20 occurrences in `slm-dialogsum-samsum-l40s-38303490.out` (e.g. 316-317)
+  of `response was cut off after 4096 output tokens (stop_reason=max_tokens)`, each triggering a
+  ~$0.02 reask.
+- **Assessment.** The B240 error message is doing its job — it says plainly "too long, NOT malformed"
+  — but a reask is the wrong remedy for an output-budget failure. `_ITERATE_MAX_TOKENS` defaults to
+  20,000, so this path was running under a smaller effective cap.
+- **Fix.** Raise the budget for the truncating call site rather than retrying.
+- **Status:** 🔴 open.
+
+## B265 — `_threshold_raise_asked_iteration` undeclared in `AgentState` (caught pre-merge)
+- **Symptom (2026-08-15).** `test_every_key_iterate_persists_is_declared` failed as soon as the
+  stretch-goal guard was added.
+- **Root cause.** Exactly **B256** again, in a new key: keys not on the `AgentState` schema are
+  **dropped when LangGraph merges a node's returned state**, so the flag would have read back as
+  absent and the orchestrator would have been asked the stretch-goal question twice per turn — the
+  same mechanism that made iterate re-log its whole system prompt on all 69 turns.
+- **Fix.** Declared in `agent/state.py`.
+- **Status:** 🟢 fixed. Worth noting the guard test caught this before a run ever saw it.
+
+## B266 — `tests/nodes/test_iterate_prompt.py` had been silently failing since 2026-07-31
+- **Symptom (2026-08-15).** `test_iterate_prompt_receives_complete_curation_counts` failed with
+  `unsupported data_rebuild field(s): primary_strategy`.
+- **Root cause.** The fixture returned `{"primary_strategy": "resample_existing"}`, a field the
+  2026-07-31 curation redesign retired (the plan doc explicitly states "No `primary_strategy`"). The
+  decision failed validation, the reask failed identically, and the test's real assertion — that
+  curation counts reach the orchestrator prompt — had stopped running.
+- **Fix.** Fixture updated to `{"strategy": "resample"}`.
+- **Status:** 🟢 fixed.
+
+## B267 — the teacher was asked to judge the label's WORDING, not the task's class
+- **Symptom (2026-08-15).** RouterBench's teacher rejected 70% of generated rows (876 `REJECTED`
+  lines in one run, 1,378 in another) with verdicts like:
+  ```
+  REJECTED [local] 'What is 15 percent of 200?' — the utterance is a math question, not related
+                                                  to local services or location
+  REJECTED [cloud] 'The thick fog rolled in and obscured the view' — the utterance describes fog,
+                                                  not clouds
+  ```
+- **Root cause.** `verify_generated_labels` showed the teacher the label STRING and no task context
+  whatsoever: *"Does this utterance genuinely belong to the 'local' class?"*. `local` in this task
+  means "a small on-device model can answer this correctly", but with nothing to say so the teacher
+  read it as the English word and judged **topic** instead of **class**. The generator prompt had the
+  same flaw (`"an utterance that belongs to the 'local' class"` → weather/restaurant queries), which
+  is also why `cloud` looked like a plausible sibling class for the LLM to hallucinate (B259).
+- **Assessment.** The teacher was **not** being too strict. Given the prompt it was handed, those
+  verdicts are correct answers to the wrong question.
+- **Fix.** `data/label_space.py::label_definitions_for` supplies per-benchmark label definitions;
+  `_label_context_block` injects them into BOTH the generator and verifier prompts, and the verifier
+  is explicitly told not to reject on topic mismatch. Tasks whose label already describes the text
+  (CLINC150 intents) get no definitions and behave exactly as before.
+- **Residual.** This makes the teacher ask the right question; it does not make it good at that
+  question (0.5311 on RouterBench). The real remedy is not synthesizing for such tasks at all —
+  deferred, see the 08-15b note §2.1.
+- **Status:** 🟢 fixed (prompting); ⚪ underlying competence question open.
+
+## B268 — NER synthesis has never produced a single row, silently
+- **Symptom (2026-08-15).** Every NER synthesis call logs `kept 0`, including
+  `[synth] requested 5693 new-gold row(s) -> kept 0`. The BC5CDR curriculum ran ~7,100 rows below an
+  8,929-row target with no explanation.
+- **Root cause.** `_synthesize_new_gold` buckets anchors by `row.get("label")`. **NER rows have no
+  `label`** — their gold is in `entities` — so `by_label` is always empty and the function returns
+  `[]` at `data/curriculum.py:522` before making any API call.
+- **Latent second bug the first one was hiding.** Had the path run, it returns `{text, label}` and
+  never entity spans, so a produced row would either have no `entities` (dropped by the NER schema
+  filter) or carry the ANCHOR sentence's spans against NEW text — fabricated gold.
+- **Fix.** Kept as a deliberate no-op and made explicit: the log now states that NER rows cannot
+  anchor in-class generation, that this generator cannot produce spans, and that NER curricula are
+  gold-only by design with no teacher calls made. Span synthesis would need its own generator.
+- **Note.** BC5CDR converged at 0.8098 gold-only in 81 minutes on a 0.6B, so real data alone was
+  sufficient there. Also means `docs/DATA_CURATION_AND_CAPS.md`'s claim that NER synthesis works was
+  wrong; corrected.
+- **Status:** 🟢 fixed (now honest and intentional).
+
+## B269 — generation-family synthesis is entirely unverified
+- **Symptom (2026-08-15).** `new-correct synthesis: 450/450 kept`, every call, in every
+  generation-family run.
+- **Root cause.** `_synthesize_new_correct` only checks candidates `if verify_fn is not None`, and
+  `curate._verifier_for` returns `None` for every task type. The branch has never executed.
+- **Impact.** For these task types the teacher invents BOTH the input and the correct output, with no
+  check. On `calendar_json` the teacher scores **0.2176** and the curriculum target was 8,929 rows
+  against 3,250 real ones — ~5,700 machine-invented training targets from a model that gets the task
+  right 22% of the time. Unlike classification, the anchor-label-inheritance argument does not even
+  apply here, because the output is generated rather than copied.
+- **Status:** 🔴 open — highest-risk remaining synthesis defect. Should be covered by whatever
+  competence gate is chosen (08-15b note §2.1).
+
+## B270 — `Baseline → Best FT` could not separate fine-tuning from the search loop
+- **Symptom (2026-08-15).** The Model Improvement Report showed only endpoints, so BC5CDR's
+  `+0.8098` read as one uniform gain when it was almost entirely iteration 1 (0.0000 → 0.7701, with
+  four further iterations adding 0.0397). The tier-3 RouterBench row is the opposite case: its first
+  fine-tune (0.2675) was WORSE than its baseline (0.5443) and the search recovered +0.4909.
+- **Why it could not be derived after the fact.** When the zero-shot baseline beats the first
+  fine-tune it becomes iteration 1's recorded score (B161's "baseline as candidate"), so
+  `scores[0]` and `baseline_f1` are indistinguishable downstream — exactly the tier-3 case above.
+- **Fix.** `evaluate_node` records `first_finetuned_f1` at the moment of measurement, before the
+  baseline is added to the candidate pool; threaded through `escalation_history`,
+  `build_run_progression`, and the report, which gains `First FT`, `Δ base` and `Δ search` columns.
+- **Status:** 🟢 fixed.
+
+## B271 — classification rows that are themselves instructions, plus an extractor that invented labels
+- **Symptom (2026-08-16).** RouterBench zero-shot baselines came out **0.4615 / 0.1685 / 0.1701 /
+  0.5443** across the 0.6B / 1.7B / 2B / 4B tiers — an ordering with no relation to model size — on
+  **472 / 511 / 333 / 157** extraction failures out of 800.
+- **Root cause, part 1 — prompt injection by the payload.** `CLASSIFY_PROMPT` put the row text LAST
+  and unfenced. RouterBench prompts are drawn from 86 upstream benchmarks and many carry their own
+  output contract (`"Print only a single choice from A or B or C or D without explanation. Answer:"`,
+  or the Chinese `请仅回复楚辞名` — "reply only with the name of the Chu Ci"). The most recent
+  instruction the model read was therefore the row's own, and it obeyed that: raw outputs were `A`,
+  `B`, `2021`, `area`, `楚辞`, `ethical` — correct answers to the embedded question, every one of them
+  `__EXTRACTION_FAILED__`. **Not a multilingual bug**; the Chinese rows only made it obvious.
+- **Root cause, part 2 (the worse half) — the extractor assigned labels by accident.** The final pass
+  was a bare substring scan of the whole output. `local` and `route` are ordinary English words: they
+  occur inside "locally", "router", "routed", and `en route` matches `route` on a **word boundary**.
+  So a model that ignored the task and wrote a paragraph was scored on whether its prose happened to
+  contain a label substring — and longer answers are MORE likely to. Tier 2 parsed *more* outputs
+  than tier 0 (467 vs 328) and scored far worse, which is what rules out extraction rate as the
+  explanation and points at label quality.
+- **Consequence.** The zero-shot baselines were never measuring capability, so no tier comparison
+  drawn from them is valid. Tier 3's 0.5443 is the only trustworthy one, because Qwen3-4B-**Instruct**
+  actually follows the outer instruction (157 failures).
+- **Fix.** (a) The payload is fenced in `<<<MESSAGE … MESSAGE>>>`, explicitly declared to be DATA and
+  not instructions, and the output contract is RESTATED after it so the last thing read is ours.
+  (b) Extraction enforces that contract: the answer IS a label, or a label word appears in the
+  answer's TAIL, or a label appears in a SHORT answer — otherwise it is an honest failure. Qwen's
+  `<think></think>` wrapper is stripped before measuring length. Both sides of train/serve move
+  together because `build_classify_prompt` is shared with the trainer.
+- **Expected effect.** Chatty base models score LOWER at baseline, which is correct — they did not do
+  the task. Fine-tuned models are unaffected; they emit the bare label.
+- **Status:** 🟢 fixed. The stronger fix — constrained label decoding, which makes extraction failure
+  structurally impossible — remains open.
+
+## B272 — the tier ladder is confounded with data contamination
+- **Symptom (2026-08-16).** Tier 2 (Qwen3.5-2B) reached a LOWER best (0.6429/0.6561) than both tier 1
+  (0.6809/0.6960) and tier 0 (0.6486/0.6551), despite being the larger model and getting 16–20
+  iterations.
+- **Root cause.** Mined foreign rows accumulate PERMANENTLY in the train pool (B259), so curriculum
+  quality degrades monotonically as the run progresses — and the tier ladder also advances
+  monotonically. The two are inseparable:
+
+  | dataset | mined foreign rows | tier that trained on it |
+  |---|---|---|
+  | `v1` | **0** | tier 0 |
+  | `v5` | 958 | tier 0/1 |
+  | `v10` | 1,155 | tier 2 |
+  | `v14` | 1,155 | tier 3 |
+
+  Tier 0 trained on the cleanest curriculum the run ever had; tier 2 on the most contaminated, and
+  tier-2 entry is exactly where QC removed 1,134 out-of-vocabulary rows and landed 3,404 rows against
+  a 6,181 target.
+- **Ruled out.** Not undertraining (16–20 iterations, escalated on stagnation). Not a multimodal
+  problem — Qwen3.5-2B trained through the standard Unsloth 16-bit LoRA path with no `FastVisionModel`
+  branch and no vision warnings.
+- **Consequence.** **No claim of the form "model X is worse than model Y on this task" is supported by
+  these runs.** Any future tier comparison needs a curriculum held fixed across tiers.
+- **Status:** ⚪ design gap. B259/B260 remove the cause going forward; the affected runs stay invalid.
+
+## B273 — LlamaPIE decision points are any `|MARKER >`, not only `|SILENCE >`
+- **Symptom (2026-08-16, caught pre-launch).** The new `proactive_listening` loader found **zero
+  positives in all 7,065 `synthetic0` dialogues**, and the training positive rate came out 4.2%
+  against a 33.4% eval rate.
+- **Root cause, part 1.** `synthetic0` annotates speaker emotion and attaches whispers to `|ANGRY >`
+  / `|NEUTRAL >` markers rather than to `|SILENCE >`. The authors' own dataset code masks on the ` >`
+  token (`Active_dataset.py`: `symbol_token2 = tokenizer(" >")[...]`), so *any* `|MARKER >` is a
+  decision point.
+- **Root cause, part 2.** The bundle is grouped by sub-corpus, so truncating an unshuffled expansion
+  to `max_train` drew entirely from whichever corpus came first.
+- **Fix.** Regex `\|[A-Z_]+ >` for decision points; dialogues shuffled before expansion; `synthetic0`
+  excluded by default (it carries emotion markers the held-out split has none of, which would be a
+  train/serve mismatch — `SLM_PROACTIVE_SOURCES` to opt in). A test asserts train and eval positive
+  rates match within 5 points.
+- **Status:** 🟢 fixed before the task ever ran.
+
+## B274 — WITHDRAWN: `calendar_json`'s "two baseline scores" are two different models
+- **Claimed (2026-08-15, B262).** That `calendar_json` reported `ast_arg_match=0.2176` and
+  `Baseline F1 = 0.0000` for the same model on the same eval set.
+- **Actually.** Two different models, exactly as designed. `[baseline] reference …` comes from
+  `eval/endpoint_eval.py::measure_endpoint_baseline` and scores the **Qwen3.6-35B teacher** to
+  calibrate the accuracy goal. `Baseline F1 = …` comes from `agent/nodes/evaluate.py` and scores the
+  **Qwen3-0.6B student** about to be fine-tuned. The same pattern appears in RouterBench
+  (`reference macro_f1=0.5341` teacher vs `Baseline F1 = 0.4615` student).
+- **Status:** ⚪ not a bug. B262 withdrawn. The separate 478-vs-800 eval-size shortfall is still open.
+
+## B275 — empty difficulty buckets are weighted and reported as failures
+- **Symptom (2026-08-16).** The BC5CDR run reported `medium=None` eight times while still handing the
+  orchestrator `difficulty_buckets.medium = 0.25` in rebuild plans.
+- **Root cause.** Buckets come from a two-model capability gradient (`label_difficulty`): `easy` =
+  both the smallest and largest model pass, `medium` = only the largest passes, `hard` = neither. On a
+  **format-bound** task neither model can produce the output contract zero-shot, so nothing lands in
+  `medium` and almost everything lands in `hard`. The 182 `easy` rows are essentially the rows whose
+  gold entity list is EMPTY, where emitting `[]` is correct — consistent with 705/1,785 (39.5%) of
+  training rows having empty entities, and with the fine-tuned model scoring easy=0.984 / hard=0.605.
+  So NER's `easy` bucket measures **abstention, not extraction**.
+- **Impact.** The orchestrator allocated a quarter of its curriculum budget against an empty set, and
+  `medium=n/a` reads like a measurement failure rather than a structural fact.
+- **Fix (not implemented).** Drop empty buckets from the plan schema and redistribute the weight;
+  report `n=0` explicitly; fall back to the length-tercile heuristic when a bucket is degenerate,
+  since a zero-shot gradient carries no signal precisely on format-bound tasks.
+- **Status:** 🔴 open.

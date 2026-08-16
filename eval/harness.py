@@ -40,9 +40,9 @@ def eval_output_token_reserve(
             f"{setting} must be a positive integer, got {raw_value!r}."
         )
     if max_seq_length is None:
-        from training.slm_helpers import _inference_max_seq_length
+        from training.slm_helpers import task_max_seq_length
 
-        max_seq_length = _inference_max_seq_length()
+        max_seq_length = task_max_seq_length(task_type)
     if reserve >= max_seq_length:
         raise ValueError(
             f"task_type={task_type} reserves {reserve} output tokens, leaving "
@@ -121,6 +121,35 @@ def _attach_reasoning_to_failures(result, eval_set, raw_outputs, predictions) ->
                 failure["reasoning"] = reasoning
 
 
+def _gold_for_display(row: dict):
+    """The gold answer for a row, whatever field this task type keeps it in.
+
+    NER rows carry their gold in `entities` and have no `answer`/`label` at all, so reading only
+    those two printed a BLANK gold on every NER sample — in the baseline block and the fine-tuned
+    block alike. That removed the one human check of gold against prediction from exactly the task
+    where it matters most: a legitimate `Baseline F1 = 0.0000` (the base model emitting ```json []```
+    on every row) was indistinguishable from a broken harness, because there was nothing to compare
+    the prediction to. `diff` rows keep gold in `answer`, which already worked, and `src`/`tgt` are
+    shown as a fallback for a row that somehow lacks the precomputed diff.
+    """
+    entities = row.get("entities")
+    if entities is not None:
+        # Rendered the way the NER scorer compares them — exact (surface, type) pairs — so the
+        # display matches what is actually being matched, not a prettier paraphrase of it.
+        if isinstance(entities, list):
+            return "[" + ", ".join(
+                f"{e.get('text')!r}:{e.get('type')}" if isinstance(e, dict) else repr(e)
+                for e in entities
+            ) + "]"
+        return entities
+    gold = row.get("answer") or row.get("label")
+    if gold:
+        return gold
+    if row.get("tgt") is not None:
+        return f"src={row.get('src')!r} → tgt={row.get('tgt')!r}"
+    return gold
+
+
 def _log_prediction_samples(eval_set, raw_outputs, predictions) -> None:
     """Print a few raw model answers next to the extracted prediction and the gold label.
 
@@ -150,7 +179,7 @@ def _log_prediction_samples(eval_set, raw_outputs, predictions) -> None:
         + "):"
     )
     for i in chosen:
-        gold = rows[i].get("answer") or rows[i].get("label")
+        gold = _gold_for_display(rows[i])
         flag = "  <-- EXTRACTION FAILED" if str(predictions[i]) == "__EXTRACTION_FAILED__" else ""
         print(f"        input : {_clip(rows[i].get('text'))}")
         print(f"        gold  : {_clip(gold, 60)}")
@@ -189,6 +218,68 @@ def run_eval(
     return _run_eval_local(
         eval_set, weights_ref, base_model, task_type, quant=quant, gguf_path=gguf_path,
     )
+
+
+def _judge_overlap_chunk() -> int:
+    """Rows per generate-then-judge chunk. 0 disables the overlap entirely."""
+    try:
+        return max(0, int(os.environ.get("SLM_EVAL_JUDGE_OVERLAP_CHUNK", "100")))
+    except (TypeError, ValueError):
+        return 100
+
+
+def _infer_overlapping_judge(prompts, eval_set, infer) -> list[str]:
+    """Generate in chunks, judging each finished chunk while the next one generates.
+
+    Generation runs on the pipeline GPU and the judge on the synthesis GPU, but the two were
+    strictly sequential: all 800 predictions were produced, and only then were all 800 judged.
+    Measured overlap between the two devices across run 38303490 was 0.0%, with the judge alone
+    accounting for 22% of wall time (B258).
+
+    The judge is not called differently here — a background thread simply asks
+    ``LocalJudgeClient`` to score the chunk, which populates its process-wide and on-disk caches.
+    The scorer's own ``score`` call afterwards is unchanged and finds those rows already cached,
+    so ordering, scores and failure records are bit-identical to the sequential path. That is
+    also why warm failures are swallowed: anything genuinely broken resurfaces in ``score``,
+    which is the authority and raises there.
+    """
+    from concurrent.futures import ThreadPoolExecutor
+
+    from eval.judge_client import LocalJudgeClient
+    from eval.scorers.generation import split_reasoning
+
+    chunk_size = _judge_overlap_chunk()
+    rows = getattr(eval_set, "all", None) or []
+    client = LocalJudgeClient.from_config()
+
+    def warm(start: int, raw_chunk: list[str]) -> None:
+        # Mirrors eval.scorers.generation.score exactly; a divergence here would miss the cache
+        # rather than corrupt anything, but it would silently undo the speedup.
+        triples = [
+            (
+                row.get("text", ""),
+                row.get("answer", row.get("label", "")),
+                split_reasoning(raw)[1],
+            )
+            for row, raw in zip(rows[start:start + len(raw_chunk)], raw_chunk)
+        ]
+        try:
+            client.score_many(triples)
+        except Exception:  # noqa: BLE001 — best-effort warm; score() is the authority
+            pass
+
+    raw_outputs: list[str] = []
+    # One worker: the point is to overlap judging with the NEXT generation chunk, not to run
+    # several judge batches at once against a single vLLM server.
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        pending = []
+        for start in range(0, len(prompts), chunk_size):
+            chunk_raw = infer(prompts[start:start + chunk_size])
+            raw_outputs.extend(chunk_raw)
+            pending.append(pool.submit(warm, start, chunk_raw))
+        for future in pending:
+            future.result()
+    return raw_outputs
 
 
 def _run_eval_local(
@@ -237,22 +328,27 @@ def _run_eval_local(
     max_new_tokens = eval_output_token_reserve(task_type)
     prompts = scorer.build_prompts(eval_set)
 
-    if gguf_path is not None:
-        raw_outputs = infer_batch_gguf(
-            prompts,
-            gguf_path,
-            max_new_tokens=max_new_tokens,
-            base_model=base_model,
-        )
-    else:
-        raw_outputs = infer_batch(
-            prompts,
+    def _infer(chunk: list[str]) -> list[str]:
+        if gguf_path is not None:
+            return infer_batch_gguf(
+                chunk,
+                gguf_path,
+                max_new_tokens=max_new_tokens,
+                base_model=base_model,
+            )
+        return infer_batch(
+            chunk,
             weights_ref,
             base_model,
             max_workers=20,
             max_new_tokens=max_new_tokens,
             task_type=task_type,
         )
+
+    if task_type == "generation" and _judge_overlap_chunk() > 0:
+        raw_outputs = _infer_overlapping_judge(prompts, eval_set, _infer)
+    else:
+        raw_outputs = _infer(prompts)
 
     predictions = scorer.extract_predictions(raw_outputs, eval_set)
     _log_prediction_samples(eval_set, raw_outputs, predictions)

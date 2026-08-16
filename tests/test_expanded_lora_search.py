@@ -241,7 +241,7 @@ def test_iterate_rejects_malformed_threshold_adjustment(adjustment, message):
             "intervention": "data_rebuild",
             "hypothesis": "validate threshold payload",
             "data_rebuild": {
-                "strategy": "resample",
+                "strategy": "synthesize",
             },
             "threshold_adjustment": adjustment,
         })
@@ -252,7 +252,7 @@ def test_iterate_accepts_null_or_reasoned_finite_threshold_adjustment():
         "intervention": "data_rebuild",
         "hypothesis": "no threshold adjustment needed",
         "data_rebuild": {
-            "strategy": "resample",
+            "strategy": "synthesize",
         },
         "threshold_adjustment": {"new_threshold": None},
     })["threshold_adjustment"]["new_threshold"] is None
@@ -260,7 +260,7 @@ def test_iterate_accepts_null_or_reasoned_finite_threshold_adjustment():
         "intervention": "data_rebuild",
         "hypothesis": "capacity bounds the remaining score",
         "data_rebuild": {
-            "strategy": "resample",
+            "strategy": "synthesize",
         },
         "threshold_adjustment": {
             "new_threshold": 0.85,

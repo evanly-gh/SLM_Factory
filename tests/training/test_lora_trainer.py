@@ -426,9 +426,13 @@ def test_qwen35_text_only_training_uses_vision_loader_and_freezes_vision(tmp_pat
 
     assert checkpoint == str(output_dir / "final_checkpoint")
     language_loader.from_pretrained.assert_not_called()
+    # Derived, not hardcoded: the context ceiling is per task type, and training must request
+    # exactly what eval will use or a row could fit one side and be truncated on the other.
+    from training.slm_helpers import task_max_seq_length
+
     vision_loader.from_pretrained.assert_called_once_with(
         model_name="Qwen/Qwen3.5-0.8B",
-        max_seq_length=4096,
+        max_seq_length=task_max_seq_length("classification"),
         load_in_4bit=True,
         trust_remote_code=True,
     )

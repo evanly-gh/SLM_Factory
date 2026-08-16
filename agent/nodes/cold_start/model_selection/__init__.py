@@ -22,17 +22,24 @@ Available strategies (set MODEL_SELECTION_STRATEGY in config.py or env):
     "orchestrator_choice" Let the orchestrator LLM pick the starting model
                           based on task context and benchmark affinities.
                           No probing; single API call.
+
+    "single_model"        NAIVE BASELINE / ablation control. Orchestrator picks one
+                          model and the run stays on it: no escalation on failure,
+                          no downward regression on success. Everything else in the
+                          loop still runs, so this isolates what the ladder buys.
 """
 from agent.nodes.cold_start.model_selection.smallest_first import smallest_first_node
 from agent.nodes.cold_start.model_selection.largest_first import largest_first_node
 from agent.nodes.cold_start.model_selection.interpolation import interpolation_node
 from agent.nodes.cold_start.model_selection.orchestrator_choice import orchestrator_choice_node
+from agent.nodes.cold_start.model_selection.single_model import single_model_node
 
 STRATEGIES = {
     "smallest_first": smallest_first_node,
     "largest_first": largest_first_node,
     "interpolation": interpolation_node,
     "orchestrator_choice": orchestrator_choice_node,
+    "single_model": single_model_node,
 }
 
 

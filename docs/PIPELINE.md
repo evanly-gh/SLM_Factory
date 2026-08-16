@@ -142,10 +142,11 @@ consulted by every router — so termination is checked on both sides of every e
 | `MAX_EVALS_BEFORE_ESCALATION` | 30 | `agent/nodes/iterate.py` | Unconditional ceiling: escalate after this many evals on one model without meeting the goal |
 | `SLM_SURGICAL_SYNTH_SHARE` | 0.20 | `agent/nodes/curate.py` | Share of a `synthesize` budget spent on confused pairs rather than balanced fill |
 | `SLM_SURGICAL_MAX_PAIRS` | 5 | `agent/nodes/curate.py` | Most confusion pairs targeted per rebuild |
-| curriculum target | per-tier | `agent/data_sizing.py` | `clamp(5000 × (0.5 + novelty) × size_factor, 5000, 25000)`; recomputed on every tier change |
-| `CURRICULUM_SIZE_FLOOR` | 3000 | `config/config.py` | Per-task floor; curricula are synth-filled up to this |
+| curriculum target | per-tier | `agent/data_sizing.py` | `clamp(5000 × (0.5 + novelty) × size_factor, 5000, 25000)`; recomputed on every tier change, then **ratcheted** so it never falls below the previous target |
+| `CURRICULUM_SIZE_FLOOR` | 5000 | `config/config.py` | Per-task floor; curricula are synth-filled up to this |
 | `EVAL_SET_SIZE` | 800 | `config/config.py` | Eval floor; below n≈100 F1 CIs under-cover |
-| `DATA_SIZE_CEILING` | 10000 | `config/config.py` | Hard cap on both targets (also the `target_rows` upper clamp) |
+| `DATA_SIZE_CEILING` | 25000 | `config/config.py` | Hard cap on both targets (also the `target_rows` upper clamp) |
+| `SLM_EVAL_JUDGE_OVERLAP_CHUNK` | 100 | `eval/harness.py` | Rows per generate-then-judge chunk so judging overlaps the next generation batch; `0` disables |
 | `DEFAULT_STOP_THRESHOLD` | 0.96 | `config/config.py` | Used only if the planner supplies none |
 | `MAX_PAID_ACQUIRE_ROUNDS_PER_RUN` | 9 | `agent/data_rebuild.py` | Exa spend ceiling for the whole run |
 | `MAX_PAID_ACQUIRE_ROUNDS_PER_PLAN` | 3 | `agent/data_rebuild.py` | Per data-rebuild plan |
@@ -527,6 +528,14 @@ answer.
 
 **Step 3 — `_route_score_at_threshold`**, in order:
 
+0. **Bank the convergence, then ask about a stretch goal** — `_maybe_raise_threshold`.
+   `_bank_convergence` records the cleared goal into `convergence_banked` unconditionally, then
+   (unless `SLM_THRESHOLD_RAISE=0` or `SLM_CHEAP=1`) a dedicated `stage="threshold_raise"` call
+   asks the orchestrator whether the goal should be **raised**. A raise returns `False`, so the
+   caller treats the score as below-threshold again and the run keeps training against the new
+   goal. This runs *before* steps 1–4 because those all treat the goal as settled — probing for a
+   smaller model that clears a goal we are about to abandon wastes a tier. See
+   "Stretch goals" below.
 1. `_largest_first_phase == "probe"` → `check_probe_result` → `curate` if it switched to the
    smallest model.
 2. `hw_gating_enabled` and the selected variant fails `check_hardware_constraints` → **not
@@ -604,11 +613,96 @@ DAG has any nodes.
 `<0.80` → `data_rebuild` / `acquire`; `0.80–0.95` → `hyperparameter`;
 `≥0.95` → `data_rebuild` / `synthesize`.
 
-**Threshold adjustment.** `new_threshold` is clamped to `max(value, initial_stop_threshold)` and
-applied only if it *lowers* the current threshold. The LLM is told the floor is system-enforced.
-Legitimate reasons are genuine capacity limits (world knowledge beyond parametric memory,
-reasoning chains too long, adversarial OOD) — explicitly not "the task is hard but learnable."
-When `stop_threshold` already equals the floor, this path is inert.
+**Threshold adjustment (lowering).** `new_threshold` is clamped to
+`max(value, initial_stop_threshold)` and applied only if it *lowers* the current threshold. The LLM
+is told the floor is system-enforced. Legitimate reasons are genuine capacity limits (world knowledge
+beyond parametric memory, reasoning chains too long, adversarial OOD) — explicitly not "the task is
+hard but learnable." When `stop_threshold` already equals the floor, this path is inert. This is the
+below-threshold path and is separate from stretch goals, which only fire on a *met* goal.
+
+### The curated benchmark suite, organised by what fine-tuning is expected to do
+
+`NAMED_BENCHMARK_TASK_TYPES` in `agent/nodes/cold_start/eval_setup.py` is the single source of truth,
+keyed by `SLM_BENCHMARK_TASK`. `coedit` and `medqa` were removed 2026-08-15 (neither ever produced a
+run); `proactive_listening` was added.
+
+| Category — what FT should buy | Task | task_type | Metric |
+|---|---|---|---|
+| **in-distribution** — base model can already do it; FT buys format discipline. Good baseline, small delta. | `dialogsum_samsum` | generation | `judge_mean_0_1` |
+| **format-bound** — knows the content, cannot produce the contract. Near-zero baseline, large delta. | `xlam_bfcl` | function_call | `ast_arg_match` |
+| | `calendar_json` | function_call | `ast_arg_match` |
+| | `ner_bc5cdr` | NER | `span_f1` |
+| **out-of-distribution** — label is not a property of the input's surface form. Low/noisy baseline, delta bounded by label noise. | `clinc150` | classification | `macro_f1` (151-way) |
+| | `routerbench` | classification | minority-class F1 |
+| | `proactive_listening` | classification | minority-class F1 |
+
+Evidence for the categories is in `Evan's Notes/2026-08-16-…-synthetic-data-verdict.md` §9. Two
+caveats that matter when reading results:
+
+- **`clinc150` behaves like an in-distribution control, not an OOD task** — its label *is* the
+  utterance's meaning, so the teacher scores 0.8919 and fine-tuning adds +0.003. The predictive
+  variable is not in/out of distribution but **whether the label is inferable from surface form**.
+- **`dialogsum_samsum` showed +0.0000 over 15 iterations at tier 3** (baseline 0.7157 = best FT). For
+  a genuinely in-distribution task the honest output of the loop may be "use the base model".
+
+### The label vocabulary is pinned at eval_setup and closed thereafter
+
+`_pin_label_space` writes `state["task_label_space"]` from the frozen eval set immediately after it is
+built — `{"labels": [...], "definitions": {...}, "benchmark": …, "source": "frozen_eval_set"}`. The eval
+set is the authority because it is what the score is computed against, so a class absent from it cannot
+be scored. Every later stage may only DROP rows outside the vocabulary, never extend it, and **no LLM
+may introduce a label**. Enforcement points and the strict-vs-inferred rule are documented in
+`DATA_CURATION_AND_CAPS.md`; the history is in `data/label_space.py` (B259).
+
+`definitions` additionally tells the synthesis and verification prompts what each class MEANS, so the
+teacher judges the task rather than the label's wording (B267).
+
+### Stretch goals — raising the accuracy target
+
+The goal is the Qwen-3.6 teacher's zero-shot score floored at 0.80, so when the teacher scores below
+the floor the goal reflects what we refused to go below rather than what the task permits. BC5CDR
+cleared a floored 0.8000 in five iterations and 81 minutes and stopped with hours of budget left.
+
+`_maybe_raise_threshold` (`agent/nodes/iterate.py`) runs first in `_route_score_at_threshold`:
+
+1. **Bank** — `convergence_banked = {threshold, score, iteration, selector}`, keeping the highest
+   goal ever cleared. Unconditional, including when raising is disabled or declined.
+2. **Ask** — a small dedicated call, not a field on the intervention decision (that prompt is only
+   built for below-threshold scores). The orchestrator is shown the current goal, its **provenance**
+   (whether the floor or the teacher set it), the score and margin, iterations used, the last 12
+   scores, turns used/remaining, the ceiling, the minimum step, and previous raises. It returns
+   `{"raise_goal": true, "new_threshold": …, "reason": …}` or `{"raise_goal": false, "reason": …}`.
+3. **Ratchet** — the proposal must exceed `max_stop_threshold` (the run's high-water mark) by at
+   least `_THRESHOLD_RAISE_MIN_STEP = 0.005`, and is clamped to `THRESHOLD_CEILING = 0.99`. Clamping
+   against the high-water mark rather than the current goal is what prevents a lower-then-raise cycle
+   from reusing the same band indefinitely.
+4. **Continue** — returns `False`; the run trains on against the new goal.
+
+**Termination.** Raises are strictly increasing with a fixed minimum step under a hard ceiling, so a
+run performs at most `(0.99 − initial) / 0.005` of them; each also requires clearing the previous
+goal, and at most one is asked per iteration (`_threshold_raise_asked_iteration`). Every other budget
+(turn, wall clock, graph steps, stagnation, eval cap) is unchanged.
+
+**A missed stretch goal is still a success.** `run.py` treats a banked convergence as convergence, so
+raising can never turn an already-successful run into a reported failure. When the stretch goal is
+missed it prints `⚠ CONVERGED AT THE ORIGINAL GOAL, stretch goal missed: …`.
+
+**Controls.** `SLM_THRESHOLD_RAISE=0` disables; `SLM_CHEAP=1` skips. Default **off under pytest**
+(`conftest.py`), because every convergence assertion would otherwise make a live call.
+`scores.json` carries `convergence_banked` and `threshold_raises`.
+
+### Goal provenance in the run summary
+
+A floored goal and a teacher-set goal print the same number, so BC5CDR's `threshold 0.8000` hid a
+teacher score of 0.0999. `threshold_calibration` now records `floored: bool`, and
+`agent.threshold.describe_threshold_provenance()` renders it. The summary always prints:
+
+```
+  goal source: floor 0.80 OVERRODE the Qwen-3.6 teacher, which scored only 0.0999 span_f1 …
+  teacher    : Qwen-3.6 zero-shot 0.0999 span_f1  (no fine-tuning; …)
+```
+
+`scores.json` carries `initial_stop_threshold` and the full `threshold_calibration` block.
 
 **`llm_iterate_decision` is always overwritten**, including with `None` on failure. A stale
 non-`None` decision would let `train._build_config` reuse the previous iteration's
@@ -825,8 +919,15 @@ same `H` **is** allowed after a data rebuild, because the dataset identity chang
 
 `training/lora_trainer.py`:
 
-- **Max sequence length 4096** (`SLM_MAX_SEQ_LENGTH`, clamped to [128, 32768]). Task-specific
-  output reserves: 50 classification, 512 NER/math/generation, 1024 APPS.
+- **Max sequence length is per task type**, from `training.slm_helpers.task_max_seq_length`:
+  1024 classification, 2048 generation/math/NER/function_call/diff, 4096 code_generation (APPS
+  prompts plus a 1024-token completion need the full window), 4096 for anything unrecognised.
+  `SLM_MAX_SEQ_LENGTH` overrides every task; the training side clamps to [128, 32768]. Training
+  and eval read the same table so a row cannot fit one side and be truncated on the other.
+  These are ceilings with headroom, not tight fits — measured rows are p50≈228 / p99≈601 tokens.
+  Task-specific output reserves: 50 classification, 512 NER/math/generation, 1024 APPS.
+- **Eval batch size** 32 short-output / 16 long-output (`SLM_EVAL_BATCH_SIZE`). A CUDA OOM
+  halves the active batch and retries in place.
 - **Nothing truncates.** Training (`_validate_training_sequence_lengths`), HF inference, and
   GGUF inference all tokenize with `truncation=False` and **raise** on an over-length row,
   rather than silently cutting a prompt or gold completion. `_log_sequence_length_report`
@@ -1066,10 +1167,10 @@ recommendations, not behavior.** No code was changed to produce this list.
 6. **Optimizer schedule intervention** — warmup and scheduler are fixed. (Weight decay *is* now
    a bounded intervention; effective batch deliberately is not — see
    [§8](#8-hyperparameter-contract).)
-7. **Context-length intervention** — sequence length is a fixed 4096 for every task. Nothing
-   truncates and the distribution is now reported, so an over-length task fails loudly rather
-   than silently; but the orchestrator still cannot *choose* a longer context, so a genuinely
-   long-context task has to be resized by hand.
+7. **Context-length intervention** — sequence length is a fixed per-task ceiling (see §11);
+   nothing truncates and the distribution is reported, so an over-length task fails loudly rather
+   than silently. The orchestrator still cannot *choose* a longer context, so a genuinely
+   long-context task has to be resized by hand with `SLM_MAX_SEQ_LENGTH`.
 8. **Cross-run source cache** — reuse novelty fingerprints across independent runs without
    weakening source/split restrictions.
 9. **Additional verified-positive strategies** — math/code generators, gated on exact-answer or

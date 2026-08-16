@@ -46,11 +46,17 @@ def _tools_str(example: dict) -> str:
         return str(tools)
 
 
+def build_function_call_prompt(example: dict) -> str:
+    """The single-row prompt builder, shared by the eval harness and the trainer.
+
+    Exists so `training/lora_trainer.py::_training_turn` can import it rather than reproduce the
+    format, which is the only thing that makes train/serve drift impossible (B250).
+    """
+    return FUNCTION_CALL_PROMPT.format(tools=_tools_str(example), text=example.get("text", ""))
+
+
 def build_prompts(eval_set: EvalSet) -> list[str]:
-    return [
-        FUNCTION_CALL_PROMPT.format(tools=_tools_str(ex), text=ex.get("text", ""))
-        for ex in eval_set.all
-    ]
+    return [build_function_call_prompt(ex) for ex in eval_set.all]
 
 
 def _parse_calls(raw: object) -> list[dict] | None:
@@ -155,6 +161,67 @@ def _call_correct(gold_calls: list[dict], pred_calls: list[dict], allowed: set[s
     return True
 
 
+def _accept_args_match(accepted_args: dict, pred_args: dict) -> bool:
+    """BFCL argument semantics: each gold arg maps to a LIST of acceptable values, and an
+    argument whose acceptable list contains "" may legitimately be omitted. An EMPTY acceptable
+    list means the argument has no acceptable value at all, i.e. it must be omitted — BFCL uses
+    this for intent-classifier-shaped functions where only one of many slots is filled.
+
+    Rejects any predicted argument the gold does not know about, so a model cannot pad its way
+    to a match.
+    """
+    if not set(pred_args).issubset(set(accepted_args)):
+        return False
+    for arg, accepted in accepted_args.items():
+        values = accepted if isinstance(accepted, list) else [accepted]
+        omittable = not values or any(v == "" for v in values)
+        if arg not in pred_args:
+            if not omittable:
+                return False
+            continue
+        predicted = pred_args[arg]
+        if any(
+            predicted == candidate
+            or (
+                not isinstance(candidate, (dict, list))
+                and not isinstance(predicted, (dict, list))
+                and _coerce(predicted) == _coerce(candidate)
+            )
+            for candidate in values
+        ):
+            continue
+        return False
+    return True
+
+
+def _accept_correct(accept_calls: list, pred_calls: list[dict], allowed: set[str] | None) -> bool:
+    """Match a prediction against BFCL's ``ground_truth`` form, ``[{name: {arg: [values]}}]``.
+
+    Matching is order-INSENSITIVE (greedy one-to-one): BFCL's `parallel` categories ask for
+    several calls whose order the benchmark does not constrain, and penalising a correct set of
+    calls for their sequence would understate the model.
+    """
+    if not isinstance(accept_calls, list) or len(accept_calls) != len(pred_calls):
+        return False
+    unmatched = list(range(len(accept_calls)))
+    for pred in pred_calls:
+        if allowed is not None and pred["name"] not in allowed:
+            return False
+        for slot in unmatched:
+            entry = accept_calls[slot]
+            if not isinstance(entry, dict) or len(entry) != 1:
+                return False
+            (name, arg_map), = entry.items()
+            if name != pred["name"] or not isinstance(arg_map, dict):
+                continue
+            if _accept_args_match(arg_map, pred.get("arguments", {})):
+                unmatched.remove(slot)
+                break
+        else:
+            return False
+    return not unmatched
+
+
 def score(eval_set: EvalSet, predictions: list[list[dict] | None]) -> dict:
     content_scores: list[float] = []
     format_scores: list[float] = []
@@ -163,7 +230,15 @@ def score(eval_set: EvalSet, predictions: list[list[dict] | None]) -> dict:
         gold_calls = _parse_calls(ex.get("answer", "")) or []
         format_valid = 1.0 if pred is not None else 0.0
         allowed = _allowed_names(ex)
-        content = 1.0 if (pred is not None and _call_correct(gold_calls, pred, allowed)) else 0.0
+        # BFCL rows carry the full acceptable-value map; xLAM rows do not and fall back to
+        # plain equality against the single canonical gold.
+        accept = ex.get("_accept")
+        if pred is None:
+            content = 0.0
+        elif isinstance(accept, list) and accept:
+            content = 1.0 if _accept_correct(accept, pred, allowed) else 0.0
+        else:
+            content = 1.0 if _call_correct(gold_calls, pred, allowed) else 0.0
         format_scores.append(format_valid)
         content_scores.append(content)
         if content < 1.0:

@@ -63,3 +63,38 @@ def threshold_from_endpoint_baseline(
         f"capped at {THRESHOLD_CEILING}"
     )
     return round(value, 4), reason
+
+
+def describe_threshold_provenance(calibration: dict | None) -> str:
+    """One-line provenance for the accuracy goal, for the run summary.
+
+    The goal is the Qwen-3.6 teacher's own zero-shot score on E, floored at 0.8. When the teacher
+    scores BELOW the floor the floor wins, and the resulting number looks identical to a goal the
+    teacher actually set — BC5CDR converged at "threshold 0.8000" while the teacher had in fact
+    scored 0.0999, and nothing in the summary said so. Reporting which input won, and the measured
+    teacher score either way, is what makes a converged run interpretable: clearing a floor the
+    teacher could not reach is a very different result from matching a teacher that scored 0.87.
+    """
+    if not isinstance(calibration, dict) or not calibration:
+        return "provenance unrecorded"
+    source = str(calibration.get("source") or "unknown")
+    if source == "pending_qwen_baseline":
+        return "pending Qwen-3.6 teacher measurement (eval set not yet built)"
+    if source == "manual_override":
+        return "set explicitly via SLM_STOP_THRESHOLD"
+    measured = calibration.get("measured_qwen")
+    if measured is None:
+        return f"source={source}"
+    metric = str(calibration.get("measured_metric") or "score")
+    floor = calibration.get("floor")
+    if calibration.get("floored"):
+        return (
+            f"floor {float(floor):.2f} OVERRODE the Qwen-3.6 teacher, which scored only "
+            f"{float(measured):.4f} {metric} zero-shot on this eval set"
+        )
+    return (
+        f"from the Qwen-3.6 teacher's own zero-shot {float(measured):.4f} {metric} "
+        f"on this eval set (above the {float(floor):.2f} floor)"
+        if floor is not None
+        else f"from the Qwen-3.6 teacher's own zero-shot {float(measured):.4f} {metric}"
+    )
