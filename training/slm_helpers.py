@@ -25,11 +25,34 @@ _gguf_cache: dict = {}
 _gguf_cache_order: list = []
 
 _LONG_OUTPUT_TASKS = {"math_reasoning", "code_generation", "generation", "NER"}
-_SHORT_EVAL_BATCH_SIZE = 16
-_LONG_EVAL_BATCH_SIZE = 4
+# Sized for a 48GB L40S holding a sub-4B model. The previous 16/4 was set when max_seq_length
+# was assumed to be the real sequence length; measured rows are p50=228 / p99=601 tokens, so the
+# per-sequence KV footprint is a fraction of what those numbers assumed. A CUDA OOM halves the
+# active batch and retries in place, so the cost of aiming high is one retry, not a failed eval.
+_SHORT_EVAL_BATCH_SIZE = 32
+_LONG_EVAL_BATCH_SIZE = 16
 _EVAL_BATCH_SIZE_ENV = "SLM_EVAL_BATCH_SIZE"
-_DEFAULT_MAX_SEQ_LENGTH = 4096
 _MAX_SEQ_LENGTH_ENV = "SLM_MAX_SEQ_LENGTH"
+
+# Context is allocated, not measured: KV cache and position buffers are sized from this number
+# whatever the rows actually contain. At 4096 against a measured max of 1206 tokens, ~70% of that
+# allocation was never touched and `truncated=0/5754` confirms the cap never bound. These are
+# per-task ceilings with real headroom over observed lengths, NOT tight fits — a row that would
+# exceed its ceiling raises rather than truncating, so they stay generous. Code generation keeps
+# 4096 because APPS prompts plus a 1024-token completion genuinely need it.
+#
+# This governs the SMALL MODEL being trained and evaluated. The orchestrator's Claude context is
+# a completely separate budget that nothing here affects.
+_DEFAULT_MAX_SEQ_LENGTH = 4096
+_TASK_MAX_SEQ_LENGTH = {
+    "classification": 1024,
+    "generation": 2048,
+    "math_reasoning": 2048,
+    "NER": 2048,
+    "function_call": 2048,
+    "diff": 2048,
+    "code_generation": 4096,
+}
 
 
 def _is_qwen_model_id(model_id: str | None) -> bool:
@@ -233,11 +256,20 @@ def _configure_inference_tokenizer(tokenizer):
     return tokenizer
 
 
-def _inference_max_seq_length() -> int:
-    raw_value = os.environ.get(
-        _MAX_SEQ_LENGTH_ENV,
-        str(_DEFAULT_MAX_SEQ_LENGTH),
-    )
+def task_max_seq_length(task_type: str | None) -> int:
+    """Context ceiling for ``task_type``. An explicit SLM_MAX_SEQ_LENGTH always wins."""
+    override = os.environ.get(_MAX_SEQ_LENGTH_ENV)
+    if override is not None:
+        return _validated_max_seq_length(override)
+    return _TASK_MAX_SEQ_LENGTH.get(task_type or "", _DEFAULT_MAX_SEQ_LENGTH)
+
+
+def _inference_max_seq_length(task_type: str | None = None) -> int:
+    """Back-compatible alias; callers that know their task pass it for a tighter ceiling."""
+    return task_max_seq_length(task_type)
+
+
+def _validated_max_seq_length(raw_value: str) -> int:
     try:
         max_seq_length = int(raw_value)
     except ValueError as exc:
@@ -578,7 +610,7 @@ def _infer_batch_local(
     try:
         initial_batch_size = _eval_batch_size(task_type)
         batch_size = initial_batch_size
-        max_seq_length = _inference_max_seq_length()
+        max_seq_length = _inference_max_seq_length(task_type)
         metadata.update(
             {
                 "max_seq_length": max_seq_length,

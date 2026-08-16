@@ -251,14 +251,39 @@ def apply_quality_controls(
         return dataset
 
 
+# Row provenances that define the task's true length distribution: real rows from the benchmark's
+# own train split. Mined and synthesized rows do not — see _filter_length_outliers.
+_TRUSTED_LENGTH_PROVENANCE = frozenset({"train_anchor", "resample"})
+
+
 def _filter_length_outliers(
     examples: list[dict], key: str = "text", max_ratio: float = 3.0,
 ) -> list[dict]:
-    """Remove examples whose text length exceeds max_ratio × median. Paper §2.3 item 3."""
-    lengths = [len(e.get(key, "")) for e in examples]
-    if not lengths:
+    """Remove examples whose text length exceeds max_ratio × median. Paper §2.3 item 3.
+
+    The median is computed over TRUSTED rows only — the task's own real training data — not over
+    the whole dataset (B260). The ratio is relative, so whatever sets the median sets the cutoff,
+    and that made the filter destroy the real data it was meant to protect:
+
+    RouterBench's real rows have a median length of 715 characters. Mining substituted a foreign
+    dataset (B259) whose rows have a median of 75, which dragged the DATASET median down to 269 and
+    the cutoff from 2145 to 807 — a bound that removes 48% of the real benchmark (17,667 of 36,497
+    rows) instead of the 0.6% it removes on clean data. It is visible in the artifacts: the median
+    length of `train_anchor` rows fell 572 → 432 → 396 across three rebuilds while the pool they
+    were sampled from never changed.
+
+    Anchoring on trusted rows keeps the intended behaviour (drop genuine outliers relative to the
+    task's own distribution) and makes it impossible for injected rows to move the goalposts. Falls
+    back to all rows when nothing is tagged, so untagged callers and unit tests behave as before.
+    """
+    if not examples:
         return examples
-    lengths.sort()
+    trusted = [
+        e for e in examples
+        if str(e.get("_provenance") or "") in _TRUSTED_LENGTH_PROVENANCE
+    ]
+    basis = trusted or examples
+    lengths = sorted(len(e.get(key, "")) for e in basis)
     median = lengths[len(lengths) // 2] or 1
     cutoff = median * max_ratio
     return [e for e in examples if len(e.get(key, "")) <= cutoff]
@@ -366,6 +391,86 @@ def _new_example_prompt(anchor: dict, task_type: str) -> str:
     )
 
 
+_TASK_DESCRIPTIONS = {
+    "generation": "summarising a conversation in one to three sentences",
+    "function_call": "converting a request into a JSON function call using only the declared tools",
+    "diff": "producing a unified diff that applies the requested edit",
+    "math_reasoning": "solving a math word problem and giving the final numeric answer",
+    "code_generation": "writing code that satisfies the stated problem",
+    "multilingual": "responding correctly in the language of the request",
+    "structured_extraction": "extracting the requested fields into the given schema",
+}
+
+
+def verify_generated_answers(
+    rows: list[dict],
+    *,
+    task_type: str,
+    generate_fn,
+    log=None,
+) -> list[dict]:
+    """Ask the teacher whether each generated (input, answer) pair is actually correct.
+
+    The generation family is the ONE synthesis path where the teacher invents both the input and
+    the output, so nothing about the anchor constrains correctness — and it was running completely
+    unchecked: `curate._verifier_for` returns None for every one of these task types, so
+    `_synthesize_new_correct`'s `if verify_fn is not None` branch had never executed and every batch
+    logged `450/450 kept`. On `calendar_json` the teacher scores 0.2176, so that is ~5,700
+    machine-invented training targets from a model that gets the task right 22% of the time (B269).
+
+    Same fail-open contract as `verify_generated_labels`: an unparseable reply or endpoint error
+    KEEPS the row, because a verifier must never be able to empty a dataset.
+    """
+    if not rows or generate_fn is None:
+        return rows
+    task_desc = _TASK_DESCRIPTIONS.get(task_type, task_type)
+
+    def _check(row: dict):
+        request = str(row.get("text") or "")
+        answer = str(row.get("answer") or row.get("response") or "")
+        if not answer.strip():
+            return row, False, "empty answer"
+        prompt = (
+            f"You are checking one training example for the task of {task_desc}.\n\n"
+            f"User input / question:\n{request}\n\n"
+            f"Proposed answer:\n{answer}\n\n"
+            f"Does the proposed answer correctly and directly satisfy the user's request, in the "
+            f"context of {task_desc}? Answer strictly as JSON: "
+            f'{{"valid": true|false, "reason": "<max 15 words>"}}. '
+            f"Answer false if the answer is wrong, incomplete, in the wrong format for this task, "
+            f"or does not address what was actually asked."
+        )
+        try:
+            raw = generate_fn(prompt, 0.0, 160)
+        except Exception:  # noqa: BLE001 — verification must never be fatal
+            return row, True, "verifier unavailable (kept)"
+        match = re.search(r"\{.*\}", str(raw or ""), re.DOTALL)
+        if not match:
+            return row, True, "unparseable verifier reply (kept)"
+        try:
+            verdict = json.loads(match.group())
+        except json.JSONDecodeError:
+            return row, True, "unparseable verifier reply (kept)"
+        return row, bool(verdict.get("valid", True)), str(verdict.get("reason", ""))[:120]
+
+    results = _progress_map(
+        _check, rows, label=f"answer verification ({task_type})", log=log,
+        workers=_synth_concurrency(len(rows)),
+    )
+    kept, rejected = [], []
+    for row, valid, reason in results:
+        (kept if valid else rejected).append((row, reason))
+    if log:
+        log(f"      [verify] teacher validated {len(kept)}/{len(rows)} generated answer(s); "
+            f"rejected {len(rejected)}")
+        for row, reason in rejected[:_VERIFY_LOG_LIMIT]:
+            text = " ".join(str(row.get("text") or "").split())[:70]
+            log(f"        REJECTED {text!r} — teacher: {reason}")
+        if len(rejected) > _VERIFY_LOG_LIMIT:
+            log(f"        ... and {len(rejected) - _VERIFY_LOG_LIMIT} more rejected")
+    return [row for row, _ in kept]
+
+
 def _synthesize_new_correct(
     examples: list[dict],
     *,
@@ -436,13 +541,52 @@ def _verify_synth_enabled() -> bool:
     return os.environ.get("SLM_VERIFY_SYNTH", "1") == "1"
 
 
-def verify_generated_labels(rows: list[dict], *, generate_fn, log=None) -> list[dict]:
+def _label_context_block(
+    label: str,
+    label_definitions: dict | None,
+    all_labels: list[str] | None,
+) -> str:
+    """Explain what the labels MEAN, so the teacher judges the task and not the label's wording.
+
+    Without this the prompts named the label and nothing else, and the teacher read the label as an
+    ordinary English word. On RouterBench — where `local` means "a small on-device model can answer
+    this correctly" — it rejected 70% of generated rows for reasons like *"the utterance is a math
+    problem, not a local query"* and *"the utterance describes fog, not clouds"*. Those verdicts are
+    correct answers to the question the prompt actually asked; the prompt was asking the wrong one.
+    """
+    if not label_definitions:
+        return ""
+    meaning = label_definitions.get(label)
+    lines = ["", "What the labels mean for THIS task (judge by these definitions, NOT by the"
+             " everyday meaning of the label word):"]
+    for name in (all_labels or sorted(label_definitions)):
+        definition = label_definitions.get(name)
+        if definition:
+            lines.append(f"  - {name!r}: {definition}")
+    if meaning:
+        lines.append("")
+        lines.append(f"The label under consideration is {label!r}, which means: {meaning}")
+    return "\n".join(lines) + "\n"
+
+
+def verify_generated_labels(
+    rows: list[dict],
+    *,
+    generate_fn,
+    log=None,
+    label_definitions: dict | None = None,
+    all_labels: list[str] | None = None,
+) -> list[dict]:
     """Ask the teacher model to confirm each generated row really belongs to its assigned label.
 
     Generation and verification are NOT the same task. Writing "an utterance that belongs to
     class X" is open-ended; deciding "does this utterance belong to class X, yes or no" is the
     classification task the reference model is already good at. So a self-check is cheap and
     meaningfully better than nothing, even though it uses the same model.
+
+    `label_definitions` says what each class MEANS. Supply it whenever the label name is not itself
+    a plain description of the class, or the teacher will judge the word instead of the task — see
+    `_label_context_block`.
 
     Rows the teacher rejects are dropped, and its stated reason is logged so a bad *generator*
     prompt is visible rather than silently absorbed. Any verification failure (unparseable reply,
@@ -454,14 +598,18 @@ def verify_generated_labels(rows: list[dict], *, generate_fn, log=None) -> list[
     def _check(row: dict):
         label = str(row.get("label"))
         text = str(row.get("text") or "")
+        context = _label_context_block(label, label_definitions, all_labels)
         prompt = (
-            f"You are checking one training example for a text classifier.\n\n"
+            f"You are checking one training example for a text classifier.\n"
+            f"{context}\n"
             f"Utterance: {text}\n"
             f"Proposed label: {label}\n\n"
             f"Does this utterance genuinely belong to the '{label}' class? Answer strictly as "
             f'JSON: {{"valid": true|false, "reason": "<max 15 words>"}}. '
             f"Answer false if the utterance actually belongs to a different class, is "
-            f"incoherent, or mixes two intents."
+            f"incoherent, or mixes two intents. Do NOT answer false merely because the "
+            f"utterance's TOPIC is unrelated to the label's wording — judge only whether the "
+            f"class, as defined above, applies."
         )
         try:
             raw = generate_fn(prompt, 0.0, 120)
@@ -504,6 +652,7 @@ def _synthesize_new_gold(
     n: int,
     generate_fn,
     log=None,
+    label_definitions: dict | None = None,
 ) -> list[dict]:
     """Generate ``n`` NEW CORRECT in-class examples, spread evenly over the label space.
 
@@ -520,6 +669,27 @@ def _synthesize_new_gold(
         if label is not None and str(row.get("text") or "").strip():
             by_label.setdefault(str(label), []).append(row)
     if not by_label:
+        # NER rows keep their gold in `entities` and carry NO `label`, so this bucketing is always
+        # empty for NER and the function has therefore NEVER produced a row: the BC5CDR run logged
+        # `requested 5693 new-gold row(s) -> kept 0` on every call and ran ~7,000 rows below target
+        # with no explanation. Say so, because silence here reads as a synthesis failure.
+        #
+        # This must stay a no-op rather than being "fixed" to generate. The generator returns
+        # {text, label} and never entity spans, so a produced row would either have no `entities`
+        # (dropped by the NER schema filter) or carry the ANCHOR sentence's spans against NEW text —
+        # fabricated gold. Span synthesis needs its own generator, not this one.
+        if log:
+            if task_type == "NER":
+                log(
+                    "      [synth] SKIPPED: NER rows have no 'label' field to anchor in-class "
+                    "generation, and this generator cannot produce entity spans. NER curricula are "
+                    "gold-only by design — no rows generated, no teacher calls made."
+                )
+            else:
+                log(
+                    f"      [synth] SKIPPED: no anchor row carries both a 'label' and non-empty "
+                    f"'text' (task_type={task_type}), so there is nothing to generate in-class from."
+                )
         return []
 
     rng = random.Random(20260804)
@@ -543,9 +713,12 @@ def _synthesize_new_gold(
 
     def _gold_one(anchor: dict) -> dict | None:
         label = str(anchor.get("label"))
+        context = _label_context_block(label, label_definitions, labels)
         prompt = (
             f"Write ONE new, realistic user utterance that belongs to the '{label}' class "
-            f"of a text classifier. It must be genuinely NEW and phrased differently from the "
+            f"of a text classifier.\n"
+            f"{context}\n"
+            f"It must be genuinely NEW and phrased differently from the "
             f"reference — not a paraphrase, not a copy — while unambiguously belonging to "
             f"'{label}'.\n\n"
             f"Reference '{label}' example:\n{anchor.get('text', '')}\n\n"
@@ -585,6 +758,7 @@ def synthesize_examples(
     generate_fn,
     verify_fn=None,
     log=None,
+    label_definitions: dict | None = None,
 ) -> list[dict]:
     """Unified, task-adaptive synthesis entry.
 
@@ -605,14 +779,24 @@ def synthesize_examples(
             n=n,
             generate_fn=generate_fn,
             log=log,
+            label_definitions=label_definitions,
         )
         if rows and _verify_synth_enabled():
-            rows = verify_generated_labels(rows, generate_fn=generate_fn, log=log)
+            rows = verify_generated_labels(
+                rows,
+                generate_fn=generate_fn,
+                log=log,
+                label_definitions=label_definitions,
+                all_labels=sorted({
+                    str(row.get("label")) for row in examples
+                    if isinstance(row, dict) and row.get("label") is not None
+                }) or None,
+            )
         if log:
             log(f"      [synth] requested {n} new-gold row(s) -> kept {len(rows)}")
         return rows
     if task_type in _GENERATION_FAMILY:
-        return _synthesize_new_correct(
+        rows = _synthesize_new_correct(
             examples,
             task_type=task_type,
             n=n,
@@ -620,4 +804,16 @@ def synthesize_examples(
             verify_fn=verify_fn,
             log=log,
         )
+        # Teacher answer-verification for the generation family. `verify_fn` above is a
+        # PROGRAMMATIC checker (a math answer-checker, a test runner) and is None for every task
+        # type today, which left this path with no check at all. This is the model-based fallback:
+        # weaker than execution feedback, but the alternative was keeping 100% of whatever the
+        # teacher produced (B269).
+        if rows and _verify_synth_enabled():
+            rows = verify_generated_answers(
+                rows, task_type=task_type, generate_fn=generate_fn, log=log,
+            )
+        if log:
+            log(f"      [synth] requested {n} new-correct row(s) -> kept {len(rows)}")
+        return rows
     return []

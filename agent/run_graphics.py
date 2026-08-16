@@ -90,8 +90,17 @@ def _iteration_records(progression: list[dict]) -> tuple[list[dict], dict]:
                 "per_class": last_eval.get("per_class") or {},
                 "by_difficulty": by_diff,
                 "n_gold": int(comp.get("n_gold", 0) or 0),
+                # Prefer `n_synth_total`, which counts every teacher-generated row. The older
+                # `n_hard_generated` counted only the plan's `synthesize` strategy, so synth-fill
+                # and generation-family positives fell into the grey "unattributed" band and the
+                # synthetic share of the curriculum was drawn far smaller than it really was.
+                # Older runs predate the field, so fall back for them.
                 "n_generated": int(
-                    comp.get("n_hard_generated", comp.get("n_hard", 0)) or 0
+                    comp.get(
+                        "n_synth_total",
+                        comp.get("n_hard_generated", comp.get("n_hard", 0)),
+                    )
+                    or 0
                 ),
                 "n_source": int(comp.get("n_hard_source", 0) or 0),
                 "total": int(comp.get("total_examples", 0) or 0),
@@ -262,7 +271,7 @@ def _plot_composition(ax, records) -> None:
     ax.bar(xs, gen, bottom=bottom_gen, color="#ff7f0e", label="synthetic (generated)")
     ax.bar(xs, src, bottom=bottom_src, color="#9467bd", label="mined (source)")
     if any(other):
-        ax.bar(xs, other, bottom=bottom_other, color="#bbbbbb", label="synth-fill (unattributed)")
+        ax.bar(xs, other, bottom=bottom_other, color="#bbbbbb", label="unattributed")
     # No separate "total" series: the stack height IS the total, so plotting it again drew a
     # line exactly along the top of the bars and added a legend entry for information already
     # on screen. (An earlier version put it on a twin right-hand axis, which was worse — the

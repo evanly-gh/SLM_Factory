@@ -14,12 +14,29 @@ class AgentState(TypedDict):
     task_type: str                    # "classification" | "NER" | "math_reasoning" | "code_generation" | "generation"
     selected_model: Optional[ModelSpec]
     feasible_models: list[ModelSpec]       # models that passed hardware_filter (Stages 1+2), largest→smallest
-    stop_threshold: float             # calibrated target; iterate_node may lower mid-run
+    stop_threshold: float             # calibrated target; iterate_node may lower or RAISE mid-run
     initial_stop_threshold: float     # immutable floor; stop_threshold can never go below this
     # Provenance of the accuracy target (B32): which source set it, the anchor and headroom
     # used, and whether calibration is still pending the first measurement. Audit trail for
     # "where did this goal come from" — see agent/threshold.py.
     threshold_calibration: Optional[dict]
+    # Stretch-goal machinery. When a score clears the goal the orchestrator is asked whether the
+    # goal should be RAISED, so a model that converged quickly is pushed further instead of
+    # stopping at a bar it cleared on iteration 2.
+    #   convergence_banked — the first goal this run actually cleared, and the score/iteration
+    #     that cleared it. Banked so raising can never turn an already-successful run into a
+    #     reported failure if the stretch goal is then missed.
+    #   threshold_raises   — append-only audit of every raise (from, to, score, iteration, reason).
+    #   max_stop_threshold — high-water mark. Raises must strictly exceed it, which makes the goal
+    #     a ratchet toward THRESHOLD_CEILING and bounds how many raises a run can perform.
+    convergence_banked: Optional[dict]
+    threshold_raises: list[dict]
+    max_stop_threshold: float
+    # The task's CLOSED label vocabulary, pinned once from the frozen eval set by eval_setup:
+    # {"labels": [...], "definitions": {label: what it means}, "benchmark": str|None, "source": str}.
+    # Downstream stages may only DROP rows outside it, never extend it, and no LLM may introduce a
+    # class — see data/label_space.py (B259). None for task types whose `label` is a constant tag.
+    task_label_space: Optional[dict]
     task_plan: Optional[dict]         # orchestrator's autonomous plan (labels, exa_queries, ...)
     autonomous: bool                  # if True, task_analysis derives task_type/plan via LLM
 
@@ -65,6 +82,16 @@ class AgentState(TypedDict):
     turn_budget: int
     _graph_steps: int                     # durable cumulative completed-node count
     _wallclock_terminated_before: Optional[str]  # long node skipped at wall guard
+    # "the full orchestrator system prompt has already been logged this run". Undeclared keys
+    # are dropped when LangGraph merges a node's returned state against this schema, so an
+    # undeclared flag reads back False on the next call: iterate re-logged the entire system
+    # prompt on all 69 turns instead of once (B256).
+    _iterate_prompt_logged: bool
+    # Iteration at which the stretch-goal question was last put to the orchestrator. iterate_node
+    # routes through the threshold check twice per turn, so without this the same score would be
+    # asked about twice — and, per the note above, an undeclared key reads back as absent, which
+    # would make the guard silently do nothing.
+    _threshold_raise_asked_iteration: Optional[int]
 
     # Model selection strategy state
     _largest_first_phase: Optional[str]   # "probe" | "escalate" | "done" (largest_first strategy only)

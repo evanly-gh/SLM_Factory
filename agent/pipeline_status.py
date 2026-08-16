@@ -22,6 +22,22 @@ def process_exit_code(error: BaseException | None) -> int:
     return 1 if error is not None else 0
 
 
+def _first_finetuned_for(selector: str, baselines: list[dict]) -> float | None:
+    """The best score this variant reached on its FIRST fine-tuned iteration.
+
+    Recorded by evaluate_node before the zero-shot baseline is added as a candidate, so it is a
+    genuine fine-tuned number even on an iteration the baseline went on to win.
+    """
+    return next(
+        (
+            entry.get("first_finetuned_f1")
+            for entry in baselines
+            if entry.get("selector", entry.get("model_id")) == selector
+        ),
+        None,
+    )
+
+
 def _baseline_for(selector: str, baselines: list[dict]) -> float | None:
     return next(
         (
@@ -59,6 +75,10 @@ def build_run_progression(
             origin_entry["selector"],
             baselines,
         )
+        origin_entry["first_finetuned_f1"] = _first_finetuned_for(
+            origin_entry["selector"],
+            baselines,
+        )
         origin_entry["best_score"] = origin_entry.get("score", 0.0)
         progression.append(origin_entry)
         for attempt in downward.get("attempts") or []:
@@ -67,6 +87,8 @@ def build_run_progression(
                 **copy.deepcopy(attempt),
                 "kind": "downward_probe",
                 "baseline_f1": None,
+                # A probe runs exactly one config, so its first fine-tuned score IS its best.
+                "first_finetuned_f1": score,
                 "best_score": score,
                 "iterations": 1,
                 "scores": [score] if score is not None else [],
@@ -83,6 +105,7 @@ def build_run_progression(
             "quant": getattr(model, "quant", None),
             "tier": getattr(model, "tier", "?"),
             "baseline_f1": _baseline_for(model.selector, baselines),
+            "first_finetuned_f1": _first_finetuned_for(model.selector, baselines),
             "best_score": state.get("best_score", 0.0),
             "iterations": state.get("iteration", 0),
             "scores": list(state.get("scores") or []),

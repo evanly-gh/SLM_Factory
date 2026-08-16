@@ -29,8 +29,13 @@ def test_iterate_prompt_receives_complete_curation_counts():
         return MagicMock(
             tool_calls=[],
             content=(
+                # `strategy`, not the retired `primary_strategy`: the 2026-07-31 curation redesign
+                # replaced the primary/support strategy pair with one strategy field, and this
+                # fixture was never updated — so the decision failed validation, the reask failed
+                # identically, and this test's real assertion (that the curation counts reach the
+                # prompt) had stopped running.
                 '{"intervention":"data_rebuild","hypothesis":"counts verified",'
-                '"data_rebuild":{"primary_strategy":"resample_existing"},'
+                '"data_rebuild":{"strategy":"synthesize"},'
                 '"threshold_adjustment":{"new_threshold":null,"reason":""}}'
             ),
         )

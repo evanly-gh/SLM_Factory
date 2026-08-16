@@ -609,6 +609,8 @@ fresh_initial_state = {
     "task_type": _initial_task_type,
     "autonomous": _initial_autonomous,
     "task_plan": None,
+    # Pinned by eval_setup from the frozen eval set, then closed for the rest of the run.
+    "task_label_space": None,
     "selected_model": None,
     "feasible_models": [],
     # Both are overwritten by task_analysis._calibrate_stop_threshold before any training:
@@ -617,6 +619,11 @@ fresh_initial_state = {
     "stop_threshold": config.DEFAULT_STOP_THRESHOLD,
     "initial_stop_threshold": config.DEFAULT_STOP_THRESHOLD,
     "threshold_calibration": None,
+    # Stretch-goal state. `max_stop_threshold` is the high-water mark every raise must exceed,
+    # which is what makes repeated raising a terminating ratchet rather than an open loop.
+    "convergence_banked": None,
+    "threshold_raises": [],
+    "max_stop_threshold": 0.0,
     "train_examples": [],
     "eval_set": None,
     "data_source": None,
@@ -1052,7 +1059,17 @@ atomic_write_json(
         "best_score": last_state.get("best_score", 0.0),
         "stop_threshold": last_state.get("stop_threshold", config.DEFAULT_STOP_THRESHOLD),
         "iterations": last_state.get("iteration", 0),
-        "converged": last_state.get("best_score", 0.0) >= last_state.get("stop_threshold", 1.0),
+        "converged": (
+            last_state.get("best_score", 0.0) >= last_state.get("stop_threshold", 1.0)
+            or bool(last_state.get("convergence_banked"))
+        ),
+        # The calibrated goal and its provenance, so a converged run can be read without
+        # re-deriving whether the floor or the teacher's own measurement set the bar.
+        "initial_stop_threshold": last_state.get("initial_stop_threshold"),
+        "threshold_calibration": last_state.get("threshold_calibration"),
+        # Stretch-goal audit: the goal actually cleared, and every raise applied after it.
+        "convergence_banked": last_state.get("convergence_banked"),
+        "threshold_raises": last_state.get("threshold_raises") or [],
     },
 )
 
@@ -1128,7 +1145,12 @@ atomic_write_json(os.path.join(RUN_DIR, "baselines.json"), baselines)
 m = last_state.get("selected_model")
 best = last_state.get("best_score", 0.0)
 threshold = last_state.get("stop_threshold", config.DEFAULT_STOP_THRESHOLD)
-converged = best >= threshold
+# A run that met its calibrated goal and then had the goal RAISED is still a converged run. Judging
+# only against the final threshold would report "budget exhausted" for a run that cleared the bar it
+# was actually calibrated against, purely because the stretch goal it was pushed toward was missed.
+_banked = last_state.get("convergence_banked") or None
+_raises = last_state.get("threshold_raises") or []
+converged = best >= threshold or bool(_banked)
 # Name the metric explicitly. The comparison scalar is carried in a field called `f1`, but
 # only classification and NER compute an F1 — math is exact match, code is an execution
 # pass-rate, and open generation is a judge mean. Printing the real name keeps a run summary
@@ -1169,6 +1191,32 @@ log(f"  model     : {m.selector if m else None}")
 log(f"  iterations: {_final_entry.get('iterations', 0)}")
 log(f"  best F1   : {best:.4f}  (threshold {threshold:.4f})  "
     f"{'✗ failed' if pipeline_error else ('✓ converged' if converged else '✗ budget exhausted')}")
+# Where the accuracy goal came from, ALWAYS — including when the 0.80 floor overrode a teacher that
+# scored below it. Without this, a converged run against a floored goal looks identical to one that
+# matched a strong teacher, and BC5CDR's "threshold 0.8000" hid a teacher score of 0.0999.
+from agent.threshold import describe_threshold_provenance
+
+_calibration = last_state.get("threshold_calibration") or {}
+log(f"  goal source: {describe_threshold_provenance(_calibration)}")
+if _calibration.get("measured_qwen") is not None:
+    log(f"  teacher    : Qwen-3.6 zero-shot "
+        f"{float(_calibration['measured_qwen']):.4f} "
+        f"{_calibration.get('measured_metric') or ''}".rstrip()
+        + "  (no fine-tuning; this is the score the goal is calibrated against)")
+if _raises:
+    log(f"  stretch goals: raised {len(_raises)}x — "
+        + " → ".join(
+            [f"{_raises[0]['from']:.4f}"]
+            + [f"{r['to']:.4f}@iter{r['iteration']}" for r in _raises]
+        ))
+    for _r in _raises:
+        log(f"    raise at iteration {_r['iteration']}: {_r['from']:.4f} → {_r['to']:.4f} "
+            f"(score was {_r['score_at_raise']:.4f}) — {_r['reason']}")
+    if _banked and best < threshold:
+        log(f"  ⚠ CONVERGED AT THE ORIGINAL GOAL, stretch goal missed: cleared "
+            f"{_banked['threshold']:.4f} with {_banked['score']:.4f} at iteration "
+            f"{_banked['iteration']}; the raised goal {threshold:.4f} was not reached "
+            f"(best {best:.4f}). The run is a SUCCESS against its calibrated goal.")
 lifetime_best = last_state.get("lifetime_best_score", 0.0) or 0.0
 log(f"  lifetime best F1 across all tiers: {max(lifetime_best, best):.4f}")
 log(f"  final-model trajectory: {[f'{x:.3f}' for x in _final_scores]}")
@@ -1222,21 +1270,35 @@ if _downward_lines:
 if progression:
     log("")
     log(f"  Model Improvement Report (per quantized variant):")
-    log(f"  {'Tier':>4}  {'Model':<32} {'Quant':<8} {'Baseline':>9} {'Best FT':>9} {'Δ':>9}")
-    log(f"  {'-'*80}")
+    # `First FT` sits between baseline and best so the two halves of the gain are separable: how
+    # much ONE round of fine-tuning bought (baseline → first FT), and how much the whole
+    # orchestrated search added on top of it (first FT → best). Reporting only the endpoints made
+    # those indistinguishable — BC5CDR's +0.8098 was almost entirely the first iteration
+    # (0.0000 → 0.7701), with 4 further iterations adding 0.0397.
+    log(f"  {'Tier':>4}  {'Model':<32} {'Quant':<8} {'Baseline':>9} {'First FT':>9} "
+        f"{'Best FT':>9} {'Δ base':>9} {'Δ search':>9}")
+    log(f"  {'-'*100}")
     for p in progression:
         bl = p.get("baseline_f1")
         ft = p.get("best_score")
+        first = p.get("first_finetuned_f1")
         bl_text = f"{bl:.4f}" if bl is not None else "n/a"
         ft_text = f"{ft:.4f}" if ft is not None else "n/a"
+        first_text = f"{first:.4f}" if first is not None else "n/a"
         delta_text = (
             f"{ft - bl:+.4f}"
             if bl is not None and ft is not None
             else "n/a"
         )
+        # Gain attributable to the iteration loop rather than to fine-tuning at all.
+        search_text = (
+            f"{ft - first:+.4f}"
+            if first is not None and ft is not None
+            else "n/a"
+        )
         log(f"  {str(p.get('tier','?')):>4}  {p.get('model_id','?'):<32} "
-            f"{str(p.get('quant') or 'bf16'):<8} {bl_text:>9} "
-            f"{ft_text:>9} {delta_text:>9}")
+            f"{str(p.get('quant') or 'bf16'):<8} {bl_text:>9} {first_text:>9} "
+            f"{ft_text:>9} {delta_text:>9} {search_text:>9}")
 
 # DAG Traversal for EVERY model tested (not just the final one). Each escalation reset the
 # DAG, so escalate_node stashed each model's per-iteration DAG in escalation_history; here

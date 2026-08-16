@@ -78,6 +78,12 @@ _BENCHMARK_ALIASES = {
     "apps": "apps", "codeparrotapps": "apps",
     "mbpp": "mbpp", "mostlybasicpythonproblems": "mbpp",
     "samsum": "samsum", "samsumdialoguesummarization": "samsum",
+    # RouterBench. Without this entry Stage-0 had no alias for the benchmark the task is ABOUT, so
+    # `load_dataset("withmartian/routerbench")` failed (the repo ships only pickles), mining fell
+    # through to agentic discovery, and a completely different corpus was substituted 21 times in
+    # one run — with its labels invented by an LLM (B259). Routes to the real pickle loader.
+    "routerbench": "routerbench", "withmartianrouterbench": "routerbench",
+    "routerbench0shot": "routerbench",
 }
 
 # The planner often emits a composite benchmark label ("HumanEval / MBPP", "Biomedical
@@ -85,6 +91,7 @@ _BENCHMARK_ALIASES = {
 # safe to recognize inside a normalized composite name.
 _COMPOSITE_BENCHMARK_MARKERS = {
     "bc5cdr": "bc5cdr",
+    "routerbench": "routerbench",
     "gsm8k": "gsm8k",
     "codeparrotapps": "apps",
     "appsintroductory": "apps",
@@ -310,6 +317,32 @@ def load_benchmark_dataset(plan: dict, log=print, max_train: int = 300, max_test
     if not key:
         return None
     name = plan.get("benchmark")
+
+    # RouterBench cannot go through `load_dataset` at all — the repo ships only
+    # `routerbench_{0shot,5shot,raw}.pkl` and `datasets` has no pickle reader (B254). It needs its
+    # dedicated loader, which fetches via hf_hub_download + pandas and derives the routing label
+    # from a real per-model correctness column. Handled before the load_dataset block below.
+    if key == "routerbench":
+        try:
+            from data.loaders.routerbench import HF_ID as _RB_ID, load_routerbench
+
+            train, test = load_routerbench(
+                max_train=max_train, max_test=max_test, log=log
+            )
+        except Exception as e:  # noqa: BLE001 - fall through to discovery, as other loaders do
+            log(f"      [acquire] routerbench loader failed: {e}; falling back to Exa")
+            return None
+        _set_benchmark_meta(
+            meta, name, _RB_ID, None,
+            {"train": "hash-split 80%", "test": "hash-split 20%"},
+            detail="per-model correctness column → local/route routing decision",
+        )
+        train, test = _clean_stage0_splits(train, test, name, log=log, meta=meta)
+        if not train or not test:
+            return None
+        log(f"      [acquire] loaded REAL benchmark {name!r}: "
+            f"train={len(train)} test={len(test)}")
+        return train, test
 
     # NER benchmarks are token/BIO-tagged, not question/answer — handle separately.
     if key in ("bc5cdr", "conll"):
@@ -581,6 +614,7 @@ def mine_additional_real_rows(
     max_paid_rounds: int,
     query_variant: int,
     plan_identity: str,
+    label_space: set[str] | None = None,
     log=print,
 ) -> tuple[list[dict], dict]:
     """Mine bounded, novel real-source training rows without touching eval data.
@@ -612,21 +646,47 @@ def mine_additional_real_rows(
     paid_rounds_used = 0
     paid_budget_exhausted = False
 
-    # Label space already established by the run's own data. A mined classification source whose
-    # labels are disjoint from this is unusable: its rows can never match an eval label, so they
-    # are pure noise in the curriculum. This bites when a mined dataset stores its intent column
-    # as a plain integer rather than a ClassLabel — `DeepPavlov/clinc150` types `label` as
-    # `Value('int64')`, so the ClassLabel `.names` resolution below has nothing to resolve and the
-    # raw ids ("0", "1", "2") were written straight into training data (B222).
-    _known_labels = {
+    # The task's CLOSED label vocabulary. Prefer the pinned space from the frozen eval set (that is
+    # what the model is scored against); fall back to the labels already present in the run's own
+    # rows when no pinned space was supplied.
+    #
+    # Two guards, and the distinction matters (B259). The ORIGINAL guard was per-source and passed
+    # a source on ANY overlap, so a source whose labels were *partly* right admitted all of its
+    # rows — that is precisely how `cloud`/`on_device`/`router`/`remote` entered a two-class
+    # RouterBench run and then got deleted by quality control on every rebuild for the rest of the
+    # run. It also still catches the case it was written for: a mined dataset storing its intent
+    # column as a plain integer rather than a ClassLabel (`DeepPavlov/clinc150` types `label` as
+    # `Value('int64')`, so raw ids "0"/"1"/"2" were written straight into training data, B222).
+    # Whether the vocabulary is AUTHORITATIVE decides which of the two rules applies, and getting
+    # this wrong in either direction is harmful. A pinned space (from the frozen eval set) or a
+    # plan-declared label list is complete by construction, so a source carrying anything outside it
+    # is genuinely unusable and the whole source is rejected. A space merely *inferred* from the rows
+    # the run happens to hold is NOT complete — a small or skewed pool can be missing real classes —
+    # so applying the strict rule there would reject perfectly good sources for classes the pool
+    # simply had not seen yet. In that case fall back to the original any-overlap check, which still
+    # catches what it was written for: raw integer class ids from a non-ClassLabel column
+    # (`DeepPavlov/clinc150` types `label` as `Value('int64')`, so "0"/"1"/"2" reached training, B222).
+    _pinned_labels = {str(v) for v in (label_space or ()) if str(v).strip()}
+    _plan_labels = {
+        str(v) for v in (task_plan.get("labels") or []) if str(v).strip()
+    }
+    _row_labels = {
         str(row.get("label"))
         for row in (existing_rows or [])
         if isinstance(row, dict) and row.get("label") is not None
     }
+    _known_labels = _pinned_labels or (_plan_labels | _row_labels)
+    _authoritative = bool(_pinned_labels or _plan_labels)
 
     def _labels_are_usable(train: list, stage: str) -> bool:
+        """Reject a source whose labels fall outside the task's vocabulary.
+
+        Strict subset when the vocabulary is authoritative; any-overlap when it was inferred.
+        """
         if task_type != "classification" or not _known_labels:
             return True
+        from data.label_space import describe_rejected_labels
+
         mined_labels = {
             str(row.get("label"))
             for row in train
@@ -634,15 +694,27 @@ def mine_additional_real_rows(
         }
         if not mined_labels:
             return True
-        overlap = mined_labels & _known_labels
-        if overlap:
+        foreign = mined_labels - _known_labels
+        if not foreign:
             return True
-        sample = sorted(mined_labels)[:5]
+        if not _authoritative and foreign != mined_labels:
+            # Inferred vocabulary, partial overlap: cannot distinguish "a class the pool has not
+            # seen" from "a foreign class", so admit and let the per-row filter and quality control
+            # decide. This is the pre-B259 behaviour, retained only for the inferred case.
+            return True
+        counts: dict[str, int] = {}
+        for row in train:
+            if isinstance(row, dict):
+                key = str(row.get("label"))
+                if key in foreign:
+                    counts[key] = counts.get(key, 0) + 1
         log(
-            f"      [mine] REJECTED {stage} source: none of its {len(mined_labels)} label(s) "
-            f"{sample} exist in the run's {len(_known_labels)}-label space — most likely raw "
-            "class ids from a non-ClassLabel column. Merging them would inject unmatchable "
-            "labels into training (B222)."
+            f"      [mine] REJECTED {stage} source: {len(foreign)} of its {len(mined_labels)} "
+            f"label(s) are NOT in the task's "
+            f"{'pinned' if _authoritative else 'established'} {len(_known_labels)}-class "
+            f"vocabulary [{describe_rejected_labels(counts)}]. The label space is closed — a "
+            "source is used only when every label it carries already exists, because a class "
+            "absent from the eval set cannot be scored (B259/B222)."
         )
         return False
 
@@ -674,6 +746,22 @@ def mine_additional_real_rows(
         if not _labels_are_usable(train, stage):
             rejected_sources += 1
             return 0
+        # Per-ROW backstop, only against an AUTHORITATIVE vocabulary — against an inferred one it
+        # would drop rows for classes the pool merely had not seen yet. The source-level check above
+        # already rejects a source carrying a foreign label, so reaching here with one means a
+        # converter produced it after validation; dropping the row is then the only safe response,
+        # because a class outside a closed space can never be scored.
+        if task_type == "classification" and _authoritative and _known_labels:
+            from data.label_space import describe_rejected_labels, partition_rows_by_label
+
+            train, _row_rejected = partition_rows_by_label(train, _known_labels)
+            if _row_rejected:
+                log(
+                    f"      [mine] dropped {sum(_row_rejected.values())} row(s) from {stage} with "
+                    f"out-of-vocabulary labels [{describe_rejected_labels(_row_rejected)}]"
+                )
+            if not train:
+                return 0
         accepted = 0
         source_id = (
             f"{records[0].get('kind', 'source')}:{records[0].get('id', '?')}"
@@ -950,10 +1038,18 @@ def _peek_hf_dataset(hf_id: str, log=print):
     return None
 
 
-def _llm_map_dataset(hf_id, cfg, splits, columns, sample_row, task_type, plan, log=print):
-    """Ask the orchestrator to map this dataset's columns to our schema. dict or None."""
+def _llm_map_dataset(hf_id, cfg, splits, columns, sample_row, task_type, plan, log=print,
+                     label_space=None):
+    """Ask the orchestrator to map this dataset's columns to our schema. dict or None.
+
+    `label_space` is the task's CLOSED vocabulary. When supplied, the model is told the exact
+    permitted target labels and that inventing one is forbidden; `_materialize_from_mapping`
+    additionally strips any entry that targets a label outside the space, so a hallucinated class
+    cannot survive even if the model ignores the instruction (B259).
+    """
     import anthropic
     from config.config import ANTHROPIC_API_KEY, ORCHESTRATOR_MODEL, orchestrator_client_kwargs
+    allowed = sorted(label_space or ())
     if task_type == "classification":
         want = ('{"train_split","test_split","text_col","label_col",'
                 '"label_map": {"<raw>":"<one of the task labels>"} (optional)}')
@@ -962,11 +1058,28 @@ def _llm_map_dataset(hf_id, cfg, splits, columns, sample_row, task_type, plan, l
                 '(list of BIO tag ids) OR "text_col" + "entities_col"}')
     else:  # math_reasoning / code_generation / generation
         want = '{"train_split","test_split","question_col","answer_col","cot_col" (optional)}'
+    # State the closed vocabulary explicitly. Without it the model was free to invent plausible-
+    # sounding classes, and it did: a RouterBench run (two classes, `local`/`route`) accumulated
+    # `cloud`, `on_device`, `router` and `remote` — one new hallucinated class per acquire round,
+    # because the mapping is re-requested each round and is non-deterministic (B259).
+    label_rules = ""
+    if task_type == "classification" and allowed:
+        label_rules = (
+            f"\nThe task's label space is CLOSED and consists of EXACTLY these "
+            f"{len(allowed)} labels: {allowed}.\n"
+            f"Every value on the right-hand side of `label_map` MUST be one of those labels "
+            f"verbatim. You may NOT invent, rename, split, or add a label, however sensible a new "
+            f"one would seem. If this dataset's classes do not map cleanly onto that exact set, "
+            f'reply {{"suitable": false}} — a partial or approximate mapping is worse than no '
+            f"dataset, because a class outside the space cannot be scored and becomes training "
+            f"noise. Omit any source value you cannot map; omitted values are discarded.\n"
+        )
     prompt = (
         f"We want to fine-tune for task_type={task_type} "
-        f"(name={plan.get('task_name', task_type)}, labels={plan.get('labels', [])}).\n"
+        f"(name={plan.get('task_name', task_type)}, labels={allowed or plan.get('labels', [])}).\n"
         f"HuggingFace dataset: {hf_id} (config={cfg}); splits={splits}; columns={columns}\n"
-        f"One sample row: {sample_row}\n\n"
+        f"One sample row: {sample_row}\n"
+        f"{label_rules}\n"
         f"If this dataset is a GOOD fit, reply with STRICT JSON mapping its columns to our "
         f"schema: {want}. If it is NOT a suitable dataset for this task, reply exactly "
         f'{{"suitable": false}}. JSON only, no prose.'
@@ -1001,9 +1114,20 @@ def _mapped_split_names(splits, mapping):
     return tr, te
 
 
-def _materialize_from_mapping(hf_id, cfg, splits, mapping, task_type, max_train, max_test, log=print):
-    """Load train/test with the LLM's column mapping and convert to our example dicts."""
+def _materialize_from_mapping(hf_id, cfg, splits, mapping, task_type, max_train, max_test,
+                              log=print, label_space=None):
+    """Load train/test with the LLM's column mapping and convert to our example dicts.
+
+    When `label_space` is supplied the mapping is sanitized first (entries targeting a label
+    outside the space are discarded) and any row whose resulting label is still outside the space
+    is dropped. The old code applied `lmap.get(str(lab), lab)`, so an unmapped source value passed
+    through VERBATIM into training data — the mechanism by which `LOW`/`MEDIUM`/`HIGH` complexity
+    tiers and four invented routing classes reached a two-class task (B259).
+    """
     from datasets import load_dataset
+    from data.label_space import describe_rejected_labels, sanitize_label_map
+
+    allowed = set(label_space or ())
     tr, te = _mapped_split_names(splits, mapping)
 
     def _load(split, n):
@@ -1014,15 +1138,32 @@ def _materialize_from_mapping(hf_id, cfg, splits, mapping, task_type, max_train,
         out = []
         if task_type == "classification":
             tcol, lcol = mapping.get("text_col"), mapping.get("label_col")
-            lmap = mapping.get("label_map") or {}
+            lmap, dropped_targets = sanitize_label_map(mapping.get("label_map"), allowed)
+            if dropped_targets:
+                log(
+                    f"      [acquire] IGNORED {len(dropped_targets)} label_map target(s) that are "
+                    f"not in the task's label space: {dropped_targets}. The orchestrator proposed "
+                    "classes this task does not have; they are discarded rather than trained on."
+                )
             label_names = ds.features[lcol].names if hasattr(ds.features.get(lcol), "names") else None
+            out_of_vocab: dict[str, int] = {}
             for ex in ds:
                 lab = ex[lcol]
                 if isinstance(lab, int) and label_names:
                     lab = label_names[lab]
-                lab = lmap.get(str(lab), lab)
+                lab = str(lmap.get(str(lab), lab))
+                if allowed and lab not in allowed:
+                    # Unmapped or mis-mapped: discard. Passing it through is what put four
+                    # invented classes into a two-class curriculum.
+                    out_of_vocab[lab] = out_of_vocab.get(lab, 0) + 1
+                    continue
                 if ex.get(tcol):
-                    out.append({"text": str(ex[tcol]), "label": str(lab)})
+                    out.append({"text": str(ex[tcol]), "label": lab})
+            if out_of_vocab:
+                log(
+                    f"      [acquire] dropped {sum(out_of_vocab.values())} row(s) whose label is "
+                    f"outside the task's closed vocabulary [{describe_rejected_labels(out_of_vocab)}]"
+                )
         elif task_type == "NER":
             if mapping.get("tokens_col"):
                 tok, tag = mapping["tokens_col"], mapping["tags_col"]
@@ -1299,11 +1440,18 @@ def _discover_worker(plan, description, task_type, max_train, max_test, q):
         if peek is None:
             continue
         cfg, splits, columns, sample, _features = peek
-        mapping = _llm_map_dataset(hf_id, cfg, splits, columns, sample, task_type, plan, log=log)
+        # `plan["labels"]` carries the run's CLOSED label vocabulary. curate writes the pinned
+        # space (from the frozen eval set) into it before mining, and the plan is the one object
+        # that already crosses this subprocess boundary — so it is the carrier rather than a new
+        # parameter that would have to be pickled separately.
+        _plan_labels = {str(v) for v in (plan.get("labels") or []) if str(v).strip()}
+        mapping = _llm_map_dataset(hf_id, cfg, splits, columns, sample, task_type, plan, log=log,
+                                   label_space=_plan_labels)
         if not mapping:
             log(f"      [acquire] {hf_id}: orchestrator judged it unsuitable / unmappable")
             continue
-        result = _materialize_from_mapping(hf_id, cfg, splits, mapping, task_type, max_train, max_test, log=log)
+        result = _materialize_from_mapping(hf_id, cfg, splits, mapping, task_type, max_train,
+                                          max_test, log=log, label_space=_plan_labels)
         if result is not None:
             accepted = _accept_discovered_result(
                 result,
