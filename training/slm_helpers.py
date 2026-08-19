@@ -24,35 +24,16 @@ _MAX_CACHED = 1
 _gguf_cache: dict = {}
 _gguf_cache_order: list = []
 
-_LONG_OUTPUT_TASKS = {"math_reasoning", "code_generation", "generation", "NER"}
-# Sized for a 48GB L40S holding a sub-4B model. The previous 16/4 was set when max_seq_length
-# was assumed to be the real sequence length; measured rows are p50=228 / p99=601 tokens, so the
-# per-sequence KV footprint is a fraction of what those numbers assumed. A CUDA OOM halves the
-# active batch and retries in place, so the cost of aiming high is one retry, not a failed eval.
-_SHORT_EVAL_BATCH_SIZE = 32
-_LONG_EVAL_BATCH_SIZE = 16
+# Eval batch size and context ceiling are per-TASK and declared on its spec. A CUDA OOM halves
+# the active batch and retries in place, so the cost of a task aiming high is one retry, not a
+# failed eval.
 _EVAL_BATCH_SIZE_ENV = "SLM_EVAL_BATCH_SIZE"
+# Only for the two paths that genuinely have no task in hand: the single-prompt helper used by
+# ad-hoc probes, and a GGUF load whose caller did not name one. Every task-aware path reads the
+# ceiling from the task's spec.
+_DEFAULT_INFERENCE_SEQ_LENGTH = 4096
 _MAX_SEQ_LENGTH_ENV = "SLM_MAX_SEQ_LENGTH"
 
-# Context is allocated, not measured: KV cache and position buffers are sized from this number
-# whatever the rows actually contain. At 4096 against a measured max of 1206 tokens, ~70% of that
-# allocation was never touched and `truncated=0/5754` confirms the cap never bound. These are
-# per-task ceilings with real headroom over observed lengths, NOT tight fits — a row that would
-# exceed its ceiling raises rather than truncating, so they stay generous. Code generation keeps
-# 4096 because APPS prompts plus a 1024-token completion genuinely need it.
-#
-# This governs the SMALL MODEL being trained and evaluated. The orchestrator's Claude context is
-# a completely separate budget that nothing here affects.
-_DEFAULT_MAX_SEQ_LENGTH = 4096
-_TASK_MAX_SEQ_LENGTH = {
-    "classification": 1024,
-    "generation": 2048,
-    "math_reasoning": 2048,
-    "NER": 2048,
-    "function_call": 2048,
-    "diff": 2048,
-    "code_generation": 4096,
-}
 
 
 def _is_qwen_model_id(model_id: str | None) -> bool:
@@ -60,13 +41,27 @@ def _is_qwen_model_id(model_id: str | None) -> bool:
 
 
 def _qwen_no_think_prompt(prompt: str, base_model: str) -> str:
-    """Model-specific ChatML equivalent of HF non-thinking templates."""
+    """Model-specific ChatML equivalent of HF non-thinking templates.
+
+    These strings must match the SERVING template — the one belonging to the official base model that
+    the GGUF is merged from — because that is what governs the deployed artifact. They are correct as
+    written; the hazard is on the training side, and it is worth naming here because this function is
+    what a reader will suspect first (B290).
+
+    `Qwen/Qwen3-4B-Instruct-2507` is thinking-free, and its official template renders a bare assistant
+    prefix. Unsloth's 4-bit mirror, which is what `FastLanguageModel.from_pretrained` actually loads,
+    ships a template that inserts `<think>\\n\\n</think>\\n\\n` before the assistant content anyway. So
+    training rendered targets containing a think block that this function — correctly, for the served
+    model — does not pre-fill, and the fine-tuned model spent its first generated tokens emitting the
+    scaffolding straight into the scored output. `_assert_train_serve_prefix_alignment` in
+    `training/lora_trainer.py` now fails loudly rather than letting that ship.
+    """
     prefix = (
         f"<|im_start|>user\n{prompt}<|im_end|>\n"
         "<|im_start|>assistant\n"
     )
     if base_model == "Qwen/Qwen3-4B-Instruct-2507":
-        # Non-thinking-only artifact: its HF template emits the plain assistant prefix.
+        # Thinking-free artifact: its official HF template emits the plain assistant prefix.
         return prefix
     # Hybrid Qwen3/Qwen3.5 templates disable thinking by pre-filling an empty block.
     return prefix + "<think>\n\n</think>\n\n"
@@ -80,7 +75,7 @@ def train(
     batch_size: int | None = None,
     lora_rank: int | None = None,
     output_dir: str = "artifacts",
-    task_type: str = "classification",
+    task: str = "",
     *,
     lora_alpha: int | None = None,
     lora_dropout: float = 0.0,
@@ -93,7 +88,7 @@ def train(
     Execute the full LoRA training loop.
     Returns TrainingOutput(weights_ref, gguf_path=None).
     Always trains from base_model — never from a prior checkpoint.
-    task_type controls the prompt format used during training.
+    task controls the prompt format used during training.
     """
     from training.cuda_isolation import isolation_enabled, run_isolated
 
@@ -105,7 +100,7 @@ def train(
         learning_rate=learning_rate,
         batch_size=batch_size,
         lora_rank=lora_rank,
-        task_type=task_type,
+        task=task,
         lora_alpha=lora_alpha,
         lora_dropout=lora_dropout,
         weight_decay=weight_decay,
@@ -130,7 +125,7 @@ def train(
             ),
             "effective_batch_size": config.effective_batch_size,
             "output_dir": output_dir,
-            "task_type": task_type,
+            "task": task,
         }
         # Defense in depth: remove any explicit parent-side inference model before
         # the child takes ownership of the GPU. Worker exit is the hard cleanup boundary.
@@ -140,17 +135,17 @@ def train(
         finally:
             clear_inference_cache()
 
-    return _train_local(dataset_path, config, output_dir, task_type)
+    return _train_local(dataset_path, config, output_dir, task)
 
 
 def _train_local(
     dataset_path: str,
     config: TrainingConfig,
     output_dir: str = "artifacts",
-    task_type: str = "classification",
+    task: str = "",
 ) -> TrainingOutput:
     """In-process implementation used by disposable workers and direct callers."""
-    return run_lora_training(dataset_path, config, output_dir=output_dir, task_type=task_type)
+    return run_lora_training(dataset_path, config, output_dir=output_dir, task=task)
 
 
 def clear_inference_cache() -> None:
@@ -256,17 +251,21 @@ def _configure_inference_tokenizer(tokenizer):
     return tokenizer
 
 
-def task_max_seq_length(task_type: str | None) -> int:
-    """Context ceiling for ``task_type``. An explicit SLM_MAX_SEQ_LENGTH always wins."""
+def task_max_seq_length(task: str) -> int:
+    """Context ceiling for ``task``, from its spec. An explicit SLM_MAX_SEQ_LENGTH always wins.
+
+    Context is allocated, not measured: KV cache and position buffers are sized from this number
+    whatever the rows actually contain, so it is a per-task ceiling with real headroom over
+    observed lengths rather than a tight fit. A row that would exceed it raises rather than
+    truncating. This governs the SMALL MODEL being trained and evaluated; the orchestrator's
+    Claude context is a separate budget nothing here affects.
+    """
+    from tasks import get_task
+
     override = os.environ.get(_MAX_SEQ_LENGTH_ENV)
     if override is not None:
         return _validated_max_seq_length(override)
-    return _TASK_MAX_SEQ_LENGTH.get(task_type or "", _DEFAULT_MAX_SEQ_LENGTH)
-
-
-def _inference_max_seq_length(task_type: str | None = None) -> int:
-    """Back-compatible alias; callers that know their task pass it for a tighter ceiling."""
-    return task_max_seq_length(task_type)
+    return get_task(task).max_seq_length
 
 
 def _validated_max_seq_length(raw_value: str) -> int:
@@ -463,7 +462,7 @@ def _generate_continuations(
     ]
 
 
-def _eval_batch_size(task_type: str) -> int:
+def _eval_batch_size(task: str) -> int:
     override = os.environ.get(_EVAL_BATCH_SIZE_ENV)
     if override is not None:
         try:
@@ -477,11 +476,9 @@ def _eval_batch_size(task_type: str) -> int:
                 f"{_EVAL_BATCH_SIZE_ENV} must be a positive integer, got {override!r}."
             )
         return batch_size
-    return (
-        _LONG_EVAL_BATCH_SIZE
-        if task_type in _LONG_OUTPUT_TASKS
-        else _SHORT_EVAL_BATCH_SIZE
-    )
+    from tasks import get_task
+
+    return get_task(task).eval_batch_size
 
 
 def _is_cuda_oom(exc: BaseException, torch_module) -> bool:
@@ -562,7 +559,7 @@ def infer(prompt: str, weights_ref: str, base_model: str, max_new_tokens: int = 
             },
         )
 
-    max_seq_length = _inference_max_seq_length()
+    max_seq_length = _DEFAULT_INFERENCE_SEQ_LENGTH
     model, tokenizer = _load_inference_model(
         weights_ref,
         base_model,
@@ -584,7 +581,7 @@ def _infer_batch_local(
     weights_ref: str,
     base_model: str,
     max_new_tokens: int,
-    task_type: str,
+    task: str,
 ) -> list[str]:
     import torch
     from agent.timing import TimingEvent, record_timing_event
@@ -598,7 +595,7 @@ def _infer_batch_local(
     oom_retries = 0
     status = "success"
     metadata = {
-        "task_type": task_type,
+        "task": task,
         "prompt_count": len(prompts),
         "max_new_tokens": max_new_tokens,
         "max_seq_length": max_seq_length,
@@ -608,9 +605,9 @@ def _infer_batch_local(
         "oom_retries": oom_retries,
     }
     try:
-        initial_batch_size = _eval_batch_size(task_type)
+        initial_batch_size = _eval_batch_size(task)
         batch_size = initial_batch_size
-        max_seq_length = _inference_max_seq_length(task_type)
+        max_seq_length = task_max_seq_length(task) if task else _DEFAULT_INFERENCE_SEQ_LENGTH
         metadata.update(
             {
                 "max_seq_length": max_seq_length,
@@ -645,7 +642,7 @@ def _infer_batch_local(
                 if len(current_prompts) == 1:
                     raise RuntimeError(
                         "CUDA OOM during batched inference at batch_size=1 "
-                        f"(task_type={task_type}, base_model={base_model!r}, "
+                        f"(task={task}, base_model={base_model!r}, "
                         f"weights_ref={weights_ref!r}, prompt_index={offset}, "
                         f"max_new_tokens={max_new_tokens}). Reduce max_new_tokens "
                         "or select a smaller model. Original error: "
@@ -691,7 +688,7 @@ def infer_batch(
     base_model: str,
     max_new_tokens: int = 50,
     max_workers: int = 20,
-    task_type: str = "classification",
+    task: str = "",
 ) -> list[str]:
     """
     Greedily generate ordered continuations in padded batches on one cached model.
@@ -715,7 +712,7 @@ def infer_batch(
                 "base_model": base_model,
                 "max_new_tokens": max_new_tokens,
                 "max_workers": max_workers,
-                "task_type": task_type,
+                "task": task,
             },
         )
     return _infer_batch_local(
@@ -723,7 +720,7 @@ def infer_batch(
         weights_ref,
         base_model,
         max_new_tokens,
-        task_type,
+        task,
     )
 
 
@@ -732,6 +729,7 @@ def infer_batch_gguf(
     gguf_path: str,
     max_new_tokens: int = 50,
     base_model: str | None = None,
+    task: str = "",
 ) -> list[str]:
     """
     Run inference over all prompts using a GGUF file via llama-cpp-python.
@@ -753,7 +751,7 @@ def infer_batch_gguf(
             "Install with: pip install llama-cpp-python"
         )
 
-    max_seq_length = _inference_max_seq_length()
+    max_seq_length = task_max_seq_length(task) if task else _DEFAULT_INFERENCE_SEQ_LENGTH
     cache_key = (gguf_path, max_seq_length)
     if cache_key not in _gguf_cache:
         while len(_gguf_cache) >= _MAX_CACHED and _gguf_cache_order:

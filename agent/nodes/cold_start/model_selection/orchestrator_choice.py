@@ -44,13 +44,22 @@ _CHOOSE_SYSTEM = (
     "Output STRICT JSON only: {\"selector\": \"...\", \"reason\": \"...\"}"
 )
 
-_BENCHMARK_HINT = {
+_FAMILY_HINT = {
     "classification": "like-for-like knowledge metrics and instruction-following.",
-    "NER": "instruction-following and structured extraction; use only like-for-like metrics.",
-    "math_reasoning": "GSM8K when reported; missing GSM8K is unknown rather than zero.",
-    "code_generation": "APPS introductory pass@1; do not substitute a different code metric.",
-    "generation": "instruction-following and task-specific generation evidence.",
+    "extraction": "instruction-following and structured extraction; use only like-for-like metrics.",
+    "generation": "GSM8K when the task is arithmetic; otherwise instruction-following and "
+                  "task-specific generation evidence. Missing metrics are unknown, not zero.",
+    "structured_output": "instruction-following and JSON/schema adherence; a general knowledge "
+                         "score is not evidence for emitting a valid call.",
 }
+
+
+def _benchmark_hint(task: str) -> str:
+    """Steer the model-choice prompt toward metrics that mean something for THIS task."""
+    from tasks import TASKS
+
+    spec = TASKS.get(str(task or ""))
+    return _FAMILY_HINT.get(spec.family, "") if spec else ""
 
 
 def _parse_choice(raw: str) -> tuple[str, str]:
@@ -100,9 +109,8 @@ def orchestrator_choice_node(state: AgentState) -> AgentState:
     task_plan = state.get("task_plan") or {}
     hw = state["hardware_constraints"]
     goal = state.get("stop_threshold", 0.9)
-    benchmark_hint = _BENCHMARK_HINT.get(
-        task_type,
-        "task-specific sourced evidence; compare only like-for-like named metrics.",
+    benchmark_hint = _benchmark_hint(task_type) or (
+        "task-specific sourced evidence; compare only like-for-like named metrics."
     )
 
     candidate_lines = "\n".join(

@@ -9,6 +9,29 @@ This document absorbs and replaces `docs/intervention_capability_audit.md`. Item
 audit that are **not** implemented are collected in [§12](#12-not-implemented) rather than
 described as behavior.
 
+> **Update 2026-08-19 — the `task_type` channel is gone, and with it a lot of what was written
+> here.** Eight concrete benchmarks used to share five abstract channels (`classification`, `NER`,
+> `math_reasoning`, `code_generation`, `generation`, plus `function_call`/`diff` bolted on later),
+> and behaviour was decided by `if task_type == ...` chains. Behaviour now comes from a per-task
+> `TaskSpec` in `tasks/`, one module per benchmark, **every field required and no defaults**, so a
+> decision nobody made for a task is an import-time error instead of a silent runtime fallthrough.
+> `state["task"]` and `EvalSet.task` hold a registry NAME. `TaskSpec.family` survives only as a
+> descriptive tag for reports and model-selection hints and **must never be read as a dispatch
+> key** (`tests/test_task_registry.py` enforces that).
+>
+> Every section below that described a per-task-type table, a three-strategy `data_rebuild`, a
+> curriculum rebuilt to a target size, or a paid-acquisition budget has been corrected in place and
+> the correction dated. **[`interventions.md`](interventions.md) is the authority for the
+> iterate → `data_rebuild` → curate loop**; the sections here point at it rather than restating it.
+> The reasoning behind the rebuild is in `Evan's Notes/08-19b-task-registry-rebuild.md`, and the
+> defects it introduced and fixed are B299–B305.
+>
+> Also deleted on 2026-08-18, and therefore no longer described as behaviour anywhere below:
+> `code_generation` / APPS / MBPP / HumanEval **and their execution sandbox**, the `diff` scorer,
+> `sms_spam`, `fpb`, `arc`, `multilingual`, `structured_extraction`, `NAMED_BENCHMARK_TASK_TYPES`,
+> `TASK_REQUIRED_FIELDS`, `TASK_METRIC_NAMES` (now `eval.harness.task_metric_name(task)`), and the
+> paid-acquisition ledger.
+
 ---
 
 ## Table of contents
@@ -22,7 +45,6 @@ described as behavior.
 7. [Interventions](#7-interventions)
 8. [Hyperparameter contract](#8-hyperparameter-contract)
 9. [Model pool, tiers, and variant identity](#9-model-pool-tiers-and-variant-identity)
-10. [Production mode](#10-production-mode)
 11. [Durability and checkpoint/requeue](#11-durability-and-checkpointrequeue)
 12. [Not implemented](#12-not-implemented)
 13. [State field reference](#13-state-field-reference)
@@ -31,9 +53,16 @@ described as behavior.
 
 ## 1. Graph topology
 
-`agent/graph.py::build_graph(mode, checkpointer)` builds one of two LangGraph state machines
-over `agent/state.py::AgentState`. `graph_topology_descriptor(mode)` is the canonical
-structure and is used to reject unsafe checkpoint resumes.
+`agent/graph.py::build_graph(mode, checkpointer)` builds the LangGraph state machine over
+`agent/state.py::AgentState`. `graph_topology_descriptor(mode)` is the canonical structure and is
+used to reject unsafe checkpoint resumes.
+
+**There is one mode, `cold_start`.** The `mode` parameter is retained because it is part of the
+checkpoint compatibility fingerprint and the run manifest, and `graph_topology_descriptor` raises
+on anything else. A second `production` mode existed until 2026-07-29; its entry chain
+(`trace_ingest` → `live_confirm` → `parent_awareness`) was never wired into the topology and the
+idea was scrapped, so those nodes and `agent/nodes/production/` no longer exist. Sections below that
+still discuss production behaviour are retained as history and are marked where they are.
 
 **Every edge is conditional.** There are no unconditional `add_edge` calls — each transition
 passes through a guard that can divert to `END` (see [§2](#2-global-guards)).
@@ -66,26 +95,14 @@ passes through a guard that can divert to `END` (see [§2](#2-global-guards)).
                                                                            END
 ```
 
-### Production mode
-
-Replaces the three cold-start entry nodes with three others; the loop from `curate` onward is
-the same code.
-
-```
-(entry) ──▶ trace_ingest ──▶ live_confirm ──▶ parent_awareness ──▶ curate ──▶ (same loop)
-```
-
 ### Exact routing table
 
 | From | Router | Destinations |
 |---|---|---|
-| entry | `_route_before(entry)` | `task_analysis` / `trace_ingest`, `END` |
+| entry | `_route_before(entry)` | `task_analysis`, `END` |
 | `task_analysis` | `_route_before` | `eval_setup`, `END` |
 | `eval_setup` | `_route_before` | `model_selection`, `END` |
 | `model_selection` | `_route_before` | `curate`, `END` |
-| `trace_ingest` | `_route_before` | `live_confirm`, `END` |
-| `live_confirm` | `_route_before` | `parent_awareness`, `END` |
-| `parent_awareness` | `_route_before` | `curate`, `END` |
 | `curate` | `_route_before` | `train`, `END` |
 | `train` | `_route_before` | `evaluate`, `END` |
 | `evaluate` | `_route_after_evaluate` | `rollback` if `should_rollback`, else `iterate`; `END` |
@@ -140,16 +157,35 @@ consulted by every router — so termination is checked on both sides of every e
 | `STAGNATION_WINDOW` | 15 | `agent/nodes/iterate.py` | Evals examined by the stagnation test (over the append-only `eval_history`, so rollback cannot reset it) |
 | `STAGNATION_MIN_DELTA` | 0.02 | `agent/nodes/iterate.py` | Minimum window gain that counts as progress |
 | `MAX_EVALS_BEFORE_ESCALATION` | 30 | `agent/nodes/iterate.py` | Unconditional ceiling: escalate after this many evals on one model without meeting the goal |
-| `SLM_SURGICAL_SYNTH_SHARE` | 0.20 | `agent/nodes/curate.py` | Share of a `synthesize` budget spent on confused pairs rather than balanced fill |
-| `SLM_SURGICAL_MAX_PAIRS` | 5 | `agent/nodes/curate.py` | Most confusion pairs targeted per rebuild |
-| curriculum target | per-tier | `agent/data_sizing.py` | `clamp(5000 × (0.5 + novelty) × size_factor, 5000, 25000)`; recomputed on every tier change, then **ratcheted** so it never falls below the previous target |
-| `CURRICULUM_SIZE_FLOOR` | 5000 | `config/config.py` | Per-task floor; curricula are synth-filled up to this |
-| `EVAL_SET_SIZE` | 800 | `config/config.py` | Eval floor; below n≈100 F1 CIs under-cover |
-| `DATA_SIZE_CEILING` | 25000 | `config/config.py` | Hard cap on both targets (also the `target_rows` upper clamp) |
+| `SLM_SURGICAL_MAX_CATEGORIES` | 5 | `agent/nodes/curate.py` | Most failure categories targeted per surgical rebuild |
+| `SURGICAL_MIN/MAX_ROWS_PER_CATEGORY` | 25 / 600 | `agent/nodes/curate.py` | Bounds on a category's share of the rebuild, which is otherwise proportional to its failure count |
+| `MIN_REBUILD_ROWS` / `MAX_REBUILD_ROWS` | 50 / 2000 | `agent/data_rebuild.py` | Clamp on a plan's `rows`. The floor stops a whole train+eval cycle being spent on a handful of rows; the ceiling stops one turn dominating the run |
+| `MAX_FAILED_DISCOVERY_ROUNDS` | 2 | `agent/data_rebuild.py` | Consecutive web-research rounds contributing zero novel rows before `mine_new_real` is retired for the run |
+| `TaskSpec.initial_train_cap` | 5000 (all 8 tasks) | `tasks/` | Gold rows requested at cold start. The loader returns as many as it has, up to this. **Not a fraction of anything** |
+| `TaskSpec.eval_cap` | 1000 (all 8 tasks) | `tasks/` | Held-out eval rows requested. `SLM_EVAL_SIZE_CAP` overrides |
+| `MIN_CURRICULUM_ROWS` | 500 | `agent/nodes/curate.py` | Viability FLOOR — curate raises below it. There is no target and nothing pads |
 | `SLM_EVAL_JUDGE_OVERLAP_CHUNK` | 100 | `eval/harness.py` | Rows per generate-then-judge chunk so judging overlaps the next generation batch; `0` disables |
 | `DEFAULT_STOP_THRESHOLD` | 0.96 | `config/config.py` | Used only if the planner supplies none |
-| `MAX_PAID_ACQUIRE_ROUNDS_PER_RUN` | 9 | `agent/data_rebuild.py` | Exa spend ceiling for the whole run |
-| `MAX_PAID_ACQUIRE_ROUNDS_PER_PLAN` | 3 | `agent/data_rebuild.py` | Per data-rebuild plan |
+
+**Update 2026-08-19 — four constants left this table and one changed meaning.**
+
+- `SLM_SURGICAL_SYNTH_SHARE` (0.20) is gone because there is no longer a balanced fill to take the
+  other 80%. Surgical synthesis is now the whole of synthesis, so a share of it is meaningless.
+  `SLM_SURGICAL_MAX_PAIRS` became `SLM_SURGICAL_MAX_CATEGORIES` when confusion *pairs* were replaced
+  by the task's own failure **categories** (B296).
+- **`MAX_PAID_ACQUIRE_ROUNDS_PER_RUN` (9), `MAX_PAID_ACQUIRE_ROUNDS_PER_PLAN` (3), the durable
+  reservation ledger, `plan_budget_identity` and `reserve_paid_acquisition` were all removed.** They
+  bounded paid Exa calls during dataset *discovery*, but the same counter gated the re-read path,
+  where re-reading a corpus already in the local cache costs nothing. What is metered now is
+  failure, not spend: `MAX_FAILED_DISCOVERY_ROUNDS`.
+- **`CURRICULUM_SIZE_FLOOR`, `EVAL_SET_SIZE`, `DATA_SIZE_CEILING` and `agent/data_sizing.py` are all
+  DELETED** (2026-08-19). The per-tier novelty × capacity target they bounded had exactly one
+  consumer — the `× 0.65` split that produced the mystery 3,250-row curriculum — and once that split
+  was removed nothing read the figure at all (B305). The curriculum is cumulative and has no target:
+  the initial load is `TaskSpec.initial_train_cap` (5,000) gold rows and `eval_cap` (1,000) eval
+  rows, as many as the source has up to those, and rebuilds grow it from there.
+  Scores recorded before this change were measured on 800 eval rows and are not strictly comparable
+  to ones measured on 1,000.
 
 `STAGNATION_*`, `MAX_EVALS_BEFORE_ESCALATION`, and both size targets are env-overridable
 (`SLM_STAGNATION_WINDOW`, `SLM_MAX_EVALS_BEFORE_ESCALATION`, `SLM_CURRICULUM_SIZE`,
@@ -222,35 +258,35 @@ measured gating happens post-convergence in the driver, opt-in via
 
 `agent/nodes/cold_start/task_analysis.py::task_analysis_node`
 
-- If `autonomous` or `task_type` is not one of the five valid types, calls
-  `agent/task_planner.py::plan_task` for labels, Exa queries, benchmark, stop threshold, and
-  data sizes.
+- If `autonomous`, calls `agent/task_planner.py::plan_task` for labels, Exa queries, benchmark,
+  stop threshold, and data sizes. A run naming a registered task skips this entirely.
 - `_apply_data_targets` clamps the planner's `curriculum_size` / `eval_size` into
-  `[floor, DATA_SIZE_CEILING]`. `SLM_CURRICULUM_SIZE` / `SLM_EVAL_SET_SIZE` override.
+  the task's own `initial_train_cap` / `eval_cap`. There is no floor or ceiling to clamp to.
 - `SLM_STOP_THRESHOLD` pins both `stop_threshold` **and** `initial_stop_threshold` (the
   immutable floor), taking precedence over the planner.
 - Runs the hardware filter, sorts feasible **largest→smallest by `size_mb`**, stores in
   `feasible_models`. Raises if empty.
 - **Does not set `selected_model`** — that is Node 1b's job.
 
-The five valid task types, each differing in at least two of {model selection, supervision
-format, eval metric, curation strategy}:
+**Update 2026-08-19 — the five-task-type table that stood here has been deleted, not corrected.**
+It listed `classification`, `NER`, `math_reasoning`, `code_generation` and `generation` with a
+supervision format, an eval metric and a synthesis-eligibility flag per *type*. Every one of those
+columns is now a field on the task's own spec, because two tasks sharing a type do not share those
+answers: `routerbench` and `clinc150` were both `classification` and reported the same metric name
+while computing different quantities (B301), and `xlam_bfcl` and `calendar_json` were both
+`function_call` and received the same one-line description in every teacher prompt.
 
-| `task_type` | Supervision | Eval metric | Positive synthesis eligible |
-|---|---|---|---|
-| `classification` | single label | macro-F1 / accuracy | ✅ |
-| `NER` | typed spans as JSON | span-F1 (exact match, pooled TP/FP/FN) | ✅ |
-| `math_reasoning` | CoT mandatory | final-answer exact match | ❌ |
-| `code_generation` | code | APPS/MBPP execution pass@1 | ❌ |
+The suite is eight named tasks, listed with their metrics in
+[§6.5](#the-curated-benchmark-suite-organised-by-what-fine-tuning-is-expected-to-do).
+`code_generation` and its APPS/MBPP execution sandbox were **deleted** on 2026-08-18 — those
+benchmarks are not in the suite, and a sandbox that nothing runs is a liability rather than a
+capability. `task_analysis` no longer validates a `task_type`; `tasks.get_task` raises when the
+run's state names a task the registry does not hold, which happens before the graph is built.
 
-**Code-execution safety.** APPS/MBPP scoring executes candidate code in an isolated
-subprocess with a per-case timeout and a bounded per-problem deadline. The trusted controller
-retains the expected outputs; candidate workers inherit no success FD and no expected-output
-payload, so a candidate cannot signal a false pass. This is **trusted-input only** — the
-process boundary and limits bound accidental damage, but it is **not a hostile-code sandbox**
-(no seccomp, no namespace isolation). Only run benchmark code you obtained from a source you
-trust.
-| `generation` | free text | local Qwen3.6 LLM-as-judge `[0,1]` | ❌ |
+The autonomous path is the one place the old vocabulary survives: `agent/task_planner.py` still
+asks the orchestrator to classify a free-text description into one of those strings, because a task
+that is not in the registry has no spec to read. That path is now nearly unreachable — every task
+this project runs is curated — and is discussed in [§12](#12-not-implemented).
 
 ### Node 2 — `eval_setup`
 
@@ -266,15 +302,37 @@ meaningless random partition).
   file hash, checks `bundle_type`/`schema_version`, validates the row schema against
   `required_fields_for_task`, checks manifest counts against the JSONL, and **rejects any
   normalized train/test overlap**.
-- **Acquisition path** — `data/loaders/web_acquire.py::acquire_dataset` with
-  `gold_target = 0.65 × curriculum_size_target` and request headroom `×1.15 + 40` to survive
-  eval-overlap removal and quality-control drops.
-- `_eval_target(target)` clamps `eval_size_target` to a min-30 floor and passes it to
-  `build_eval_set` as the total sample size. (Historically `build_eval_set` defaulted to 100,
-  which silently capped every eval set at 100 rows regardless of how many test rows were
-  acquired.) Multi-class classification keeps **label-coverage stratification** — a round-robin
-  draw across every label so `E` spans the full label range; every other task type is a plain
-  shuffled top-N sample.
+- **Curated path (every task this project runs)** — `_load_named_benchmark` calls the task's own
+  loader, named on its spec, for `max_train = TaskSpec.initial_train_cap` and
+  `max_test = TaskSpec.eval_cap`. There is no per-channel fallback branch: a task the registry does
+  not know cannot reach this point. It also seeds `state["source_progress"]` with what was consumed
+  per mining source, which is what later lets `mine_new_real` tell an exhausted corpus from one we
+  only read the first few thousand rows of (B297).
+
+  > **Update 2026-08-19 — where 3,250 came from, and why it is gone.** This used to load
+  > `0.65 × curriculum_size_target` gold rows, which on a 5,000-row "target" is 3,250 — a number
+  > that appeared in every xlam log with no stated derivation. It was 65% of a target the
+  > curriculum was then never allowed to reach, because the only mechanism that could have closed
+  > the gap was re-drawing rows it already had. The fraction, the split and the target are all
+  > removed: the loader returns as many rows as the source has, up to a flat 5,000, and the
+  > curriculum **grows** from there. See [§6.1](#61-curate--build-one-dataset-artifact).
+
+- **Autonomous path** (`task_plan` present, no registered task) — `web_acquire.py::acquire_dataset`
+  with `gold_target = 0.65 × curriculum_size_target` and request headroom `×1.15 + 40` to survive
+  eval-overlap removal and quality-control drops. This is the only surviving reader of
+  `curriculum_size_target` (B305).
+- `_eval_target(target)` clamps to a min-30 floor and passes it to `build_eval_set` as the total
+  sample size. (Historically `build_eval_set` defaulted to 100, which silently capped every eval set
+  at 100 rows regardless of how many test rows were acquired.) On the curated path the target is the
+  size of the split the loader already capped, because re-applying a separate `eval_size_target`
+  here capped it a second time and undid the cap (B288). Sampling is the task's own
+  `TaskSpec.eval_sampling`: `label_balanced` round-robins across classes so `E` spans the full label
+  range, `shuffled` is a plain top-N draw. A short eval set is accepted and **logged as short**,
+  because fewer rows means more variance and scores that are not comparable across tasks.
+- `_author_task_brief` — after the real data is loaded, the orchestrator is shown real rows and
+  writes the **task brief** (`agent/task_brief.py`): what the benchmark is, its exact output
+  contract, and its likely failure modes. Every synthesis and verification prompt is built from it.
+  New 2026-08-19; see [`PROMPTS.md` §1.11](PROMPTS.md#111-task-brief-authoring).
 - **Leak firewall (layer 1)** — after *all* acquisition paths, any train row whose normalized
   text matches a test row raises `ValueError`. Logged as
   `official train/test separation: normalized overlap=0`.
@@ -353,39 +411,64 @@ highest-benchmark one. Injects `config/model_capabilities.py::capability_section
 `SKIP: intervention=… — dataset held fixed` and returns unchanged. A hyperparameter
 intervention never rebuilds data.
 
-Requires `eval_set`; raises `RuntimeError` if absent (see [§10](#10-production-mode)).
+Requires `eval_set`; raises `RuntimeError` if absent.
 
-1. **Eval firewall (layer 2)** — `_exclude_eval_rows` over `train_examples`.
-2. **Resolve the plan** — `state["data_rebuild_plan"]` if present, else
-   `fallback_data_rebuild_plan`; then `normalize_data_rebuild_plan`. No dedup/rotation:
-   the plan is used as-is (redesign 2026-07-31).
+**The curriculum is CUMULATIVE (2026-08-19).** Cold start loads the gold rows the loader returned;
+every rebuild **adds** to what is already on disk; rows leave only via quality control or the eval
+firewall. Nothing re-draws from a pool it has already drawn from, and there is no target size.
+[`interventions.md` §4](interventions.md#4-data_rebuild) is the authority for what a rebuild does;
+what follows is the node's own order of operations.
+
+1. **First build** (no previous dataset on disk) — the curriculum is `state["train_examples"]`
+   tagged `train_anchor`, decontaminated against the frozen eval set. No plan, no strategy: there
+   is nothing to add to yet.
+2. **Otherwise, resolve the plan** — `state["data_rebuild_plan"]` if present, else
+   `fallback_data_rebuild_plan`; then `normalize_data_rebuild_plan`, which **rejects unknown
+   fields** rather than dropping them. No dedup or rotation: the plan is used as-is.
 3. **Seed** — `_entropy_seed()` (fresh OS entropy per sampler call). **Non-deterministic** by
    design; there is no reproducible per-plan seed.
-4. **Execute the one strategy** — `acquire` mines new real rows, `synthesize` generates
-   task-adaptive rows, `resample` reshuffles; then resample-fill covers the remainder to
-   `target_rows`. **`resample` is gated**: when the whole train pool is already in the
-   curriculum (`resample_pool_exhausted`), `normalize_data_rebuild_plan`/the fallback planner
-   redirect it to `synthesize` (a reshuffle there adds no novelty).
-5. **Synth-fill to `target_rows`** — `_synth_fill_to_target` tops up any shortfall with
-   task-adaptive synthesis (covers the initial curriculum and every rebuild); degrades
-   gracefully if the endpoint is down.
-6. **CoT annotation** for math/code/generation (`_annotate_generation_cot`); skipped under
-   `SLM_CHEAP=1`.
-7. `apply_quality_controls` → **eval firewall (layer 3)**. `target_rows` is a floor for
-   synth-fill, **not an upper cap** — there is no truncation step, so an `acquire`/`synthesize`
-   overshoot keeps its extra rows (change 2026-08-02).
-8. Atomic write to `artifacts/dataset_v{N}.jsonl`; every row stamped `_dataset_version`.
-9. Record `last_curation`: provenance/source/difficulty composition, per-origin
-   `rows`/`novel_rows`, `plan_yield`, `source_novelty`, and `allocation_fallbacks`.
+4. **Execute the one named sub-strategy.** `mine_new_real` walks the ladder (re-read unexhausted
+   known sources → web discovery only once all are exhausted → retire after
+   `MAX_FAILED_DISCOVERY_ROUNDS`); `surgical_synthesis` generates rows aimed at the failure
+   categories costing the most points. Mined rows also join `state["train_examples"]`, so a later
+   re-read counts them as consumed.
+5. **Eval firewall, per row**, on whatever was added, with each blocked row logged by provenance,
+   label, length and a SHA-8 of its normalized text — never the text itself.
+6. `_dedupe_into` appends only additions whose normalized text is not already present. **This is
+   the only place the curriculum grows.** If it added zero rows, that is logged as an **ERROR**: an
+   intervention was chosen, a plan was built, and the mechanism it named could not do the thing it
+   exists to do, so this iteration would retrain the previous curriculum exactly.
+7. **CoT annotation**, only if the task declares `cot_annotation=True` (gsm8k alone in the current
+   suite); skipped under `SLM_CHEAP=1`.
+8. `apply_quality_controls` → **eval firewall again** → `MIN_CURRICULUM_ROWS = 500` viability floor,
+   which raises rather than warns, because below it the run would burn GPU hours producing a number
+   nobody should trust and the cause is always upstream where it can be fixed.
+9. Atomic write to `artifacts/dataset_v{N}.jsonl`; every row stamped `_dataset_version`.
+10. Record `last_curation`: rows added, novel rows, strategy, target categories, the mining report,
+    `source_progress`, `failed_discovery_rounds`, provenance/source composition, label distribution,
+    and the per-layer eval-firewall tally.
 
-**Allocation fallbacks are recorded, not silent.** When `acquire` mining yields no novel rows,
-or `synthesize` produces nothing (endpoint down / cheap mode), the shortfall is covered by
-resample-fill and an honest entry (`base_fill` / `synth_unavailable_degrade`) is appended to
-`allocation_fallbacks` — never a crash and never a misattributed strategy.
+> **Update 2026-08-19 — three mechanisms described here were removed, and the `target_rows` floor
+> with them.** `resample` went on 2026-08-16 because it re-drew rows from the pool the curriculum
+> was already built from: it could change *which* gold rows were present but never add information
+> (one traced rebuild resampled 3,308 rows of which 122 were novel). The **universal gold FILL** is
+> the same defect one level down — because the curriculum was rebuilt to a target size every
+> iteration, something had to refill it from the train pool, and with nothing else changed it
+> re-selected the identical ~3,235 rows and honestly reported `0 novel` on eight consecutive
+> rebuilds of one run. Untargeted **balanced `synthesize`** went because it spent most of the
+> teacher budget on rows chosen for class balance rather than for anything the model was getting
+> wrong. With no target there is no shortfall to cover, so `allocation_fallbacks` and its
+> `rewrite_noop_strategy` entry are gone too — a rebuild that adds nothing is now an ERROR line
+> rather than a silently-padded curriculum.
 
-`apply_quality_controls` (`data/curriculum.py`) implements four controls, task-routed:
-label balancing, context-length outlier removal (>3× median), entity-value capping (≤3
-occurrences, NER), and Jaccard>0.9 near-duplicate removal.
+**Quality control is per task, not per channel (B299).** `apply_quality_controls` runs the ordered
+steps *this task declared* in `TaskSpec.quality_controls`, from the named units in
+`data/quality_controls.py`: `require_fields`, `label_space`, `balance_labels`, `length_outliers`
+(>3× the median over TRUSTED rows only, B260), `dedup_surface` (Jaccard ≥ 0.9), `entity_diversity`
+(≤3 occurrences of a surface form), and `valid_json_answer`. An empty tuple is a legal, visible
+choice; falling through is impossible because there is no branch. A step told to filter on a field
+no row carries **says so loudly and skips** instead of passing — that silent pass is what made QC a
+no-op for four of the eight tasks.
 
 ### 6.2 `train` — one LoRA configuration
 
@@ -401,7 +484,7 @@ adapter for on-device adapter-manager deployment.
 | `intervention == "hyperparameter"` with LLM `hyperparams` | the LLM's, normalized |
 | …and that exact `(dataset, H)` identity was already tried | `_next_untried_config` deterministic replacement |
 | `intervention == "hyperparameter"`, no config supplied | `_next_untried_config(best_prior)` — never a silent repeat |
-| any other intervention (`data_rebuild`, `rollback`) | **carry-forward best prior config**, labelled `[carry-fwd best]` |
+| any other intervention (`data_rebuild`, `rollback`) | **carry-forward best prior config** (unlabelled — holding the best config is the definition of a non-hyperparameter intervention) |
 | no prior config at all | `_DEFAULT_CONFIG` (r16, α32, dropout 0, wd 0.01, lr 2e-4, 3 epochs, mb 8, ga 1) |
 
 The carry-forward rule matters: previously every `data_rebuild` collapsed to the hardcoded
@@ -429,6 +512,16 @@ builds the base GGUF first.
 - Any other failure records **`baseline_f1 = None`, reported as `n/a`, never `0.0`.**
   Conflating a failed measurement with a genuine zero-shot score of zero once credited
   fine-tuning with a fabricated `+0.8476` improvement in the NER run.
+
+**`judge_mean_0_1` requires a local Qwen3.6 judge, and there is no cloud fallback.**
+`eval/judge_client.py::LocalJudgeClient` preflights `JUDGE_ENDPOINT` before it scores anything: the
+host must be loopback unless `SLM_JUDGE_ALLOW_REMOTE=1`, and `JUDGE_MODEL` (default
+`Qwen/Qwen3.6-35B-A3B`) must name a Qwen3.6 model. Either check failing raises
+`JudgeInfrastructureError`, which aborts the eval rather than falling back — a silently substituted
+judge changes what every generation score in the run means, and the scores would still be reported
+as comparable. Scoring runs `SLM_JUDGE_CONCURRENCY` (16) requests concurrent, and
+`SLM_EVAL_JUDGE_OVERLAP_CHUNK` hands each finished generation chunk to the judge while the next
+chunk is still generating.
 
 **Quantized accuracy eval.** A GGUF is built and scored when `quant is not None` **and**
 (`config.QUANT_ACCURACY_EVAL` — default on — **or** `config.HW_ONDEVICE_BACKEND != "theoretical"`).
@@ -467,8 +560,25 @@ baseline won), `evaluation_state` (`last_eval` + `test_report`), and the full tr
 
 - `pi.D` — dataset `version`, `path`, `plan`, `plan_identity`, `config`, `composition`
 - `pi.H` — the complete hyperparameter identity (retired fields included, for replay)
-- `pi.S` — `task_type`, `supervision`, `loss_masking="assistant_only"`,
-  `loss_contract_version`
+- `pi.S` — `task` (the registry NAME, not a channel), `supervision`,
+  `loss_masking="assistant_only"`, `loss_contract_version`
+
+**Two numbers per evaluation, not one (2026-08-19).** Every log line, DAG node and report now
+carries a **content** score (`EvalResult.f1`, under the task's own `metric` name) *and* a **format**
+score (`EvalResult.format_valid` — the fraction of predictions the scorer could read at all). Seven
+of the eight tasks have a real parse step, and gsm8k is the one the guesses got wrong: a model that
+reasons correctly and never states a parseable number is a *format* failure, fixable by the prompt
+or the answer marker rather than by more data. Reporting only content made those indistinguishable,
+which is exactly how B290 hid for two runs — every prediction carried two stray `<think>` tags, so
+content collapsed while format told the real story.
+
+| task | what `format_valid` measures | needs parsing? |
+|---|---|---|
+| `xlam_bfcl`, `calendar_json` | output parses as a JSON list of `{name, arguments}` | yes |
+| `ner_bc5cdr` | output parses as a JSON array of `{text, type}` | yes |
+| `clinc150`, `routerbench`, `proactive_listening` | an in-vocabulary label was extractable | yes |
+| `gsm8k` | a final numeric answer was extractable | yes |
+| `dialogsum` | non-empty output; there is no contract to satisfy | no |
 
 Finally writes one `data-curation.md` row via `data/curation_log.py::CurationLog`.
 
@@ -491,16 +601,28 @@ heuristic — used under `SLM_DIFFICULTY=heuristic`, on any failure, or if the z
 degenerate (all three buckets empty).
 
 **`build_test_report`** returns `overall`, `by_difficulty`, `confusion_pairs` (top 8),
-`diagnosis`, `suggested_intervention`, `band`. Confusion is task-aware:
+`diagnosis`, `suggested_intervention`, `band`.
 
-| task_type | gold | predicted |
-|---|---|---|
-| `classification` | label | predicted label |
-| `NER` | sorted gold entity types | sorted predicted types, or `incorrect_entity_set` |
-| everything else | `error_type` / `judge_category` / `gold_verifier` | `"incorrect"` |
+**Failure categories come from the task's own scorer (2026-08-19).** `TaskSpec.failure_category`
+maps one failure record to an actionable category, so a reported category names something the
+scorer measured. For a closed-label task the pair is the real `(gold, predicted)` class confusion;
+for everything else the category names the error KIND and the "predicted" slot reads `incorrect`. A
+task that declares `failure_category=None` reports one honest aggregate rather than a fake taxonomy.
 
-Open-ended targets are reduced to a verifier category because the raw target *is* the held-out
-answer.
+| task | categories it can report |
+|---|---|
+| `xlam_bfcl`, `calendar_json` | `unparseable_output`, `undeclared_function`, `wrong_function`, `wrong_call_count`, `wrong_arguments` |
+| `ner_bc5cdr` | `unparseable_output`, `no_entities_predicted`, `entities_hallucinated`, `wrong_entity_type`, `wrong_span_boundaries` |
+| `clinc150`, `routerbench`, `proactive_listening` | the real `(gold, predicted)` class confusions, plus `extraction_failed` vs `wrong_label` |
+| `gsm8k` | `empty_output`, `no_numeric_answer`, `wrong_value` |
+| `dialogsum` | `empty_output`, `unrelated_output`, `partially_correct` |
+
+> **What this replaced (B296).** Under the `task_type` design every non-classification, non-NER
+> failure collapsed to the single literal `gold_verifier → incorrect`, whose count is the failure
+> count the orchestrator already had. Across a dozen iterations of the xlam run the orchestrator
+> wrote hypotheses like *"the dominant confusion gold_verifier->incorrect (147) essentially
+> unchanged since iter2"* — paragraphs of reasoning about a constant, used as evidence. Surgical
+> synthesis now aims at these categories, so it is aiming at something measured.
 
 **`diagnose`** turns the per-bucket *pattern* into an action:
 
@@ -609,9 +731,12 @@ DAG has any nodes.
   depth, so mock/alternate provider paths cannot bypass the contract.
 - **Failure ladder:** `raise_if_fatal` → test-agent `suggested_intervention` → score bands.
 
-**Score bands are fallback only**, not enforced boundaries on a valid LLM decision:
-`<0.80` → `data_rebuild` / `acquire`; `0.80–0.95` → `hyperparameter`;
-`≥0.95` → `data_rebuild` / `synthesize`.
+**Score bands are fallback only**, not enforced boundaries on a valid LLM decision
+(`apply_iteration_policy`): `<0.80` → `data_rebuild` / `mine_new_real`; `0.80–0.95` →
+`hyperparameter`; `≥0.95` → `data_rebuild` / `surgical_synthesis`. The plan itself is filled in by
+`fallback_data_rebuild_plan`, which prefers real rows while any source has them — real data is free
+of teacher error, and a gold-only curriculum produced the best result anyone has measured on this
+project (BC5CDR, 0.8098).
 
 **Threshold adjustment (lowering).** `new_threshold` is clamped to
 `max(value, initial_stop_threshold)` and applied only if it *lowers* the current threshold. The LLM
@@ -620,30 +745,179 @@ beyond parametric memory, reasoning chains too long, adversarial OOD) — explic
 hard but learnable." When `stop_threshold` already equals the floor, this path is inert. This is the
 below-threshold path and is separate from stretch goals, which only fire on a *met* goal.
 
+### Data rebuild: what an intervention can actually do
+
+`DATA_REBUILD_STRATEGIES = ("mine_new_real", "surgical_synthesis")` — exactly two, and a plan names
+one. **[`interventions.md` §4](interventions.md#4-data_rebuild) is the authority**; this is the
+summary.
+
+| Sub-strategy | Effect |
+|---|---|
+| `mine_new_real` | add REAL rows, by a ladder: re-read the task's own unexhausted `mining_sources` for a larger head slice (free — no provider call, no LLM mapping, no schema risk) → web research for a dataset never used, only once every known source is exhausted → **retired** for the run after `MAX_FAILED_DISCOVERY_ROUNDS` (2) rounds that contribute nothing |
+| `surgical_synthesis` | add TEACHER-GENERATED rows aimed at the failure categories costing the most points, budgeted proportionally to each category's failure count and bounded to [25, 600] rows. A category already targeted whose count did not fall is EXHAUSTED and skipped |
+
+Both exhaustion events are logged loudly, because "mining added nothing" and "mining had nothing
+left to add" are different facts that the run used to report identically. A source is marked
+exhausted only when its loader returns *fewer* rows than asked for — the only reliable evidence a
+head slice has reached the end of the split — and progress is tracked per source in
+`state["source_progress"]`.
+
+**A candidate dataset is filtered PER ROW.** It is no longer rejected wholesale for carrying columns
+we do not need, for rows duplicating the curriculum (`_dedupe_into` drops those per row), for rows
+overlapping the eval set (the firewall drops those per row), for a single-class slice, or for its
+own internal train/test split structure. That last check was a tautology: `_materialize_from_mapping`
+sliced train and test from the front of the same split, so it always "found" overlap exactly equal
+to `max_test` and rejected every candidate — including both canonical xLAM repositories. A source is
+useless only when *nothing* survives per-row filtering.
+
+> **What was removed, and why (2026-08-16 through 2026-08-19).**
+> - **`resample`** re-drew rows from the pool the curriculum was already built from, so it could
+>   change which gold rows were present but never add information: one traced rebuild resampled
+>   3,308 rows of which 122 were novel.
+> - **train-pool-gold / the universal gold FILL** was the same defect one level down. Because the
+>   curriculum was rebuilt to a target size every iteration, something had to refill it from the
+>   train pool; with nothing else changed it re-selected the identical ~3,235 rows and honestly
+>   reported `0 novel` on eight consecutive rebuilds of run 38566712. The curriculum is now
+>   cumulative, so nothing needs to refill it.
+> - **synth-fill** padded to `target_rows` with generated rows. The target was itself a heuristic,
+>   BC5CDR's best-in-project 0.8098 came from a gold-only curriculum ~7,100 rows below target, and
+>   one traced rebuild spent 749 generations to keep 64 post-QC rows.
+> - **Untargeted balanced `synthesize`** spent most of the teacher budget on rows chosen for class
+>   balance rather than for anything the model was getting wrong. Targeted generation is strictly
+>   better use of the same calls, so surgical synthesis is now the whole of synthesis.
+>
+> A plan naming any of them is now **rejected**, not silently redirected. A plan written against the
+> wrong contract means the orchestrator believes it asked for something it did not.
+
+**Synthesis coverage is derived from the task, not chosen by a channel.** `synthesize_examples`
+produces one of two row shapes: for a task with a **closed label space** (`clinc150`, `routerbench`,
+`proactive_listening`) a new *input* for an existing class, so the row inherits a real anchor's
+label and only the phrasing can be wrong; for an **open-ended target** (everything else) a whole new
+*(input, answer)* pair, which is why those are gated twice. Under the old dispatch table
+`function_call` matched neither branch and fell through to a bare `return []`, so six rebuilds on
+xlam announced 250–500 rows against a healthy teacher endpoint and produced zero, silently — and the
+exact verifiers written for that path had never executed in production (B291). The table it lived in
+no longer exists.
+
+**`MIN_CURRICULUM_ROWS = 500`** (`SLM_MIN_CURRICULUM_ROWS`) is the viability floor: curate RAISES
+below it, because the cause is always upstream (loader or QC) where it can be fixed.
+
+### Model selection strategies
+
+`SLM_MODEL_SELECTION_STRATEGY` ∈ `smallest_first` (default), `largest_first`, `interpolation`,
+`orchestrator_choice`, **`single_model`**.
+
+`single_model` is the naive-baseline ablation control: the orchestrator picks one model and the run
+stays on it — no escalation on failure, no downward regression on success. Everything else
+(hyperparameter search, data rebuilds, rollback, accuracy goal, stretch goals) runs unchanged, so
+`single_model` vs `smallest_first` isolates what the model ladder buys. Enforced at all three ladder
+gates through `config.model_ladder_enabled()`.
+
+### Eval-set size is capped per task at 1,000
+
+The cap is `TaskSpec.eval_cap`, declared by each task and currently **1,000 for all eight**
+(`SLM_EVAL_SIZE_CAP` overrides every task). It replaced a module-level `_EVAL_SIZE_CAP` on
+2026-08-19, which in turn replaced the old `eval_size_target` default of 800 that was applied
+per-benchmark regardless of how much held-out data existed (B282). The cap is now a per-task field
+because it is a per-task trade-off, and because leaving it in `eval_setup` meant a task could not
+state its own answer.
+
+Why 1,000 and not the whole split: the eval runs on EVERY iteration, so an unbounded split makes each
+loop turn proportionally slower — RouterBench's full held-out set is 7,267 rows, 9x the old per-iteration
+cost, for a variance improvement that flattens out long before that. At n=1,000 the standard error on a
+proportion is about 1.5 percentage points, comfortably below the score differences this project resolves.
+
+Every task **asks** for 1,000; the loader returns as many as its split has, and a short eval set is
+accepted and logged as short. `dialogsum` (renamed from `dialogsum_samsum` on 2026-08-19) and
+`calendar_json` have historically returned fewer — 667 and 478 rows respectively — because their
+whole held-out splits are smaller. **Scores measured before the cap moved to 1,000 used 800 rows and
+are not strictly comparable.**
+
+### Synthetic rows pass TWO gates, exact first
+
+```
+generate (5-shot) → PROGRAMMATIC verify (exact) → MODEL verify (judgement) → quality control
+```
+
+`data/synth_verifiers.py` supplies the exact gate for the tasks where correctness is decidable by
+computation. The verifier is named on the task's own spec as `TaskSpec.synth_verifier`;
+`programmatic_verifier_for` and its side registry are gone.
+
+| task | exact verifier | what it proves for free |
+|---|---|---|
+| `xlam_bfcl` | `verify_function_call_row` | JSON parses; the call targets a **declared** tool; arguments exist in its schema; required parameters present |
+| `calendar_json` | `verify_calendar_row` | the above, plus datetimes parse, `end` follows `start`, an unstated duration is 60 minutes, and the event resolves near the request's own reference instant |
+| `ner_bc5cdr` | `verify_ner_row` *(new 2026-08-19)* | every span appears **verbatim** in the row's own text, with no duplicates |
+| the other five | `None` | only the teacher's judgement is available, and that is logged as such rather than implied |
+
+The exact gate runs FIRST because it is free, cannot be fooled, and a row it rejects should never
+cost a teacher call. `None` is the honest answer for `dialogsum` (summary quality is not decidable
+by computation) and for the closed-label tasks (rows inherit a real anchor's label, so there is no
+answer to verify) — those get the teacher label-verification pass instead.
+
+**NER span synthesis looked unverifiable and is not**, which is why BC5CDR moved from "gold-only by
+design" to having a verifier. The substring check catches the dominant teacher error — a plausible
+entity that was never written down. What it *cannot* catch is a **missed** entity, so the teacher
+pass still runs and that limit is stated in the code rather than left implicit.
+
+Generated rows have `tools` and `_instruction` **pinned from the anchor**: the tool signature is the
+constraint rather than something being invented, and without it a row cannot be schema-checked at all.
+
+**All synthesis and verification prompts are 5-shot** (`SLM_SYNTH_SHOTS`) and are built from the
+**task brief** — the orchestrator's own description of the benchmark, authored once at cold start
+from real rows (`agent/task_brief.py`). The brief replaced a one-line description keyed by task
+*type*, under which `xlam_bfcl` and `calendar_json` were described identically, omitting every
+convention that makes a calendar row correct — so a verifier judging against it was judging its own
+guess (B269, calendar synthesis at 0.2176). Worked examples shown to the teacher are always **real
+rows** sampled from the task's own training split, never orchestrator-invented: a wrong example is
+worse than none. The teacher scores 0.1131 span-F1 zero-shot on BC5CDR NER and 0.7190 with five
+demonstrations (B276/B281).
+
+### Per-task preflight
+
+`scripts/preflight_tasks.py` checks every registered task without a GPU: data loads with the required
+fields, gold scores 1.0 through the real scorer, a DEGENERATE answer scores ~0 (a metric that rewards
+collapse cannot detect it), `_training_turn` produces a non-empty prompt/target byte-identical to the
+eval prompt, and there is no train/eval overlap. Run it before submitting anything — it is the check
+that would have caught the `function_call` trainer crash and it takes ~2 minutes.
+
 ### The curated benchmark suite, organised by what fine-tuning is expected to do
 
-`NAMED_BENCHMARK_TASK_TYPES` in `agent/nodes/cold_start/eval_setup.py` is the single source of truth,
-keyed by `SLM_BENCHMARK_TASK`. `coedit` and `medqa` were removed 2026-08-15 (neither ever produced a
-run); `proactive_listening` was added.
+The registry in `tasks/` is the single source of truth, keyed by `SLM_BENCHMARK_TASK`, which equals
+both the module name and `TaskSpec.name`. `coedit` and `medqa` were removed 2026-08-15 (neither ever
+produced a run); `proactive_listening` was added.
 
-| Category — what FT should buy | Task | task_type | Metric |
+| Category — what FT should buy | Task | `family` (descriptive) | Metric |
 |---|---|---|---|
-| **in-distribution** — base model can already do it; FT buys format discipline. Good baseline, small delta. | `dialogsum_samsum` | generation | `judge_mean_0_1` |
-| **format-bound** — knows the content, cannot produce the contract. Near-zero baseline, large delta. | `xlam_bfcl` | function_call | `ast_arg_match` |
-| | `calendar_json` | function_call | `ast_arg_match` |
-| | `ner_bc5cdr` | NER | `span_f1` |
+| **in-distribution** — base model can already do it; FT buys format discipline. Good baseline, small delta. | `gsm8k` | generation | `exact_match` |
+| | `dialogsum` | generation | `judge_mean_0_1` |
+| **format-bound** — knows the content, cannot produce the contract. Near-zero baseline, large delta. | `xlam_bfcl` | structured_output | `ast_arg_match` |
+| | `calendar_json` | structured_output | `ast_arg_match` |
+| | `ner_bc5cdr` | extraction | `span_f1` |
 | **out-of-distribution** — label is not a property of the input's surface form. Low/noisy baseline, delta bounded by label noise. | `clinc150` | classification | `macro_f1` (151-way) |
-| | `routerbench` | classification | minority-class F1 |
-| | `proactive_listening` | classification | minority-class F1 |
+| | `routerbench` | classification | `minority_f1` |
+| | `proactive_listening` | classification | `minority_f1` |
 
-Evidence for the categories is in `Evan's Notes/2026-08-16-…-synthetic-data-verdict.md` §9. Two
+> **Update 2026-08-19 — three things changed in this table.** `NAMED_BENCHMARK_TASK_TYPES` (and the
+> parallel loader dict a test kept in lockstep with it) were replaced by the registry. The
+> `task_type` column became `family`, which is **descriptive only** — a report label and a
+> model-selection hint, never a dispatch key. **`gsm8k` was promoted** from the autonomous path to a
+> first-class task with its own loader (`data/loaders/gsm8k.py`), making the suite eight, and
+> `dialogsum_samsum` was renamed `dialogsum`. The metric column now states the string the scorer
+> actually returns: `routerbench` and `proactive_listening` reported a minority-class F1 under the
+> name `macro_f1` for their entire history (B301).
+
+Evidence for the categories is in `Evan's Notes/08-16-extraction-collapse-verdict.md` §9. Three
 caveats that matter when reading results:
 
 - **`clinc150` behaves like an in-distribution control, not an OOD task** — its label *is* the
   utterance's meaning, so the teacher scores 0.8919 and fine-tuning adds +0.003. The predictive
   variable is not in/out of distribution but **whether the label is inferable from surface form**.
-- **`dialogsum_samsum` showed +0.0000 over 15 iterations at tier 3** (baseline 0.7157 = best FT). For
+- **`dialogsum` showed +0.0000 over 15 iterations at tier 3** (baseline 0.7157 = best FT). For
   a genuinely in-distribution task the honest output of the loop may be "use the base model".
+- **`gsm8k` is genuinely format-sensitive despite sitting in the in-distribution row.** Its scorer
+  regexes a final number out of the working, so a model that reasons correctly and never states a
+  parseable number scores zero on content and is only visible in `format_valid`.
 
 ### The label vocabulary is pinned at eval_setup and closed thereafter
 
@@ -757,10 +1031,16 @@ base model*.
 
 Two durable phases, one graph commit each:
 
-- **Plan** — record `origin` (once), compute untried lower tiers, ask
-  `_should_reexplore_downward` (LLM; fallback `margin >= 0.03`), pick a candidate with
+- **Plan** — record `origin` (once), compute untried lower tiers, pick a candidate with
   `_llm_choose_model(direction="down")`, write `downward_probe_pending`, return. The choice is
   checkpointed *before* training.
+
+  > The separate `_should_reexplore_downward` gate — one extra LLM call answering "is another
+  > lower tier worth probing?", with a `margin >= 0.03` heuristic fallback — **no longer exists**.
+  > It parsed its answer with `bool(...)`, so a JSON string `"false"` evaluated true and the gate
+  > could not decline (B202), and it was never given the probe's cost or the candidate's RAM saving,
+  > so it was not actually the cost-aware decision it was written to be. The probe now simply runs
+  > while an untried lower tier exists and stops at the first tier that misses the goal.
 - **Execute** — revalidate that the pending selector is still feasible and that its `H` matches
   the fixed contract, then train + eval and append to `history["attempts"]`.
   - `f1 >= threshold` → **adopt**: swap `selected_model`, `best_weights_ref`, `best_score`,
@@ -792,51 +1072,60 @@ rejected.
 Routes to `curate`; hyperparameters are held at the current best so the data change is isolated
 and comparable.
 
-`agent/data_rebuild.py` defines **three** strategies (redesign 2026-07-31), chosen singly with
-no task-type or score gating:
+`agent/data_rebuild.py` defines **two** orchestrator-selectable sub-strategies
+(`DATA_REBUILD_STRATEGIES = ("mine_new_real", "surgical_synthesis")`), chosen singly with no
+task-type or score gating. What each one does is in
+[§6.5](#data-rebuild-what-an-intervention-can-actually-do) and, in full, in
+[`interventions.md`](interventions.md).
 
-| Strategy | What it does |
+**Plan schema version 3** (`normalize_data_rebuild_plan`), rewritten 2026-08-19:
+
+| Field | Domain |
 |---|---|
-| `resample` | Reshuffle / re-draw rows from the existing pool (entropy-seeded). **Gated:** redirected to `synthesize` when the whole pool is already in the curriculum (`resample_pool_exhausted`) — a reshuffle there adds no novelty. |
-| `acquire` | Add new rows from the same or a new provenance (bounded real-source mining: local → deterministic benchmark → paid Exa) |
-| `synthesize` | Task-adaptive synthetic generation — new *in-class gold* rows for classification/NER, new *correct* in-distribution examples for math/code/generation |
+| `schema_version` | must be `3` |
+| `strategy` | `mine_new_real` \| `surgical_synthesis` |
+| `rows` | [50, 2000], clamped. How many rows this rebuild may ADD |
+| `target_categories` | ≤8 entries of `{"category": <name>, "count": <observed failures>}`, drawn from the task's own failure taxonomy |
+| `pattern_hint` | free text, ≤1200 chars |
 
-Regardless of strategy, the curriculum is **synth-filled up to `target_rows`** when real data
-falls short (covers the initial curriculum and every rebuild); if synthesis is unavailable it
-degrades gracefully (resample-fill + a logged `allocation_fallbacks` entry, never a crash).
+**Unknown fields are rejected, not ignored.** A plan that sets something we removed is a plan
+written against the wrong contract, and silently dropping it would let the orchestrator believe it
+had asked for something. So `target_rows`, `resample_fraction`, `new_real_rows`, `synth_rows`,
+`max_acquire_rounds`, `difficulty_buckets` and `confusion_pairs` are all now hard validation errors
+rather than fields that get trimmed. `difficulty_buckets` went because nothing ever read it back to
+sample rows with; per-difficulty targeting is expressed through failure categories instead, which is
+more direct. Validation also rejects any raw held-out text anywhere in the plan.
 
-**Plan schema** (`normalize_data_rebuild_plan`) — every field is snapped to a bounded, stepped
-range:
-
-`strategy` (one of the three) · `target_rows` [16, `DATA_SIZE_CEILING`] step 8 ·
-`resample_fraction` [0.10,1.00] step 0.05 · `new_real_rows` [0,500] step 5 ·
-`synth_rows` [100,500] step 5 (the `synthesize` count, model's discretion) ·
-`max_acquire_rounds` [0,3] · `difficulty_buckets` ·
-`confusion_pairs` (≤8) · `pattern_hint`
-
-Validation rejects: an unknown `strategy`, and any raw held-out text anywhere in the plan. A
-material strategy (`acquire`/`synthesize`) with a zero budget has a sensible positive budget
-auto-filled rather than being rejected.
+**One rewrite survives, and it is not silent.** A `mine_new_real` plan is rewritten to
+`surgical_synthesis` when `mining_available_for_state` is False — every known source exhausted AND
+web research already out of its allowance — because the alternative is spending a full train+eval
+cycle on an intervention that provably cannot add a row. The orchestrator is told mining is retired
+in its own prompt before it writes the plan.
 
 **Non-determinism.** There is no plan-identity dedup, no untried-plan rotation, and no
-`DataRebuildPlanSpaceExhausted`. Sampling and synthesis draw fresh OS entropy each call, so
-repeated rebuilds genuinely vary. The orchestrator freely re-picks any strategy each turn;
-**escalation after `MAX_STALL_EVALS` (20) non-improving evals** is the sole stuck-run backstop
-(plus the wall-clock guard). Exact checkpoint-resume reproducibility is intentionally dropped.
+`DataRebuildPlanSpaceExhausted`. Sampling and synthesis draw fresh OS entropy each call, so repeated
+rebuilds genuinely vary. The orchestrator freely re-picks a strategy each turn; escalation on
+no-improvement (`STAGNATION_WINDOW` = 15, plus the `MAX_EVALS_BEFORE_ESCALATION` = 30 ceiling) is the
+sole stuck-run backstop, plus the wall-clock guard. Exact checkpoint-resume reproducibility is
+intentionally dropped.
 
-**Real-source mining** (for `acquire`) tries local and deterministic benchmark sources before
-process-isolated paid discovery. Local candidates require an explicit benchmark match or strong
-task+label+schema agreement. Paid rounds use a locked append-only reservation ledger under the
-stable run directory: reservation precedes the call and remains spent after completion, failure,
-or crash.
+> **The paid-acquisition ledger is gone (2026-08-19.)** Mining used to reserve a round against a
+> locked append-only ledger under the stable run directory, bounded by
+> `MAX_PAID_ACQUIRE_ROUNDS_PER_RUN` (9) and `MAX_PAID_ACQUIRE_ROUNDS_PER_PLAN` (3). The ledger did
+> what it was built to do — a crash loop could not re-spend budget — but it metered the wrong thing:
+> the same counter gated **re-reading a corpus already in the local cache**, which costs nothing at
+> all, and on xlam that meant the loop could not reach ~57,000 unused rows it already had while
+> paying Exa to rediscover mirrors of them (B297). `data/acquisition_budget.py`,
+> `plan_budget_identity` and `reserve_paid_acquisition` are no longer on any code path. What is
+> metered now is **failure, not spend**: `MAX_FAILED_DISCOVERY_ROUNDS` (2) fruitless discovery
+> rounds retire mining for the run.
 
-**Fallback plan** (`fallback_data_rebuild_plan` → `_fallback_strategy_from_signal`) is
-**non-deterministic and signal-weighted**: it draws a weighted-random strategy biased by the
-measured failure signal — failing easy bucket biases toward `acquire`; weak medium/hard (or
-confusion pairs) biases toward `synthesize`; otherwise all three are roughly equal. Difficulty
-weights are computed **inversely to measured accuracy** (`0.1 + 0.7 × deficit/total_deficit`,
-floored at 0.1). This replaced the old deterministic keyword/rotation chooser that sent every
-NER fallback to `resample_existing` and exhausted the (then-bounded) plan space.
+**Fallback plan** (`fallback_data_rebuild_plan`) is now deterministic in its strategy choice:
+`mine_new_real` while any source still has rows, `surgical_synthesis` otherwise, aimed at whatever
+the last test report says is failing most. It prefers real rows because real data is free of teacher
+error and a gold-only curriculum produced the best result anyone has measured on this project
+(BC5CDR, 0.8098). This replaced a signal-weighted random draw over three strategies, which in turn
+replaced a keyword/rotation chooser that sent every NER fallback to `resample_existing`.
 
 **A stray `hyperparams` block on a `data_rebuild` is stripped, not rejected.** The rule being
 enforced is "a data rebuild must not also change hyperparameters"; dropping the field enforces
@@ -919,13 +1208,17 @@ same `H` **is** allowed after a data rebuild, because the dataset identity chang
 
 `training/lora_trainer.py`:
 
-- **Max sequence length is per task type**, from `training.slm_helpers.task_max_seq_length`:
-  1024 classification, 2048 generation/math/NER/function_call/diff, 4096 code_generation (APPS
-  prompts plus a 1024-token completion need the full window), 4096 for anything unrecognised.
-  `SLM_MAX_SEQ_LENGTH` overrides every task; the training side clamps to [128, 32768]. Training
-  and eval read the same table so a row cannot fit one side and be truncated on the other.
-  These are ceilings with headroom, not tight fits — measured rows are p50≈228 / p99≈601 tokens.
-  Task-specific output reserves: 50 classification, 512 NER/math/generation, 1024 APPS.
+- **Max sequence length is per TASK** (2026-08-19), from `training.slm_helpers.task_max_seq_length`
+  → `TaskSpec.max_seq_length`: 1024 for `clinc150` and `routerbench`, 2048 for `gsm8k`,
+  `dialogsum`, `ner_bc5cdr`, `xlam_bfcl`, `calendar_json` and `proactive_listening`.
+  `SLM_MAX_SEQ_LENGTH` overrides every task; the training side clamps to [128, 32768]. Training and
+  eval read the same field, so a row cannot fit one side and be truncated on the other. These are
+  ceilings with headroom, not tight fits — measured rows are p50≈228 / p99≈601 tokens. Output
+  reserves are `TaskSpec.max_new_tokens`: 50 for the classification tasks, 256 for the two
+  function-calling tasks, 512 for `gsm8k` / `dialogsum` / `ner_bc5cdr`. `TaskSpec.__post_init__`
+  rejects a spec whose reserve leaves no prompt budget, so the pair is validated at import.
+  There is no longer a `.get(..., 4096)` default for an unrecognised type: an unregistered task
+  raises in `get_task` long before this.
 - **Eval batch size** 32 short-output / 16 long-output (`SLM_EVAL_BATCH_SIZE`). A CUDA OOM
   halves the active batch and retries in place.
 - **Nothing truncates.** Training (`_validate_training_sequence_lengths`), HF inference, and
@@ -1040,24 +1333,6 @@ Removed pool-wide: `CHIP_SCALE_FACTORS`, `tok_s_snapdragon_*`, `peak_memory_mb`,
 
 ---
 
-## 10. Production mode
-
-`mode="production"` (paper §2.6). Three entry nodes, then the identical shared loop.
-
-| Node | Symbol | Behavior |
-|---|---|---|
-| `trace_ingest` | `production/trace_ingest.py` | Loads judged traces from `state["traces"]` or `traces.jsonl`; partitions `T_fail`/`T_pass`; seeds `train_examples` from `T_fail` corrected outputs |
-| `live_confirm` | `production/live_confirm.py` | Pre-screens by the `cluster` **key** (traces with `cluster=None` are kept as unclassified, not dropped), then **re-runs M0** on each candidate and keeps only failures M0 still reproduces. Inference errors count conservatively as confirmed |
-| `parent_awareness` | `production/parent_awareness.py` | Regression set `R` = stratified sample of passing traces (≥50, or half); replay buffer `D_replay` = 15% of the parent dataset (paper's 10–20%) |
-
-`curate` consumes `replay_buffer` at ≤20% of `target_rows`, tagged `_provenance="replay"`, and
-applies the eval firewall to it.
-
-> **Production mode is not runnable end-to-end.** `curate_node` raises when `eval_set` is
-> `None`, and the production graph never builds one. See [§12](#12-not-implemented).
-
----
-
 ## 11. Durability and checkpoint/requeue
 
 Driver: `tests/pipeline/run.py`. Machinery: `agent/checkpoint.py`, `agent/state_codec.py`.
@@ -1101,9 +1376,12 @@ requeue path is unchanged.
   different graph shape is rejected. A `thread_id` mismatch against the manifest is a hard error.
 - **Atomic writes.** `atomic_write_json` / `atomic_write_jsonl` for datasets, eval sets, and
   checkpoints. `run_training_atomically` makes each training checkpoint write-or-nothing.
-- **Paid-acquisition ledger.** Locked, append-only, under the stable run directory. Reservation
-  precedes the Exa call and stays spent after completion, failure, or crash, so a crash loop
-  cannot re-spend budget.
+- ~~**Paid-acquisition ledger.**~~ **Removed 2026-08-19.** It was locked, append-only and under the
+  stable run directory, and it did prevent a crash loop from re-spending budget — but it metered
+  free re-reads of already-cached corpora alongside genuinely paid Exa discovery, which is what
+  kept mining off its own data (B297). Discovery is now bounded by `MAX_FAILED_DISCOVERY_ROUNDS`,
+  which needs no durable state: `state["failed_discovery_rounds"]` and `state["source_progress"]`
+  ride the normal checkpoint.
 - **Cost ledger.** `agent/cost.py` appends one `CostEvent` per instrumented call to
   `SLM_COST_EVENT_PATH` under an OS file lock, so the runner, forked acquisition processes, and
   spawned CUDA workers share one ledger. Provider SDK calls are wrapped explicitly at their call
@@ -1138,31 +1416,45 @@ recommendations, not behavior.** No code was changed to produce this list.
 
 | # | Gap | Evidence |
 |---|---|---|
-| 1 | **Production mode cannot start.** `curate_node` raises when `eval_set is None`, and the production graph has no node that builds one. A caller must pre-populate it; nothing validates that at graph entry. | `curate.py` guard vs `graph.py` production branch |
-| 2 | **Gold-only degradation on a dead synth endpoint.** `curate` logs a warning and proceeds without synthesis. The driver's preflight (phase 7) blocks *at startup*, but an endpoint that dies mid-run degrades silently. | `curate.py::_synthesize_positive_rows` |
-| 3 | **Synthesis has never actually run at scale.** Both completed runs show only `synth_preflight` events in the cost ledger — 8/9 failed (NER), 18/43 failed (math) — and **no generation events at all**. Every claim about synthesis quality is therefore untested in production. | `logs/runs/*/cost.json` |
-| 4 | **Generation scorer mislabels its metric.** The average LLM-judge score is reported in the `"f1"` field. | `eval/scorers/generation.py:592` |
-| 5 | **`delegate_task` and the four `@tool`-decorated tools have zero call sites.** No sub-agent or tool-using path is reachable from either graph. | `agent/tools/` |
-| 6 | **No baseline/SOTA survey.** Design §2.4 stage 3 calls for a web-search survey of published baselines at plan time; `task_analysis` relies on the planner LLM's own recall. | `task_analysis.py` |
-| 7 | **`_annotate_ner_entities` does not re-validate spans.** Contrary to its prompt, returned spans are not rechecked as exact substrings and types are not allow-listed at that call site. A parse failure becomes an empty-entity gold row, indistinguishable from a genuine negative. | `web_acquire.py::_annotate_ner_entities` |
-| 8 | **`_should_reexplore_downward` coerces with `bool(...)`.** A JSON string `"false"` would evaluate true. | `downward_probe.py` |
-| 9 | **Live confirmation does not replay the serving prompt.** It sends `trace["input"]` raw and compares by exact string, which is wrong for most classification/NER/generation outputs. | `production/live_confirm.py` |
+| 2 | **Gold-only degradation on a dead synth endpoint.** `_surgical_synthesize` logs "synthesis endpoint unavailable — no rows generated" and returns nothing. The driver's preflight (phase 7) blocks *at startup*, but an endpoint that dies mid-run degrades to a zero-row rebuild. That is at least now an **ERROR** line rather than a silent pad. | `curate.py::_surgical_synthesize` |
+| 3 | **Synthesis has never run at scale in production.** The two completed runs that predate this note show only `synth_preflight` events in the cost ledger — 8/9 failed (NER), 18/43 failed (math) — and no generation events at all; the xlam run that followed had a healthy endpoint and produced zero rows for a different reason (B291). Every claim about synthesis quality remains untested in production. | `logs/runs/*/cost.json` |
+| 4 | **Generation scorer mislabels its metric field.** The average LLM-judge score is carried in `EvalResult.f1`. The `metric` field now names what it really is (`judge_mean_0_1`), so reports cannot misattribute it, but `f1` itself is deliberately never renamed — checkpoints and DAG replay depend on the field name. | `eval/scorers/generation.py` |
+| 7 | **`_annotate_ner_entities` does not re-validate spans.** Contrary to its prompt, returned spans are not rechecked as exact substrings and types are not allow-listed at that call site. A parse failure becomes an empty-entity gold row, indistinguishable from a genuine negative. Reachable only from the autonomous acquisition path. | `web_acquire.py::_annotate_ner_entities` |
+| 10 | **`calendar_json`'s mining source is unverified.** `TOPv2/reminder` is a GitHub tarball, not a hub dataset, and nothing has confirmed its loader answers a request for a larger head slice — so rung 1 of the ladder may be a no-op for that task. **B303**, 🔴 open. | `tasks/calendar_json.py` |
+| 11 | **`allow_paid_discovery=True` on `routerbench` and `proactive_listening`,** whose labels are derived rather than observed, so discovery there can only find data whose labels an LLM must invent. **B304**, ⚪ design gap. | `tasks/routerbench.py`, `tasks/proactive_listening.py` |
+| 12 | ~~`agent/data_sizing.py` has no production call site.~~ **RESOLVED 2026-08-19** — the module is deleted, along with `CURRICULUM_SIZE_FLOOR`/`EVAL_SET_SIZE`/`DATA_SIZE_CEILING`. Per-task caps on `TaskSpec` replaced it. **B305** closed. | (deleted) |
+
+> **Update 2026-08-19 — items 5, 8 and 9 were resolved by deletion, not by a fix.** `agent/tools/`
+> (item 5, `delegate_task` and the four `@tool` wrappers) no longer exists. `agent/nodes/production/`
+> (item 9, live confirmation) went with production mode on 2026-07-29. `_should_reexplore_downward`
+> (item 8, the `bool("false")` coercion) is no longer in `downward_probe.py`. Their B-numbers —
+> B21, B23, B199, B202, B207 — are retained in BUGS.md as history.
+>
+> The numbers are the original audit's and are left as they are so an entry can still be matched to
+> the audit it came from; the gaps predate this sweep.
 
 ### 12.2 Recommended interventions (none implemented)
 
 1. **Prompt-contract repair** — a first-class intervention that versions and edits the shared
    train/eval prompt builder, then re-evaluates without relabeling data.
-2. **Verified hard-case generation** — task-specific generators for math/code that emit new
-   problems *plus* executable or exact-answer verification, instead of reusing unchanged
-   failures.
+2. **Verified hard-case generation** — *partly implemented as of 2026-08-19.* Three tasks now have
+   exact programmatic verifiers on generated rows (`xlam_bfcl`, `calendar_json`, `ner_bc5cdr`; see
+   `TaskSpec.synth_verifier`), and surgical synthesis targets measured failure categories rather
+   than reusing unchanged failures. What is still missing is an exact verifier for `gsm8k` —
+   `synth_verifier=None` there, so a generated math row is gated only by the teacher's own answer
+   check, which is the weakest gate in the suite and the one an arithmetic check could replace
+   outright.
 3. **Preference optimization** — store generation negatives as explicit chosen/rejected pairs
    and train with a preference loss. Never as positive SFT.
-4. **Class weighting and confusion-pair oversampling** — none of this touches row sampling.
-   `difficulty_weighted_sampling` does not exist (the dead `_difficulty_sample` helper was
-   deleted 2026-08-02), and `curate_node` never reads `difficulty_buckets`, `confusion_pairs`,
-   or `pattern_hint`. They steer *which strategy* runs (via the fallback planner) and populate
-   the orchestrator prompt, but explicit class weights and confusion-pair oversampling of rows
-   are not implemented.
+4. **Class weighting** — still not implemented; nothing weights the loss or oversamples a class at
+   the row level. *Confusion-pair oversampling, however, now exists in a better form:*
+   `surgical_synthesis` budgets generation per failure **category** in proportion to that
+   category's measured failure count, so the evidence does steer row production. `difficulty_buckets`
+   and `confusion_pairs` were removed from the plan schema on 2026-08-19 precisely because nothing
+   read them back to sample with; the buckets are still computed once at cold start and remain
+   **advisory only**, feeding reporting and the orchestrator prompt (and a small-right/large-wrong
+   row is still bucketed as `hard`, B298). `pattern_hint` survives in the plan and reaches the
+   teacher prompt, not the sampler.
 5. **LoRA target-module search** — target sets are fixed; a model-aware choice is possible.
 6. **Optimizer schedule intervention** — warmup and scheduler are fixed. (Weight decay *is* now
    a bounded intervention; effective batch deliberately is not — see
@@ -1173,8 +1465,10 @@ recommendations, not behavior.** No code was changed to produce this list.
    long-context task has to be resized by hand with `SLM_MAX_SEQ_LENGTH`.
 8. **Cross-run source cache** — reuse novelty fingerprints across independent runs without
    weakening source/split restrictions.
-9. **Additional verified-positive strategies** — math/code generators, gated on exact-answer or
-   execution verification for every synthesized row.
+9. **Additional verified-positive strategies** — an exact-answer verifier for `gsm8k`, which is the
+   one remaining open-ended task where correctness is decidable by computation and currently is not
+   checked. (Execution verification is no longer relevant: `code_generation` and its sandbox were
+   deleted 2026-08-18.)
 
 ### 12.3 Audit claims that were stale and are now corrected
 
@@ -1203,12 +1497,28 @@ Recorded so the delta is auditable.
 
 **Task specification** — `description`, `target_metric`, `hardware_constraints`
 
-**Task analysis** — `task_type`, `selected_model`, `feasible_models` (largest→smallest),
-`stop_threshold`, `initial_stop_threshold` (immutable floor), `task_plan`, `autonomous`
+**Task analysis** — `task` (the registry NAME — `xlam_bfcl`, `clinc150`, …, **not** an abstract
+`task_type`), `selected_model`, `feasible_models` (largest→smallest), `stop_threshold`,
+`initial_stop_threshold` (immutable floor), `threshold_calibration`, `task_label_space`,
+`task_plan`, `autonomous`
 
 **Data** — `train_examples`, `eval_set`, `data_source`, `current_dataset_path`,
-`dataset_version`, `data_rebuild_plan`, `data_rebuild_plan_identity`,
-`source_acquire_rounds_used`, `curation_log_path`
+`dataset_version`, `data_rebuild_plan`, `data_rebuild_plan_identity`, `curation_log_path`. Also
+still declared and initialised: `source_acquire_rounds_used`, which nothing increments or reads now
+that the paid-acquisition ledger is gone — as is `data/acquisition_budget.py` itself, which has no
+importers.
+
+**Curriculum growth bookkeeping (added 2026-08-19)** — `source_progress`
+(`{source_id: {consumed, asked_for, url, exhausted}}`, so `mine_new_real` can tell an exhausted
+corpus from one we read the first few thousand rows of), `failed_discovery_rounds` (consecutive
+web-research rounds contributing zero novel rows; at `MAX_FAILED_DISCOVERY_ROUNDS` mining is
+retired), `task_brief` (the orchestrator's own description of the benchmark, authored once at cold
+start and used to build every teacher prompt), and `surgical_category_history` (written by curate:
+which failure categories were targeted, at what count, so an unresponsive one is skipped as
+exhausted).
+
+**Stretch goals** — `convergence_banked`, `threshold_raises`, `threshold_lowers`,
+`max_stop_threshold`
 
 **Search state** — `best_weights_ref`, `best_score`, `lifetime_best_score` (max across all
 tiers), `iteration`, `scores`, `dag`, `consecutive_no_improvement`, `downward_probe_done`,
@@ -1223,8 +1533,9 @@ unmeasured. Doubles as the source of truth for "which tiers the main ladder trie
 
 **Phase 2 flags** — `quantize_enabled`, `hw_gating_enabled`
 
-**Production** — `mode`, `deployed_model_ref`, `traces`, `regression_set`, `replay_buffer`,
-`turn_budget`
+**Turn budget** — `turn_budget`, charged at ~2 productive turns per iteration (curate + train). The
+production fields that used to sit alongside it (`mode`, `deployed_model_ref`, `traces`,
+`regression_set`, `replay_buffer`) went with production mode.
 
 **Graph internals** — `_graph_steps` (durable cumulative node count),
 `_wallclock_terminated_before`
@@ -1235,7 +1546,9 @@ unmeasured. Doubles as the source of truth for "which tiers the main ladder trie
 **Train→evaluate carry** — `_pending_weights_refs`, `_pending_training_outputs`,
 `_pending_configs` (all keyed by config label)
 
-**Data targets** — `curriculum_size_target`, `eval_size_target` (planner-chosen, clamped)
+**Data targets** — `curriculum_size_target`, `eval_size_target` (planner-chosen, clamped). Read
+only by the **autonomous** acquisition path since 2026-08-19; a curated run sizes its initial load
+from `TaskSpec.initial_train_cap` / `eval_cap` and then grows without a target. See B305.
 
 **Provenance** — `eval_source_ban`, `data_sources`
 
@@ -1246,5 +1559,9 @@ unmeasured. Doubles as the source of truth for "which tiers the main ladder trie
 `downward_probe_history` (`{origin, fixed_H, attempts, termination?}`),
 `downward_probe_pending`
 
-Written by a node but **not** declared in the `TypedDict`: `termination_reason` (set by `curate`
-on plan-space exhaustion).
+> **Note.** `agent/state.py`'s inline comment on the `task` field still lists the old channel
+> vocabulary (`"classification" | "NER" | "math_reasoning" | …`). The field itself holds a registry
+> name — every reader resolves it through `tasks.get_task` — so the comment is stale, not the
+> behaviour.
+
+Written by a node but **not** declared in the `TypedDict`: `termination_reason`.

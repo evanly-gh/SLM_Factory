@@ -54,10 +54,31 @@ def convert_dialogsum_rows(dataset: Iterable[dict]) -> list[dict]:
 convert_samsum_rows = convert_dialogsum_rows
 
 
+def _dialogue_key(row: dict) -> str:
+    """Normalized dialogue text, for cross-source deduplication."""
+    return " ".join(str(row.get("text") or "").lower().split())
+
+
 def load_dialogsum_samsum(
-    max_train: int = 2000, max_test: int = 800
+    max_train: int = 2000, max_test: int = 800, log=print
 ) -> tuple[list[dict], list[dict]]:
-    """Return ``(train, test)`` merging DialogSum + SAMSum as ``{text, answer}`` rows."""
+    """Return ``(train, test)`` merging DialogSum + SAMSum as ``{text, answer}`` rows.
+
+    **SAMSum ships a handful of dialogues in BOTH its own train and test splits**, each with an
+    independently written summary. Measured on a 500+500 draw: 2 collisions, ~0.2% of rows, and both
+    were samsum_train x samsum_test — NOT, as first reported, a DialogSum/SAMSum cross-source
+    problem (B285, corrected). One example, byte-identical text with two different golds:
+
+        train: "Jeff has a skin allergy. He doesn't take meds all the time..."
+        eval : "Serena's skin condition is fine now and she doesn't have to take medication..."
+
+    Reading the dialogue, the training summary is the accurate one. So the eval row is unwinnable.
+
+    At ~0.2% this is NEGLIGIBLE for the score — it did not move the run's 0.7157 — and curate's eval
+    firewall already removes the training side before training. Deduplicating here is cheap hygiene
+    rather than a fix for a significant defect: it keeps the reported curriculum size honest instead
+    of having the firewall silently shrink it. Dedup is EVAL FIRST, so an eval row is never dropped.
+    """
     from datasets import load_dataset
 
     half_train = max(1, max_train // 2)
@@ -70,4 +91,27 @@ def load_dialogsum_samsum(
         convert_dialogsum_rows(load_dataset(DIALOGSUM_ID, split=f"test[:{half_test}]"))
         + convert_samsum_rows(load_dataset(SAMSUM_ID, split=f"test[:{half_test}]"))
     )
-    return train, test
+
+    # Within-split dedup first (the same dialogue can appear twice in one split across the two
+    # sources), then remove any training row whose dialogue is in the eval set.
+    def _dedup(rows: list[dict]) -> list[dict]:
+        seen, out = set(), []
+        for row in rows:
+            key = _dialogue_key(row)
+            if key and key not in seen:
+                seen.add(key)
+                out.append(row)
+        return out
+
+    test = _dedup(test)
+    eval_keys = {_dialogue_key(row) for row in test}
+    train_deduped = _dedup(train)
+    train_clean = [row for row in train_deduped if _dialogue_key(row) not in eval_keys]
+
+    dropped_dupe = len(train) - len(train_deduped)
+    dropped_overlap = len(train_deduped) - len(train_clean)
+    if log and (dropped_dupe or dropped_overlap):
+        log(f"      [dialogsum_samsum] dedup: dropped {dropped_dupe} duplicate train row(s) and "
+            f"{dropped_overlap} train row(s) whose dialogue is in the eval split "
+            f"(SAMSum ships a few dialogues in both its own splits, with different summaries)")
+    return train_clean, test

@@ -13,12 +13,13 @@
 #SBATCH --signal=B:USR1@7200
 #SBATCH --output=/mmfs1/gscratch/intelligentsystems/evanly/SLM_Factory/logs/slurm/slm-xlam-bfcl-l40s-%j.out
 #
-# CURATED BENCHMARK: xlam_bfcl (task_type=function_call, metric ast_arg_match). SLM_BENCHMARK_TASK
+# CURATED BENCHMARK: xlam_bfcl (format-bound, metric ast_arg_match). SLM_BENCHMARK_TASK
 # pins the deterministic loader (train on Salesforce xLAM-60k, evaluate on the Berkeley
 # Function-Calling Leaderboard) instead of autonomous web_acquire — run.py starts the run
-# NON-autonomous with the loader's task_type. The datasets are pulled live from HuggingFace on the
-# compute node (public; BFCL ships a loader script, trust_remote_code). Scoring is judge-free
-# executable AST argument match.
+# NON-autonomous against this task's registry spec, which is where its loader, scorer, metric and
+# token budget are declared. The datasets are pulled live from HuggingFace on the compute node
+# (public; BFCL ships a loader script, trust_remote_code). Scoring is judge-free executable AST
+# argument match.
 #
 # Dedicated gpu-l40s-intelligentsystems quota: 2x L40S (synth server on GPU0, pipeline on GPU1 —
 # the auto-2gpu profile in _l40s_task_body.sh). --requeue + USR1 checkpoint contract is a safety

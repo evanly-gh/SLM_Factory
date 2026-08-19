@@ -693,19 +693,19 @@ def filter_pool_by_task(
     """
     feasible = filter_pool(constraints)
 
-    if task_type in ("math", "reasoning", "math_reasoning"):
-        return _sort_by_comparable_metric(
-            feasible,
-            lambda model: model.measurement("GSM8K"),
-        )
-    if task_type == "classification":
-        return _sort_by_comparable_metric(
-            feasible,
-            lambda model: (
-                model.measurement("MMLU-Pro") or model.measurement("MMLU")
-            ),
-        )
+    # Which published benchmark ranks candidate models is the task's own choice
+    # (`TaskSpec.model_ranking_metric`); `None` means no published metric is a fair proxy, and the
+    # resource order is kept rather than inventing one.
+    from tasks import TASKS
 
+    spec = TASKS.get(str(task_type or ""))
+    metric = spec.model_ranking_metric if spec else None
+    if metric == "GSM8K":
+        return _sort_by_comparable_metric(feasible, lambda m: m.measurement("GSM8K"))
+    if metric == "MMLU":
+        return _sort_by_comparable_metric(
+            feasible, lambda m: m.measurement("MMLU-Pro") or m.measurement("MMLU")
+        )
     return feasible
 
 

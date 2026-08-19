@@ -113,25 +113,61 @@ def extract_predictions(raw_outputs: list[str], eval_set: EvalSet) -> list[str]:
 
     return [extract(r) for r in raw_outputs]
 
-def score(eval_set: EvalSet, predictions: list[str]) -> dict:
+def _score(eval_set: EvalSet, predictions: list[str], headline: float, metric: str) -> dict:
     labels = [e["label"] for e in eval_set.all]
     all_labels = list({e["label"] for e in eval_set.all})
     per_class = {lbl: binary_f1(predictions, labels, pos_label=lbl) for lbl in all_labels}
-    if len(all_labels) > 2:
-        # Multi-class: macro-averaged F1 across every label.
-        f1 = sum(per_class.values()) / len(per_class) if per_class else 0.0
-    else:
-        # Binary: F1 of the (minority) positive class.
-        pos_label = min(all_labels, key=lambda l: labels.count(l))
-        f1 = binary_f1(predictions, labels, pos_label=pos_label)
+    # Format = an in-vocabulary label was extractable at all. A chatty base model that answers the
+    # row's own embedded question scores 0 here, which is the honest reading of "it did not do the
+    # task" and is what separates that from picking the wrong class (B271).
+    readable = sum(1 for pred in predictions if pred != _UNKNOWN_LABEL)
+    format_valid = readable / len(predictions) if predictions else 0.0
+    per_class["format_valid"] = format_valid
     failures = [
-        {**ex, "predicted": pred}
+        {**ex, "predicted": pred, "error_type": failure_category_of({"predicted": pred})}
         for ex, pred, lbl in zip(eval_set.all, predictions, labels)
         if pred != lbl
     ]
-    return {
-        "f1": f1,
-        "metric": "macro_f1",
-        "per_class": per_class,
-        "failures": failures,
-    }
+    return {"f1": headline, "metric": metric, "per_class": per_class,
+            "failures": failures, "format_valid": format_valid}
+
+
+def score_macro_f1(eval_set: EvalSet, predictions: list[str]) -> dict:
+    """Macro-averaged F1 across every class. For multi-class tasks."""
+    labels = [e["label"] for e in eval_set.all]
+    all_labels = list({e["label"] for e in eval_set.all})
+    per_class = [binary_f1(predictions, labels, pos_label=lbl) for lbl in all_labels]
+    headline = sum(per_class) / len(per_class) if per_class else 0.0
+    return _score(eval_set, predictions, headline, "macro_f1")
+
+
+def score_minority_f1(eval_set: EvalSet, predictions: list[str]) -> dict:
+    """F1 of the minority class. For binary tasks, where macro-F1 over two classes flatters a
+    model that always predicts the majority.
+
+    This used to be selected implicitly by counting labels — `>2 classes` chose macro, otherwise
+    minority — and the returned `metric` string said `macro_f1` either way. So RouterBench and
+    proactive-listening reported a minority-class F1 under a macro-F1 label for their whole
+    history. The task now names which one it wants.
+    """
+    labels = [e["label"] for e in eval_set.all]
+    all_labels = list({e["label"] for e in eval_set.all})
+    if not all_labels:
+        return _score(eval_set, predictions, 0.0, "minority_f1")
+    pos_label = min(all_labels, key=lambda l: labels.count(l))
+    headline = binary_f1(predictions, labels, pos_label=pos_label)
+    return _score(eval_set, predictions, headline, "minority_f1")
+
+
+def failure_category_of(failure: dict) -> str:
+    """Separate "answered in an unreadable format" from "picked the wrong class".
+
+    These call for different interventions — the first is a prompt/format problem, the second a
+    real accuracy problem — and collapsing them is how a chatty base model's non-answers looked
+    like ordinary misclassifications (B271).
+    """
+    return (
+        "extraction_failed"
+        if str(failure.get("predicted")) == _UNKNOWN_LABEL
+        else "wrong_label"
+    )

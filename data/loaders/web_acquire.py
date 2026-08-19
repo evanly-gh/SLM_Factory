@@ -66,17 +66,10 @@ def survey_baseline(exa, description, log=print) -> str:
 _BENCHMARK_ALIASES = {
     "gsm8k": "gsm8k",
     "gradeschoolmath8k": "gsm8k",
-    "financialphrasebank": "fpb", "fpb": "fpb",
-    "smsspam": "sms_spam",
-    "smsspamcollection": "sms_spam",
-    "ucismsspamcollection": "sms_spam",
-    "arcchallenge": "arc", "arc": "arc", "ai2arc": "arc", "arcc": "arc",
     # NER benchmarks: load real token+BIO-tag data and convert to entity spans.
     "bc5cdr": "bc5cdr", "bc5cdrner": "bc5cdr",
     "biocreativevchemicaldiseaserelation": "bc5cdr",
     "conll": "conll", "conll2003": "conll", "conll03": "conll",
-    "apps": "apps", "codeparrotapps": "apps",
-    "mbpp": "mbpp", "mostlybasicpythonproblems": "mbpp",
     "samsum": "samsum", "samsumdialoguesummarization": "samsum",
     # RouterBench. Without this entry Stage-0 had no alias for the benchmark the task is ABOUT, so
     # `load_dataset("withmartian/routerbench")` failed (the repo ships only pickles), mining fell
@@ -93,11 +86,7 @@ _COMPOSITE_BENCHMARK_MARKERS = {
     "bc5cdr": "bc5cdr",
     "routerbench": "routerbench",
     "gsm8k": "gsm8k",
-    "codeparrotapps": "apps",
-    "appsintroductory": "apps",
-    "mbpp": "mbpp",
     "samsum": "samsum",
-    "smsspam": "sms_spam",
 }
 
 
@@ -203,7 +192,7 @@ def _load_ner_benchmark(key: str, max_train: int, max_test: int, log=print):
                     f"train={len(train)} test={len(test)}")
                 return source, train, test
         except Exception as e:
-            log(f"      [acquire] NER benchmark {ds_id!r} unavailable ({str(e)[:80]}); trying next")
+            log(f"      [acquire] NER benchmark {ds_id!r} unavailable ({e}); trying next")
     return None
 
 
@@ -273,19 +262,6 @@ def _set_benchmark_meta(
 
 def _clean_stage0_splits(train, test, name, log=print, meta=None):
     """Apply the same normalized train/test decontamination as offline bundles."""
-    fingerprint_removed = 0
-    if _resolve_benchmark_key(name) == "apps":
-        from data.loaders.apps import remove_apps_train_fingerprint_overlap
-
-        train, fingerprint_removed = remove_apps_train_fingerprint_overlap(
-            train,
-            test,
-        )
-        if fingerprint_removed:
-            log(
-                f"      [acquire] Stage-0 APPS URL/solution overlap removal: "
-                f"removed {fingerprint_removed} train row(s)"
-            )
     clean_train, removed = remove_normalized_train_overlap(train, test)
     if removed:
         log(
@@ -299,10 +275,6 @@ def _clean_stage0_splits(train, test, name, log=print, meta=None):
         )
     if meta is not None:
         meta["overlap_removed_from_train"] = removed
-        if _resolve_benchmark_key(name) == "apps":
-            meta["fingerprint_overlap_removed_from_train"] = (
-                fingerprint_removed
-            )
     return clean_train, test
 
 
@@ -361,36 +333,7 @@ def load_benchmark_dataset(plan: dict, log=print, max_train: int = 300, max_test
 
     try:
         from datasets import load_dataset
-        if key == "sms_spam":
-            from data.loaders.sms_spam import (
-                SMS_SPAM_URL,
-                download_sms_spam,
-            )
-
-            train, test = download_sms_spam()
-            train = _stratified_take(train, max_train)
-            test = _stratified_take(test, max_test, seed=7)
-            if meta is not None:
-                records = [
-                    {
-                        "kind": "url",
-                        "id": "uci-sms-spam",
-                        "split": "train",
-                        "url": SMS_SPAM_URL,
-                        "role": "curriculum",
-                    },
-                    {
-                        "kind": "url",
-                        "id": "uci-sms-spam",
-                        "split": "test",
-                        "url": SMS_SPAM_URL,
-                        "role": "eval",
-                    },
-                ]
-                meta["source"] = "UCI SMS Spam Collection"
-                meta["source_records"] = records
-                meta["eval_ban"] = [dict(records[1])]
-        elif key == "gsm8k":
+        if key == "gsm8k":
             def conv(ds):
                 out = []
                 for ex in ds:
@@ -412,85 +355,6 @@ def load_benchmark_dataset(plan: dict, log=print, max_train: int = 300, max_test
             train = conv(load_dataset(source_id, config, split=f"train[:{max_train}]"))
             test = conv(load_dataset(source_id, config, split=f"test[:{max_test}]"))
             _set_benchmark_meta(meta, name, source_id, config, splits, detail="gold CoT preserved")
-        elif key == "apps":
-            from data.loaders.apps import (
-                APPS_SOURCE_REVISION,
-                convert_apps_rows,
-            )
-
-            source_id, config = "codeparrot/apps", "introductory"
-            splits = {"train": "train", "test": "test"}
-            data_files = {
-                split: (
-                    "https://huggingface.co/datasets/codeparrot/apps/"
-                    f"resolve/{APPS_SOURCE_REVISION}/{split}.jsonl"
-                )
-                for split in splits.values()
-            }
-
-            def load_apps(split, limit):
-                raw = load_dataset(
-                    "json",
-                    data_files={split: data_files[split]},
-                    split=split,
-                    streaming=True,
-                )
-                from eval.scorers.generation import _run_apps_tests
-
-                def gold_validator(solution, row):
-                    return _run_apps_tests(solution, row)
-
-                conversion_stats: dict = {}
-                rows, _ = convert_apps_rows(
-                    raw,
-                    split=split,
-                    limit=limit,
-                    gold_validator=gold_validator,
-                    conversion_stats=conversion_stats,
-                    skip_runner_incompatible=split == "test",
-                )
-                if meta is not None:
-                    meta.setdefault(
-                        "apps_conversion_stats",
-                        {},
-                    )[split] = conversion_stats
-                return rows
-
-            train = load_apps("train", max_train)
-            test = load_apps("test", max_test)
-            _set_benchmark_meta(
-                meta,
-                name,
-                source_id,
-                config,
-                splits,
-                detail=(
-                    "introductory only; solutions/starter code and call-based/"
-                    "stdin tests preserved"
-                ),
-                revision=APPS_SOURCE_REVISION,
-            )
-        elif key == "mbpp":
-            def conv(ds):
-                out = []
-                for ex in ds:
-                    prompt = str(ex.get("prompt") or "").strip()
-                    code = str(ex.get("code") or "").strip()
-                    tests = ex.get("test_list")
-                    if not prompt or not code or not isinstance(tests, (list, tuple)):
-                        continue
-                    out.append({
-                        "text": prompt, "answer": code, "code": code,
-                        "test_imports": list(ex.get("test_imports") or []),
-                        "test_list": list(tests), "task_id": ex.get("task_id"),
-                        "label": "code_generation",
-                    })
-                return out
-            source_id, config = "google-research-datasets/mbpp", "sanitized"
-            splits = {"train": "train", "test": "test"}
-            train = conv(load_dataset(source_id, config, split=f"train[:{max_train}]"))
-            test = conv(load_dataset(source_id, config, split=f"test[:{max_test}]"))
-            _set_benchmark_meta(meta, name, source_id, config, splits, detail="code/tests preserved")
         elif key == "samsum":
             def conv(ds):
                 out = []
@@ -521,29 +385,11 @@ def load_benchmark_dataset(plan: dict, log=print, max_train: int = 300, max_test
                     errors.append(f"{candidate}: {error}")
                     log(
                         f"      [acquire] SAMSum source {candidate!r} unavailable "
-                        f"({str(error)[:80]}); trying mirror"
+                        f"({error}); trying mirror"
                     )
             if not source_id:
                 raise RuntimeError("; ".join(errors) or "no usable SAMSum rows")
             _set_benchmark_meta(meta, name, source_id, config, splits)
-        elif key == "fpb":
-            ds = load_dataset("ChanceFocus/flare-fpb", split="train")
-            rows = [{"text": ex["text"], "label": ex["answer"]}
-                    for ex in ds if ex.get("text") and ex.get("answer")]
-            import random as _rnd
-            _rnd.Random(42).shuffle(rows)
-            train, test = rows[:max_train], rows[max_train:max_train + max_test]
-        elif key == "arc":
-            def conv(ds):
-                out = []
-                for ex in ds:
-                    ch = ex["choices"]
-                    ans = ch["text"][ch["label"].index(ex["answerKey"])] \
-                        if ex["answerKey"] in ch["label"] else ""
-                    out.append({"text": ex["question"], "answer": ans, "label": "generation"})
-                return out
-            train = conv(load_dataset("allenai/ai2_arc", "ARC-Challenge", split=f"train[:{max_train}]"))
-            test = conv(load_dataset("allenai/ai2_arc", "ARC-Challenge", split=f"test[:{max_test}]"))
         else:
             return None
     except Exception as e:
@@ -606,26 +452,46 @@ def mine_additional_real_rows(
     *,
     task_plan: dict,
     description: str,
-    task_type: str,
+    task: str,
     existing_rows: list[dict],
     eval_rows: list[dict],
     eval_source_ban: list[dict],
     requested_rows: int,
-    max_paid_rounds: int,
     query_variant: int,
-    plan_identity: str,
     label_space: set[str] | None = None,
     log=print,
 ) -> tuple[list[dict], dict]:
-    """Mine bounded, novel real-source training rows without touching eval data.
+    """Find a dataset this run has NEVER used and take novel real rows from it.
 
-    The acquisition order reuses the existing clean local loader and deterministic
-    benchmark loader before the process-isolated Exa/HuggingFace discovery path.
-    It deliberately does not call the seed-synthesis fallback: rows returned by
-    this function must come from a real source.
+    This is the last rung of the `mine_new_real` ladder and is only reached once every dataset the
+    run has already sourced is exhausted — `curate._reread_known_sources` handles those, because
+    re-reading a corpus we already have is free and cannot go wrong.
+
+    There is no acquisition BUDGET here any more. The old ledger
+    (`MAX_PAID_ACQUIRE_ROUNDS_PER_PLAN/RUN`, `reserve_paid_acquisition`) metered rounds because the
+    same call path was used for re-reading datasets we already had, so a run could spend nine paid
+    discovery rounds rediscovering mirrors of a corpus sitting in the local cache. Now that
+    re-reading is separate and free, discovery runs when it is asked to and stops when it stops
+    contributing — `curate` retires it after MAX_FAILED_DISCOVERY_ROUNDS fruitless rounds.
+
+    Acceptance is PER ROW, not per source (2026-08-19). A candidate dataset is not rejected for
+    having extra columns we do not need, for having rows that duplicate the curriculum, or for
+    overlapping the held-out eval set: the columns we need are mapped and the rest ignored,
+    duplicates are dropped by `curate._dedupe_into`, and eval overlap is dropped by the eval
+    firewall. A source is only useless if NONE of its rows survive that — which is exactly the
+    condition "every row is already ours".
     """
+    from tasks import TASKS
+
+    # Resolved here, not at a call site: the spec decides whether this task may search the hub at
+    # all, and whether its label vocabulary is closed (which is what makes the per-row label guard
+    # below meaningful).
+    spec = TASKS.get(str(task or ""))
+    closed_label_space = bool(spec.closed_label_space) if spec else False
     requested = max(0, min(500, int(requested_rows or 0)))
-    paid_limit = max(0, min(MAX_ACQUIRE_ROUNDS, int(max_paid_rounds or 0)))
+    if spec is not None and not spec.allow_paid_discovery:
+        log(f"      [mine] {task} does not permit web discovery")
+        requested = 0
     existing_texts = {
         normalize_text(row.get("text", row.get("prompt", "")))
         for row in existing_rows
@@ -643,8 +509,6 @@ def mine_additional_real_rows(
     source_records: list[dict] = []
     candidate_rows = 0
     rejected_sources = 0
-    paid_rounds_used = 0
-    paid_budget_exhausted = False
 
     # The task's CLOSED label vocabulary. Prefer the pinned space from the frozen eval set (that is
     # what the model is scored against); fall back to the labels already present in the run's own
@@ -678,45 +542,38 @@ def mine_additional_real_rows(
     _known_labels = _pinned_labels or (_plan_labels | _row_labels)
     _authoritative = bool(_pinned_labels or _plan_labels)
 
-    def _labels_are_usable(train: list, stage: str) -> bool:
-        """Reject a source whose labels fall outside the task's vocabulary.
+    def _keep_in_vocabulary(train: list, stage: str) -> list:
+        """Drop rows whose label is outside the task's vocabulary, keeping the rest.
 
-        Strict subset when the vocabulary is authoritative; any-overlap when it was inferred.
+        PER ROW, not per source (2026-08-19). The old guard rejected the WHOLE source as soon as any
+        label fell outside a pinned vocabulary. That was the right instinct — B259 saw four
+        hallucinated classes (`cloud`, `on_device`, `router`, `remote`) enter a two-class RouterBench
+        run because an unmapped value passed through verbatim — but the wrong remedy: a dataset whose
+        mapping got most rows right and a few wrong is a dataset worth most of its rows.
+
+        What actually protects the curriculum is that a row carrying an unscoreable class is dropped,
+        and that is exactly what happens here. A source is refused only when NOTHING survives, which
+        is the honest reading of "this dataset does not carry our task".
         """
-        if task_type != "classification" or not _known_labels:
-            return True
-        from data.label_space import describe_rejected_labels
+        if not closed_label_space or not _known_labels:
+            return train
+        from data.label_space import describe_rejected_labels, partition_rows_by_label
 
-        mined_labels = {
-            str(row.get("label"))
-            for row in train
-            if isinstance(row, dict) and row.get("label") is not None
-        }
-        if not mined_labels:
-            return True
-        foreign = mined_labels - _known_labels
-        if not foreign:
-            return True
-        if not _authoritative and foreign != mined_labels:
-            # Inferred vocabulary, partial overlap: cannot distinguish "a class the pool has not
-            # seen" from "a foreign class", so admit and let the per-row filter and quality control
-            # decide. This is the pre-B259 behaviour, retained only for the inferred case.
-            return True
-        counts: dict[str, int] = {}
-        for row in train:
-            if isinstance(row, dict):
-                key = str(row.get("label"))
-                if key in foreign:
-                    counts[key] = counts.get(key, 0) + 1
-        log(
-            f"      [mine] REJECTED {stage} source: {len(foreign)} of its {len(mined_labels)} "
-            f"label(s) are NOT in the task's "
-            f"{'pinned' if _authoritative else 'established'} {len(_known_labels)}-class "
-            f"vocabulary [{describe_rejected_labels(counts)}]. The label space is closed — a "
-            "source is used only when every label it carries already exists, because a class "
-            "absent from the eval set cannot be scored (B259/B222)."
-        )
-        return False
+        kept, rejected = partition_rows_by_label(train, _known_labels)
+        if rejected:
+            log(
+                f"      [mine] {stage}: dropped {sum(rejected.values())} of {len(train)} row(s) "
+                f"whose label is outside the task's {len(_known_labels)}-class vocabulary "
+                f"[{describe_rejected_labels(rejected)}]. The label space is closed — a class "
+                "absent from the eval set cannot be scored, so those rows are unusable "
+                "(B259/B222). The rest of the source is kept."
+            )
+        if not kept:
+            log(
+                f"      [mine] REJECTED {stage} source: not one of its {len(train)} row(s) carries "
+                f"a label in the task's vocabulary, so it is not this task's data at all."
+            )
+        return kept
 
     def accept(result, meta: dict, stage: str) -> int:
         nonlocal candidate_rows, rejected_sources
@@ -743,7 +600,8 @@ def mine_additional_real_rows(
             return 0
 
         candidate_rows += len(train)
-        if not _labels_are_usable(train, stage):
+        train = _keep_in_vocabulary(train, stage)
+        if not train:
             rejected_sources += 1
             return 0
         # Per-ROW backstop, only against an AUTHORITATIVE vocabulary — against an inferred one it
@@ -751,7 +609,7 @@ def mine_additional_real_rows(
         # already rejects a source carrying a foreign label, so reaching here with one means a
         # converter produced it after validation; dropping the row is then the only safe response,
         # because a class outside a closed space can never be scored.
-        if task_type == "classification" and _authoritative and _known_labels:
+        if closed_label_space and _authoritative and _known_labels:
             from data.label_space import describe_rejected_labels, partition_rows_by_label
 
             train, _row_rejected = partition_rows_by_label(train, _known_labels)
@@ -792,100 +650,26 @@ def mine_additional_real_rows(
         return accepted
 
     if requested:
-        local_meta: dict = {}
-        local = load_local_dataset(
+        discovered = discover_and_load_hf_dataset(
             task_plan,
-            task_type,
+            description,
+            task,
             max(300, len(existing_rows) + requested * 4),
+            # A test slice is still requested because some loaders need one to shape rows, but it is
+            # never used as a rejection criterion: the source's own internal train/test structure is
+            # irrelevant to us, since mining consumes only the train side.
             80,
             log=log,
-            meta=local_meta,
+            meta=(paid_meta := {}),
         )
-        if accept(local, local_meta, "local"):
-            paid_limit = 0
-        else:
-            benchmark_meta: dict = {}
-            benchmark = load_benchmark_dataset(
-                task_plan,
-                log=log,
-                max_train=max(300, len(existing_rows) + requested * 4),
-                max_test=80,
-                meta=benchmark_meta,
-            )
-            if accept(benchmark, benchmark_meta, "benchmark"):
-                paid_limit = 0
-
-    for round_index in range(paid_limit):
-        if len(novel) >= requested:
-            break
-        from agent.data_rebuild import MAX_PAID_ACQUIRE_ROUNDS_PER_RUN
-        from data.acquisition_budget import (
-            acquisition_budget_snapshot,
-            reconcile_paid_acquisition,
-            reserve_paid_acquisition,
-        )
-
-        reservation = reserve_paid_acquisition(
-            plan_identity=plan_identity,
-            per_plan_limit=paid_limit,
-            run_limit=MAX_PAID_ACQUIRE_ROUNDS_PER_RUN,
-        )
-        if reservation is None:
-            paid_budget_exhausted = True
-            log(
-                "      [mine] durable paid-acquisition budget exhausted; "
-                "no provider call made"
-            )
-            break
-        paid_rounds_used += 1
-        variant = (
-            int(query_variant or 0)
-            + int(reservation["plan_round"])
-        ) % 8
-        variant_plan = dict(task_plan)
-        base_name = str(
-            task_plan.get("task_name")
-            or task_plan.get("benchmark")
-            or task_type
-        )
-        variant_plan["task_name"] = _diversify_query(base_name, variant)
-        queries = task_plan.get("exa_queries") or {}
-        variant_plan["exa_queries"] = {
-            key: _diversify_query(str(query), variant)
-            for key, query in queries.items()
-        }
-        paid_meta: dict = {}
-        try:
-            result = discover_and_load_hf_dataset(
-                variant_plan,
-                _diversify_query(description or base_name, variant),
-                task_type,
-                max(300, len(existing_rows) + requested * 4),
-                80,
-                log=log,
-                meta=paid_meta,
-            )
-        except Exception as error:
-            reconcile_paid_acquisition(
-                reservation,
-                status="failed",
-                detail=f"{type(error).__name__}: {error}",
-            )
-            log(
-                f"      [mine] paid round failed after reservation: "
-                f"{type(error).__name__}: {error}"
-            )
-            continue
-        reconcile_paid_acquisition(
-            reservation,
-            status="completed",
-            detail="dataset discovered" if result else "no dataset discovered",
-        )
-        accept(result, paid_meta, f"paid-round-{round_index + 1}")
-
-    run_paid_rounds_spent = 0
-    if paid_rounds_used or paid_budget_exhausted:
-        run_paid_rounds_spent = acquisition_budget_snapshot()["run_spent"]
+        if discovered is not None:
+            # `accept` takes the (train, test) PAIR and unwraps the train side itself. Passing
+            # `discovered[0]` handed it the train list, so `result[0]` became the first row — a dict,
+            # not a list — and `accept` returned 0 before counting a single candidate. Rung 2 of the
+            # mining ladder could therefore never contribute a row, and every discovery round
+            # reported `no_novelty`, which retires mining after two rounds while a perfectly usable
+            # dataset goes unused. Silent, because "found nothing" is a legitimate outcome.
+            accept(discovered, paid_meta, "discovered")
 
     status = "novel" if novel else "no_novelty"
     report = {
@@ -897,17 +681,14 @@ def mine_additional_real_rows(
             if candidate_rows
             else 0.0
         ),
-        "paid_rounds_used": paid_rounds_used,
-        "run_paid_rounds_spent": run_paid_rounds_spent,
-        "paid_budget_exhausted": paid_budget_exhausted,
         "status": status,
         "source_records": source_records,
         "rejected_sources": rejected_sources,
     }
     if not novel:
         log(
-            "      [mine] no novel non-eval real rows found; "
-            "marking plan yield as no_novelty"
+            "      [mine] web discovery found no dataset contributing a row this curriculum does "
+            "not already have"
         )
     return novel[:requested], report
 
@@ -923,7 +704,7 @@ def _web_source_id(url: str) -> str:
     return host or (url or "web")
 
 
-def _exa_round(exa, task_type, plan, description, n_per_label, round_idx,
+def _exa_round(exa, task, plan, description, n_per_label, round_idx,
                seen_texts: set, log=print) -> list[dict]:
     """One Exa acquisition round across all labels/topics; dedups against seen_texts.
 
@@ -932,7 +713,7 @@ def _exa_round(exa, task_type, plan, description, n_per_label, round_idx,
     """
     queries: dict = plan.get("exa_queries") or {}
     out: list[dict] = []
-    if task_type == "classification":
+    if _task_has_closed_labels(task):
         labels = (plan.get("labels") or list(queries.keys()))[:MAX_LABELS]
         items = [(lbl, queries.get(lbl, f"{lbl} example text")) for lbl in labels]
     else:
@@ -978,6 +759,21 @@ def _exa_round(exa, task_type, plan, description, n_per_label, round_idx,
 # datasets.load_dataset(). This replaces "scrape web pages and call the text a dataset".
 # ---------------------------------------------------------------------------
 
+def _task_has_closed_labels(task: str) -> bool:
+    """Whether `task` predicts a class from a pinned vocabulary.
+
+    Used by the agentic-discovery path below, which shapes its queries, its column-mapping prompt
+    and its validation differently for a classification task. Note that as of 2026-08-18 that path
+    is UNREACHABLE in production: every task in the suite declares `allow_paid_discovery=False`,
+    because for all eight the canonical corpus is the only source carrying their labels. It is kept
+    working, not deleted, because it is the paper's agentic-acquisition contribution.
+    """
+    from tasks import TASKS
+
+    spec = TASKS.get(str(task or ""))
+    return bool(spec.closed_label_space) if spec else False
+
+
 def _extract_hf_dataset_ids(text: str) -> list[str]:
     import re as _re
     return _re.findall(r"huggingface\.co/datasets/([A-Za-z0-9_.\-]+/[A-Za-z0-9_.\-]+)", text or "")
@@ -1007,6 +803,32 @@ def _exa_find_hf_dataset_ids(exa, query: str, log=print, n: int = 6) -> list[str
     return out
 
 
+def _peek_failure_reason(error: BaseException) -> str:
+    """One short phrase for why a candidate repo could not be opened.
+
+    The raw `datasets` message is not worth a log line: it is a paragraph of hub internals, and
+    truncating it to 80 characters cut it mid-path — "Couldn't find any data file at
+    /mmfs1/gscratch/intelligentsystems/evanly/SLM_Fac" made it look as though a local directory
+    were being passed as a hub id, which it never was. The repo id is already in the log line;
+    what is missing is the category of failure, which is what this returns.
+    """
+    text = str(error or "")
+    lowered = text.lower()
+    if "doesn't exist on the hub" in lowered or "not found" in lowered or "404" in text:
+        return "repo does not exist or is gated"
+    if "couldn't find any data file" in lowered or "no (supported) data files" in lowered:
+        return "no loadable data files in the repo"
+    if "arrowinvalid" in lowered or "json parse error" in lowered:
+        return "malformed data files (inconsistent JSON schema across shards)"
+    if "error occurred while generating the dataset" in lowered:
+        return "repo fails to build a split"
+    if "trust_remote_code" in lowered or "loading script" in lowered:
+        return "script-based repo, unsupported by the installed datasets version"
+    if "connection" in lowered or "timed out" in lowered or "503" in text or "504" in text:
+        return "hub unreachable"
+    return f"{type(error).__name__}: {text.splitlines()[0]}" if text else type(error).__name__
+
+
 def _peek_hf_dataset(hf_id: str, log=print):
     """Load 2 rows to expose (config, split_names, columns, sample_row). None on failure.
 
@@ -1017,13 +839,19 @@ def _peek_hf_dataset(hf_id: str, log=print):
     for-loop header, outside the try/except, so a single bad Exa candidate (e.g. the
     script-based SemEvalWorkshop/sem_eval_2018_task_1) raised FileNotFoundError and aborted
     the whole pipeline in eval_setup.
+
+    Emits exactly ONE line per candidate. Probing six Exa candidates used to produce three log
+    lines each from here plus, from `datasets` itself, a download progress bar and one
+    "Failed to load JSON from file ... ArrowInvalid" per shard of every malformed repo — 39
+    shards for one BFCL mirror, twice. The library's own writes are discarded by the fd-level
+    suppression the caller installs; this function keeps the verdict.
     """
     from datasets import load_dataset, get_dataset_config_names, get_dataset_split_names
     try:
         extra_cfgs = get_dataset_config_names(hf_id)[:1]
-    except Exception as e:
-        log(f"      [acquire] peek {hf_id} config-name lookup failed ({str(e)[:80]}); trying default config only")
+    except Exception:
         extra_cfgs = []
+    last_error: BaseException | None = None
     for cfg in [None] + extra_cfgs:
         try:
             splits = get_dataset_split_names(hf_id, cfg) if cfg is not None else get_dataset_split_names(hf_id)
@@ -1032,13 +860,14 @@ def _peek_hf_dataset(hf_id: str, log=print):
                   if cfg else load_dataset(hf_id, split=f"{train_split}[:2]"))
             sample = {k: (str(v)[:200]) for k, v in ds[0].items()}
             return cfg, list(splits), ds.column_names, sample, ds.features
-        except Exception as e:
-            log(f"      [acquire] peek {hf_id} (config={cfg}) failed: {str(e)[:80]}")
+        except Exception as error:
+            last_error = error
             continue
+    log(f"      [acquire] {hf_id}: SKIPPED — {_peek_failure_reason(last_error)}")
     return None
 
 
-def _llm_map_dataset(hf_id, cfg, splits, columns, sample_row, task_type, plan, log=print,
+def _llm_map_dataset(hf_id, cfg, splits, columns, sample_row, task, plan, log=print,
                      label_space=None):
     """Ask the orchestrator to map this dataset's columns to our schema. dict or None.
 
@@ -1050,10 +879,10 @@ def _llm_map_dataset(hf_id, cfg, splits, columns, sample_row, task_type, plan, l
     import anthropic
     from config.config import ANTHROPIC_API_KEY, ORCHESTRATOR_MODEL, orchestrator_client_kwargs
     allowed = sorted(label_space or ())
-    if task_type == "classification":
+    if _task_has_closed_labels(task):
         want = ('{"train_split","test_split","text_col","label_col",'
                 '"label_map": {"<raw>":"<one of the task labels>"} (optional)}')
-    elif task_type == "NER":
+    elif task == "NER":
         want = ('{"train_split","test_split","tokens_col" (list of tokens) + "tags_col" '
                 '(list of BIO tag ids) OR "text_col" + "entities_col"}')
     else:  # math_reasoning / code_generation / generation
@@ -1063,7 +892,7 @@ def _llm_map_dataset(hf_id, cfg, splits, columns, sample_row, task_type, plan, l
     # `cloud`, `on_device`, `router` and `remote` — one new hallucinated class per acquire round,
     # because the mapping is re-requested each round and is non-deterministic (B259).
     label_rules = ""
-    if task_type == "classification" and allowed:
+    if _task_has_closed_labels(task) and allowed:
         label_rules = (
             f"\nThe task's label space is CLOSED and consists of EXACTLY these "
             f"{len(allowed)} labels: {allowed}.\n"
@@ -1075,8 +904,8 @@ def _llm_map_dataset(hf_id, cfg, splits, columns, sample_row, task_type, plan, l
             f"noise. Omit any source value you cannot map; omitted values are discarded.\n"
         )
     prompt = (
-        f"We want to fine-tune for task_type={task_type} "
-        f"(name={plan.get('task_name', task_type)}, labels={allowed or plan.get('labels', [])}).\n"
+        f"We want to fine-tune for task={task} "
+        f"(name={plan.get('task_name', task)}, labels={allowed or plan.get('labels', [])}).\n"
         f"HuggingFace dataset: {hf_id} (config={cfg}); splits={splits}; columns={columns}\n"
         f"One sample row: {sample_row}\n"
         f"{label_rules}\n"
@@ -1103,7 +932,7 @@ def _llm_map_dataset(hf_id, cfg, splits, columns, sample_row, task_type, plan, l
     except Exception as e:
         from agent.llm_errors import raise_if_fatal
         raise_if_fatal(e, "acquire")
-        log(f"      [acquire] column-mapping LLM call failed for {hf_id}: {str(e)[:80]}")
+        log(f"      [acquire] column-mapping LLM call failed for {hf_id}: {e}")
         return None
 
 
@@ -1114,7 +943,7 @@ def _mapped_split_names(splits, mapping):
     return tr, te
 
 
-def _materialize_from_mapping(hf_id, cfg, splits, mapping, task_type, max_train, max_test,
+def _materialize_from_mapping(hf_id, cfg, splits, mapping, task, max_train, max_test,
                               log=print, label_space=None):
     """Load train/test with the LLM's column mapping and convert to our example dicts.
 
@@ -1130,13 +959,14 @@ def _materialize_from_mapping(hf_id, cfg, splits, mapping, task_type, max_train,
     allowed = set(label_space or ())
     tr, te = _mapped_split_names(splits, mapping)
 
-    def _load(split, n):
-        return (load_dataset(hf_id, cfg, split=f"{split}[:{n}]")
-                if cfg else load_dataset(hf_id, split=f"{split}[:{n}]"))
+    def _load(split, n, offset=0):
+        window = f"[{offset}:{offset + n}]" if offset else f"[:{n}]"
+        return (load_dataset(hf_id, cfg, split=f"{split}{window}")
+                if cfg else load_dataset(hf_id, split=f"{split}{window}"))
 
     def _convert(ds):
         out = []
-        if task_type == "classification":
+        if _task_has_closed_labels(task):
             tcol, lcol = mapping.get("text_col"), mapping.get("label_col")
             lmap, dropped_targets = sanitize_label_map(mapping.get("label_map"), allowed)
             if dropped_targets:
@@ -1164,7 +994,7 @@ def _materialize_from_mapping(hf_id, cfg, splits, mapping, task_type, max_train,
                     f"      [acquire] dropped {sum(out_of_vocab.values())} row(s) whose label is "
                     f"outside the task's closed vocabulary [{describe_rejected_labels(out_of_vocab)}]"
                 )
-        elif task_type == "NER":
+        elif task == "NER":
             if mapping.get("tokens_col"):
                 tok, tag = mapping["tokens_col"], mapping["tags_col"]
                 names = getattr(getattr(ds.features.get(tag), "feature", None), "names", None)
@@ -1182,7 +1012,7 @@ def _materialize_from_mapping(hf_id, cfg, splits, mapping, task_type, max_train,
             qcol, acol, ccol = mapping.get("question_col"), mapping.get("answer_col"), mapping.get("cot_col")
             for ex in ds:
                 if ex.get(qcol) and ex.get(acol) is not None:
-                    row = {"text": str(ex[qcol]), "answer": str(ex[acol]), "label": task_type}
+                    row = {"text": str(ex[qcol]), "answer": str(ex[acol]), "label": task}
                     if ccol and ex.get(ccol):
                         row["cot_reasoning"] = str(ex[ccol])
                     out.append(row)
@@ -1190,17 +1020,24 @@ def _materialize_from_mapping(hf_id, cfg, splits, mapping, task_type, max_train,
 
     try:
         train = _convert(_load(tr, max_train))
-        test = _convert(_load(te, max_test))
+        # A single-split repo resolves `test_split` back to the TRAIN split, and slicing both from
+        # the front then made train[:N] ⊇ test[:80] by construction — so `_validate_discovered_splits`
+        # rejected the source for an overlap this function had just manufactured. That is why xlam
+        # run 38566712 rejected every xLAM mirror with "normalized train/test text overlap (80
+        # rows)": 80 is exactly `max_test`, i.e. ALL of it. Most instruction-tuning corpora on the
+        # Hub ship one split, so this was a guaranteed rejection for the common case — including
+        # for `Salesforce/xlam-function-calling-60k` itself. Take a DISJOINT window instead.
+        if te == tr:
+            test = _convert(_load(te, max_test, offset=max_train))
+        else:
+            test = _convert(_load(te, max_test))
     except Exception as e:
-        log(f"      [acquire] materialize {hf_id} failed: {str(e)[:100]}")
+        log(f"      [acquire] materialize {hf_id} failed: {e}")
         return None
     return (train, test) if train and test else None
 
 
 _KNOWN_DISCOVERED_BENCHMARKS = {
-    "apps": ("apps", "code_generation", "APPS introductory"),
-    "humaneval": ("humaneval", "code_generation", "HumanEval"),
-    "mbpp": ("mbpp", "code_generation", "MBPP"),
     "bc5cdr": ("bc5cdr", "NER", "BC5CDR"),
     "gsm8k": ("gsm8k", "math_reasoning", "GSM8K"),
     "samsum": ("samsum", "generation", "SAMSum"),
@@ -1216,44 +1053,59 @@ def _known_discovered_benchmark(hf_id: str):
 
 def _validate_discovered_splits(
     result,
-    task_type: str,
+    task: str,
     *,
     source: str,
+    log=print,
 ) -> tuple[list[dict], list[dict]]:
-    """Validate an agent-discovered result before it can outrank local data."""
-    if (
-        not isinstance(result, (list, tuple))
-        or len(result) != 2
-        or not isinstance(result[0], list)
-        or not isinstance(result[1], list)
-        or not result[0]
-        or not result[1]
-    ):
-        raise ValueError(f"{source}: discovered result must contain non-empty train/test lists")
-    train, test = result
-    required = required_fields_for_task(task_type)
-    validate_rows(train, required, bundle_name=source, split="train")
-    validate_rows(test, required, bundle_name=source, split="test")
+    """Keep the usable rows from a discovered dataset, per ROW, and say what was dropped.
 
-    overlap = normalized_text_overlap(train, test)
-    if overlap:
+    Three checks were removed here on 2026-08-19, all of which rejected an entire dataset for
+    something that should only have cost it some rows:
+
+    * **The internal train/test overlap check.** It compared the discovered dataset's own train
+      slice against its own test slice — not against OUR eval set — and because
+      `_materialize_from_mapping` sliced both from the front of the same underlying split, the test
+      rows were a subset of the train rows BY CONSTRUCTION. So it always "found" overlap exactly
+      equal to `max_test`, which is why every xLAM mirror was rejected with
+      `normalized train/test text overlap (80 rows)`: 80 was `max_test`, i.e. all of it. The source's
+      internal split structure is irrelevant to us because mining consumes only the train side.
+    * **Whole-source rejection on schema.** A dataset with columns we do not need is not a bad
+      dataset. The mapping already picks the columns we want; the rest are ignored.
+    * **The two-distinct-labels rule.** A single-class slice is not useless, it is just narrow.
+
+    What survives is what actually protects the curriculum, and it is all per-row: a row must carry
+    the fields this task needs and, for a closed label space, a label inside it. Duplicates against
+    the curriculum are dropped by `curate._dedupe_into`; overlap with the held-out eval set is
+    dropped by the eval firewall. A source is only useless when nothing survives that.
+    """
+    if not isinstance(result, (list, tuple)) or len(result) != 2:
+        raise ValueError(f"{source}: discovered result must be a (train, test) pair")
+    train = result[0] if isinstance(result[0], list) else []
+    test = result[1] if isinstance(result[1], list) else []
+    if not train:
+        raise ValueError(f"{source}: discovered dataset yielded no train rows")
+    required = required_fields_for_task(task)
+    usable = [
+        row for row in train
+        if isinstance(row, dict)
+        and all(str(row.get(field) or "").strip() or row.get(field) for field in required)
+    ]
+    if not usable:
         raise ValueError(
-            f"{source}: normalized train/test text overlap ({len(overlap)} rows)"
+            f"{source}: no row carries all of the fields this task needs {required}"
         )
-
-    if task_type == "classification":
-        distinct = {str(row.get("label")) for row in train}
-        if len(distinct) < 2:
-            raise ValueError(
-                f"{source}: classification train split has only "
-                f"{len(distinct)} distinct label(s)"
-            )
-    return train, test
+    if len(usable) < len(train):
+        log(
+            f"      [acquire] {source}: kept {len(usable)} of {len(train)} row(s); the rest were "
+            f"missing one of {required}"
+        )
+    return usable, test
 
 
 def _accept_discovered_result(
     result,
-    task_type: str,
+    task: str,
     log=print,
     source="agentic",
     requested_benchmark: str | None = None,
@@ -1262,58 +1114,12 @@ def _accept_discovered_result(
         return None
     try:
         requested_key = _resolve_benchmark_key(requested_benchmark)
-        if (
-            requested_key == "apps"
-            and isinstance(result, (list, tuple))
-            and len(result) == 2
-            and isinstance(result[0], list)
-            and isinstance(result[1], list)
-        ):
-            from data.loaders.apps import (
-                remove_apps_train_fingerprint_overlap,
-            )
-
-            train, test = result
-            train, fingerprint_removed = (
-                remove_apps_train_fingerprint_overlap(train, test)
-            )
-            train, text_removed = remove_normalized_train_overlap(
-                train,
-                test,
-            )
-            test = [
-                row
-                for row in test
-                if row.get("runner_compatible", True) is not False
-            ]
-            if fingerprint_removed or text_removed:
-                log(
-                    f"      [acquire] {source} APPS decontamination removed "
-                    f"{fingerprint_removed} URL/solution and {text_removed} "
-                    "normalized-text train row(s)"
-                )
-            result = (train, test)
         train, test = _validate_discovered_splits(
             result,
-            task_type,
+            task,
             source=source,
+            log=log,
         )
-        if requested_key == "apps" and any(
-            not isinstance(row.get("input_output"), dict)
-            for row in train + test
-        ):
-            raise ValueError(
-                f"{source}: requested APPS but discovered rows do not preserve "
-                "the canonical APPS input_output schema"
-            )
-        if requested_key == "mbpp" and any(
-            not isinstance(row.get("test_list"), list)
-            for row in train + test
-        ):
-            raise ValueError(
-                f"{source}: requested MBPP but discovered rows do not preserve "
-                "the canonical MBPP test_list schema"
-            )
         return train, test
     except (TypeError, ValueError) as error:
         log(
@@ -1330,7 +1136,7 @@ def _accept_discovered_result(
 DISCOVERY_TIMEOUT_S = 600
 
 
-def _discover_worker(plan, description, task_type, max_train, max_test, q):
+def _discover_worker(plan, description, task, max_train, max_test, q):
     """Run the Exa→peek→map→download pipeline and return a result dict via `q`:
     {"train","test","source","source_records","eval_ban","logs"}.
 
@@ -1350,13 +1156,29 @@ def _discover_worker(plan, description, task_type, max_train, max_test, q):
         "train": None, "test": None, "source": None,
         "source_records": [], "eval_ban": [], "logs": logs,
     }
+    # Every verdict this worker produces goes into `logs` and is replayed by the parent, so
+    # nothing of ours travels on stdout/stderr. What does travel there is the `datasets` library's
+    # download bars and its per-shard "Failed to load JSON ... ArrowInvalid" errors, hundreds of
+    # lines for a handful of candidate repos, none of it actionable. Discard the descriptors for
+    # the duration of discovery.
+    from agent.logging_setup import quiet_output
+
+    try:
+        with quiet_output():
+            _discover(plan, description, task, max_train, max_test, out, log)
+    except Exception as error:  # noqa: BLE001
+        log(f"      [acquire] agentic discovery failed: {type(error).__name__}: {error}")
+    q.put(out)
+
+
+def _discover(plan, description, task, max_train, max_test, out, log):
+    """Exa search → candidate peek → LLM column mapping → download. Fills `out` in place."""
     try:
         from config.config import EXA_API_KEY
         from exa_py import Exa
         exa = Exa(api_key=EXA_API_KEY)
     except Exception as e:  # noqa: BLE001
-        log(f"      [acquire] Exa init failed: {str(e)[:80]}")
-        q.put(out)
+        log(f"      [acquire] Exa init failed: {e}")
         return
 
     # Search a few COMPLEMENTARY queries so a mismatched/obscure benchmark name doesn't
@@ -1373,22 +1195,38 @@ def _discover_worker(plan, description, task_type, max_train, max_test, q):
             seen_q.add(qs.lower())
             queries.append(qs)
     if not queries:
-        queries = [task_type]
-    candidates, seen_c = [], set()
+        queries = [task]
+    # INTERLEAVE the per-query hit lists rather than concatenating them. Concatenation gave the
+    # first query's entire result set priority over every later query's best hit, and the shortlist
+    # below only probes the first 6: in xlam run 38566712 Exa returned
+    # `Salesforce/xlam-function-calling-60k` and `gorilla-llm/Berkeley-Function-Calling-Leaderboard`
+    # — the two CANONICAL sources for the task — at positions 7 and 8, so they were discovered,
+    # logged, and then silently dropped while six broken community mirrors consumed the whole
+    # budget. Round-robin puts each query's top hit near the front.
+    per_query: list[list[str]] = []
     for qq in queries[:3]:
-        for hf_id in _exa_find_hf_dataset_ids(exa, f"{qq} {task_type}", log=log):
+        per_query.append(_exa_find_hf_dataset_ids(exa, f"{qq} {task}", log=log))
+    candidates, seen_c = [], set()
+    for rank in range(max((len(hits) for hits in per_query), default=0)):
+        for hits in per_query:
+            if rank >= len(hits):
+                continue
+            hf_id = hits[rank]
             if hf_id not in seen_c:
                 seen_c.add(hf_id)
                 candidates.append(hf_id)
     if not candidates:
         log("      [acquire] no candidate HF datasets found via Exa")
-        q.put(out)
         return
-    log(f"      [acquire] Exa-discovered candidate HF datasets: {candidates[:8]}")
-    for hf_id in candidates[:6]:
+    shortlist = candidates
+    log(
+        f"      [acquire] Exa found {len(candidates)} candidate HF dataset(s); probing all of "
+        f"them: {shortlist}"
+    )
+    for hf_id in shortlist:
         known = _known_discovered_benchmark(hf_id)
         if known is not None:
-            _key, expected_task_type, display_name = known
+            _key, expected_task, display_name = known
             requested_key = _resolve_benchmark_key(plan.get("benchmark"))
             if requested_key is not None and _key != requested_key:
                 log(
@@ -1396,15 +1234,15 @@ def _discover_worker(plan, description, task_type, max_train, max_test, q):
                     f"benchmark {requested_key!r}, discovered {_key!r}"
                 )
                 continue
-            if task_type != expected_task_type:
+            if task != expected_task:
                 log(
                     f"      [acquire] {hf_id}: REJECTED — known {display_name} "
-                    f"schema is {expected_task_type}, not requested {task_type}"
+                    f"schema is {expected_task}, not requested {task}"
                 )
                 continue
             benchmark_meta: dict = {}
             converted = load_benchmark_dataset(
-                {"benchmark": display_name, "task_type": task_type},
+                {"benchmark": display_name, "task": task},
                 log=log,
                 max_train=max_train,
                 max_test=max_test,
@@ -1412,7 +1250,7 @@ def _discover_worker(plan, description, task_type, max_train, max_test, q):
             )
             accepted = _accept_discovered_result(
                 converted,
-                task_type,
+                task,
                 log=log,
                 source=f"agentic {display_name}",
                 requested_benchmark=plan.get("benchmark"),
@@ -1433,7 +1271,6 @@ def _discover_worker(plan, description, task_type, max_train, max_test, q):
                 benchmark_meta.get("source_records") or []
             )
             out["eval_ban"] = list(benchmark_meta.get("eval_ban") or [])
-            q.put(out)
             return
 
         peek = _peek_hf_dataset(hf_id, log=log)
@@ -1445,17 +1282,17 @@ def _discover_worker(plan, description, task_type, max_train, max_test, q):
         # that already crosses this subprocess boundary — so it is the carrier rather than a new
         # parameter that would have to be pickled separately.
         _plan_labels = {str(v) for v in (plan.get("labels") or []) if str(v).strip()}
-        mapping = _llm_map_dataset(hf_id, cfg, splits, columns, sample, task_type, plan, log=log,
+        mapping = _llm_map_dataset(hf_id, cfg, splits, columns, sample, task, plan, log=log,
                                    label_space=_plan_labels)
         if not mapping:
             log(f"      [acquire] {hf_id}: orchestrator judged it unsuitable / unmappable")
             continue
-        result = _materialize_from_mapping(hf_id, cfg, splits, mapping, task_type, max_train,
+        result = _materialize_from_mapping(hf_id, cfg, splits, mapping, task, max_train,
                                           max_test, log=log, label_space=_plan_labels)
         if result is not None:
             accepted = _accept_discovered_result(
                 result,
-                task_type,
+                task,
                 log=log,
                 source=f"agentic {hf_id}",
                 requested_benchmark=plan.get("benchmark"),
@@ -1473,12 +1310,11 @@ def _discover_worker(plan, description, task_type, max_train, max_test, q):
             )
             out["source_records"] = records
             out["eval_ban"] = [dict(records[1])]
-            q.put(out)
             return
-    q.put(out)
+    log(f"      [acquire] none of the {len(shortlist)} probed candidate(s) were usable")
 
 
-def discover_and_load_hf_dataset(plan, description, task_type, max_train, max_test,
+def discover_and_load_hf_dataset(plan, description, task, max_train, max_test,
                                  log=print, meta=None):
     """Agentic path: Exa → candidate HF datasets → LLM picks+maps → load_dataset.
 
@@ -1499,12 +1335,12 @@ def discover_and_load_hf_dataset(plan, description, task_type, max_train, max_te
         class _Q:
             def put(self, v):
                 q_inline.append(v)
-        _discover_worker(plan, description, task_type, max_train, max_test, _Q())
+        _discover_worker(plan, description, task, max_train, max_test, _Q())
         result = q_inline[0] if q_inline else None
     else:
         q = ctx.Queue()
         p = ctx.Process(target=_discover_worker,
-                        args=(plan, description, task_type, max_train, max_test, q),
+                        args=(plan, description, task, max_train, max_test, q),
                         daemon=True)
         p.start()
         # get() BEFORE join() to avoid the feeder-thread deadlock; the timeout doubles as
@@ -1532,7 +1368,7 @@ def discover_and_load_hf_dataset(plan, description, task_type, max_train, max_te
     if train and test:
         accepted = _accept_discovered_result(
             (train, test),
-            task_type,
+            task,
             log=log,
             source="agentic discovery",
             requested_benchmark=plan.get("benchmark"),
@@ -1581,12 +1417,12 @@ def _local_dataset_dir() -> Path:
 
 def _local_manifest_match(
     plan: dict,
-    task_type: str,
+    task: str,
     bundle_name: str,
     manifest: dict,
 ) -> tuple[int, float] | None:
     """Return a strong-match score, or reject an unrelated same-task bundle."""
-    if manifest.get("task_type") != task_type:
+    if manifest.get("task") != task:
         return None
     requested_key = _resolve_benchmark_key(plan.get("benchmark"))
     manifest_key = (
@@ -1612,7 +1448,7 @@ def _local_manifest_match(
     union = len(requested_labels | manifest_labels)
     jaccard = intersection / union if union else 0.0
     requested_coverage = intersection / len(requested_labels)
-    required = set(required_fields_for_task(task_type))
+    required = set(required_fields_for_task(task))
     declared_required = set(
         (manifest.get("row_schema") or {}).get("required") or []
     )
@@ -1630,7 +1466,7 @@ def _local_manifest_match(
     return (1 if requested_labels == manifest_labels else 0, jaccard)
 
 
-def load_local_dataset(plan, task_type, max_train, max_test, log=print, meta=None):
+def load_local_dataset(plan, task, max_train, max_test, log=print, meta=None):
     """Load a clean OFFLINE dataset from ``SLM_LOCAL_DATASET_DIR`` that matches the task
     (B161 local fallback). Known benchmark aliases require the exact bundle; otherwise a
     bundle must pass a strong task+label+schema match. Unrelated same-task bundles are
@@ -1656,7 +1492,7 @@ def load_local_dataset(plan, task_type, max_train, max_test, log=print, meta=Non
                 man = _json.load(handle)
         except Exception:
             continue
-        score = _local_manifest_match(plan, task_type, name, man)
+        score = _local_manifest_match(plan, task, name, man)
         if score is None:
             log(
                 f"      [acquire] LOCAL candidate {name!r} rejected: "
@@ -1716,7 +1552,7 @@ def load_local_dataset(plan, task_type, max_train, max_test, log=print, meta=Non
                     raise ValueError(
                         f"{name}: {split} row {index} missing schema fields {sorted(missing)}"
                     )
-    canonical_required = required_fields_for_task(task_type)
+    canonical_required = required_fields_for_task(task)
     validate_rows(
         all_train,
         canonical_required,
@@ -1736,38 +1572,13 @@ def load_local_dataset(plan, task_type, max_train, max_test, log=print, meta=Non
             f"{name}: normalized train/test text overlap ({len(overlap)} rows), "
             f"sample={sorted(overlap)[:3]!r}"
         )
-    if name == "apps":
-        from data.loaders.apps import apps_fingerprint_overlap
-
-        fingerprint_overlap = apps_fingerprint_overlap(
-            all_train,
-            all_test,
-        )
-        if fingerprint_overlap:
-            raise ValueError(
-                f"{name}: train/test URL or solution fingerprint overlap "
-                f"({len(fingerprint_overlap)} fingerprints)"
-            )
-
     eligible_test = all_test
-    if name == "apps":
-        eligible_test = [
-            row
-            for row in all_test
-            if row.get("runner_compatible", True) is not False
-        ]
-        skipped = len(all_test) - len(eligible_test)
-        if skipped:
-            log(
-                f"      [acquire] APPS runner compatibility: skipped "
-                f"{skipped} explicitly marked eval row(s)"
-            )
     train = _stratified_take(all_train, max_train)
     test = _stratified_take(eligible_test, max_test, seed=7)
     if not train or not test:
         return None
 
-    if task_type == "NER":
+    if task == "NER":
         label_values = sorted({
             str(entity.get("type")) for row in train for entity in row.get("entities", [])
             if entity.get("type")
@@ -1817,19 +1628,19 @@ def acquire_dataset(plan: dict, description: str = "", n_per_label: int = DEFAUL
 
     Returns (train, test). `meta["source"]` records provenance (benchmark / web+synth mix).
     """
-    task_type = plan["task_type"]
+    task = plan["task"]
     agent_first = os.environ.get("SLM_AGENT_FIRST_DATASET_DISCOVERY", "0") == "1"
 
     if agent_first:
         log("      [acquire] readiness mode: trying agentic dataset discovery first")
         prior_meta = dict(meta) if meta is not None else None
         disc = discover_and_load_hf_dataset(
-            plan, description, task_type, benchmark_max_train, benchmark_max_test,
+            plan, description, task, benchmark_max_train, benchmark_max_test,
             log=log, meta=meta,
         )
         accepted = _accept_discovered_result(
             disc,
-            task_type,
+            task,
             log=log,
             source="agent-first discovery",
             requested_benchmark=plan.get("benchmark"),
@@ -1841,7 +1652,7 @@ def acquire_dataset(plan: dict, description: str = "", n_per_label: int = DEFAUL
             meta.update(prior_meta)
 
     # Clean local bundles are the default and the first non-paid fallback in readiness mode.
-    local = load_local_dataset(plan, task_type, benchmark_max_train, benchmark_max_test,
+    local = load_local_dataset(plan, task, benchmark_max_train, benchmark_max_test,
                                log=log, meta=meta)
     if local is not None:
         return local
@@ -1856,12 +1667,12 @@ def acquire_dataset(plan: dict, description: str = "", n_per_label: int = DEFAUL
         # Only now may the default path make paid Exa/orchestrator discovery calls.
         prior_meta = dict(meta) if meta is not None else None
         disc = discover_and_load_hf_dataset(
-            plan, description, task_type, benchmark_max_train, benchmark_max_test,
+            plan, description, task, benchmark_max_train, benchmark_max_test,
             log=log, meta=meta,
         )
         accepted = _accept_discovered_result(
             disc,
-            task_type,
+            task,
             log=log,
             source="agentic discovery",
             requested_benchmark=plan.get("benchmark"),
@@ -1886,7 +1697,7 @@ def acquire_dataset(plan: dict, description: str = "", n_per_label: int = DEFAUL
     seen_texts: set = set()
     floor = max(1, int(target_examples * MIN_VIABLE_FRACTION))
     for round_idx in range(MAX_ACQUIRE_ROUNDS):
-        examples.extend(_exa_round(exa, task_type, plan, description, n_per_label,
+        examples.extend(_exa_round(exa, task, plan, description, n_per_label,
                                    round_idx, seen_texts, log=log))
         if len(examples) >= target_examples:
             break
@@ -1900,7 +1711,7 @@ def acquire_dataset(plan: dict, description: str = "", n_per_label: int = DEFAUL
         needed = target_examples - len(examples)
         log(f"      [acquire] ⚠ web acquisition returned {len(examples)} < floor {floor}; "
             f"synthesizing up to {needed} gold examples via the orchestrator (verified/deduped)")
-        synth = synthesize_seed_examples(plan, task_type, needed,
+        synth = synthesize_seed_examples(plan, task, needed,
                                          existing_texts=seen_texts, log=log)
         n_synth = len(synth)
         examples.extend(synth)
@@ -1913,7 +1724,7 @@ def acquire_dataset(plan: dict, description: str = "", n_per_label: int = DEFAUL
 
     # For NER, acquired documents lack entity annotations — annotate via Claude (B48).
     # (Synthesized NER examples already carry entities and are skipped inside the annotator.)
-    if task_type == "NER":
+    if task == "NER":
         # Prefer the task plan's declared entity types over the CoNLL default, so a
         # domain task (e.g. BC5CDR CHEMICAL/DISEASE) allow-lists its own schema instead of
         # having every domain span rejected as a bad type.
@@ -1946,7 +1757,7 @@ def acquire_dataset(plan: dict, description: str = "", n_per_label: int = DEFAUL
     return train, test
 
 
-def synthesize_seed_examples(plan: dict, task_type: str, n_needed: int,
+def synthesize_seed_examples(plan: dict, task: str, n_needed: int,
                              existing_texts: set | None = None, log=print) -> list[dict]:
     """Last-resort GOLD synthesis via the orchestrator, deduped + label-validated.
 
@@ -1966,13 +1777,13 @@ def synthesize_seed_examples(plan: dict, task_type: str, n_needed: int,
 
     existing_texts = existing_texts or set()
     labels = plan.get("labels") or []
-    task_name = plan.get("task_name", task_type)
+    task_name = plan.get("task_name", task)
     client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY, **orchestrator_client_kwargs())
 
-    if task_type == "classification":
+    if _task_has_closed_labels(task):
         schema = '{"examples": [{"text": "<input text>", "label": "<one of LABELS>"}]}'
         label_line = f"LABELS = {labels}. Balance examples across all labels."
-    elif task_type == "NER":
+    elif task == "NER":
         schema = ('{"examples": [{"text": "<passage>", '
                   '"entities": [{"text": "<span>", "type": "<TYPE>"}]}]}')
         label_line = f"Entity types = {labels}. Every entity span must be an exact substring of text."
@@ -1982,7 +1793,7 @@ def synthesize_seed_examples(plan: dict, task_type: str, n_needed: int,
 
     prompt = (
         f"Generate {n_needed} diverse, realistic training examples for this task.\n"
-        f"Task: {task_name} (type: {task_type}).\n{label_line}\n"
+        f"Task: {task_name} (type: {task}).\n{label_line}\n"
         f"Return STRICT JSON only, no prose: {schema}"
     )
     try:
@@ -2007,11 +1818,11 @@ def synthesize_seed_examples(plan: dict, task_type: str, n_needed: int,
         text = str(ex.get("text", "")).strip()
         if not text or text in existing_texts:
             continue
-        if task_type == "classification":
+        if _task_has_closed_labels(task):
             if labels and ex.get("label") not in labels:
                 continue
             valid.append({"text": text, "label": ex["label"]})
-        elif task_type == "NER":
+        elif task == "NER":
             ents = [e for e in ex.get("entities", [])
                     if isinstance(e, dict) and e.get("text") and e.get("text") in text]
             valid.append({"text": text, "entities": ents})
@@ -2019,7 +1830,7 @@ def synthesize_seed_examples(plan: dict, task_type: str, n_needed: int,
             ans = str(ex.get("answer", "")).strip()
             if not ans:
                 continue
-            valid.append({"text": text, "answer": ans, "label": task_type})
+            valid.append({"text": text, "answer": ans, "label": task})
         existing_texts.add(text)
     log(f"      [acquire] synthesized {len(valid)}/{len(candidates)} valid examples "
         f"(deduped + validated)")

@@ -8,6 +8,12 @@ from agent.nodes.iterate import (
     iterate_node,
 )
 
+# Every "does NOT escalate" case below runs with `_llm_iterate` failing, so it carries on into the
+# deterministic `data_rebuild` fallback. That makes each of them a live check that the rescue path
+# out of an unusable orchestrator reply still works, on top of the window boundary it is written
+# for: a call-site/signature disagreement there once turned the non-escalating branch into a
+# TypeError, i.e. the rescue killed the run it existed to save.
+
 
 def _model(tier=0):
     m = MagicMock()
@@ -30,7 +36,7 @@ def _state(cni, score=0.30, threshold=0.90, phase=None, scores=None, eval_histor
         "turn_budget": 1000,
         "stop_threshold": threshold,
         "initial_stop_threshold": threshold,
-        "task_type": "math_reasoning",
+        "task": "gsm8k",
         "last_eval": None,
         "hw_gating_enabled": False,
         "consecutive_no_improvement": cni,

@@ -107,7 +107,7 @@ def test_cuda_worker_dispatches_infer_batch_as_one_operation():
         "base_model": "model-id",
         "max_new_tokens": 77,
         "max_workers": 3,
-        "task_type": "NER",
+        "task": "ner_bc5cdr",
     }
     with patch(
         "training.slm_helpers.infer_batch",

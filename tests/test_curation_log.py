@@ -27,7 +27,7 @@ def test_curation_log_persists_complete_dataset_composition(tmp_path):
 
     log.write_iteration(
         iteration=2,
-        task_type="classification",
+        task="clinc150",
         dataset_version="v3",
         total_examples=12,
         n_gold=5,
@@ -83,7 +83,7 @@ def test_curation_log_persists_complete_dataset_composition(tmp_path):
 def _base_kwargs(result):
     return {
         "iteration": 4,
-        "task_type": "classification",
+        "task": "clinc150",
         "dataset_version": "v4",
         "n_gold": 5,
         "n_hard": 0,
@@ -178,7 +178,7 @@ def test_curation_log_iteration_is_retry_idempotent(tmp_path):
     result = EvalResult(0.8, {}, [])
     kwargs = {
         "iteration": 2,
-        "task_type": "classification",
+        "task": "clinc150",
         "dataset_version": "v3",
         "n_gold": 5,
         "n_hard": 3,

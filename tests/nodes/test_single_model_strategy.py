@@ -47,7 +47,7 @@ def _state(scores, threshold=0.80, iteration=None):
         "max_stop_threshold": 0.0,
         "convergence_banked": None,
         "threshold_raises": [],
-        "task_type": "classification",
+        "task": "clinc150",
         "last_eval": None,
         "hw_gating_enabled": False,
         "hardware_constraints": MagicMock(),

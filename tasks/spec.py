@@ -1,0 +1,200 @@
+"""`TaskSpec` — one benchmark task's complete, explicit behaviour.
+
+WHY THIS EXISTS
+    The pipeline used to route every benchmark through an abstract `task_type` channel
+    (`classification`, `NER`, `function_call`, `generation`, ...). Eight concrete tasks shared five
+    channels, so behaviour was decided by `if task_type == ...` chains — **47 of them** across eval,
+    data, synthesis, orchestration and training. A task inherited whatever the chain's `else` branch
+    happened to do, and three production bugs came from exactly that:
+
+      * B291 — `function_call` matched neither synthesis branch, so `synthesize_examples` returned
+        `[]`. Six rebuilds on xlam announced 250-500 rows and produced none, silently, and the exact
+        verifiers written for that path had never executed.
+      * B296 — every non-classification failure was reported as the constant confusion pair
+        `gold_verifier -> incorrect`, and the orchestrator wrote pages of reasoning about it.
+      * B299 — quality control's `else` returned the dataset untouched, so xlam and calendar were
+        never filtered at all, and gsm8k/dialogsum filtered on a `"prompt"` key their rows lack.
+        Four of eight tasks, no quality control, nothing logged.
+
+    Meanwhile per-task behaviour that the channel could not express had already leaked into five
+    ad-hoc side registries (`synth_verifiers._BY_BENCHMARK`, `label_space._LABEL_DEFINITIONS`,
+    `_BENCHMARK_ALIASES`, `NAMED_BENCHMARK_TASK_TYPES`, the `_instruction` row field) — each added
+    reactively after a bug.
+
+THE RULE
+    **No field on this dataclass has a default.** Python then refuses to construct a `TaskSpec` that
+    does not state every decision, so "we never considered this for that task" becomes an import-time
+    error instead of a silent runtime fallthrough three hours into a run. A task that genuinely wants
+    nothing writes `synthesize=None` or `quality_controls=()` — an explicit choice a reader can see
+    and a reviewer can challenge.
+
+    `family` survives only as a descriptive tag for reports and model-selection hints. It must never
+    be used as a dispatch key again; `tests/test_task_registry.py` enforces that.
+"""
+from __future__ import annotations
+
+from collections.abc import Callable, Mapping, Sequence
+from dataclasses import dataclass, fields
+
+from data.quality_controls import QCStep
+
+# Descriptive groupings from the benchmark suite design. Reporting only.
+CATEGORIES = ("in_distribution", "format_bound", "out_of_distribution")
+
+# Descriptive shape tag. Used for report labelling and the orchestrator's model-selection hint —
+# NEVER to choose behaviour. Every behavioural choice is a field on the spec.
+FAMILIES = ("classification", "extraction", "generation", "structured_output")
+
+EVAL_SAMPLING = ("label_balanced", "shuffled")
+
+
+@dataclass(frozen=True)
+class MiningSource:
+    """A corpus that can supply MORE real rows for this task, mid-run.
+
+    `offset_field` is what makes mining useful on a curated benchmark: the initial curriculum takes
+    the first N rows, so a later `acquire` must start where that left off or it re-offers rows the
+    pool already has. Without this, xlam's `acquire` could only pay Exa to rediscover mirrors of a
+    corpus already sitting in the local cache while ~57,000 unused rows went unreachable (B297).
+    """
+
+    hf_id: str
+    config: str | None
+    split: str
+    url: str
+    supports_offset: bool
+
+
+@dataclass(frozen=True)
+class TaskSpec:
+    """Everything the pipeline needs to know about one benchmark task.
+
+    Field order groups by subsystem. None of them has a default — see the module docstring.
+    """
+
+    # ---- identity -------------------------------------------------------------------
+    name: str
+    """Registry key. Equals `SLM_BENCHMARK_TASK` and the slurm script suffix."""
+    title: str
+    """Human label for reports and charts."""
+    category: str
+    """One of CATEGORIES. Reporting only."""
+    family: str
+    """One of FAMILIES. Reporting and model-selection hints only — never dispatch."""
+
+    # ---- data -----------------------------------------------------------------------
+    load: Callable[..., tuple[list[dict], list[dict]]]
+    """`load(max_train, max_test, log=...) -> (train_rows, eval_rows)`."""
+    required_fields: tuple[str, ...]
+    """Fields every row of this task must carry, checked at load and after mining."""
+    initial_train_cap: int
+    """Gold rows to request at cold start. The loader returns as many as it has, up to this.
+
+    Not a fraction of anything. It used to be `curriculum_size_target × 0.65`, which is where the
+    mystery 3,250 came from: a 5,000-row "target" the curriculum was then never allowed to reach.
+    """
+    eval_cap: int
+    """Maximum held-out eval rows. The loader returns as many as it has, up to this."""
+    eval_sampling: str
+    """One of EVAL_SAMPLING. `label_balanced` round-robins across classes."""
+    closed_label_space: bool
+    """True when `label` is a real class to predict and the vocabulary is pinned from the eval set."""
+    label_definitions: Mapping[str, str]
+    """What each class MEANS, for the teacher's prompts. Empty when the label is self-describing."""
+    quality_controls: tuple[QCStep, ...]
+    """Ordered QC steps. `()` is a legal, explicit choice."""
+
+    # ---- eval -----------------------------------------------------------------------
+    build_prompts: Callable[[object], list[str]]
+    extract_predictions: Callable[[list[str], object], Sequence]
+    score: Callable[[object, Sequence], dict]
+    metric_name: str
+    """What the comparison scalar actually measures. Per TASK, so binary and multi-class
+    classification are not both mislabelled `macro_f1`."""
+    max_new_tokens: int
+    max_seq_length: int
+    eval_batch_size: int
+    failure_category: Callable[[dict], str] | None
+    """Maps a failure record to an actionable category for the orchestrator's confusion pairs.
+    `None` means this task reports failures without a taxonomy."""
+    needs_judge: bool
+    """True when scoring calls the LLM judge, so a judge outage must fail loudly not score zero."""
+    judge_overlap: bool
+    """Overlap judging of finished chunks with the next generation batch."""
+    attach_reasoning: bool
+    """Record the model's `<reasoning>` block on failure records."""
+
+    # ---- training -------------------------------------------------------------------
+    build_training_turn: Callable[[dict, object], tuple[str, str]]
+    """`(row, spec) -> (prompt, target)` for completion-only SFT. Must produce the SAME prompt the
+    eval harness sends, or training teaches a prefix inference never supplies (B290)."""
+
+    # ---- synthesis ------------------------------------------------------------------
+    synth_verifier: Callable[[dict], bool] | None
+    """EXACT programmatic check on a generated row, run before any teacher call.
+
+    Set for the format-bound tasks, where correctness of FORM is decidable by computation: parse the
+    output, confirm it targets a declared tool with arguments its schema has, confirm spans are
+    real substrings of the text. `None` for the rest, where the only available check is the
+    teacher's judgement of its own output — which is weaker, and is why this field is required
+    rather than defaulted, so the weakness is visible at the point the decision was made.
+    """
+    cot_annotation: bool
+    """Annotate rows with chain-of-thought before training."""
+
+    # ---- mining ---------------------------------------------------------------------
+    mining_sources: tuple[MiningSource, ...]
+    """Canonical corpora that can supply more real rows. `()` means paid discovery only."""
+    allow_paid_discovery: bool
+    """Whether `acquire` may fall through to Exa + orchestrator dataset discovery."""
+
+    # ---- model selection ------------------------------------------------------------
+    model_ranking_metric: str | None
+    """Published benchmark used to rank candidate models for this task, or `None` for no ranking."""
+
+    def __post_init__(self) -> None:
+        if not self.name or not self.name.replace("_", "").isalnum():
+            raise ValueError(f"task name must be an identifier-like string, got {self.name!r}")
+        if self.category not in CATEGORIES:
+            raise ValueError(f"{self.name}: category must be one of {CATEGORIES}")
+        if self.family not in FAMILIES:
+            raise ValueError(f"{self.name}: family must be one of {FAMILIES}")
+        if self.eval_sampling not in EVAL_SAMPLING:
+            raise ValueError(f"{self.name}: eval_sampling must be one of {EVAL_SAMPLING}")
+        if not self.required_fields:
+            raise ValueError(f"{self.name}: required_fields must not be empty")
+        for number in ("initial_train_cap", "eval_cap", "max_new_tokens", "max_seq_length",
+                       "eval_batch_size"):
+            if int(getattr(self, number)) < 1:
+                raise ValueError(f"{self.name}: {number} must be positive")
+        if self.max_new_tokens >= self.max_seq_length:
+            raise ValueError(
+                f"{self.name}: max_new_tokens ({self.max_new_tokens}) leaves no prompt budget "
+                f"inside max_seq_length ({self.max_seq_length})"
+            )
+        if not self.metric_name:
+            raise ValueError(f"{self.name}: metric_name must be a non-empty string")
+        for callable_field in ("load", "build_prompts", "extract_predictions", "score",
+                               "build_training_turn"):
+            if not callable(getattr(self, callable_field)):
+                raise ValueError(f"{self.name}: {callable_field} must be callable")
+        if self.label_definitions and not self.closed_label_space:
+            raise ValueError(
+                f"{self.name}: label_definitions only mean something for a closed label space"
+            )
+
+    def qc_context_labels(self, eval_set) -> set[str] | None:
+        """The closed class vocabulary for this task, read from the frozen eval set."""
+        if not self.closed_label_space:
+            return None
+        rows = getattr(eval_set, "all", None) or []
+        labels = {
+            str(row.get("label")) for row in rows
+            if isinstance(row, dict) and row.get("label") is not None
+        }
+        return labels or None
+
+
+def spec_field_names() -> tuple[str, ...]:
+    """Every field a task must declare. Used by the registry completeness test."""
+    return tuple(f.name for f in fields(TaskSpec))

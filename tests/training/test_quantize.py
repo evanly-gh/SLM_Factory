@@ -102,7 +102,11 @@ def test_validation_failure_does_not_write_cache_sidecar(tmp_path):
 def test_validated_cache_hit_requires_matching_size_and_hash(tmp_path):
     gguf_path = tmp_path / "model-q4_k_m.gguf"
     gguf_path.write_bytes(b"complete-gguf")
-    llama_instance = MagicMock()
+    # The completion call must return real text: validation now generation-tests the artifact, and a
+    # bare MagicMock is neither a passing nor a failing model, just an unrepresentative one.
+    llama_instance = MagicMock(
+        return_value={"choices": [{"text": " Hello, how can I help?"}]}
+    )
     llama_instance.close = MagicMock()
     llama = SimpleNamespace(
         __version__="0.3.test",

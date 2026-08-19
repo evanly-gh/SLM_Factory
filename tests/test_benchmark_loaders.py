@@ -1,8 +1,8 @@
-"""Six curated benchmark loaders (2026-08-01).
+"""The curated benchmark loaders (2026-08-01).
 
 Each loader has a PURE converter that shapes raw HF rows into the task's row schema; the live HF
 pull runs on the cluster. These tests exercise the converters on small in-memory samples so the
-row shaping is verified here, and confirm CoEdIT emits a git-applicable gold diff.
+row shaping is verified here.
 """
 import os
 import shutil
@@ -13,6 +13,13 @@ os.environ.setdefault("EXA_API_KEY", "test-key")
 import json  # noqa: E402
 
 import pytest  # noqa: E402
+
+from tasks._builders import TrainingContext  # noqa: E402
+
+# The dataset-level context a training turn needs. Neither of the tasks below has a closed label
+# space or a shared generation instruction, so both fields are empty — and the trainer reads that
+# off the spec rather than being told.
+_NO_CONTEXT = TrainingContext(labels=(), instruction="")
 
 
 # --- HF repo id hygiene --------------------------------------------------------
@@ -173,14 +180,14 @@ def test_xlam_gold_is_scored_correct_by_the_function_call_scorer():
         "tools": [{"name": "book", "parameters": {"people": "int", "time": "string"}}],
         "answers": [{"name": "book", "arguments": {"people": 2, "time": "7pm"}}],
     }])
-    es = EvalSet(all=rows, task_type="function_call")
+    es = EvalSet(all=rows, task="xlam_bfcl")
     preds = extract_predictions([rows[0]["answer"]], es)
     result = score(es, preds)
     assert result["f1"] == 1.0
     assert result["metric"] == "ast_arg_match"
 
 
-# --- CoEdIT (diff) -------------------------------------------------------------
+# --- RouterBench (escalate or not) ---------------------------------------------
 
 def test_routerbench_derives_local_vs_route_label():
     from data.loaders.routerbench import convert_routerbench_rows
@@ -326,7 +333,7 @@ def test_function_call_scorer_honours_bfcl_acceptable_value_semantics():
         # `b` may be omitted (""); `a` accepts either 1 or "one"; `c` must be absent ([]).
         "_accept": [{"f": {"a": [1, "one"], "b": ["x", ""], "c": []}}],
     }
-    es = build_eval_set([row], task_type="function_call", target=1)
+    es = build_eval_set([row], task="xlam_bfcl", target=1)
 
     def scored(pred_json):
         return fc.score(es, fc.extract_predictions([pred_json], es))["f1"]
@@ -346,7 +353,7 @@ def test_function_call_scorer_matches_parallel_calls_order_insensitively():
         "text": "t", "answer": "[]", "tools": [{"name": "play"}], "label": "function_call",
         "_accept": [{"play": {"artist": ["A"]}}, {"play": {"artist": ["B"]}}],
     }
-    es = build_eval_set([row], task_type="function_call", target=1)
+    es = build_eval_set([row], task="xlam_bfcl", target=1)
     reversed_order = '[{"name":"play","arguments":{"artist":"B"}},' \
                      '{"name":"play","arguments":{"artist":"A"}}]'
     assert fc.score(es, fc.extract_predictions([reversed_order], es))["f1"] == 1.0
@@ -359,7 +366,7 @@ def test_function_call_scorer_without_accept_is_unchanged():
 
     row = {"text": "t", "tools": [{"name": "f"}], "label": "function_call",
            "answer": json.dumps([{"name": "f", "arguments": {"a": 1}}])}
-    es = build_eval_set([row], task_type="function_call", target=1)
+    es = build_eval_set([row], task="xlam_bfcl", target=1)
     assert fc.score(es, fc.extract_predictions(['[{"name":"f","arguments":{"a":1}}]'], es))["f1"] == 1.0
     assert fc.score(es, fc.extract_predictions(['[{"name":"f","arguments":{"a":9}}]'], es))["f1"] == 0.0
 
@@ -401,8 +408,8 @@ def test_ner_training_prompt_is_byte_identical_to_the_eval_prompt():
     from training.lora_trainer import _training_turn
 
     example = {"text": "aspirin helps", "entities": [{"text": "aspirin", "type": "Chemical"}]}
-    train_prompt, _target, _marker = _training_turn(example, "NER", [], "")
-    eval_prompt = ner_scorer.build_prompts(build_eval_set([example], "NER", target=1))[0]
+    train_prompt, _target, _marker = _training_turn(example, "ner_bc5cdr", _NO_CONTEXT)
+    eval_prompt = ner_scorer.build_prompts(build_eval_set([example], "ner_bc5cdr", target=1))[0]
     assert train_prompt == eval_prompt
 
 
@@ -523,8 +530,8 @@ def test_calendar_sgd_conversion_uses_the_final_complete_addevent_state():
 
 def test_function_call_training_prompt_is_byte_identical_to_eval():
     """`_training_turn` raised `completion-only SFT does not support task_type='function_call'`
-    for every format-bound task, so the pipeline could GRADE function_call/diff but never train
-    them. That is why xlam_bfcl and coedit had no run log, and it killed
+    for every format-bound task, so the pipeline could GRADE those tasks but never train
+    them. That is why xlam_bfcl had no run log, and it killed
     slm-xlam-bfcl-cse-38454799 and slm-calendar-json-cse-38455147 after they had already loaded
     data and measured a baseline."""
     from data.eval_set import build_eval_set
@@ -537,20 +544,8 @@ def test_function_call_training_prompt_is_byte_identical_to_eval():
         "tools": [{"name": "get_weather", "parameters": {"city": "string"}}],
         "label": "function_call",
     }
-    user, target, _marker = _training_turn(row, "function_call", [], "")
-    assert user == fc.build_prompts(build_eval_set([row], "function_call", target=1))[0]
-    assert target == row["answer"]
-
-
-def test_diff_training_prompt_is_byte_identical_to_eval():
-    from data.eval_set import build_eval_set
-    from eval.scorers import diff as diff_scorer
-    from training.lora_trainer import _training_turn
-
-    row = {"text": "Fix grammar", "src": "He go.\n", "tgt": "He goes.\n",
-           "answer": "--- a/f\n+++ b/f\n@@ -1 +1 @@\n-He go.\n+He goes.\n", "label": "diff"}
-    user, target, _marker = _training_turn(row, "diff", [], "")
-    assert user == diff_scorer.build_prompts(build_eval_set([row], "diff", target=1))[0]
+    user, target, _marker = _training_turn(row, "xlam_bfcl", _NO_CONTEXT)
+    assert user == fc.build_prompts(build_eval_set([row], "xlam_bfcl", target=1))[0]
     assert target == row["answer"]
 
 
@@ -560,15 +555,18 @@ def test_format_bound_training_refuses_an_empty_answer():
 
     from training.lora_trainer import _training_turn
 
-    for task_type in ("function_call", "diff"):
+    for task in ("xlam_bfcl", "calendar_json"):
         with pytest.raises(ValueError, match="empty 'answer'"):
-            _training_turn({"text": "t", "answer": "  "}, task_type, [], "")
+            _training_turn({"text": "t", "answer": "  "}, task, _NO_CONTEXT)
 
 
-def test_unknown_task_type_still_raises():
+def test_an_unknown_task_cannot_be_trained():
+    """It used to be an `if task == ...` chain, and a task missing from it raised only after the
+    run had loaded data and measured a baseline. The registry refuses at the lookup instead, and
+    names every task that does exist."""
     import pytest
 
     from training.lora_trainer import _training_turn
 
-    with pytest.raises(ValueError, match="does not support task_type"):
-        _training_turn({"text": "t"}, "not_a_task_type", [], "")
+    with pytest.raises(ValueError, match=r"unknown task 'not_a_task'.*registry holds"):
+        _training_turn({"text": "t"}, "not_a_task", _NO_CONTEXT)

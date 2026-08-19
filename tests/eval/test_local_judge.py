@@ -657,7 +657,7 @@ def test_generation_scorer_uses_required_local_judge_and_propagates_parse_failur
             {"text": "first-question", "answer": "first-gold"},
             {"text": "second-question", "answer": "second-gold"},
         ],
-        task_type="generation",
+        task="dialogsum",
     )
     monkeypatch.setenv("SLM_COST_EVENT_PATH", str(tmp_path / "cost.jsonl"))
     monkeypatch.setenv("SLM_TIMING_EVENT_PATH", str(tmp_path / "timing.jsonl"))
@@ -670,13 +670,13 @@ def test_generation_scorer_uses_required_local_judge_and_propagates_parse_failur
         responses={"first-question": "0.25", "second-question": "0.75"}
     ) as (endpoint, _handler):
         monkeypatch.setattr(config, "JUDGE_ENDPOINT", endpoint)
-        result = generation.score(eval_set, ["first-prediction", "second-prediction"])
+        result = generation.score_with_judge(eval_set, ["first-prediction", "second-prediction"])
     assert result["f1"] == 0.5
 
     with _judge_server(default_response="not-a-number") as (endpoint, _handler):
         monkeypatch.setattr(config, "JUDGE_ENDPOINT", endpoint)
         with pytest.raises(JudgeInfrastructureError):
-            generation.score(
+            generation.score_with_judge(
                 eval_set,
                 ["first-prediction-invalid", "second-prediction-invalid"],
             )

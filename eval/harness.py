@@ -1,71 +1,55 @@
 # eval/harness.py
 import os
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from data.eval_set import EvalSet
 from training.slm_helpers import infer_batch, infer_batch_gguf
 
 
-_EVAL_OUTPUT_TOKEN_SETTINGS = {
-    "classification": ("SLM_EVAL_MAX_NEW_TOKENS_CLASSIFICATION", 50),
-    "NER": ("SLM_EVAL_MAX_NEW_TOKENS_NER", 512),
-    "math_reasoning": ("SLM_EVAL_MAX_NEW_TOKENS_MATH", 512),
-    "generation": ("SLM_EVAL_MAX_NEW_TOKENS_GENERATION", 512),
-    "code_generation": ("SLM_EVAL_MAX_NEW_TOKENS_APPS", 1024),
-    # Format-bound types (2026-08-01). A single tool call is short; a unified diff needs
-    # room for a few hunks.
-    "function_call": ("SLM_EVAL_MAX_NEW_TOKENS_FUNCTION_CALL", 256),
-    "diff": ("SLM_EVAL_MAX_NEW_TOKENS_DIFF", 512),
-}
+_OVERRIDE_MAX_NEW_TOKENS = "SLM_EVAL_MAX_NEW_TOKENS"
 
 
-def eval_output_token_reserve(
-    task_type: str,
-    *,
-    max_seq_length: int | None = None,
-) -> int:
-    """Return a positive task reserve that leaves prompt context available."""
-    try:
-        setting, default = _EVAL_OUTPUT_TOKEN_SETTINGS[task_type]
-    except KeyError as exc:
-        raise ValueError(f"Unknown task_type: {task_type!r}") from exc
-    raw_value = os.environ.get(setting, str(default))
+def eval_output_token_reserve(task: str) -> int:
+    """The task's output-token reserve, validated against its own context window.
+
+    Both numbers come from the task's spec, which validated their relationship at import time; this
+    only re-checks after an environment override. Previously the reserve was a dict keyed by
+    task_type with `.get(..., 4096)` on the context side, so an unrecognised type silently received
+    a generous default rather than an error.
+    """
+    from tasks import get_task
+
+    spec = get_task(task)
+    raw_value = os.environ.get(_OVERRIDE_MAX_NEW_TOKENS)
+    if raw_value is None:
+        return spec.max_new_tokens
     try:
         reserve = int(raw_value)
     except (TypeError, ValueError) as exc:
         raise ValueError(
-            f"{setting} must be a positive integer, got {raw_value!r}."
+            f"{_OVERRIDE_MAX_NEW_TOKENS} must be a positive integer, got {raw_value!r}."
         ) from exc
     if reserve < 1:
         raise ValueError(
-            f"{setting} must be a positive integer, got {raw_value!r}."
+            f"{_OVERRIDE_MAX_NEW_TOKENS} must be a positive integer, got {raw_value!r}."
         )
-    if max_seq_length is None:
-        from training.slm_helpers import task_max_seq_length
-
-        max_seq_length = task_max_seq_length(task_type)
-    if reserve >= max_seq_length:
+    if reserve >= spec.max_seq_length:
         raise ValueError(
-            f"task_type={task_type} reserves {reserve} output tokens, leaving "
-            f"no prompt budget inside max sequence length {max_seq_length}. "
-            "Increase SLM_MAX_SEQ_LENGTH or lower the task-specific output "
-            f"reserve {setting}."
+            f"task={task} reserves {reserve} output tokens, leaving no prompt budget inside its "
+            f"{spec.max_seq_length}-token context. Lower {_OVERRIDE_MAX_NEW_TOKENS} or raise the "
+            "task's max_seq_length."
         )
     return reserve
 
 
-# What the comparison scalar actually measures, per task type. Used to label reports so the
-# `f1` field name cannot be mistaken for a real F1 on tasks that do not compute one.
-TASK_METRIC_NAMES = {
-    "classification": "macro_f1",
-    "NER": "span_f1",
-    "math_reasoning": "exact_match",
-    "code_generation": "execution_pass@1",
-    "generation": "judge_mean_0_1",
-    # Format-bound: the comparison scalar is content-correctness; format_valid rides
-    # alongside in per_class (see eval/scorers/function_call.py, eval/scorers/diff.py).
-    "function_call": "ast_arg_match",
-    "diff": "apply_match",
-}
+def task_metric_name(task: str) -> str:
+    """What the comparison scalar measures for this task.
+
+    Per TASK, not per channel: RouterBench and CLINC150 were both `classification` and both
+    reported `macro_f1`, but RouterBench's headline number has always been a minority-class F1.
+    """
+    from tasks import get_task
+
+    return get_task(task).metric_name
 
 
 @dataclass
@@ -78,8 +62,14 @@ class EvalResult:
     f1: float
     per_class: dict
     failures: list[dict]
-    execution_diagnostics: list[dict] = field(default_factory=list)
     metric: str = "f1"
+    # What fraction of predictions were even READABLE by the scorer, separately from whether they
+    # were right. Every task has a parse step — a JSON call list, a JSON span array, an
+    # in-vocabulary label, a final number — so a low score means two very different things depending
+    # on this number: a content problem the data can fix, or a format problem the prompt or the chat
+    # template can. Reported for all tasks rather than only function-calling, because the run that
+    # made this necessary (B290) was diagnosed entirely from the gap between the two.
+    format_valid: float = 1.0
 
 
 _PREDICTION_SAMPLE_N = int(os.environ.get("SLM_EVAL_SAMPLE_LOG_N", "3"))
@@ -98,8 +88,6 @@ def _attach_reasoning_to_failures(result, eval_set, raw_outputs, predictions) ->
     is positional. Failures are matched on the row's own text, so this is a no-op for scorers
     that emit no reasoning (B251).
     """
-    if getattr(eval_set, "task_type", None) == "code_generation":
-        return
     failures = (result or {}).get("failures") or []
     if not failures:
         return
@@ -191,11 +179,14 @@ def run_eval(
     eval_set: EvalSet,
     weights_ref: str,
     base_model: str,
-    task_type: str,
     quant: str | None = None,
     gguf_path: str | None = None,
 ) -> EvalResult:
-    """Run one complete evaluation, isolated in a disposable process when enabled."""
+    """Run one complete evaluation, isolated in a disposable process when enabled.
+
+    The task comes from the eval set rather than a separate argument: they can no longer be passed
+    inconsistently, and the eval set is the thing that knows which rows these are.
+    """
     from training.cuda_isolation import isolation_enabled, run_isolated
 
     if isolation_enabled():
@@ -205,7 +196,6 @@ def run_eval(
             "eval_set": eval_set,
             "weights_ref": weights_ref,
             "base_model": base_model,
-            "task_type": task_type,
             "quant": quant,
             "gguf_path": gguf_path,
         }
@@ -216,7 +206,7 @@ def run_eval(
             clear_inference_cache()
 
     return _run_eval_local(
-        eval_set, weights_ref, base_model, task_type, quant=quant, gguf_path=gguf_path,
+        eval_set, weights_ref, base_model, quant=quant, gguf_path=gguf_path,
     )
 
 
@@ -286,47 +276,25 @@ def _run_eval_local(
     eval_set: EvalSet,
     weights_ref: str,
     base_model: str,
-    task_type: str,
     quant: str | None = None,
     gguf_path: str | None = None,
 ) -> EvalResult:
+    """Run inference on the eval set and score it with the task's own scorer.
+
+    When gguf_path is provided (quantized model path), inference uses llama-cpp-python
+    (infer_batch_gguf) to get honest on-device accuracy. When gguf_path is None (base/BF16 model),
+    uses Unsloth (infer_batch).
+
+    There is no task dispatch here any more. Every choice — which prompt builder, which extractor,
+    which scoring rule, how many output tokens, whether to overlap the judge, whether to record
+    reasoning — is read off the task's spec, so a task cannot inherit another's behaviour by
+    matching the same branch.
     """
-    Run inference on E and compute task-type-appropriate metrics.
+    from tasks import get_task
 
-    When gguf_path is provided (quantized model path), inference uses
-    llama-cpp-python (infer_batch_gguf) to get honest on-device accuracy.
-    When gguf_path is None (base/BF16 model), uses Unsloth (infer_batch).
-
-    Dispatches to eval/scorers/{task_type}.py for prompting, extraction, scoring.
-    Scorers are inference-backend agnostic — they receive list[str] predictions.
-    """
-    # Dispatch to the appropriate scorer module.
-    # classification family: argmax label prediction (binary, multi-class).
-    #   multi_label flag on eval_set switches scorer to per-label threshold mode.
-    # NER family: span extraction with entity F1.
-    # generation family: math_reasoning → exact match; code_generation → pass@1;
-    #   generation → LLM-as-judge. The generation scorer inspects task_type internally.
-    if task_type == "classification":
-        from eval.scorers import classification as scorer
-    elif task_type == "NER":
-        from eval.scorers import ner as scorer
-    elif task_type in ("math_reasoning", "code_generation", "generation"):
-        from eval.scorers import generation as scorer
-    elif task_type == "function_call":
-        from eval.scorers import function_call as scorer
-    elif task_type == "diff":
-        from eval.scorers import diff as scorer
-    else:
-        raise ValueError(
-            f"Unknown task_type: {task_type!r}. Must be one of: classification, NER, "
-            "math_reasoning, code_generation, generation, function_call, diff."
-        )
-
-    # Validate the task reserve against the configured context before loading a
-    # model. This prevents the historical 512-context/512-output zero prompt
-    # budget while retaining task-specific completion room.
-    max_new_tokens = eval_output_token_reserve(task_type)
-    prompts = scorer.build_prompts(eval_set)
+    spec = get_task(eval_set.task)
+    max_new_tokens = eval_output_token_reserve(spec.name)
+    prompts = spec.build_prompts(eval_set)
 
     def _infer(chunk: list[str]) -> list[str]:
         if gguf_path is not None:
@@ -342,23 +310,24 @@ def _run_eval_local(
             base_model,
             max_workers=20,
             max_new_tokens=max_new_tokens,
-            task_type=task_type,
+            task=spec.name,
         )
 
-    if task_type == "generation" and _judge_overlap_chunk() > 0:
+    if spec.judge_overlap and _judge_overlap_chunk() > 0:
         raw_outputs = _infer_overlapping_judge(prompts, eval_set, _infer)
     else:
         raw_outputs = _infer(prompts)
 
-    predictions = scorer.extract_predictions(raw_outputs, eval_set)
+    predictions = spec.extract_predictions(raw_outputs, eval_set)
     _log_prediction_samples(eval_set, raw_outputs, predictions)
-    result = scorer.score(eval_set, predictions)
-    _attach_reasoning_to_failures(result, eval_set, raw_outputs, predictions)
+    result = spec.score(eval_set, predictions)
+    if spec.attach_reasoning:
+        _attach_reasoning_to_failures(result, eval_set, raw_outputs, predictions)
 
     return EvalResult(
         f1=result["f1"],
         per_class=result["per_class"],
         failures=result["failures"],
-        execution_diagnostics=result.get("execution_diagnostics", []),
-        metric=result.get("metric", TASK_METRIC_NAMES.get(task_type, "f1")),
+        metric=result.get("metric", spec.metric_name),
+        format_valid=float(result.get("format_valid", 1.0)),
     )

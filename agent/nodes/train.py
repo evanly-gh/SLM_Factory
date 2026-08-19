@@ -189,20 +189,26 @@ def _config_diff(old: dict | None, new: dict) -> str:
     return ", ".join(changes) if changes else "unchanged from best prior config"
 
 
-def _label_for(cfg: dict, suffix: str = "") -> str:
+def _label_for(cfg: dict) -> str:
+    """Name a config by the fields a hyperparameter intervention can actually change.
+
+    The label is the Config column of the per-tier trajectory table, so listing a field that
+    never varies costs width on every row and buys nothing: `drop` is fixed at 0.0 and is not in
+    the search space, and `mb`/`ga`/`eb` are trainer-derived batch shape that neither the
+    orchestrator (`iterate._TUNABLE_HYPERPARAMS`) nor the deterministic neighbour search
+    (`training.hparams.deterministic_neighbor_configs`) is allowed to touch. What remains is the
+    five mutable axes — rank, alpha, weight decay, learning rate, epochs.
+    """
     return (
-        f"LoRA r={cfg['lora_rank']} a={cfg['lora_alpha']} "
-        f"drop={cfg['lora_dropout']:g} wd={cfg['weight_decay']:g} "
-        f"lr={cfg['learning_rate']:.0e} ep={cfg['nr_epochs']} "
-        f"mb={cfg['micro_batch_size']} ga="
-        f"{cfg['gradient_accumulation_steps']} eb="
-        f"{cfg['effective_batch_size']}{suffix}"
+        f"r={cfg['lora_rank']} a={cfg['lora_alpha']} "
+        f"wd={cfg['weight_decay']:g} lr={cfg['learning_rate']:.0e} "
+        f"ep={cfg['nr_epochs']}"
     )
 
 
-def _finalize_config(config: dict, suffix: str = "") -> dict:
+def _finalize_config(config: dict) -> dict:
     finalized, _ = normalize_hyperparams(config)
-    finalized["label"] = _label_for(finalized, suffix=suffix)
+    finalized["label"] = _label_for(finalized)
     return finalized
 
 
@@ -277,8 +283,10 @@ def _build_config(state: AgentState) -> tuple[dict, str]:
 
         # data_rebuild / anything else: hold hyperparameters at the current best
         # so the data (or other) change is isolated and comparable — not confounded by
-        # reverting to r=16.
-        config = _finalize_config(best, suffix=" [carry-fwd best]")
+        # reverting to r=16. No marker on the label: holding the best config is what every
+        # non-hyperparameter intervention does, so annotating it repeated the intervention
+        # column on every data_rebuild row.
+        config = _finalize_config(best)
         return config, (
             f"carry-forward best config (r={config['lora_rank']}, "
             f"a={config['lora_alpha']}, drop="
@@ -341,7 +349,7 @@ def train_node(state: AgentState) -> AgentState:
     config_diff = _config_diff(_best_prior_config(state), cfg)
 
     state["iteration"] += 1
-    task_type = state["task_type"]
+    task = state["task"]
 
     _log(mlabel, f"Iteration {state['iteration']}")
     _log(mlabel, f"  Config: {cfg['label']}")
@@ -383,7 +391,7 @@ def train_node(state: AgentState) -> AgentState:
             ],
             effective_batch_size=cfg["effective_batch_size"],
             output_dir=output_dir,
-            task_type=task_type,
+            task=task,
         )
 
     training_output = run_training_atomically(final_dir, produce)

@@ -21,6 +21,16 @@ from training.lora_trainer import (
 
 
 class _TokenizerDouble:
+    """Stands in for a Qwen tokenizer, rendering real ChatML.
+
+    It used to render a made-up `<user>..</user><assistant>` shape. That was fine while nothing
+    compared the rendered text against the inference prompt, but `_assert_train_serve_prefix_alignment`
+    (B290) does exactly that, and a Qwen tokenizer that emits non-ChatML is a configuration that cannot
+    occur — the double was asserting against an impossible world. Emitting the hybrid-Qwen3 form (with
+    the pre-filled empty think block, matching `_qwen_no_think_prompt`) keeps these tests exercising
+    their real subjects instead of tripping the skew guard.
+    """
+
     chat_template = "qwen-template"
     pad_token_id = 0
     pad_token = "<pad>"
@@ -43,10 +53,13 @@ class _TokenizerDouble:
             "add_generation_prompt": add_generation_prompt,
             "enable_thinking": enable_thinking,
         })
-        prompt = f"<user>{messages[0]['content']}</user><assistant>"
+        prompt = (
+            f"<|im_start|>user\n{messages[0]['content']}<|im_end|>\n"
+            "<|im_start|>assistant\n<think>\n\n</think>\n\n"
+        )
         if add_generation_prompt:
             return prompt
-        return f"{prompt}{messages[-1]['content']}</assistant>"
+        return f"{prompt}{messages[-1]['content']}<|im_end|>\n"
 
     def __call__(self, text, *, truncation, add_special_tokens):
         return {"input_ids": [ord(char) + 10 for char in text]}
@@ -310,12 +323,17 @@ def test_model_prefetch_local_checkpoint_is_noop(tmp_path):
         assert _ensure_model_cached(str(checkpoint)) is None
 
 
-def test_training_max_sequence_length_honors_code_job_override(monkeypatch):
+def test_training_max_sequence_length_honors_an_explicit_override(monkeypatch):
+    """An explicit SLM_MAX_SEQ_LENGTH wins over the task's own ceiling on both sides.
+
+    Training and inference must agree: a row that fits training but not eval would be scored on a
+    truncated prompt. Both read `task_max_seq_length`, so the override cannot apply to one only.
+    """
     from training import lora_trainer
 
     monkeypatch.setenv("SLM_MAX_SEQ_LENGTH", "1024")
 
-    assert lora_trainer._configured_max_seq_length() == 1024
+    assert lora_trainer._configured_max_seq_length("gsm8k") == 1024
 
 
 def test_training_rejects_target_truncation_before_sft():
@@ -403,6 +421,7 @@ def test_qwen35_text_only_training_uses_vision_loader_and_freezes_vision(tmp_pat
         weight_decay=0.1,
         micro_batch_size=1,
         gradient_accumulation_steps=8,
+        task="clinc150",
     )
     output_dir = tmp_path / "output"
     with (
@@ -422,17 +441,18 @@ def test_qwen35_text_only_training_uses_vision_loader_and_freezes_vision(tmp_pat
             str(dataset_path),
             config,
             str(output_dir),
+            task=config.task,
         )
 
     assert checkpoint == str(output_dir / "final_checkpoint")
     language_loader.from_pretrained.assert_not_called()
-    # Derived, not hardcoded: the context ceiling is per task type, and training must request
+    # Derived, not hardcoded: the context ceiling is per task, and training must request
     # exactly what eval will use or a row could fit one side and be truncated on the other.
     from training.slm_helpers import task_max_seq_length
 
     vision_loader.from_pretrained.assert_called_once_with(
         model_name="Qwen/Qwen3.5-0.8B",
-        max_seq_length=task_max_seq_length("classification"),
+        max_seq_length=task_max_seq_length("clinc150"),
         load_in_4bit=True,
         trust_remote_code=True,
     )
@@ -489,6 +509,7 @@ def test_text_training_wires_expanded_peft_and_sft_kwargs(tmp_path):
         weight_decay=0.05,
         micro_batch_size=2,
         gradient_accumulation_steps=4,
+        task="clinc150",
     )
 
     with (
@@ -509,6 +530,7 @@ def test_text_training_wires_expanded_peft_and_sft_kwargs(tmp_path):
             str(dataset_path),
             config,
             str(tmp_path / "output"),
+            task=config.task,
         )
 
     peft_kwargs = language_loader.get_peft_model.call_args.kwargs
@@ -611,6 +633,7 @@ def test_early_stop_failure_reloads_fresh_model_and_full_training_rows(
         weight_decay=0.01,
         micro_batch_size=2,
         gradient_accumulation_steps=4,
+        task="clinc150",
     )
     output_dir = tmp_path / "output"
 
@@ -644,6 +667,7 @@ def test_early_stop_failure_reloads_fresh_model_and_full_training_rows(
             str(dataset_path),
             config,
             str(output_dir),
+            task=config.task,
         )
 
     assert checkpoint == str(output_dir / "final_checkpoint")

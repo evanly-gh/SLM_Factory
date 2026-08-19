@@ -6,66 +6,91 @@ from types import SimpleNamespace
 import pytest
 
 from agent.nodes.cold_start import eval_setup
-from data.loaders import web_acquire
 from data.loaders.dataset_integrity import sha256_file
 from scripts import prepare_shared_dataset
 
 
 def _state():
     return {
-        "task_type": "generation",
+        "task": "dialogsum",
         "task_plan": {
-            "task_type": "generation",
+            "task": "dialogsum",
             "benchmark": "SAMSum",
             "multi_label": False,
             "schema": None,
             "multilingual": False,
         },
         "description": "dialogue summarization",
-        "curriculum_size_target": 10,
-        "eval_size_target": 6,
         "data_sources": [],
         "eval_source_ban": [],
         "feasible_models": [],
     }
 
 
-def _install_lightweight_dependencies(monkeypatch, tmp_path, acquire):
+def _install_lightweight_dependencies(monkeypatch, tmp_path):
+    # Cold start now asks the orchestrator to write a task brief from the real rows it loaded. That
+    # is a live Anthropic call and is covered on its own in tests/test_task_brief.py; here it is
+    # stubbed, because these tests are about which dataset SPLITS get banned from the curriculum.
     monkeypatch.setitem(
         sys.modules,
-        "config.config",
-        SimpleNamespace(DATA_SIZE_CEILING=100),
+        "agent.task_brief",
+        SimpleNamespace(
+            build_task_brief=lambda spec, rows, **_kwargs: {
+                "summary": spec.title, "output_contract": "stubbed",
+                "failure_modes": [], "source": "test-stub",
+            },
+        ),
     )
     monkeypatch.setitem(
         sys.modules,
         "agent.nodes.test_agent",
         SimpleNamespace(label_difficulty=lambda *_args, **_kwargs: None),
     )
-    monkeypatch.setattr(web_acquire, "acquire_dataset", acquire)
     monkeypatch.setattr(eval_setup, "ARTIFACTS_DIR", str(tmp_path))
 
 
-def test_eval_setup_records_only_declared_eval_split_bans(tmp_path, monkeypatch, capsys):
-    train_record = {
-        "kind": "hf", "id": "knkarthick/samsum", "split": "train", "role": "curriculum"
-    }
-    test_record = {
-        "kind": "hf", "id": "knkarthick/samsum", "split": "test", "role": "eval"
-    }
+def _pin_loader(monkeypatch, task, loader):
+    """Give `task` a loader that returns fixture rows.
 
-    def acquire(*_args, meta, **_kwargs):
-        meta["source"] = "local SAMSum"
-        meta["source_records"] = [train_record, test_record]
-        meta["eval_ban"] = [test_record]
-        return (
+    The loader used to live in `_named_benchmark_loaders`, a dict kept in lockstep by hand with
+    `NAMED_BENCHMARK_TASK_TYPES` — two of the five side registries the task specs replaced. It is
+    now `TaskSpec.load`, so the loader is pinned by replacing the spec itself.
+    """
+    import dataclasses
+
+    from tasks import TASKS, get_task
+
+    monkeypatch.setitem(
+        TASKS, task, dataclasses.replace(get_task(task), load=loader)
+    )
+
+
+def test_eval_setup_records_only_declared_eval_split_bans(tmp_path, monkeypatch, capsys):
+    """Provenance records BOTH official splits; only the held-out one is banned as a source.
+
+    The two lists are built from different keys (`source_records` vs `eval_ban`) precisely so that
+    recording where data came from cannot be mistaken for forbidding it — the curriculum is
+    supposed to be drawn from the train split of the very dataset the eval set comes from.
+
+    The scenario moved: `acquire_meta` used to be filled by `web_acquire.acquire_dataset` on the
+    autonomous path, which is gone. `_load_named_benchmark` now fills it from the task spec, so the
+    records name the registry task rather than the hub repo.
+    """
+    _pin_loader(
+        monkeypatch, "dialogsum",
+        lambda max_train, max_test, log=print: (
             [{"text": "train dialogue", "answer": "train summary", "label": "generation"}],
             [{"text": "test dialogue", "answer": "test summary", "label": "generation"}],
-        )
-
-    _install_lightweight_dependencies(monkeypatch, tmp_path, acquire)
+        ),
+    )
+    _install_lightweight_dependencies(monkeypatch, tmp_path)
 
     result = eval_setup.eval_setup_node(_state())
 
+    train_record = {
+        "kind": "hf", "id": "dialogsum", "split": "train", "role": "curriculum"
+    }
+    test_record = {"kind": "hf", "id": "dialogsum", "split": "test", "role": "eval"}
     assert result["data_sources"] == [train_record, test_record]
     assert result["eval_source_ban"] == [test_record]
     output = capsys.readouterr().out
@@ -74,20 +99,28 @@ def test_eval_setup_records_only_declared_eval_split_bans(tmp_path, monkeypatch,
 
 
 def test_eval_setup_does_not_invent_eval_bans_from_provenance(tmp_path, monkeypatch):
+    """A source that declares no eval restriction gets none — the ban is never inferred.
+
+    Inferring it from `source_records` would ban the whole dataset the curriculum is drawn from.
+    Asserted on the shared-bundle path because that is the one remaining path whose provenance and
+    ban are supplied separately, and so the only one where the two can still disagree.
+    """
     records = [
         {"kind": "hf", "id": "source", "split": "train", "role": "curriculum"},
         {"kind": "hf", "id": "source", "split": "test", "role": "eval"},
     ]
-
-    def acquire(*_args, meta, **_kwargs):
-        meta["source"] = "source without declared restriction"
-        meta["source_records"] = records
-        return (
-            [{"text": "train", "answer": "a", "label": "generation"}],
-            [{"text": "test", "answer": "b", "label": "generation"}],
-        )
-
-    _install_lightweight_dependencies(monkeypatch, tmp_path, acquire)
+    shared = tmp_path / "shared"
+    prepare_shared_dataset._write_shared_bundle(
+        shared,
+        [{"text": "train", "answer": "a", "label": "generation"}],
+        [{"text": "test", "answer": "b", "label": "generation"}],
+        task="dialogsum",
+        plan={"task": "dialogsum"},
+        difficulty=None,
+        meta={"source": "source without declared restriction", "source_records": records},
+    )
+    monkeypatch.setenv("SLM_SHARED_DATASET_DIR", str(shared))
+    _install_lightweight_dependencies(monkeypatch, tmp_path / "artifacts")
 
     result = eval_setup.eval_setup_node(_state())
 
@@ -96,47 +129,48 @@ def test_eval_setup_does_not_invent_eval_bans_from_provenance(tmp_path, monkeypa
 
 
 def test_eval_setup_enforces_normalized_train_test_separation(tmp_path, monkeypatch):
-    def acquire(*_args, meta, **_kwargs):
-        meta["source"] = "contaminated source"
-        meta["source_records"] = []
-        meta["eval_ban"] = []
-        return (
+    """The Layer-1 firewall is independent of Stage-0, which is the point of having both.
+
+    Stage-0 (`remove_normalized_train_overlap`, inside `_load_named_benchmark`) normally drops the
+    offending train row before this check ever sees it, so Stage-0 is disabled here to prove the
+    second layer is not merely echoing the first. A loader that returns an overlapping pair — a new
+    loader, or a Stage-0 regression — must stop the run rather than train on held-out text.
+    """
+    _pin_loader(
+        monkeypatch, "dialogsum",
+        lambda max_train, max_test, log=print: (
             [{"text": " Same\n  Dialogue ", "answer": "train", "label": "generation"}],
             [{"text": "same dialogue", "answer": "test", "label": "generation"}],
-        )
-
-    _install_lightweight_dependencies(monkeypatch, tmp_path, acquire)
+        ),
+    )
+    monkeypatch.setattr(
+        eval_setup, "remove_normalized_train_overlap", lambda train, test: (train, 0)
+    )
+    _install_lightweight_dependencies(monkeypatch, tmp_path)
 
     with pytest.raises(ValueError, match="normalized train/test overlap"):
         eval_setup.eval_setup_node(_state())
 
 
-# The curated SLM_BENCHMARK_TASK path bypasses web_acquire, and therefore also bypasses its
-# Stage-0 `remove_normalized_train_overlap`. Official benchmark splits are not guaranteed
-# disjoint — CLINC150 ships "what's your designation" in *both* splits under two different
-# intents — so without Stage-0 the Layer-1 firewall turns a source-data quirk into a hard
-# run-ending raise. Decontaminate like the autonomous path: drop the train row, never the
-# official test row.
+# Official benchmark splits are not guaranteed disjoint — CLINC150 ships "what's your designation"
+# in *both* splits under two different intents — so without Stage-0 the Layer-1 firewall above
+# turns a source-data quirk into a hard run-ending raise. Decontaminate first: drop the train row,
+# never the official test row.
+
 
 def test_named_benchmark_path_removes_train_rows_overlapping_official_test(monkeypatch, capsys):
     leaked = {"text": " What's Your  Designation ", "label": "what_is_your_name"}
     kept = {"text": "set an alarm for 6am", "label": "alarm"}
     test_rows = [{"text": "what's your designation", "label": "user_name"}]
 
-    def fake_registry():
-        return {
-            "clinc150": (
-                lambda max_train, max_test: ([leaked, kept], test_rows),
-                "classification",
-                "CLINC150 (clinc_oos/plus)",
-            )
-        }
-
-    monkeypatch.setattr(eval_setup, "_named_benchmark_loaders", fake_registry)
+    _pin_loader(
+        monkeypatch, "clinc150",
+        lambda max_train, max_test, log=print: ([leaked, kept], test_rows),
+    )
 
     meta: dict = {}
     train_examples, test_examples = eval_setup._load_named_benchmark(
-        "clinc150", {"task_type": "classification"}, meta
+        "clinc150", {"task": "clinc150"}, meta
     )
 
     assert train_examples == [kept], "the overlapping train row must be dropped"
@@ -149,26 +183,31 @@ def test_named_benchmark_path_reports_zero_removal_when_splits_are_clean(monkeyp
     train_rows = [{"text": "set an alarm", "label": "alarm"}]
     test_rows = [{"text": "what time is it", "label": "time"}]
 
-    monkeypatch.setattr(
-        eval_setup,
-        "_named_benchmark_loaders",
-        lambda: {
-            "clinc150": (
-                lambda max_train, max_test: (train_rows, test_rows),
-                "classification",
-                "CLINC150 (clinc_oos/plus)",
-            )
-        },
+    _pin_loader(
+        monkeypatch, "clinc150",
+        lambda max_train, max_test, log=print: (train_rows, test_rows),
     )
 
     meta: dict = {}
     train_examples, test_examples = eval_setup._load_named_benchmark(
-        "clinc150", {"task_type": "classification"}, meta
+        "clinc150", {"task": "clinc150"}, meta
     )
 
     assert train_examples == train_rows
     assert test_examples == test_rows
     assert meta["overlap_removed_from_train"] == 0
+
+
+def test_named_benchmark_path_refuses_a_mismatched_run_task(monkeypatch):
+    """The run's task and SLM_BENCHMARK_TASK must agree. When several tasks shared a channel,
+    loading one task's data into another's run was undetectable."""
+    _pin_loader(
+        monkeypatch, "clinc150",
+        lambda max_train, max_test, log=print: ([{"text": "t", "label": "a"}], []),
+    )
+
+    with pytest.raises(ValueError, match="does not match the run's task"):
+        eval_setup._load_named_benchmark("clinc150", {"task": "routerbench"}, {})
 
 
 def test_eval_restriction_text_does_not_claim_unimplemented_repo_ban():
@@ -195,7 +234,8 @@ def test_shared_dataset_uses_explicit_eval_ban_file(tmp_path, monkeypatch):
         shared,
         train,
         test,
-        plan={"task_type": "generation", "benchmark": "SAMSum"},
+        task="dialogsum",
+        plan={"task": "dialogsum", "benchmark": "SAMSum"},
         difficulty=None,
         meta={
             "source": "local SAMSum",
@@ -224,45 +264,28 @@ def test_shared_dataset_preparer_persists_eval_ban_metadata():
 
 
 @pytest.mark.parametrize(
-    ("task_type", "row"),
+    ("task", "row"),
     [
-        (
-            "code_generation",
-            {
-                "input_output": {
-                    "inputs": ["x\n"],
-                    "outputs": ["x\n"],
-                },
-                "execution_mode": "stdin",
-                "runner_compatible": True,
-                "label": "code_generation",
-            },
-        ),
-        (
-            "generation",
-            {"answer": "answer", "label": "generation"},
-        ),
+        ("dialogsum", {"answer": "answer", "label": "generation"}),
+        ("xlam_bfcl", {"answer": "[]", "label": "function_call"}),
     ],
 )
-def test_shared_preparer_uses_dynamic_800_eval_slices(task_type, row):
-    examples = [
-        {"text": f"example {index}", **row}
-        for index in range(800)
-    ]
-    plan = {
-        "task_type": task_type,
-        "multi_label": False,
-        "schema": None,
-        "multilingual": False,
-    }
+def test_shared_preparer_uses_dynamic_800_eval_slices(task, row):
+    """The frozen eval set must be the size the runs that consume it would have built themselves.
 
-    eval_set = prepare_shared_dataset._build_requested_eval_set(
-        examples,
-        plan,
-        800,
-    )
+    The preparer used to build it through its own `_build_requested_eval_set` wrapper, which took a
+    plan and its abstract `task_type`; it now calls `build_eval_set` with the registry task and the
+    same `_eval_target` clamp the pipeline uses, so the two cannot size differently.
+    """
+    from agent.nodes.cold_start.eval_setup import _eval_target
+    from data.eval_set import build_eval_set
+
+    examples = [{"text": f"example {index}", **row} for index in range(800)]
+
+    eval_set = build_eval_set(examples, task=task, target=_eval_target(800))
 
     assert len(eval_set.all) == 800
+    assert eval_set.task == task
 
 
 def test_shared_dataset_loader_rejects_missing_integrity_files(tmp_path):
@@ -287,7 +310,8 @@ def test_shared_dataset_loader_rejects_checksum_tampering(tmp_path):
         shared,
         [{"text": "train", "answer": "a", "label": "generation"}],
         [{"text": "test", "answer": "b", "label": "generation"}],
-        plan={"task_type": "generation"},
+        task="dialogsum",
+        plan={"task": "dialogsum"},
         difficulty=None,
         meta={"source_records": [], "eval_ban": []},
     )
@@ -306,7 +330,8 @@ def test_shared_dataset_loader_validates_row_schema_after_integrity(tmp_path):
         shared,
         [{"text": "train", "answer": "a", "label": "generation"}],
         [{"text": "test", "answer": "b", "label": "generation"}],
-        plan={"task_type": "generation"},
+        task="dialogsum",
+        plan={"task": "dialogsum"},
         difficulty=None,
         meta={},
     )
@@ -341,7 +366,8 @@ def test_shared_dataset_writer_rejects_schema_and_normalized_overlap(tmp_path):
             tmp_path / "bad-schema",
             [{"text": "train", "label": "generation"}],
             [{"text": "test", "answer": "b", "label": "generation"}],
-            plan={"task_type": "generation"},
+            task="dialogsum",
+            plan={"task": "dialogsum"},
             difficulty=None,
             meta={},
         )
@@ -351,7 +377,8 @@ def test_shared_dataset_writer_rejects_schema_and_normalized_overlap(tmp_path):
             tmp_path / "overlap",
             [{"text": " Same\n Dialogue ", "answer": "a", "label": "generation"}],
             [{"text": "same dialogue", "answer": "b", "label": "generation"}],
-            plan={"task_type": "generation"},
+            task="dialogsum",
+            plan={"task": "dialogsum"},
             difficulty=None,
             meta={},
         )

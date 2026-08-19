@@ -1,6 +1,20 @@
 # Pioneer Agent Paper Analysis
 **Source:** "Pioneer Agent: Continual Improvement of Small Language Models in Production" (arXiv:2604.09791, Fastino Labs, April 10, 2026)
 
+> **Scope, and an update note (2026-08-19).** Sections 1–13 and 15 analyse the *paper*; they describe
+> what Fastino built and what the independent literature says about it, and nothing in our codebase
+> changes them. The sections that describe or prescribe for **SLM Factory** — §4.2, §4.3, §5, §14
+> and §16 — were swept against the code after the task-registry rebuild, and where our system now
+> does something different from what those sections assume, a dated note says so in place.
+>
+> Three facts from that rebuild bear on how this analysis should be read. **The benchmark suite is
+> eight named tasks** — gsm8k, dialogsum, xlam_bfcl, calendar_json, ner_bc5cdr, routerbench,
+> proactive_listening, clinc150 — defined one per module in `tasks/`, with no abstract `task_type`
+> channel and no dispatch on task identity anywhere else. **Code generation is not among them**:
+> APPS, MBPP, HumanEval and the execution sandbox were deleted on 2026-08-18, which retires every
+> coding-eval recommendation in §16. And **our curriculum is cumulative** — it starts at 5,000 gold
+> rows and only grows — which is a different sizing philosophy from the paper's, discussed at §4.3.
+
 ---
 
 ## 1. Core Problem Statement
@@ -115,6 +129,26 @@ When a branch stagnates:
 
 **Teacher model selection:** DeepSeek-R1 preferred for math/science reasoning; GPT-4.1 preferred for code/general knowledge. This is an empirically derived rule, not theoretically motivated.
 
+> **How this maps to SLM Factory (2026-08-19).** We implement four of the five, and the mapping is
+> now explicit per task rather than inferred from a task type — `TaskSpec.quality_controls` lists
+> the steps a task wants, in order, from the named units in `data/quality_controls.py`. Label
+> balancing is `balance_labels(max_ratio=3)`, the same 3× rule. Context-length matching is
+> `length_outliers`, measured against the median of **trusted** rows only so injected data cannot
+> move the cutoff onto the real benchmark (B260). Entity diversification is `entity_diversity(cap=3)`,
+> at the paper's 2–3 range. Chain-of-thought annotation is `TaskSpec.cot_annotation`, true only for
+> `gsm8k` — `dialogsum` is the counter-case, where the summary is a compression of text already in
+> the prompt and a reasoning chain buys nothing for one teacher call per row.
+>
+> **The 2-for-1 hard-negative rule is the one we do not implement**, and it is worth being clear that
+> its absence is a gap rather than a decision. Our nearest equivalent is surgical synthesis, which
+> generates rows aimed at the failure categories costing the most points — targeted, but positive
+> examples only, not contrastive pairs.
+>
+> One thing this section's framing would have hidden: until 2026-08-18 our quality controls were an
+> `if task_type == ...` chain ending in `else: return dataset`, so **four of the eight tasks were
+> never filtered at all** and nothing said so (B299). A per-task list makes an empty set of controls
+> a visible choice instead of an accident.
+
 ### 4.3 Dataset Sizing Philosophy
 
 - Classification/NER: 100–200 total examples typical
@@ -122,6 +156,25 @@ When a branch stagnates:
 - The agent actively monitors for regression when adding data: if expanding the dataset degrades validation accuracy → rollback immediately
 
 **Counter-intuitive finding:** On HumanEval, 173 curated examples outperformed 348. On SAMSum, 500 agent-selected examples outperformed 2,000 randomly sampled. Quality strictly dominates quantity in this setting.
+
+> **Where SLM Factory now differs (2026-08-19).** We do not size the curriculum at all. Cold start
+> loads `TaskSpec.initial_train_cap` — a flat 5,000 gold rows for every task, or as many as the
+> source has — and every `data_rebuild` **adds**; rows leave only through quality control or the
+> eval firewall. There is no target, no fraction, and nothing that pads or truncates toward a number.
+> `MIN_CURRICULUM_ROWS = 500` is a viability floor that raises when real data cannot supply a usable
+> curriculum, which is a different thing from a target.
+>
+> This replaced a per-tier sizing formula (`clamp(5000 × (0.5 + novelty) × capacity_factor, 5000,
+> 25000)`) whose target the curriculum was then never allowed to reach. The gap could only have been
+> closed by re-drawing rows the pool already had, and that is exactly what the removed gold FILL did:
+> it re-selected the identical ~3,235 rows and honestly reported `0 novel` on eight consecutive
+> rebuilds of one run. The formula still exists and is still tested; **nothing calls it** (B305).
+>
+> Our own evidence is consistent with the paper's finding, at a different scale: BC5CDR's
+> best-in-project 0.8098 came from a **gold-only** curriculum roughly 7,100 rows below the target of
+> the day. Where we differ from the paper is that its 100–3,000-example figures come from production
+> traces of a deployed model — a population of known failures — while a cold-start run on a public
+> benchmark has no such population to draw on and has to earn its rows.
 
 ---
 
@@ -137,6 +190,23 @@ The shared policy governs both modes:
 | Regression from previous iteration | Rollback immediately | More data ≠ better; revert rather than compensate |
 
 **Critical design principle:** Rollback is *always* preferred over accumulation. Cascading fixes that each introduce new failure modes are the primary cause of stagnation in iterative fine-tuning. The agent treats any score decrease as a revert signal, not a problem to compensate for.
+
+> **How SLM Factory implements this (2026-08-19).** We keep the four-row shape but compress the
+> middle: the orchestrator picks **one of two** interventions — `data_rebuild` or `hyperparameter` —
+> and a `data_rebuild` names **one of two** sub-strategies, `mine_new_real` or
+> `surgical_synthesis`. The paper's ">0.95 → surgical augmentation" row maps onto
+> `surgical_synthesis`, which budgets generation per failure **category** in proportion to that
+> category's measured count; its "<0.80 → rebuild data" row maps onto `mine_new_real`. The score
+> bands themselves are only a **fallback** here, used when the orchestrator call fails or returns
+> invalid JSON — `apply_iteration_policy` — not an enforced boundary on a valid decision. Rollback
+> is unconditional on any regression, exactly as the paper prescribes, and the rolled-back attempt
+> stays visible in the DAG marked `pruned` so it cannot be silently re-proposed.
+>
+> The one place we are stricter than the paper: a rebuild that adds **zero** rows is logged as an
+> ERROR rather than passing as an ordinary iteration. An intervention was chosen and the mechanism
+> it named could not do the thing it exists to do, so training would repeat the previous iteration
+> exactly — and a loop that cannot tell that apart from a genuine no-improvement result will spend
+> its whole budget learning nothing. See [`interventions.md`](interventions.md).
 
 ---
 
@@ -353,10 +423,35 @@ Cost structure:
 Our implementation adapts this architecture for Android-constrained models (≤1.5GB INT4). Key differences from the paper's system:
 - No Tinker SDK → we use Unsloth/LLaMA-Factory directly
 - No Modal sandbox → local GPU execution
-- Android pool constraint → model selection is bounded (Qwen3-0.6B to Llama3.2-3B)
+- Android pool constraint → model selection is bounded to the official Qwen pool (Qwen3-0.6B through Qwen3.5-4B; see [`model_pool.md`](model_pool.md))
 - Hardware metrics as a constraint → the paper doesn't optimize for on-device latency/NPU compatibility
 
-The paper's context manager, MCGS implementation, and production mode pipeline stages are the most underspecified components in our current codebase (see BUGS.md).
+> **Update 2026-08-19 — three further differences worth stating, because they are choices rather
+> than gaps.**
+>
+> **Production mode is not underspecified; it was removed.** The `trace_ingest` → `live_confirm` →
+> `parent_awareness` chain existed as modules but was never wired into the graph topology (B199),
+> and was deleted on 2026-07-29. `build_graph` accepts only `cold_start`. Everything in §7 of this
+> analysis is therefore a description of the paper, not of a stubbed part of our system. Whether to
+> build it remains open, and the paper's stages 2–4 are still the right design if we do.
+>
+> **Our benchmark suite is deliberately not the paper's.** The eight tasks are grouped by *what
+> fine-tuning is expected to buy*: in-distribution (`gsm8k`, `dialogsum` — small delta, good
+> baseline), format-bound (`xlam_bfcl`, `calendar_json`, `ner_bc5cdr` — near-zero baseline, large
+> delta), and out-of-distribution (`clinc150`, `routerbench`, `proactive_listening` — delta bounded
+> by label noise). That grouping is what makes a result interpretable: a large delta on a
+> format-bound task and a large delta on an OOD task mean different things. **ARC-Challenge,
+> HumanEval, SMS Spam and TriviaQA — four of the paper's five headline benchmarks — are not in it**,
+> and §15.3 explains why two of those results should not be built on.
+>
+> **Every task reports format alongside content.** `EvalResult.format_valid` is the fraction of
+> predictions the scorer could read at all. The paper's §11 failure mode 6 ("format-specific
+> benchmarks require format-specific supervision") is a diagnosis it makes narratively; we make it a
+> measured number on every iteration, because the alternative is what happened in B290 — two stray
+> `<think>` tags collapsed content scores for two full runs while the format number would have
+> named the cause immediately.
+
+The paper's context manager and MCGS implementation remain the most underspecified components in our current codebase (see BUGS.md).
 
 ---
 
@@ -432,11 +527,15 @@ The 92.7% claim should be treated with caution until verified on EvalPlus or Liv
 
 ### 15.6 What Could Be Improved in SLM Factory's Replication
 
-1. **Treat the HumanEval 92.7% result as unverified.** Implement the evaluation harness carefully and validate against EvalPlus before reporting numbers.
+1. ~~**Treat the HumanEval 92.7% result as unverified.**~~ **Moot 2026-08-19** — no coding benchmark
+   is in the suite, so there is no HumanEval harness to validate against EvalPlus. The underlying
+   caution transfers to any *new* benchmark we adopt: verify the harness against an independent
+   implementation before reporting a number, because a 20+pp swing can come from the harness alone
+   (see the Qwen3-8B LiveCodeBench case in §15.3).
 
-2. **Add CLEAR-style automated quality filtering to the curate node.** This is the most directly applicable independent method for the data curation stage that the paper doesn't cite.
+2. **Add CLEAR-style automated quality filtering to the curate node.** This is the most directly applicable independent method for the data curation stage that the paper doesn't cite. *(2026-08-19: `curate` now has a real per-task quality-control pipeline to add it to — `TaskSpec.quality_controls` composed from named steps — where previously it had an `if task_type` chain that was a no-op for half the suite, B299.)*
 
-3. **Consider IFD scoring (Cherry LLM, NAACL 2024) for synthetic data selection.** The paper uses 2-for-1 rule + label balancing + context-length matching but doesn't use model-native difficulty scoring for synthetic data.
+3. **Consider IFD scoring (Cherry LLM, NAACL 2024) for synthetic data selection.** The paper uses 2-for-1 rule + label balancing + context-length matching but doesn't use model-native difficulty scoring for synthetic data. *(2026-08-19: our synthetic rows now pass an exact programmatic verifier where one exists and a teacher check otherwise — both correctness gates. IFD would add the orthogonal thing neither provides: a difficulty signal, which is what would let synthesis prefer rows the model finds hard over rows it merely gets right.)*
 
 4. **Test the replay buffer hypothesis.** The paper uses 10-20% replay data but doesn't ablate it against 0% or other rates. The continual learning literature suggests 10-15% is empirically well-supported; the paper's claim is consistent but unverified in its own experiments.
 
@@ -464,7 +563,13 @@ Upgrade regression gate to include KL divergence (not just accuracy) — calibra
 On-Policy Replay (OPR) (arXiv:2605.29495): Roll out current checkpoint on prior-task prompts, filter by reward, add to next curriculum — formalizes the Pioneer Agent replay buffer design
 NVIDIA MAPE flywheel finding: 495 targeted failure samples were sufficient for production improvement — quantifies the data volume needed for Phase 2
 GRPO as SFT replacement (Phase 2+): GRPO rollouts are naturally on-distribution, achieving zero-replay continual learning parity in experiments
-Use LiveCodeBench or HumanEval+ as primary coding eval, not raw HumanEval — a 20+pp jump on raw HumanEval from a 1-3B model requires decontamination analysis before claiming
+~~Use LiveCodeBench or HumanEval+ as primary coding eval, not raw HumanEval~~ — **retired 2026-08-19: there is no coding eval.** `code_generation`, APPS, MBPP, HumanEval and the execution sandbox were all deleted on 2026-08-18, so the contamination analysis this recommended has nothing to analyse. The recommendation stands as advice if a coding benchmark is ever added; the ~57k-row xLAM function-calling task now occupies the "structured output the model must get exactly right" slot instead, and its correctness is checkable by parsing rather than by execution.
+
+> **Note on the four Phase-1 items above (2026-08-19).** None of them has been implemented, and
+> nothing in the task-registry rebuild touched them. They are also all about the *training* half of
+> the loop, which is the half this project has changed least — the LoRA config search is still five
+> hyperparameters over a fixed target-module set, and the regression gate is still accuracy-only.
+> They remain the strongest external suggestions on the list precisely because they are untouched.
 
 ### 16.1 Upgrade the LoRA Implementation (Phase 1)
 

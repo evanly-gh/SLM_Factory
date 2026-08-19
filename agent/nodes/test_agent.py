@@ -44,7 +44,7 @@ def _unique_base_endpoints(feasible_models):
     return unique[-1], unique[0]
 
 
-def label_difficulty(eval_set, feasible_models, task_type, log=print, correctness_fn=None):
+def label_difficulty(eval_set, feasible_models, task, log=print, correctness_fn=None):
     """Return {"easy":[texts], "medium":[texts], "hard":[texts]} for eval_set.all.
 
     `correctness_fn(model_id) -> dict[text->bool]` is injectable for testing; by default it
@@ -62,7 +62,7 @@ def label_difficulty(eval_set, feasible_models, task_type, log=print, correctnes
             smallest, largest = _unique_base_endpoints(feasible_models)
             if smallest is None or largest is None:
                 raise ValueError("no unique base-model endpoints")
-            cf = correctness_fn or _zeroshot_correctness(eval_set, task_type, log)
+            cf = correctness_fn or _zeroshot_correctness(eval_set, task, log)
             small_ok = cf(smallest.model_id)
             large_ok = cf(largest.model_id)
             easy, medium, hard = [], [], []
@@ -88,12 +88,12 @@ def label_difficulty(eval_set, feasible_models, task_type, log=print, correctnes
     return _length_heuristic_buckets(texts, log)
 
 
-def _zeroshot_correctness(eval_set, task_type, log):
+def _zeroshot_correctness(eval_set, task, log):
     """Return correctness using the BF16 base model ID, not a quant sibling."""
     from eval.harness import run_eval
 
     def cf(model_id):
-        res = run_eval(eval_set, model_id, model_id, task_type=task_type)
+        res = run_eval(eval_set, model_id, model_id, task=task)
         failed = {f.get("text") for f in res.failures}
         return {e.get("text", ""): (e.get("text", "") not in failed) for e in eval_set.all}
 
@@ -127,7 +127,7 @@ def score_by_difficulty(eval_set, correctness_by_text, difficulty) -> dict:
     return out
 
 
-def diagnose(by_difficulty: dict, overall_f1: float, threshold: float, task_type: str) -> dict:
+def diagnose(by_difficulty: dict, overall_f1: float, threshold: float, task: str) -> dict:
     """Turn the per-difficulty score PATTERN into a targeted improvement suggestion.
 
     The pattern is more actionable than a flat score:
@@ -170,43 +170,36 @@ def diagnose(by_difficulty: dict, overall_f1: float, threshold: float, task_type
             "band": "general"}
 
 
-def build_test_report(eval_set, best_result, difficulty, threshold, task_type) -> dict:
+def build_test_report(eval_set, best_result, difficulty, threshold, task) -> dict:
     """Assemble the report the orchestrator sees: overall + per-difficulty accuracy + diagnosis.
     Correctness per example is reconstructed from best_result.failures (text-matched)."""
     failed = {f.get("text") for f in (best_result.failures or [])}
     correctness = {e.get("text", ""): (e.get("text", "") not in failed) for e in eval_set.all}
     by_diff = score_by_difficulty(eval_set, correctness, difficulty or {})
-    diag = diagnose(by_diff, best_result.f1, threshold, task_type)
+    diag = diagnose(by_diff, best_result.f1, threshold, task)
+    # The task's own failure taxonomy. Under the previous design this was an `if task_type == ...`
+    # chain whose `else` reported the single constant pair `gold_verifier -> incorrect` for every
+    # open-ended task, so its count was just the failure count the orchestrator already had — and
+    # it wrote pages of reasoning about that constant (B296). A task that declares
+    # `failure_category=None` reports one honest aggregate instead of a fake taxonomy.
+    from tasks import get_task
+
+    spec = get_task(task)
     confusion: Counter = Counter()
     for failure in best_result.failures or []:
-        if task_type == "classification":
-            gold = str(failure.get("label", "?"))[:64]
-            predicted = str(failure.get("predicted", "?"))[:64]
-        elif task_type == "NER":
-            gold_types = sorted({
-                str(entity.get("type", "?"))[:64]
-                for entity in failure.get("entities", [])
-                if isinstance(entity, dict)
-            })
-            prediction = failure.get("predicted")
-            prediction_entities = prediction if isinstance(prediction, list) else []
-            predicted_types = sorted({
-                str(entity.get("type", "?"))[:64]
-                for entity in prediction_entities
-                if isinstance(entity, dict)
-            })
-            gold = ",".join(gold_types) or "no_entity"
-            predicted = ",".join(predicted_types) or "incorrect_entity_set"
+        if spec.failure_category is None:
+            confusion[("failed", "incorrect")] += 1
+            continue
+        try:
+            category = str(spec.failure_category(failure))[:64]
+        except Exception:  # noqa: BLE001 — a diagnostic must never break the report
+            category = "uncategorised"
+        # Classification keeps the true class on the left so the pair still names a real
+        # confusion; everything else names the error kind, which is what is actionable.
+        if spec.closed_label_space:
+            confusion[(str(failure.get("label", "?"))[:64], str(failure.get("predicted", "?"))[:64])] += 1
         else:
-            # Open-ended targets/predictions may contain the raw held-out answer.
-            # Report only an aggregate verifier category for these tasks.
-            gold = str(
-                failure.get("error_type")
-                or failure.get("judge_category")
-                or "gold_verifier"
-            )[:64]
-            predicted = "incorrect"
-        confusion[(gold, predicted)] += 1
+            confusion[(category, "incorrect")] += 1
     confusion_pairs = [
         {"gold": gold, "predicted": predicted, "count": count}
         for (gold, predicted), count in sorted(

@@ -146,15 +146,13 @@ def test_topology_descriptor_matches_compiled_graph(mode):
 
 
 def test_sqlite_serializer_stores_selectors_and_paths_not_domain_instances():
+    """A checkpoint stores the SELECTOR that identifies a model, never the ModelSpec itself, so
+    resuming resolves against the current pool rather than replaying stale metadata."""
     serializer = SafeCheckpointSerializer()
     model = ANDROID_POOL[0]
     value = {
         "model": model,
         "hardware": HardwareConstraints(1000, 800, 2000),
-        "eval_set": EvalSet(
-            all=[{"text": "p"}],
-            task_type="classification",
-        ),
         "result": EvalResult(0.5, {}, []),
         "training": TrainingOutput("/weights", "/weights/model.gguf"),
     }
@@ -167,9 +165,22 @@ def test_sqlite_serializer_stores_selectors_and_paths_not_domain_instances():
     assert model.notes.encode() not in blob
     assert decoded["model"] is model
     assert decoded["hardware"] == value["hardware"]
-    assert decoded["eval_set"] == value["eval_set"]
     assert decoded["result"] == value["result"]
     assert decoded["training"] == value["training"]
+
+
+def test_sqlite_serializer_round_trips_an_eval_set():
+    """The eval set is on the state from `eval_setup` onward, so a serializer that cannot carry it
+    means no superstep after that point can be checkpointed at all — and this is the second of the
+    two encoders, the graph's own, which a resume reconciles against the application's JSON
+    checkpoint. It has drifted from `EvalSet` before, reading three fields the dataclass no longer
+    has and raising AttributeError on every write.
+    """
+    eval_set = EvalSet(all=[{"text": "held out", "label": "local"}], task="routerbench")
+    serializer = SafeCheckpointSerializer()
+
+    decoded = serializer.loads_typed(serializer.dumps_typed({"eval_set": eval_set}))
+    assert decoded["eval_set"] == eval_set
 
 
 def test_sqlite_serializer_rejects_arbitrary_runtime_objects():

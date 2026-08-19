@@ -2530,7 +2530,7 @@ choice, not a patch.
 **The problem.** `task_planner.plan_task` asks the orchestrator to calibrate `stop_threshold`
 against "published SOTA at the target model size" using nothing but its own recall. That recall
 is frozen at training time and is systematically wrong in the direction that matters: the
-benchmark research (`docs/Evan's Notes/2026-07-28-task-suite-benchmark-research.md`) found
+benchmark research (`docs/Evan's Notes/07-28b-benchmark-research.md`) found
 BANKING77 SOTA is ~94.8% from a **110M** encoder, and that MedQA is saturating. A threshold set
 from stale recall either (i) sits under a base model's zero-shot, so the run "converges"
 immediately having learned nothing, or (ii) sits above achievable SOTA, so every tier fails and
@@ -2859,7 +2859,7 @@ headroom rides along in the existing `task_analysis` call.
 - **Where:** `agent/nodes/curate.py`, `agent/data_rebuild.py`, `agent/nodes/iterate.py`,
   `data/curriculum.py`, `agent/state.py`
 - **Found:** 2026-08-02, from Evan's review of the data-curation redesign (see
-  [Evan's Notes 2026-08-01](Evan's%20Notes/2026-08-01-firewall-filtering-rebuild-and-escalation.md)).
+  [Evan's Notes 2026-08-01](Evan's%20Notes/08-01-pipeline-deep-dive.md)).
 - **Three changes:**
   1. **`target_rows` is now a floor, not a cap.** curate previously ended with
      `dataset = dataset[:target_rows]`, hard-truncating the curriculum. That line is removed:
@@ -2894,7 +2894,7 @@ headroom rides along in the existing `task_analysis` call.
   `agent/checkpoint.py`, `agent/nodes/cold_start/eval_setup.py`, `hardware_eval/quant_accuracy_eval.py`,
   `agent/nodes/cold_start/model_selection/interpolation.py`, `scripts/prepare_shared_dataset.py`
 - **Found:** 2026-08-02, from Evan's question "does pos/neg/boundary have any effect on anything?"
-  (see [Evan's Notes 2026-08-02 Q4](Evan's%20Notes/2026-08-02-eval-firewall-test-agent-synth-prompt.md)).
+  (see [Evan's Notes 2026-08-02 Q4](Evan's%20Notes/08-02-firewall-test-agent.md)).
 - **The finding.** The eval set carried three slices — `pos`, `neg`, `boundary` — with **no
   functional effect**. Tracing every read: the slices were only ever recombined into `.all` (what
   all eval, prompting, difficulty labeling, and firewall matching use); the per-slice scores
@@ -4209,3 +4209,677 @@ headroom rides along in the existing `task_analysis` call.
   report `n=0` explicitly; fall back to the length-tercile heuristic when a bucket is degenerate,
   since a zero-shot gradient carries no signal precisely on format-bound tasks.
 - **Status:** 🔴 open.
+
+## B276 — the teacher's zero-shot score was measuring format compliance, not competence
+- **Measured (2026-08-17, job 38555749).** Qwen3.6-35B on 200 BC5CDR eval rows, same scorer and same
+  frozen eval set the pipeline uses, demonstrations drawn from TRAIN only:
+
+  | shots | span_f1 | empty/unparseable |
+  |---|---|---|
+  | 0 | **0.1131** | 131/200 |
+  | 1 | 0.4910 | 101/200 |
+  | 3 | 0.6736 | 90/200 |
+  | 5 | **0.7190** | 84/200 |
+
+  **6.4× from five demonstrations.**
+- **What the raw output shows.** Zero-shot it emitted ` ```json ` fences, `"type": "CHEMICAL"` (wrong
+  case) and `"type": "GENE_OR_PROTEIN"` (a class BC5CDR does not have). One demonstration fixed all
+  three. Min et al. (EMNLP 2022, arXiv:2202.12837) account for exactly these three: demonstrations
+  supply "(1) the label space, (2) the distribution of the input text, and (3) the overall format".
+- **Consequence.** Every inference of the form "the teacher scores 0.0999 on NER, so it cannot generate
+  NER training data" rested on the wrong number. The zero-shot score measures whether the teacher
+  guessed our output contract; synthesis anchored to a real example is a different regime.
+- **Not a code defect** — the threshold calibration is *supposed* to use zero-shot, since that is what
+  the student is measured against. What is wrong is using the same number as a proxy for synthesis
+  fitness.
+- **Also worth recording:** 0.7190 few-shot is still BELOW the fine-tuned 0.6B student's 0.8098. The
+  project's central claim survives and is better supported, because the comparison is no longer against
+  a teacher crippled by a format artifact.
+- **Status:** ⚪ measurement. The decisive follow-up (corrupt demonstration labels, hold format fixed)
+  is not yet run — see the 08-17 note §5.5.
+
+## B277 — WITHDRAWN: "systematic teacher errors are worse than random noise"
+- **Claimed (2026-08-15b, 2026-08-16).** That random label noise averages out while systematic teacher
+  bias is learned and amplified, citing Shumailov et al. (model collapse) and Gudibande et al.
+- **Actually.** No paper supports the asymmetry, and the best controlled head-to-head reports the
+  reverse. Jiang et al. (ICML 2020, arXiv:1911.09781), comparing synthetic uniform noise against
+  real-world structured noise: *"DNNs generalize much better on web label noise"* and *"The real-world
+  label noise from the web appears to be less harmful."* Rolnick et al. (arXiv:1705.10694) tested
+  confusion-biased noise specifically: robustness held *"even when erroneous labels are biased towards
+  confusing classes."*
+- **The two citations were also misapplied.** Shumailov et al. study *recursive* training (generation n
+  trains on n−1's output) — we do a single distillation step onto a separate student — and they name
+  *statistical* (sampling) error as the primary driver, close to the reverse of the claim. Gudibande et
+  al. is about *breadth*, and their own finding supports narrow single-task distillation: *"training
+  exclusively on ChatGPT responses for Natural-Questions-like queries drastically improves task
+  accuracy."*
+- **Corrected rule.** Two variables decide synthesis safety, not three: **who produces the label**, and
+  **whether an independent verifier exists**. Drop the third.
+- **Status:** ⚪ withdrawn. Recorded because the claim appears in two earlier notes.
+
+## B278 — `dialogsum_samsum` has train/eval overlap with contradictory gold
+- **Found (2026-08-17) by `scripts/preflight_tasks.py`.** One eval row appears verbatim in the training
+  set, and the two gold summaries disagree about the subject:
+  ```
+  text  : "Serena: Have you been to the doctor lately?  Jeff: No, why? …"
+  eval  : "Serena's skin condition is fine now and she doesn't have to take medication…"
+  train : "Jeff has a skin allergy. He doesn't take meds all the time…"
+  ```
+  Reading the dialogue, the TRAIN summary is correct and the EVAL gold is wrong.
+- **Root cause.** DialogSum and SAMSum contain overlapping dialogues with independently written
+  summaries. `load_dialogsum_samsum` draws half its rows from each and does not deduplicate across the
+  two sources, so the same dialogue can land in train from one and eval from the other.
+- **Impact.** One row in 300, so it did not move the reported 0.7157. But the eval set contains at least
+  one unwinnable row, and this is the task where fine-tuning bought exactly **+0.0000** over 15
+  iterations — an explanation of that result should not have a known data defect inside it.
+- **Fix.** Deduplicate across the two sources by normalized dialogue text before splitting.
+- **Status:** 🔴 open — blocks a rerun.
+
+## B279 — `set -u` in a Slurm script breaks lmod, surfacing as a bogus nvcc permission error
+- **Symptom (2026-08-17, job 38550928).** The teacher probe died after ~11 minutes of weight loading
+  with `torch._inductor.exc.InductorError: PermissionError: [Errno 13] Permission denied: 'nvcc'`.
+- **Root cause.** The script used `set -uo pipefail`. lmod's init references `LD_LIBRARY_PATH`
+  unguarded, so under `nounset` it failed with `LD_LIBRARY_PATH: unbound variable` — `module load cuda`
+  never took effect, `nvcc` was not on PATH, `CUDA_HOME` resolved to garbage, and torch-inductor's JIT
+  reported a permission error rather than a missing binary. `tests/pipeline/_l40s_task_body.sh` does not
+  use `set -u`, which is why the pipeline never hit this.
+- **Fix.** `set -o pipefail` only, plus an explicit `command -v nvcc` guard that fails in seconds with
+  an actionable message instead of minutes with a misleading one.
+- **Status:** 🟢 fixed. Worth knowing for any future GPU Slurm script in this repo.
+
+## B280 — generated format-bound rows had no exact verifier, though one was free
+- **Symptom (through 2026-08-17).** `_synthesize_new_correct` invents both input and answer, and
+  `curate._verifier_for` returned `None` for every task type, so the `if verify_fn is not None` branch
+  had never executed. Every batch logged `450/450 kept`.
+- **Why it mattered most on `function_call`.** The correctness of a generated call is *decidable by
+  computation* — parse the JSON, check the name against the declared tools, check the argument keys
+  against the schema — and none of it was being done. For `calendar_json` the datetimes are checkable
+  too (end after start, 60-minute default, date near the request's own reference instant).
+- **Fix.** `data/synth_verifiers.py` with `verify_function_call_row` (5 checks) and
+  `verify_calendar_row` (those 5 + 5 datetime/summary checks), dispatched by benchmark and wired into
+  `_verifier_for`. Runs **before** the model-based pass: exact, free, and a row it rejects never costs a
+  teacher call. Rejections are logged grouped by reason.
+- **Enabling change.** `tools` and `_instruction` are now PINNED from the anchor onto every generated
+  row. A generated row without `tools` cannot be schema-checked at all, and the tool signature is the
+  constraint rather than something being invented.
+- **Status:** 🟢 fixed. 25 tests.
+
+## B281 — synthesis and verification were zero-shot when few-shot is 6.4x better
+- **Symptom (2026-08-17, B276).** The teacher scores 0.1131 span-F1 zero-shot on BC5CDR NER and 0.7190
+  with five demonstrations. Every synthesis and verification prompt was zero-shot.
+- **Why it matters for VERIFICATION as much as generation.** On `calendar_json` the conventions ARE the
+  task (60-minute default, ISO-8601, resolve against the reference instant); a verifier that has to
+  infer them is judging its own guess.
+- **Fix.** `SYNTH_SHOTS = 5` (`SLM_SYNTH_SHOTS`) applied at four call sites: `_synthesize_new_gold`
+  (5 same-class examples), `_synthesize_new_correct` (5 examples in the required JSON shape),
+  `verify_generated_labels` (5 confirmed in-class examples), `verify_generated_answers` (5 real
+  request/answer pairs). Min et al. (arXiv:2202.12837) is the account of why: demonstrations supply
+  "(1) the label space, (2) the distribution of the input text, and (3) the overall format".
+- **Status:** 🟢 fixed.
+
+## B282 — every curated benchmark's eval set was capped at 800 rows
+- **Symptom (2026-08-18).** `_load_named_benchmark` passed `eval_size_target` (default 800) as the
+  loader's `max_test`, regardless of how much held-out data the benchmark shipped. BC5CDR has **5,865**
+  test rows and was being scored on 800.
+- **Impact.** Unnecessary variance on exactly the comparisons the project makes — tier vs tier, teacher
+  vs student. RouterBench's tier ordering was being read off 800 rows.
+- **Fix (revised 2026-08-19).** Cap at **1,000** rows (`_EVAL_SIZE_CAP`, override with
+  `SLM_EVAL_SIZE_CAP`), not the whole split. Taking the whole split was the first attempt and it is the
+  wrong trade: the eval runs every iteration, so RouterBench's 7,267 rows would be 9x the old
+  per-iteration cost for a variance gain that flattens out well before that. At n=1,000 the standard
+  error on a proportion is ~1.5pp, below the differences this project resolves. New sizes: 1,000 for
+  routerbench / ner_bc5cdr / clinc150 / proactive_listening / xlam_bfcl; dialogsum_samsum 667 and
+  calendar_json 478 (their whole splits are smaller).
+- **Caveat.** Scores measured before this change are on a smaller eval set and are not strictly
+  comparable to scores measured after.
+- **Status:** 🟢 fixed.
+
+## B283 — `calendar_json`'s gold required an unguessable year, and leaked the imperative into the title
+- **Symptom (2026-08-13 run, root-caused 2026-08-16, fixed 2026-08-18).** 82% of eval gold answers
+  required rolling the date forward to 2027, and the task scored 0.0000.
+- **Root cause 1.** `reference_for` scattered the reference instant uniformly across 2026 while SGD's
+  calendar dialogues are almost all set in **March**, so the reference usually fell after the event's
+  month, `_parse_date`'s roll-forward rule fired, and gold landed in 2027. The model answered
+  2026-03-02 for "on 2nd of March" — the more natural reading — and was marked wrong.
+- **Root cause 2.** The request was built as `f"Schedule {summary} on {date}"`, so a row titled `Food`
+  read "Schedule Food on March 1st" and the model extracted `summary="Schedule Food"`.
+- **Fix.** `_reference_before_event` places the reference a hashed 1–21 days BEFORE the event, so no
+  rollforward is needed and the year is inferable from the prompt (the offset still varies per row, so a
+  fixed "today" cannot be memorised). The request now reads `Add "<title>" to my calendar on …`.
+- **Measured.** Eval gold in the same year as the reference: **18% → 99%** (475/478). Rolled forward:
+  **82% → 1%**. Summary containing the imperative: systematic → **0**.
+- **Status:** 🟢 fixed. The verifier in B280 also catches both defects at generation time.
+
+## B284 — `calendar_json` eval data was fetched live from GitHub and never cached
+- **Symptom.** `load_sgd_calendar` read dialogue JSON from `raw.githubusercontent.com` at load time on
+  every run. One upstream commit silently changes the eval set, so past scores stop being comparable and
+  are not reproducible; the run also cannot start without network access.
+- **Fix.** `data/local/calendar_sgd/` vendors the 1,602 Calendar-service dialogues (17 MB) with a
+  manifest and sha256, the same treatment `bc5cdr` and `proactive_listening` get. The loader reads it
+  first and falls back to the network with a loud non-reproducibility warning.
+  `SLM_CALENDAR_SGD_DIR` overrides. Load time ~140 s → ~18 s as a side effect.
+- **Status:** 🟢 fixed.
+
+## B285 — SAMSum ships a few dialogues in both its own splits, with contradictory gold [SEVERITY CORRECTED]
+- **Symptom (2026-08-18), found by `scripts/preflight_tasks.py`.** Six eval rows appeared verbatim in
+  the training set, with different gold:
+  ```
+  text  : "Serena: Have you been to the doctor lately?  Jeff: No, why? …"
+  eval  : "Serena's skin condition is fine now and she doesn't have to take medication…"
+  train : "Jeff has a skin allergy. He doesn't take meds all the time…"
+  ```
+  Reading the dialogue, the TRAIN summary is correct and the EVAL gold is wrong.
+- **Root cause, CORRECTED 2026-08-19.** I first reported this as a DialogSum/SAMSum cross-source merge
+  problem. It is not. Measured on a 500+500 draw, all collisions are **samsum_train x samsum_test** —
+  SAMSum's own official splits are not disjoint, and it wrote a different summary for the same dialogue
+  in each. `load_dialogsum_samsum` did not deduplicate.
+- **Impact — NEGLIGIBLE, and the original entry overstated it.** 2 rows out of 1,000 (~0.2%). It did not
+  move the run's 0.7157, and curate's eval firewall already removed the training side before training,
+  so no run was ever contaminated. The tier-3 +0.0000 result is NOT explained by this.
+- **Fix.** Deduplicate by normalized dialogue text, **eval first** — an eval row is never dropped, a
+  colliding training row is. Logged. Kept as cheap hygiene (the reported curriculum size is honest
+  instead of being silently shrunk by the firewall), not because the defect mattered.
+- **Status:** 🟢 fixed, ⚪ severity downgraded to cosmetic.
+
+## B286 — WITHDRAWN: constrained label decoding is not worth doing
+- **Claimed (2026-08-16, 2026-08-17, 2026-08-18).** That scoring the label set instead of parsing free
+  text was "the single biggest remaining eval improvement", because it would make
+  `__EXTRACTION_FAILED__` structurally impossible.
+- **Measured (2026-08-19).** Extraction-failure rate per eval, split by baseline vs fine-tuned:
+
+  | Run | BASELINE | FINE-TUNED |
+  |---|---|---|
+  | routerbench l40s | median 50.3% | median **0.0%**, mean 2.6%, 47/77 evals had ZERO |
+  | routerbench cse | median 50.3% | median **0.0%**, mean 1.7%, 50/75 ZERO |
+  | clinc150 | 34.0% | median **2.1%** |
+  | ner_bc5cdr | 0.0% | **0.0%** on all 7 |
+  | xlam_bfcl | 0.0% | **0.0%** on all 23 |
+  | dialogsum_samsum | 0.0% | **0.0%** on all 33 |
+
+- **Conclusion.** Extraction failure is a **zero-shot-only** phenomenon. After fine-tuning the median is
+  exactly zero on every task and three of six tasks never had a single failure. The 50% spikes in the
+  RouterBench fine-tuned column are the mode-collapse iterations (`</tool_call>` on 522/800 rows) — a
+  TRAINING pathology, which a constrained decoder would convert into confident wrong labels rather than
+  fix.
+- **Cost/benefit.** It needs a log-probability path in BOTH inference backends (Unsloth, llama-cpp-python)
+  which expose scoring differently, and it invalidates every classification baseline ever measured. That
+  is a large eval-harness change for a 0–2% effect on the numbers the project reports.
+- **Status:** ⚪ withdrawn. The prompt hardening from B271 is the proportionate fix. If baseline honesty
+  matters later, report a FEW-SHOT baseline alongside the zero-shot one — the probe harness already
+  exists and it touches no inference code.
+
+## B287 — the teacher's few-shot gain is ~77% FORMAT, not knowledge
+- **Measured (2026-08-19, job 38558845).** The Min et al. (arXiv:2202.12837) ablation, adapted to
+  exact-span NER: show the teacher five demonstrations that are perfectly formatted and factually WRONG
+  (JSON shape, `Chemical`/`Disease` vocabulary and span count preserved; span text replaced with entity
+  names borrowed from other rows, so they are real biomedical terms absent from this sentence).
+
+  | condition | span_f1 |
+  |---|---|
+  | 0-shot | 0.1147 |
+  | 5-shot, correct demos | **0.7215** |
+  | 5-shot, CORRUPTED demos | **0.5833** |
+
+  Corrupted demonstrations retain **(0.5833−0.1147)/(0.7215−0.1147) = 77%** of the gain.
+- **Interpretation.** The teacher's zero-shot score was mostly measuring whether it guessed our output
+  contract. Visible in the raw output: zero-shot it emitted a ```json fence, `"type": "CHEMICAL"` (wrong
+  case) and `"type": "GENE_OR_PROTEIN"` (a class BC5CDR does not have). Demonstrations fix all three, and
+  CORRUPTED demonstrations fix them just as well — format is what survives corruption.
+- **The remaining 23% is real knowledge** and should not be overstated: the 0.1382 gap between correct and
+  corrupted demos is the demonstrations genuinely teaching the task.
+- **Consequence.** **A zero-shot score is not a valid gate on synthesis fitness** — here it understated
+  usable ability by ~5x for reasons unrelated to competence. Any synthesis gate should use the observed
+  keep-rate (already computed) or a few-shot measurement instead. Retroactively justifies B281 (all
+  synthesis and verification made 5-shot).
+- **Limit.** One task, one model. BC5CDR is unusually format-dominated; `calendar_json`, where the
+  difficulty is a date convention rather than an output shape, could split differently. `--task` makes
+  that one command.
+- **Status:** ⚪ measurement, decisive for the synthesis question.
+
+## B288 — B282's eval-cap fix was a silent no-op; the cap was applied twice
+- **Symptom (2026-08-16).** The first `single_model` xlam run logged
+  `eval set built: 800 examples (available in the held-out split: 1000)` — the loader honoured the new
+  1,000-row cap, then the eval set was truncated back to 800 anyway. B282 was recorded as fixed and
+  the observable behaviour had not changed at all.
+- **Root cause, two independent faults.**
+  1. `eval_size_target` (default 800) is applied at **two** places: once as the loader's `max_test`,
+     and again as `build_eval_set(target=...)`. B282 only changed the first. For a curated benchmark
+     the loader has *already* applied `_EVAL_SIZE_CAP`, so the split IS the target and re-applying
+     `eval_size_target` can only shrink it.
+  2. The edit that was supposed to fix this targeted a source string **that did not exist in the
+     file**. `str.replace` with no match returns the string unchanged, and nothing asserted the match,
+     so the "fix" shipped as a no-op and looked applied in the diff-free sense that nothing broke.
+- **Fix.** With `SLM_BENCHMARK_TASK` set, pass `len(test_examples)` as the target; `eval_size_target`
+  now only governs the autonomous path, where the orchestrator genuinely chooses the eval size.
+  `tests/cold_start/test_eval_size_cap.py` asserts the **behaviour** (7 tests), not the source text,
+  which is what would have caught the no-op.
+- **Lesson.** A string-replace edit with no verification is not a fix. Assert the new behaviour, or at
+  minimum re-read the file — a passing test suite says nothing about an edit that never landed.
+- **Status:** 🟢 fixed. Runs before 2026-08-16 are on 800 rows.
+
+## B289 — a GGUF that loads but decodes to nothing was scored as a real 0.0000
+> **⚠ ROOT CAUSE CORRECTED — read [B290](#b290--training-taught-the-model-to-emit-a-think-block-that-inference-never-pre-filled) first.**
+> This entry originally concluded that the merge/quantize path was intermittently corrupting artifacts.
+> That was **wrong**, and the reasoning error is instructive enough to keep on the record. I argued
+> "final `eval_loss` was 0.1221, and a model at that loss cannot emit `</tool_call>` on 800/800 rows."
+> Teacher-forced eval loss is computed with the gold prefix supplied at every position, so it says
+> nothing about what the model emits *first* when generating from the prompt alone — which is exactly
+> the failure mode. The real cause was a train/serve prefix skew (B290), and it was deterministic, not
+> intermittent; the apparent randomness was hyperparameter-dependent severity.
+> The fix below is still worth having — a load-only check genuinely cannot tell a working artifact from
+> a broken one — but it is a **backstop, not the fix for these scores**.
+
+- **Symptom (2026-08-16, `slm-xlam-single-l40s-38561204`).** Iteration 3 scored **0.0000
+  (800/800 failures)** and iteration 4 **0.0887 (729/800)**, while iteration 1 scored **0.8137**. Every
+  prediction in the collapsed iterations was the bare string `</tool_call>`.
+- **Why this is not a data or training problem.** Three independent lines of evidence:
+  1. **The data was byte-identical.** Iteration 3's "rebuild" produced `dataset_v2.jsonl` with
+     `novel_rows: 0, novel_fraction: 0.0` — synthesis yielded nothing and the file was a copy of v1.
+     Iteration 3 also ran the `[carry-fwd best]` config. Same data, same config, 0.8137 → 0.0000.
+  2. **Training converged normally.** Final `eval_loss` 0.1218 (iter 1) vs **0.1221** (iter 3) vs
+     0.1220 (iter 5); `train_loss` 0.3228 vs 0.3249. A model at loss 0.1221 cannot emit `</tool_call>`
+     on 800/800 rows.
+  3. **The adapters were healthy.** Decoding the safetensors directly:
+     `iter1 L2=38.890 max|w|=0.3621`, `iter3 L2=38.641 max|w|=0.4281`, `iter5 L2=38.714
+     max|w|=0.3540`, **zero non-finite tensors in any of them**. Iteration 3's adapter is
+     statistically indistinguishable from the two that scored 0.81–0.82.
+  Each iteration also wrote its own content-addressed GGUF (`3bf783c8d6bd`, `e0e6c2a57233`,
+  `0b7cc0dcdbe8`, …), so it was not stale-artifact reuse either. The corruption is introduced in
+  **merge → quantize → llama-cpp decode**, and it is intermittent.
+- **Root cause of the *scoring* failure.** `validate_and_record_gguf` only ever asked llama.cpp to
+  **open** the file. It loaded every tensor, compared sizes, hashed the bytes — and never generated a
+  single token. An artifact that loads cleanly and decodes to garbage passed validation, so the eval
+  ran and its 0.0000 was recorded as a measurement.
+- **The expensive part was not the wasted iteration.** The fabricated 0.0000 entered the agent loop as
+  evidence, and the orchestrator reasoned from it. Its iteration-4 hypothesis reads: *"the synthesize
+  data_rebuild on v2 catastrophically collapsed ALL buckets to 0.000 … consistent with a structural /
+  format corruption in the synthesized rows"* — about a dataset containing **zero** synthesized rows.
+  A silent infrastructure fault was laundered into a confident false causal story about the data, and
+  every subsequent hypothesis inherited it. That is why this run was aborted and resubmitted rather
+  than allowed to finish: rollback protects the *best model*, but nothing protects the *reasoning*.
+- **Fix.** Two parts:
+  1. `_smoke_test_generation` in `training/quantize.py`: after load, greedy-decode 16 tokens from
+     `"Hello"` and reject output that is empty or contains no alphanumeric character once XML-ish tags
+     and `<|...|>` special tokens are stripped. Raises the new `GgufDegenerateOutputError`.
+  2. `_build_or_reuse_gguf` rebuilds **once** on that error. The corruption is transient, so one
+     rebuild recovers the iteration; a second degenerate build raises
+     `QuantizationInfrastructureError`, which by existing policy stops the run rather than scoring it.
+     Kept as a separate exception class deliberately — subclassing `QuantizationInfrastructureError`
+     would be caught by the `except … : raise` upstream and silently disable the retry.
+- **Not yet root-caused.** *Why* the merge/quantize path intermittently produces a corrupt artifact is
+  still open. Candidates: non-determinism in Unsloth's `save_pretrained_merged` under memory pressure,
+  or the llama.cpp conversion step. The fix makes the fault **loud and recoverable** instead of
+  silent and score-shaped, which is the property that matters for trusting the loop's numbers.
+- **Related gap.** Per-row eval predictions are not persisted, so this could only be diagnosed from the
+  3-row sample display that happens to be printed. Worth fixing separately.
+- **⚠ THE FIX WAS WRONG AND HAS BEEN DOWNGRADED (2026-08-16, same day).** As a fatal gate this check
+  killed **three healthy runs** — `38569605` (routerbench), `38569606` (ner_bc5cdr, already four
+  iterations in), `38569608` (calendar_json) — all with the identical message: base `Qwen/Qwen3-0.6B`
+  Q4_K_M "decoded to degenerate output `'////////////////////////////////'` for the prompt 'Hello'".
+  Two errors compounded:
+  1. **The probe was unrepresentative.** It sent the raw string `Hello`, asking the model to *continue*
+     an unformatted string — never how it is used. A 0.6B base model emits junk for that. The prompt is
+     now rendered through the model's chat template (`base_model` is threaded in for this).
+  2. **The severity was unjustified.** Once B290 explained the 0.0000s, this check's motivating evidence
+     was gone: it had produced three false positives and zero true positives. A heuristic that can end a
+     multi-hour run needs far more certainty than that. It now **prints a warning and returns**; the
+     eval score is the arbiter (a genuinely broken artifact scores near zero) and rollback is the remedy.
+  The rebuild-once retry and `GgufDegenerateOutputError` were removed with it — there is nothing to
+  recover from when nothing fails. `validate_and_record_gguf` still **raises on a failed load**, which
+  is the real gate and was never the problem.
+- **Lesson.** A new fatal check is a new failure mode. This one was added to protect the integrity of
+  scores and instead destroyed three runs' worth of compute, for a fault that turned out not to exist.
+  Warn first; escalate to fatal only once there is a confirmed true positive.
+- **Status:** 🟢 downgraded to a warning; the "intermittent corruption" it was built for is now believed
+  to have been B290 all along, so ⚪ no known underlying corruption remains.
+
+## B290 — training taught the model to emit a `<think>` block that inference never pre-filled
+- **Symptom (2026-08-16, `slm-xlam-single-l40s-38561204` and `-38565344`).** Fine-tuned scores on
+  xlam_bfcl scattered across **0.0000, 0.0887, 0.3010, 0.6120, 0.7887, 0.8137** while the **untrained
+  baseline scored a clean 0.8010**. The loop kept concluding — correctly, given its numbers — that
+  *"Best this iteration is the ZERO-SHOT base model; fine-tuning did not improve on it."*
+- **The tell, and the control that settles it.** Sample predictions, same three eval rows:
+  ```
+  BASELINE  (no adapter):  [{"name": "create_histogram", "arguments": {...}}]      <- clean
+  ITERATION 1 (fine-tuned): </tool_call> </tool_call> [{"arguments": {...}}]       <- two stray tags
+  ```
+  Two tag tokens, *then* valid JSON, on **every** row. The parser salvages the rows where the JSON
+  survives and fails the rows where the model stops after the tags — which is the entire spread of
+  scores above, from 0.0000 (stopped every time) to 0.6120 (recovered most of the time).
+- **Root cause.** `FastLanguageModel.from_pretrained("Qwen/Qwen3-4B-Instruct-2507")` does not load that
+  repo. It silently redirects to `unsloth/qwen3-4b-instruct-2507-unsloth-bnb-4bit` and returns **that
+  mirror's tokenizer**, whose chat template applies the hybrid-Qwen3 think-block convention to a
+  thinking-free checkpoint. Verified directly against the cached tokenizers:
+  ```
+  official Qwen/Qwen3-4B-Instruct-2507  -> '<|im_start|>assistant\nANSWER<|im_end|>\n'
+  unsloth mirror (what training loads)  -> '<|im_start|>assistant\n<think>\n\n</think>\n\nANSWER<|im_end|>\n'
+  ```
+  `_build_completion_only_rows` builds the prompt with `add_generation_prompt=True` (which yields the
+  bare prefix even under the mirror's template) and the full text with the assistant message. So the
+  `<think>\n\n</think>\n\n` lands **inside `completion_mask`** — the model was explicitly *supervised*
+  to emit it. Inference, correctly following the official template, does not pre-fill it, so those
+  supervised tokens come out as the first tokens of the answer.
+  The tags surface in logs as `</tool_call>` rather than `</think>` because llama.cpp renders those
+  GGUF special-token IDs under different names; cosmetic, and it sent me down the wrong path for hours.
+- **Why the existing guard missed it.** `_build_completion_only_rows` *does* assert the prompt is a
+  token prefix of the full turn — but both sides use the same (wrong) template, so it passed. Nothing
+  compared either against the **inference** prompt. That is now `_assert_train_serve_prefix_alignment`.
+- **Why it went to the phone, not just our harness.** `merge_for_quantization` pins the **official**
+  base (`[merge] pinning merge base to 'Qwen/Qwen3-4B-Instruct-2507' (adapter recorded 'unsloth/...')`),
+  so the shipped GGUF is served under the official template. Teaching *inference* to send Unsloth's
+  prefix would have hidden the skew in our eval while shipping a model that misbehaves in deployment.
+  Hence the fix pins the **served** template for training, not the other way round.
+- **Fix.** In `training/lora_trainer.py`:
+  1. `_pin_serving_chat_template` — after loading, replace the tokenizer's `chat_template` with the
+     official base model's, so the training target and the deployment contract are the same object.
+  2. `_assert_train_serve_prefix_alignment` — before training starts, render the training text and
+     require the inference prompt to be a strict prefix with **nothing** between it and the answer.
+     Raises rather than warning: an hour of GPU time producing a silently crippled adapter is worse
+     than a fast, legible failure.
+  `tests/training/test_train_eval_prefix_alignment.py` (19 tests) covers both, including two that run
+  against the **real cached vendor tokenizers** — one asserting the official templates satisfy the
+  invariant, one asserting the Unsloth mirror violates it, so if upstream ever fixes their template we
+  find out instead of carrying the workaround forever.
+- **Scope.** Only `Qwen/Qwen3-4B-Instruct-2507` was affected: it is the sole model with a thinking-free
+  official template, so it is the only one where `_qwen_no_think_prompt` omits the block that Unsloth's
+  mirror inserts. The hybrid Qwen3 tiers (0.6B / 1.7B / 8B) pre-fill it on both sides and were always
+  aligned — so previously reported tier-0/1/2 numbers stand, and any run that selected the 4B Instruct
+  model should be treated as measuring the base model rather than fine-tuning.
+- **Lesson.** Two prompt builders can each be individually correct and still disagree, when a dependency
+  swaps the template out from under one of them. The invariant worth asserting is not "is this string
+  right" but "does the text training produces begin with the text inference sends".
+- **Status:** 🟢 fixed.
+
+---
+
+## xlam `single_model` audit — 2026-08-17 (B291–B298)
+
+Source: `slm-xlam-single3-l40s-38566712` (16 iterations, 7h42m, best `ast_arg_match` 0.8530 vs an
+0.8010 untrained baseline, terminated on stagnation). Full write-up:
+[Evan's Notes 08-17b-xlam-single-debug.md](Evan's%20Notes/08-17b-xlam-single-debug.md).
+
+The run's own reports were the defect. Six of eight data rebuilds announced 250–500 rows of synthesis
+and produced **zero**, silently; both mining rounds rejected every candidate for a train/test overlap
+the loader manufactured itself; and the two canonical source repositories were discovered and then
+dropped unprobed. The orchestrator read all of that as *"ruling out a simple data-thinness
+explanation"* and spent thirteen iterations on hyperparameters. Regression tests for all of it:
+`tests/test_xlam_single_debug_findings.py` (29).
+
+## B291 — `synthesize` was a silent no-op on every format-bound task, and the exact verifiers had never run
+- **Symptom (2026-08-17).** On `xlam_bfcl` the log announced synthesis six times and the curriculum
+  never contained a single generated row. Every dataset report read
+  `Provenance: {'train_anchor': 3235}`; every `DATA REBUILD kinds` line read `resample-fill=3235`
+  and nothing else. The teacher endpoint was reachable and logged as such on the line directly above
+  each announcement. 2,250 rows requested, 0 produced, no error anywhere.
+
+  | iter | announced | produced |
+  |---|---|---|
+  | 1 / 3 / 7 / 9 / 11 / 14 | 500 / 400 / 350 / 450 / 300 / 250 | 0 / 0 / 0 / 0 / 0 / 0 |
+
+- **Root cause.** `data.curriculum.synthesize_examples` dispatches on task type and ends in a bare
+  `return []`. It handles `("classification", "NER")` and `_GENERATION_FAMILY`, and
+  **`function_call` was in neither**. `_GENERATION_FAMILY` was
+  `{math_reasoning, code_generation, generation, multilingual, structured_extraction}` — `diff` was
+  missing too. So the whole `synthesize` strategy was dead on every format-bound task.
+- **The larger consequence.** `curate._verifier_for` correctly returns
+  `data/synth_verifiers.py:verify_function_call_row` for `function_call`, and it was being passed to
+  a function that returned before using it. So `verify_function_call_row` and `verify_calendar_row`
+  — the entire exact-verifier subsystem, and the substance of the 08-18 note — **had never once
+  executed in production**. `_synthesize_new_correct` was plainly written for these tasks: it pins
+  `tools` from the anchor, a field only a function-calling row has.
+- **Scope.** `xlam_bfcl` and `calendar_json` (both `function_call`) and any `diff` task. Every
+  measurement of synthetic-data value on a format-bound task was taken on a curriculum containing
+  zero synthetic rows, so the verdict in
+  [08-16-extraction-collapse-verdict.md](Evan's%20Notes/08-16-extraction-collapse-verdict.md) does
+  not apply to them either way.
+- **Fix.** `function_call` and `diff` added to `_GENERATION_FAMILY`; the fallthrough now logs
+  `NO SYNTHESIS PATH for task_type=... — this is a dispatch gap, not a generation failure` instead of
+  returning silently. `test_every_registered_task_type_can_synthesize` asserts every task type in
+  `TASK_METRIC_NAMES` has a synthesis path, so a newly registered task cannot reintroduce this.
+  Verified end to end against a stub teacher: generate → exact programmatic verify → teacher answer
+  verify → keep, with `tools` pinned from the anchor and undeclared-function rows dropped.
+- **Lesson.** A dispatch table with a silent default is a feature switch nobody can see is off. The
+  cost was not the missing rows — it was that the orchestrator drew a conclusion from their absence.
+- **Status:** 🟢 fixed.
+
+## B292 — (folded into B291) the `allocation_fallbacks` reason was a hardcoded guess
+- When synthesis produced nothing, curate recorded
+  `"synthesis produced no rows (endpoint unavailable or cheap mode)"` — a cause asserted without
+  checking either condition, and false on every one of the six occurrences above. It cost an hour of
+  looking at vLLM. Now it points at the `[synth]` lines rather than naming a cause, and a rebuild
+  that generates nothing logs `⚠ SYNTHESIS PRODUCED 0 ROWS` explicitly.
+- **Status:** 🟢 fixed.
+
+## B293 — agentic discovery rejected single-split repos for a train/test overlap it created itself
+- **Symptom (2026-08-17).** Every loadable xLAM mirror was rejected with
+  `normalized train/test text overlap (80 rows)`. **80 is exactly `max_test`** — i.e. *every* test
+  row overlapped, which is the signature of a tautology rather than of contamination.
+- **Root cause.** `_mapped_split_names` resolves `test_split` back to the **train** split when a repo
+  has no test/validation split, and `_materialize_from_mapping` then loaded `train[:max_train]` and
+  `train[:80]` — both from the front, so test ⊂ train by construction.
+  `_validate_discovered_splits` has **zero tolerance** for overlap and rejected the source. The
+  Stage-0 benchmark path *strips* train-side overlap before checking; agentic discovery got the strict
+  check without the cleanup step.
+- **Why it matters.** Most instruction-tuning corpora on the Hub ship one split, so this was a
+  guaranteed rejection for the common case — including for `Salesforce/xlam-function-calling-60k`
+  itself, which is train-only.
+- **Fix.** When the mapper collapses test onto train, take a **disjoint** window
+  (`train[:300]` and `train[300:380]`), so the integrity check measures real contamination again. A
+  genuinely separate test split is still read from the front.
+- **Status:** 🟢 fixed.
+
+## B294 — the two canonical source repositories were discovered, logged, and never probed
+- **Symptom (2026-08-17).** Exa returned eight candidates, with
+  `Salesforce/xlam-function-calling-60k` and `gorilla-llm/Berkeley-Function-Calling-Leaderboard` —
+  the authoritative sources for the task — at positions **7 and 8**. `_discover_worker` probes
+  `candidates[:6]`. Both were dropped untouched while six broken community mirrors consumed the whole
+  budget. The log printed `candidates[:8]`, implying all eight had been considered.
+- **Root cause.** Per-query hit lists were **concatenated**, so the first query's entire result set
+  outranked every later query's best hit; the canonical repos came from the third query.
+- **Fix.** Round-robin interleave across queries, so each query's top hit lands near the front. The
+  log now states both numbers: `Exa found 8 candidate HF dataset(s); probing 6`.
+- **Status:** 🟢 fixed.
+
+## B295 — the accuracy chart drew one flat threshold line, and lowered goals were never recorded
+- **Symptom.** `iterate_node` both lowers the goal (capacity-limited failures, down to
+  `initial_stop_threshold`) and raises it (stretch goal). `run_graphics._plot_accuracy` drew the
+  **final** `stop_threshold` as a single `axhline`, so every earlier iteration was shown as having
+  been held to a bar that did not yet exist — and on a run that lowered its goal, that line sits
+  *below* iterations the loop judged as failures.
+- **Compounding.** Only raises were audited (`threshold_raises`). A lower overwrote
+  `state["stop_threshold"]` and left one log line, so the goal a run was actually held to was
+  unrecoverable from artifacts.
+- **Fix.** `evaluate_node` stamps the in-force threshold on each DAG node (it runs before
+  `iterate_node`, so the value is the one this score was judged against); `iterate_node` appends to a
+  new `state["threshold_lowers"]`, persisted to `scores.json`; the chart draws a **step** line and
+  annotates each change with ▲/▼ and the new value. Records predating the field carry forward, so the
+  line is never discontinuous.
+- **Status:** 🟢 fixed.
+
+## B296 — every open-ended failure was reported as the same constant, and the orchestrator reasoned on it
+- **Symptom (2026-08-17).** For any task that is not classification or NER,
+  `build_test_report`'s confusion pairs collapse to the single literal
+  `gold_verifier → incorrect`, whose count is the failure count the orchestrator already has.
+  Nothing populated `error_type` for function calling, so across a dozen iterations the orchestrator
+  wrote hypotheses like *"the dominant confusion gold_verifier->incorrect (147) essentially unchanged
+  since iter2"* — paragraphs of reasoning about a constant, used as evidence.
+- **Fix.** `eval/scorers/function_call.py:failure_category` splits failures into categories the
+  scorer already computes, which point at different interventions:
+  `unparseable_output` (format / chat-template), `undeclared_function` (prompt or unwinnable row),
+  `wrong_function` (tool selection), `wrong_call_count` (parallel-call handling),
+  `wrong_arguments` (argument extraction). `build_test_report` already reads `error_type`, so it
+  flows through unchanged.
+- **Status:** 🟢 fixed.
+
+## B297 — no benchmark alias for `xlam_bfcl` / `calendar_json`, so the local corpus is unreachable
+- **Symptom.** `eval_setup` loads `train[:3250]` of `Salesforce/xlam-function-calling-60k` (from
+  `curriculum_size_target × 0.65`), and `state["train_examples"]` is never re-sliced afterwards. The
+  remaining ~57,000 rows sit in the local HF cache, addressable by a one-line change to the split
+  expression, and are **completely unreachable by the loop**. Instead `acquire` pays Exa + Claude to
+  rediscover mirrors of the same corpus, which then die at validation (B293/B294).
+- **Root cause.** `_BENCHMARK_ALIASES` in `data/loaders/web_acquire.py` has no `xlam`/`bfcl` entry,
+  so `load_benchmark_dataset` — mining's free Stage-0 — cannot resolve the benchmark the task is
+  *about*, and mining falls straight through to paid discovery. `calendar_json` has the same gap.
+  The `routerbench` entry a few lines above carries a comment describing this exact failure being
+  fixed for that task (B259); xlam and calendar were never added.
+- **Why it is the highest-value open item.** With B291/B293/B294 fixed, this is the only remaining
+  reason a run on these tasks cannot add real data. A `no_novelty` rebuild trains a full iteration on
+  a content-identical curriculum, and this run spent both of its `acquire` iterations that way.
+- **Proposed fix.** Register `xlam_bfcl` and `calendar_json` in `_BENCHMARK_ALIASES` routing to their
+  canonical loaders, and give the loaders an **offset** so mining serves rows the pool has not seen
+  (the eval firewall and the per-row dedupe against `seen` already guarantee correctness). Costs no
+  provider calls at all.
+- **Status:** 🔴 open.
+
+## B298 — an eval row the small model gets right and the large model gets wrong is bucketed as `hard`
+- **Symptom.** `test_agent.label_difficulty` builds the difficulty gradient from two zero-shot
+  probes. Three cases are as documented (both right → easy, only large right → medium, both wrong →
+  hard); the fourth — **small right, large wrong** — falls through the `else` into `hard`. Nothing
+  about such a row is hard, and `hard` is the bucket the orchestrator weights most heavily.
+- **Assessment.** A real logical flaw, but the population is small (it requires the larger model to
+  fail where the smaller succeeds) and it never made this run take a wrong turn. Not fixed, because
+  the right answer is a judgement call: a fourth `inconsistent` bucket is more honest than folding it
+  into either neighbour, and that changes the report shape the orchestrator prompt depends on.
+- **Related.** Two documentation-level facts worth recording while here: the probes run at **BF16**,
+  not at max/min quantisation (quant siblings are deduped before ranking), and the buckets are
+  computed **once** at cold start and frozen with the eval set. `plan["difficulty_buckets"]` is
+  normalised and stored but never read back to sample rows with, and no training row is ever tagged
+  with an eval difficulty — so `difficulty_composition` always reports `"unassigned"`.
+- **Status:** ⚪ design gap.
+
+## B299 — quality control was a silent no-op for four of the eight benchmark tasks
+- **Symptom (2026-08-18).** `apply_quality_controls` was one `if task_type == ...` chain ending in
+  `else: return dataset`. Measured across the whole suite, half of it received no filtering at all
+  and nothing in any log said so:
+
+| task | `task_type` | what happened |
+|---|---|---|
+| `xlam_bfcl`, `calendar_json` | `function_call` | **no QC at all** — no branch matched, so the `else` returned the dataset untouched |
+| `gsm8k` | `math_reasoning` | **no effective QC** — entered its branch, then filtered length and near-duplicates on a `"prompt"` key its rows do not carry |
+| `dialogsum` | `generation` | same as gsm8k; a 100,000-character row survived and nothing was logged |
+| `clinc150`, `routerbench`, `proactive_listening`, `ner_bc5cdr` | `classification` / `NER` | worked as documented |
+
+- **Root cause.** Two failures of the same abstraction. The `else` branch made "this task was never
+  considered" indistinguishable from "this task chose not to deduplicate"; and the field a step
+  filters on was *guessed from the channel* rather than stated by the task, so the generation-family
+  branch admitted a row on `("text", "answer")` and then measured it on `"prompt"`. Every row passed
+  the gate, none was measurable, and the step reported nothing because it removed nothing.
+- **Compounding.** The two tasks that got no QC at all are the two whose gold is a JSON payload, so
+  a row whose own gold answer does not parse trained the model to emit something the scorer marks
+  wrong no matter what it predicts — the case QC would most obviously have caught.
+- **Fix.** Quality control is now a list of named steps each task composes explicitly
+  (`TaskSpec.quality_controls`, `data/quality_controls.py`). An empty tuple is a legal, visible
+  choice; falling through is impossible because there is no branch. Each step is told which field to
+  filter on, and `length_outliers` **logs loudly and skips** when no row carries that field instead
+  of passing silently — the exact shape that hid this for gsm8k and dialogsum. `xlam_bfcl` and
+  `calendar_json` additionally gained `valid_json_answer`.
+- **Status:** 🟢 fixed. Covered by `tests/data/test_quality_controls_per_task.py`.
+
+## B300 — NER `extract_predictions` returned `[]` both for "no entities" and "did not parse"
+- **Symptom.** `eval/scorers/ner.py::extract_predictions` returned an empty list when the reply
+  parsed to zero spans **and** when the reply was prose that never parsed at all. A model emitting
+  paragraphs was therefore scored identically to a model that correctly predicted "this passage
+  contains no entities", and span-F1 alone could not tell a content problem from a format one.
+- **Why it mattered here.** BC5CDR is the task where a near-zero baseline is *expected* (the base
+  model cannot produce the output contract), so the one number that distinguishes "cannot format"
+  from "cannot extract" was the number being discarded.
+- **Fix.** `extract_predictions` now returns `None` for a parse failure and a list — possibly empty
+  — for anything that parsed. `score` counts non-`None` predictions as `format_valid` and scores
+  `None` as an empty prediction set, so content and format are reported separately for every
+  iteration, and `failure_category_of` reports `unparseable_output` for the `None` case.
+- **Status:** 🟢 fixed.
+
+## B301 — the classification scorer reported `metric="macro_f1"` while computing a minority-class F1
+- **Symptom.** `classification.score` chose its headline number implicitly by counting classes —
+  more than two chose macro-F1, otherwise the minority class — but returned the literal string
+  `"macro_f1"` either way. `routerbench` and `proactive_listening` are both binary, so both reported
+  a **minority-class F1 under a macro-F1 label** for their entire recorded history, in every log
+  line, DAG node, `scores.json` and chart.
+- **Why it is not cosmetic.** The two metrics are not close on an imbalanced binary task: macro-F1
+  over two classes is flattered by a model that always predicts the majority, which is exactly the
+  degenerate behaviour the minority-class F1 was chosen to expose. Anyone comparing a RouterBench
+  number against CLINC150's genuine 151-way macro-F1 was comparing two different quantities.
+- **Fix.** The choice is no longer inferred. `score_macro_f1` and `score_minority_f1` are separate
+  functions, each returning its own metric name, and the task names which one it wants
+  (`TaskSpec.metric_name`, surfaced by `eval.harness.task_metric_name`). `routerbench` and
+  `proactive_listening` declare `minority_f1`; `clinc150` declares `macro_f1`.
+- **Status:** 🟢 fixed. **Scores recorded before 2026-08-19 for those two tasks are correctly
+  valued and wrongly labelled** — the number did not change, only its name.
+
+## B302 — eight refactor bugs that `import` could not see
+- **Symptom (2026-08-19).** The task-registry refactor landed with eight real defects. Four of them
+  broke every run outright. They are grouped as one entry because they are one bug class, not eight
+  unrelated mistakes: every single one was a **runtime** failure invisible to module import — a
+  lazily imported name, a name left unbound on one branch, or a keyword argument the callee had
+  stopped accepting.
+
+| # | Site | Effect |
+|---|---|---|
+| 1 | `checkpoint.py` imported a deleted constant | `runtime_config_snapshot()` raised at module scope in the runner — **every run died before the graph was built** |
+| 2 | two encoders read removed `EvalSet` fields | **no checkpoint could be written and no run could resume** |
+| 3 | `curate.py` used `hashlib` after its import was removed | the **eval firewall raised on the first row it blocked** — the safety mechanism killing the run at the moment it caught a leak |
+| 4 | `web_acquire.py` read `_spec` after the assignment moved into another function | rung 2 of the mining ladder raised on entry |
+| 5 | the same for `_closed_label_space` | the B259 per-row label guard could not run |
+| 6 | `annotate_cot(task=...)` after the parameter was dropped | `TypeError` on every gsm8k rebuild once the CoT teacher was reachable |
+| 7 | `fallback_data_rebuild_plan(score=, mining_available=)` | `TypeError` on the orchestrator-failure route — the path that exists precisely so a bad reply cannot stop the run |
+| 8 | `accept(discovered[0], ...)` unwrapped one level too far | rung 2 could never accept a row, so every discovery round reported `no_novelty` and mining retired itself after two rounds while a usable dataset went unused |
+
+- **Root cause.** Moving code between functions during a large refactor. A module-level import smoke
+  test — the check most projects rely on — would have caught **none** of these, because a lazy
+  import inside a function body, an undefined name on an unexercised branch, and a keyword mismatch
+  are all deferred to call time. The 1,317-test suite caught them only where a test happened to
+  exercise the branch.
+- **Fix.** `scripts/check_unresolved_names.py` is a static AST scan for exactly these two shapes —
+  `Name` loads that resolve to nothing bound in an enclosing scope, an import, or a builtin; and
+  calls to a same-file function passing a keyword it does not accept. It is deliberately
+  conservative (a scan that cries wolf gets switched off), self-tested against the shapes above, and
+  currently reports zero across the production packages. Run it before committing any refactor that
+  moves code between functions.
+- **Status:** 🟢 fixed.
+
+## B303 — `calendar_json`'s mining source is a placeholder that has never been exercised
+- **Symptom.** `calendar_json`'s `TaskSpec.mining_sources` declares `TOPv2/reminder`, but TOPv2 ships
+  as a GitHub tarball rather than a Hugging Face dataset, and no one has verified that its loader
+  answers a request for a *larger* head slice the way rung 1 of the mining ladder requires.
+- **Consequence if true.** `_reread_known_sources` asks each source for `consumed + 4×want` rows and
+  marks it exhausted when fewer come back. A loader that cannot grow its slice returns the same rows
+  every time and is marked exhausted on the first rebuild, so rung 1 is a no-op for calendar and the
+  task falls straight through to paid web discovery — the same failure mode B297 fixed for xlam.
+- **Why it is not yet fixed.** It needs a real load against the actual corpus, not a code change:
+  the honest options are to confirm the loader supports a growing slice, to point the spec at a
+  hub-hosted calendar/SGD corpus that does, or to declare `mining_sources=()` so the ladder is
+  visibly empty rather than apparently populated.
+- **Status:** 🔴 open.
+
+## B304 — `allow_paid_discovery=True` on the two tasks whose labels no other corpus carries
+- **Symptom.** All eight tasks set `allow_paid_discovery=True`. For `routerbench` and
+  `proactive_listening` the label is **derived**, not observed: RouterBench's `local` means "a small
+  model answered this correctly", and proactive listening's label is an interruption judgement. No
+  other corpus on the hub carries either annotation natively, so a discovery round for those two can
+  only find text whose labels an LLM must invent — which is precisely what B259 was opened for.
+- **Mitigations already in place.** The per-row closed-label filter, the pinned label vocabulary, and
+  `_llm_map_dataset`'s explicit prohibition on introducing a class should all catch a fabricated
+  label. Discovery is also only reached once every known source is exhausted, and is retired after
+  `MAX_FAILED_DISCOVERY_ROUNDS` (2) fruitless rounds.
+- **Why it is recorded anyway.** Those mitigations bound the damage; they do not make the round
+  worth paying for. The decision worth making explicitly is whether these two tasks should simply
+  declare `allow_paid_discovery=False`, which states in the registry the thing the guards are
+  currently discovering at runtime.
+- **Status:** ⚪ design gap.
+
+## B305 — `agent/data_sizing.py` computes a curriculum target nothing reads
+- **Symptom.** The per-tier sizing formula (`clamp(5000 × (0.5 + novelty) × size_factor, 5000,
+  25000)`, ratcheted so it never falls below the previous tier's) is intact, tested, and **has no
+  production call site**: `resize_curriculum_for_tier` is referenced only by
+  `tests/`, a comment in `task_analysis.py`, and this documentation set.
+- **Why.** The curriculum is now cumulative and has no target. Cold start loads
+  `TaskSpec.initial_train_cap` (a flat 5,000 for all eight tasks) and every rebuild adds to it;
+  `MIN_CURRICULUM_ROWS = 500` is a viability floor, not a target. `curriculum_size_target` survives
+  in state and is still read by the **autonomous** acquisition path in `eval_setup`
+  (`gold ≈ 0.65 × curriculum_size_target`), which is why the module cannot simply be deleted without
+  a decision about that path.
+- **What to decide.** Either delete `data_sizing` and give the autonomous path its own explicit
+  size, or reinstate per-tier sizing as something the curated path actually consumes. Leaving a
+  tested, documented formula that no run reads is the state most likely to be mistaken for behaviour
+  — this documentation described it as live until 2026-08-19.
+- **Status:** ⚪ design gap.

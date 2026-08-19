@@ -25,8 +25,8 @@ def _model(tier, model_id="test/M", quant=None):
 def _state(current):
     return {
         "selected_model": current,
-        "task_type": "classification",
-        "task_plan": {"task_type": "classification"},
+        "task": "clinc150",
+        "task_plan": {"task": "clinc150"},
         "stop_threshold": 0.90,
         "best_score": 0.95,
         "best_weights_ref": "/big/ckpt",
@@ -310,7 +310,7 @@ def test_iterate_routes_to_downward_probe_on_success(_mock):
     state = {
         "selected_model": m, "scores": [0.95], "best_score": 0.95, "iteration": 3,
         "turn_budget": 1000, "stop_threshold": 0.90, "initial_stop_threshold": 0.90,
-        "task_type": "classification", "last_eval": None, "hw_gating_enabled": False,
+        "task": "clinc150", "last_eval": None, "hw_gating_enabled": False,
         "downward_probe_done": False,
     }
     out = iterate_node(state)
@@ -332,7 +332,7 @@ def test_iterate_skips_downward_probe_at_the_lowest_tier(_mock):
     state = {
         "selected_model": m, "scores": [0.95], "best_score": 0.95, "iteration": 3,
         "turn_budget": 1000, "stop_threshold": 0.90, "initial_stop_threshold": 0.90,
-        "task_type": "classification", "last_eval": None, "hw_gating_enabled": False,
+        "task": "clinc150", "last_eval": None, "hw_gating_enabled": False,
         "downward_probe_done": False,
     }
     out = iterate_node(state)
@@ -348,7 +348,7 @@ def test_iterate_probes_down_after_escalation_even_under_smallest_first(_mock):
     state = {
         "selected_model": m, "scores": [0.95], "best_score": 0.95, "iteration": 3,
         "turn_budget": 1000, "stop_threshold": 0.90, "initial_stop_threshold": 0.90,
-        "task_type": "classification", "last_eval": None, "hw_gating_enabled": False,
+        "task": "clinc150", "last_eval": None, "hw_gating_enabled": False,
         "downward_probe_done": False,
     }
     out = iterate_node(state)
@@ -362,7 +362,7 @@ def test_iterate_terminates_after_probe_done(_mock):
     state = {
         "selected_model": m, "scores": [0.95], "best_score": 0.95, "iteration": 3,
         "turn_budget": 1000, "stop_threshold": 0.90, "initial_stop_threshold": 0.90,
-        "task_type": "classification", "last_eval": None, "hw_gating_enabled": False,
+        "task": "clinc150", "last_eval": None, "hw_gating_enabled": False,
         "downward_probe_done": True,  # already probed
     }
     out = iterate_node(state)
@@ -393,7 +393,7 @@ def test_iterate_routes_downward_only_after_threshold_with_untried_lower_tier(
         "turn_budget": 1000,
         "stop_threshold": 0.90,
         "initial_stop_threshold": 0.90,
-        "task_type": "classification",
+        "task": "clinc150",
         "last_eval": None,
         "hw_gating_enabled": False,
         "downward_probe_done": False,
@@ -453,7 +453,7 @@ def test_iterate_skips_downward_when_no_lower_untried_tier(
         "turn_budget": 1000,
         "stop_threshold": 0.90,
         "initial_stop_threshold": 0.90,
-        "task_type": "classification",
+        "task": "clinc150",
         "last_eval": None,
         "hw_gating_enabled": False,
         "downward_probe_done": False,
@@ -499,7 +499,7 @@ def test_iterate_skips_downward_for_tier_already_trained_by_main_ladder(
         "turn_budget": 1000,
         "stop_threshold": 0.90,
         "initial_stop_threshold": 0.90,
-        "task_type": "classification",
+        "task": "clinc150",
         "last_eval": None,
         "hw_gating_enabled": False,
         "downward_probe_done": False,

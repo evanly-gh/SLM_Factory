@@ -13,10 +13,11 @@
 #SBATCH --signal=B:USR1@7200
 #SBATCH --output=/mmfs1/gscratch/intelligentsystems/evanly/SLM_Factory/logs/slurm/slm-xlam-bfcl-cse-%j.out
 #
-# CURATED BENCHMARK: xlam_bfcl (task_type=function_call, metric ast_arg_match). SLM_BENCHMARK_TASK
+# CURATED BENCHMARK: xlam_bfcl (format-bound, metric ast_arg_match). SLM_BENCHMARK_TASK
 # pins the deterministic loader (train on Salesforce xLAM-60k, evaluate on the Berkeley
 # Function-Calling Leaderboard) instead of autonomous web_acquire — run.py starts the run
-# NON-autonomous with the loader's task_type. Scoring is judge-free AST argument match.
+# NON-autonomous against this task's registry spec, which is where its loader, scorer, metric and
+# token budget are declared. Scoring is judge-free AST argument match.
 #
 # DATA CONTRACT (validated live 2026-08-13, B253):
 #   - xLAM is a GATED repo. It resolves via HF_TOKEN, which run.py loads from .env with

@@ -46,7 +46,7 @@ def _state(score=0.8098, threshold=0.8000, iteration=5, **over):
         "max_stop_threshold": 0.0,
         "convergence_banked": None,
         "threshold_raises": [],
-        "task_type": "NER",
+        "task": "ner_bc5cdr",
         "last_eval": None,
         "hw_gating_enabled": False,
         "hardware_constraints": MagicMock(),

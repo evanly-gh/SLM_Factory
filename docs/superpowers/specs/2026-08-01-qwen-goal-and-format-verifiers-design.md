@@ -2,7 +2,7 @@
 
 **Date:** 2026-08-01
 **Status:** approved design, pending spec review
-**Companion doc:** [2026-07-31-six-task-benchmark-selection.md](../../Evan's%20Notes/2026-07-31-six-task-benchmark-selection.md)
+**Companion doc:** [07-31-benchmark-selection.md](../../Evan's%20Notes/07-31-benchmark-selection.md)
 (progress log for the build lives there)
 
 ---

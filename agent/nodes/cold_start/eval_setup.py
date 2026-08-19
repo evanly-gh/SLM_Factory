@@ -27,7 +27,7 @@ SHARED_CHECKSUM_FILES = SHARED_CONTENT_FILES + ("manifest.json",)
 
 # Single source of truth for the curated benchmarks' task types + human labels, keyed by the
 # SLM_BENCHMARK_TASK value. Kept free of loader imports so callers (e.g. the driver deciding the
-# initial task_type) can read it without pulling `datasets` or any optional loader dependency.
+# initial task) can read it without pulling `datasets` or any optional loader dependency.
 #
 # The suite is organised by what fine-tuning is expected to DO for each task:
 #   in-distribution — the base model already does the task; FT buys format discipline and modest
@@ -38,87 +38,79 @@ SHARED_CHECKSUM_FILES = SHARED_CONTENT_FILES + ("manifest.json",)
 #     model has nothing to pattern-match. Low/noisy baseline, delta bounded by label noise.
 #
 # `coedit` and `medqa` were removed 2026-08-15 by decision — neither had ever produced a run.
-NAMED_BENCHMARK_TASK_TYPES: dict[str, tuple[str, str]] = {
-    # in-distribution
-    "dialogsum_samsum": ("generation", "DialogSum + SAMSum"),
-    # format-bound
-    "xlam_bfcl": ("function_call", "xLAM-60k / BFCL"),
-    "calendar_json": ("function_call", "Calendar NL→JSON (TOPv2 reminder / SGD Calendar_1)"),
-    "ner_bc5cdr": ("NER", "BC5CDR (Chemical/Disease spans)"),
-    # out-of-distribution
-    "clinc150": ("classification", "CLINC150 (clinc_oos/plus)"),
-    "routerbench": ("classification", "RouterBench"),
-    "proactive_listening": ("classification", "Proactive listening (LlamaPIE interrupt/wait)"),
-}
-
-
-def _named_benchmark_loaders() -> dict:
-    """Registry of the curated benchmark loaders, selectable via SLM_BENCHMARK_TASK on the
-    non-autonomous path. Each entry is (loader_callable, task_type, source_label). Imports are
-    lazy so a missing optional dependency only breaks the benchmark that needs it. Task types /
-    labels come from NAMED_BENCHMARK_TASK_TYPES so there is one source of truth."""
-    from data.loaders.clinc150 import load_clinc150
-    from data.loaders.dialogsum_samsum import load_dialogsum_samsum
-    from data.loaders.xlam_bfcl import load_xlam_bfcl
-    from data.loaders.routerbench import load_routerbench
-    from data.loaders.ner_bc5cdr import load_ner_bc5cdr
-    from data.loaders.calendar_json import load_calendar_json
-    from data.loaders.proactive_listening import load_proactive_listening
-    loaders = {
-        "clinc150": load_clinc150,
-        "dialogsum_samsum": load_dialogsum_samsum,
-        "xlam_bfcl": load_xlam_bfcl,
-        "routerbench": load_routerbench,
-        "ner_bc5cdr": load_ner_bc5cdr,
-        "calendar_json": load_calendar_json,
-        "proactive_listening": load_proactive_listening,
-    }
-    return {
-        key: (loaders[key], task_type, label)
-        for key, (task_type, label) in NAMED_BENCHMARK_TASK_TYPES.items()
-    }
+# The benchmark registry moved to `tasks/` on 2026-08-18. It used to live here as
+# NAMED_BENCHMARK_TASK_TYPES (name -> task_type, label) plus a parallel loader dict that had to be
+# kept in lockstep by a test — two of the five hand-synchronised side registries the task specs
+# replaced.
 
 
 def _load_named_benchmark(name: str, state: AgentState, acquire_meta: dict):
-    """Load one of the six curated benchmarks by SLM_BENCHMARK_TASK key, sized to the run's
-    curriculum/eval targets. Raises ValueError on an unknown key or a task_type mismatch."""
-    registry = _named_benchmark_loaders()
-    key = str(name).strip().lower()
-    if key not in registry:
+    """Load one curated benchmark by name, sized to the run's curriculum and eval targets."""
+    from tasks import get_task
+
+    spec = get_task(name)
+    if state["task"] != spec.name:
         raise ValueError(
-            f"SLM_BENCHMARK_TASK={name!r} is not a known benchmark; choose one of "
-            f"{sorted(registry)}"
+            f"SLM_BENCHMARK_TASK={spec.name!r} does not match the run's task "
+            f"{state['task']!r}; set them consistently"
         )
-    loader, expected_task, source_label = registry[key]
-    task_type = state["task_type"]
-    if task_type != expected_task:
-        raise ValueError(
-            f"SLM_BENCHMARK_TASK={key!r} produces task_type={expected_task!r} but the run's "
-            f"task_type is {task_type!r}; set them consistently"
-        )
-    max_train = int(int(state.get("curriculum_size_target") or 1000) * 0.65)
-    max_test = int(state.get("eval_size_target") or 800)
-    print(f"      [eval_setup] loading named benchmark {key!r} ({source_label}): "
-          f"train≤{max_train} test≤{max_test}")
-    train_examples, test_examples = loader(max_train=max(max_train, 60), max_test=max(max_test, 60))
-    # Stage-0 decontamination, matching the autonomous acquire_dataset path. Official benchmark
-    # splits are not guaranteed disjoint (CLINC150 ships "what's your designation" in both splits
-    # under two different intents), and this path never passes through web_acquire, so without
-    # this the eval_setup overlap firewall would turn a source-data quirk into a fatal raise.
-    # The held-out test rows are authoritative and never modified; the train row is dropped.
+    # As many gold rows as the source has, up to the task's cap. There is no fraction and no
+    # split: the number used to be `curriculum_size_target × 0.65`, which is where the mystery
+    # 3,250 came from — 65% of a 5,000-row "target" the curriculum was then never allowed to
+    # reach, because the only thing that could have filled the gap was re-drawing rows it already
+    # had. The curriculum starts at this size and GROWS from here (see agent/data_rebuild.py).
+    max_train = spec.initial_train_cap
+    # A bigger eval set is strictly better for variance — it costs one extra inference pass per
+    # iteration and buys precision on exactly the comparisons this project makes — but the eval runs
+    # EVERY iteration, so an unbounded split makes each turn proportionally slower.
+    _cap = os.environ.get("SLM_EVAL_SIZE_CAP")
+    max_test = int(_cap) if _cap else spec.eval_cap
+    print(f"      [eval_setup] loading {spec.name!r} ({spec.title}): "
+          f"train\u2264{max_train} test\u2264{max_test}"
+          + ("" if _cap else " (task default; override with SLM_EVAL_SIZE_CAP)"))
+    train_examples, test_examples = spec.load(max_train=max_train, max_test=max_test)
+    print(f"      [eval_setup] {spec.name}: loaded {len(train_examples)} gold train rows "
+          f"(asked for {max_train}) and {len(test_examples)} eval rows (asked for {max_test})")
+    # Record what we consumed per source, so a later `mine_new_real` knows which corpora still have
+    # rows we have not taken. Without this the loop had no way to tell "this dataset is exhausted"
+    # from "we only ever asked for the first 3,250 rows of it" (B297).
+    state["source_progress"] = {
+        source.hf_id: {
+            "consumed": len(train_examples),
+            "asked_for": max_train,
+            "url": source.url,
+            # Exhausted only when the loader returned FEWER rows than we asked for; that is the
+            # only reliable evidence a head slice has reached the end of the split.
+            "exhausted": len(train_examples) < max_train,
+        }
+        for source in spec.mining_sources
+    }
+    # Stage-0 decontamination. Official benchmark splits are not guaranteed disjoint (CLINC150
+    # ships "what's your designation" in both splits under two different intents), so without this
+    # the eval_setup overlap firewall would turn a source-data quirk into a fatal raise. The
+    # held-out test rows are authoritative and never modified; the train row is dropped.
     train_examples, overlap_removed = remove_normalized_train_overlap(
         train_examples, test_examples)
     if overlap_removed:
-        print(f"      [eval_setup] Stage-0 normalized overlap removal for {key!r}: "
+        print(f"      [eval_setup] Stage-0 normalized overlap removal for {spec.name!r}: "
               f"removed {overlap_removed} train row(s); official test rows unchanged")
     acquire_meta["overlap_removed_from_train"] = overlap_removed
-    acquire_meta["source"] = source_label
+    acquire_meta["source"] = spec.title
     acquire_meta["source_records"] = [
-        {"kind": "hf", "id": key, "split": "train", "role": "curriculum"},
-        {"kind": "hf", "id": key, "split": "test", "role": "eval"},
+        {"kind": "hf", "id": spec.name, "split": "train", "role": "curriculum"},
+        {"kind": "hf", "id": spec.name, "split": "test", "role": "eval"},
     ]
-    acquire_meta["eval_ban"] = [{"kind": "hf", "id": key, "split": "test", "role": "eval"}]
+    acquire_meta["eval_ban"] = [
+        {"kind": "hf", "id": spec.name, "split": "test", "role": "eval"}
+    ]
     return train_examples, test_examples
+
+
+# The eval-set cap is per task (`TaskSpec.eval_cap`). Bigger is statistically better — the standard
+# error on a proportion at n=1000 is about 1.5 percentage points, well below the score differences
+# this project cares about — but the eval runs EVERY iteration, so an unbounded split makes each
+# loop turn proportionally slower: RouterBench's whole split is 7,267 rows. Each task picks the
+# point on that trade-off that suits its own split size.
 
 
 class QwenBaselineUnavailableError(RuntimeError):
@@ -130,6 +122,20 @@ class QwenBaselineUnavailableError(RuntimeError):
     """
 
 
+def _author_task_brief(state: AgentState, train_rows: list[dict]) -> None:
+    """Have the orchestrator describe this benchmark, once, before any teacher call.
+
+    Every synthesis and verification prompt is built from this text, so it is authored here — after
+    the real data is loaded, from real rows — rather than hardcoded per task type. See
+    `agent/task_brief.py` for what that hardcoded table cost.
+    """
+    from agent.task_brief import build_task_brief
+    from tasks import get_task
+
+    spec = get_task(state["task"])
+    state["task_brief"] = build_task_brief(spec, list(train_rows or []), log=print)
+
+
 def _pin_label_space(state: AgentState, eval_set) -> None:
     """Close the task's label vocabulary against the frozen eval set, once, before any curation.
 
@@ -139,12 +145,13 @@ def _pin_label_space(state: AgentState, eval_set) -> None:
     """
     from data.label_space import label_definitions_for, label_space_from_eval_set
 
-    labels = label_space_from_eval_set(eval_set, state["task_type"])
+    task = state["task"]
+    labels = label_space_from_eval_set(eval_set, task)
     if not labels:
         state["task_label_space"] = None
         return
-    benchmark = os.environ.get("SLM_BENCHMARK_TASK") or ""
-    definitions = label_definitions_for(benchmark)
+    benchmark = task
+    definitions = label_definitions_for(task)
     state["task_label_space"] = {
         "labels": sorted(labels),
         "definitions": definitions,
@@ -188,9 +195,9 @@ def _calibrate_qwen_goal_if_pending(state: AgentState, eval_set) -> None:
     from agent.threshold import threshold_from_endpoint_baseline
 
     floor = float(calibration.get("floor", 0.8))
-    task_type = state["task_type"]
+    task = state["task"]
     try:
-        baseline = measure_endpoint_baseline(eval_set, task_type, log=print)
+        baseline = measure_endpoint_baseline(eval_set, task, log=print)
     except Exception as error:  # noqa: BLE001 - re-raised as a fatal calibration failure
         raise QwenBaselineUnavailableError(
             f"Qwen-3.6 baseline measurement failed ({str(error)[:160]}); the reference "
@@ -277,12 +284,12 @@ def _load_shared_dataset(shared_dir: str):
 
     train = _jsonl("train.jsonl")
     test = _jsonl("test.jsonl")
-    task_type = manifest.get("task_type")
+    task = manifest.get("task")
     required = tuple((manifest.get("row_schema") or {}).get("required") or ())
-    canonical_required = required_fields_for_task(task_type)
+    canonical_required = required_fields_for_task(task)
     if set(required) != set(canonical_required):
         raise ValueError(
-            f"shared dataset row_schema mismatch for {task_type!r}: {required}"
+            f"shared dataset row_schema mismatch for {task!r}: {required}"
         )
     validate_rows(train, required, bundle_name="shared dataset", split="train")
     validate_rows(test, required, bundle_name="shared dataset", split="test")
@@ -309,9 +316,9 @@ def eval_setup_node(state: AgentState) -> AgentState:
     """
     Node 2: download data and build the held-out eval set E.
     Eval set is built BEFORE any training. Fixed throughout all iterations.
-    task_type flows from state — no hardcoding.
+    task flows from state — no hardcoding.
     """
-    task_type = state["task_type"]
+    task = state["task"]
     plan = state.get("task_plan")
 
     # Shared-dataset harness (B161): for a FAIR strategy comparison, all runs can load ONE
@@ -322,10 +329,10 @@ def eval_setup_node(state: AgentState) -> AgentState:
     if _shared is not None:
         (train_examples, test_examples, _shared_diff, _shared_sources,
          _shared_eval_ban, _shared_manifest) = _shared
-        if _shared_manifest["task_type"] != task_type:
+        if _shared_manifest["task"] != task:
             raise ValueError(
-                f"shared dataset task_type={_shared_manifest['task_type']!r} "
-                f"does not match run task_type={task_type!r}"
+                f"shared dataset task={_shared_manifest['task']!r} "
+                f"does not match run task={task!r}"
             )
         print(f"      [eval_setup] using SHARED frozen dataset: train={len(train_examples)} "
               f"test={len(test_examples)} (SLM_SHARED_DATASET_DIR) — identical across strategy runs")
@@ -334,11 +341,7 @@ def eval_setup_node(state: AgentState) -> AgentState:
         state["data_sources"] = list(_shared_sources or [])
         state["eval_source_ban"] = list(_shared_eval_ban or [])
         eval_set = build_eval_set(
-            test_examples, task_type=task_type,
-            target=_eval_target(state.get("eval_size_target", 800)),
-            multi_label=plan.get("multi_label", False) if plan else False,
-            schema=(plan.get("schema") if plan else None),
-            multilingual=plan.get("multilingual", False) if plan else False,
+            test_examples, task=task, target=_eval_target(len(test_examples)),
         )
         state["eval_set"] = eval_set
         state["eval_difficulty"] = _shared_diff
@@ -346,7 +349,7 @@ def eval_setup_node(state: AgentState) -> AgentState:
         atomic_write_json(
             os.path.join(ARTIFACTS_DIR, "eval_set.json"),
             {
-                "task_type": eval_set.task_type,
+                "task": eval_set.task,
                 "counts": {"total": len(eval_set.all)},
                 "difficulty_counts": ({k: len(v) for k, v in _shared_diff.items()} if _shared_diff else {}),
                 "examples": eval_set.all,
@@ -354,43 +357,21 @@ def eval_setup_node(state: AgentState) -> AgentState:
             },
         )
         _pin_label_space(state, eval_set)
+        _author_task_brief(state, train_examples)
         _calibrate_qwen_goal_if_pending(state, eval_set)
         return state
 
+    # The task's own loader, named on its spec. There is no branch here: every run names a task from
+    # the registry, every registered task has a loader, and `get_task` already raised if it did not.
+    #
+    # What used to sit here was an "autonomous" path that asked the orchestrator to plan a task TYPE
+    # and then went looking for a dataset to fit it, sized to `curriculum_size_target × 0.65`. That
+    # is where the mystery 3,250 came from. It is gone because a task with no loader has no scorer,
+    # no training prompt and no synthesis path either — the silent no-ops of B291 and B299 were all
+    # downstream of pretending otherwise. Web research survives where it is useful: as rung 2 of the
+    # `mine_new_real` ladder, finding a corpus to GROW a curriculum that already exists.
     acquire_meta: dict = {}
-    if plan is not None:
-        # Autonomous, general path: acquire the dataset per the orchestrator's plan, sized to
-        # the ORCHESTRATOR-CHOSEN data targets (B161): curriculum_size_target (gold ≈ 65% of
-        # it) and eval_size_target. These are clamped to config floors/ceiling in task_analysis.
-        from config.config import DATA_SIZE_CEILING
-        _curriculum = int(state.get("curriculum_size_target") or 1000)
-        _gold_target = int(_curriculum * 0.65)
-        # Headroom (×1.15 + 40) covers eval-overlap removal + quality-control drops.
-        _bench_train = min(int(_gold_target * 1.15) + 40, DATA_SIZE_CEILING)
-        _bench_test = int(state.get("eval_size_target") or 800)
-        print(f"      [eval_setup] acquiring: curriculum_target={_curriculum} "
-              f"(gold≈{_gold_target}, request train≤{_bench_train})  eval_target={_bench_test}")
-        from data.loaders.web_acquire import acquire_dataset
-        train_examples, test_examples = acquire_dataset(
-            plan, description=state.get("description", ""),
-            target_examples=max(_gold_target, 120),
-            benchmark_max_train=_bench_train, benchmark_max_test=_bench_test,
-            meta=acquire_meta,
-        )
-    elif os.environ.get("SLM_BENCHMARK_TASK"):
-        # Curated non-autonomous path: load one of the six benchmark loaders by env key. This
-        # feeds the same build_eval_set + overlap-firewall path the classification branch uses.
-        train_examples, test_examples = _load_named_benchmark(
-            os.environ["SLM_BENCHMARK_TASK"], state, acquire_meta)
-    elif task_type == "classification":
-        from data.loaders.sms_spam import download_sms_spam
-        train_examples, test_examples = download_sms_spam()
-        acquire_meta["source"] = "bundled SMS Spam dataset (UCI)"
-    else:
-        raise NotImplementedError(
-            f"eval_setup_node does not yet have a data loader for task_type={task_type!r}. "
-            "Add a loader branch here when NER or generation data sources are available."
-        )
+    train_examples, test_examples = _load_named_benchmark(task, state, acquire_meta)
 
     state["train_examples"] = train_examples
     state["data_source"] = acquire_meta.get("source", "unknown")
@@ -425,20 +406,18 @@ def eval_setup_node(state: AgentState) -> AgentState:
         )
     print("      [eval_setup] official train/test separation: normalized overlap=0")
 
-    # Forward planner flags so the eval set carries multi_label/schema/multilingual
-    # context for downstream scorer dispatch.
-    plan = state.get("task_plan") or {}
+    # The loader already applied the task's own eval cap, so the split IS the target — re-applying
+    # a separate `eval_size_target` here would cap it a second time and undo the cap (B288).
     eval_set = build_eval_set(
         test_examples,
-        task_type=task_type,
-        target=_eval_target(state.get("eval_size_target", 800)),
-        multi_label=plan.get("multi_label", False),
-        schema=plan.get("schema", None),
-        multilingual=plan.get("multilingual", False),
+        task=task,
+        target=_eval_target(len(test_examples)),
     )
     state["eval_set"] = eval_set
-    _target = int(state.get("eval_size_target", 800) or 800)
-    print(f"      [eval_setup] eval set built: {len(eval_set.all)} examples (target {_target})")
+    # The "target" is the size of the held-out split the loader returned.
+    _target = len(test_examples)
+    print(f"      [eval_setup] eval set built: {len(eval_set.all)} examples "
+          f"(available in the held-out split: {_target})")
     # A short eval set is acceptable — some loaders simply have less held-out data than we asked
     # for — but it must be stated, because it changes how the score should be read: fewer rows means
     # more variance, and scores are then not directly comparable across tasks. `calendar_json` ran on
@@ -450,6 +429,7 @@ def eval_setup_node(state: AgentState) -> AgentState:
               f"loader's held-out split is the limit — but scores carry more variance than a "
               f"full-size eval set and are not directly comparable to tasks that reached target.")
     _pin_label_space(state, eval_set)
+    _author_task_brief(state, train_examples)
 
     # Difficulty-stratify the eval set for the test-data agent (B161): label each held-out
     # example easy/medium/hard by the base-model zero-shot capability gradient (smallest vs
@@ -460,7 +440,7 @@ def eval_setup_node(state: AgentState) -> AgentState:
     try:
         from agent.nodes.test_agent import label_difficulty
         difficulty = label_difficulty(
-            eval_set, state.get("feasible_models") or [], task_type, log=print)
+            eval_set, state.get("feasible_models") or [], task, log=print)
     except Exception as _e:  # noqa: BLE001
         _difficulty_status = "error"
         print(f"      [eval_setup] difficulty labeling failed ({str(_e)[:100]}); skipping")
@@ -479,7 +459,7 @@ def eval_setup_node(state: AgentState) -> AgentState:
     atomic_write_json(
         os.path.join(ARTIFACTS_DIR, "eval_set.json"),
         {
-            "task_type": eval_set.task_type,
+            "task": eval_set.task,
             "counts": {"total": len(eval_set.all)},
             "difficulty_counts": ({k: len(v) for k, v in difficulty.items()} if difficulty else {}),
             "examples": eval_set.all,

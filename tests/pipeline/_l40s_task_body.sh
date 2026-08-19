@@ -1,5 +1,5 @@
 #!/bin/bash
-# Shared run body for L40S task-type pipeline tests (sourced by run_*_l40s.slurm).
+# Shared run body for L40S per-task pipeline tests (sourced by run_*_l40s.slurm).
 # The caller sets `TASK` (and any optional SLM_* overrides) BEFORE sourcing this file; the
 # #SBATCH directives live in the caller (they are only read from the submitted script).
 #
@@ -290,12 +290,13 @@ export SLM_MODEL_SELECTION_STRATEGY="${SLM_MODEL_SELECTION_STRATEGY:-smallest_fi
 export SLM_SYNTH_WAIT_S=2400                     # preflight waits up to 40 min for the server
 export SLM_SYNTH_CONCURRENCY
 export SLM_MAX_SEQ_LENGTH="${SLM_MAX_SEQ_LENGTH:-4096}"
-export SLM_EVAL_MAX_NEW_TOKENS_CLASSIFICATION="${SLM_EVAL_MAX_NEW_TOKENS_CLASSIFICATION:-50}"
-export SLM_EVAL_MAX_NEW_TOKENS_NER="${SLM_EVAL_MAX_NEW_TOKENS_NER:-512}"
-export SLM_EVAL_MAX_NEW_TOKENS_MATH="${SLM_EVAL_MAX_NEW_TOKENS_MATH:-512}"
-export SLM_EVAL_MAX_NEW_TOKENS_GENERATION="${SLM_EVAL_MAX_NEW_TOKENS_GENERATION:-512}"
-export SLM_EVAL_MAX_NEW_TOKENS_APPS="${SLM_EVAL_MAX_NEW_TOKENS_APPS:-1024}"
-export SLM_APPS_PROBLEM_TIMEOUT_S="${SLM_APPS_PROBLEM_TIMEOUT_S:-6}"
+# The output-token reserve is declared per TASK on its TaskSpec (`max_new_tokens`) and read by
+# `eval.harness.eval_output_token_reserve`, which validates it against that task's own context
+# window. The five per-channel SLM_EVAL_MAX_NEW_TOKENS_* variables this file used to export were
+# removed with the channels on 2026-08-18: nothing reads them, and the task registry is now the
+# single place the number lives. `SLM_EVAL_MAX_NEW_TOKENS` remains as a deliberate one-off
+# override, unset here because it applies to whichever task the job runs and a value that suits
+# one suits few others. SLM_APPS_PROBLEM_TIMEOUT_S went with the deleted code-execution scorer.
 # These jobs checkpoint and requeue from Slurm's USR1 notice. The aggregate wall-clock auto-termination is disabled
 # so cumulative resumed time cannot end a healthy run before the scheduler signal; a
 # nonzero guard remains available for non-requeue executions.

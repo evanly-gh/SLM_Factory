@@ -18,7 +18,6 @@ logger = logging.getLogger(__name__)
 
 def annotate_cot(
     examples: list[dict],
-    task_type: str = "generation",
     generate_fn=None,
     log=print,
 ) -> list[dict]:
@@ -32,9 +31,8 @@ def annotate_cot(
     backend, with no cloud fallback. Generation is NON-FATAL: if ``generate_fn`` is absent
     (endpoint unavailable) or every call fails, the original example remains CoT-less.
 
-    Returns examples with an added 'cot_reasoning' field. The CoT is prepended to the
-    response during training formatting. The prompt is task-aware: code-generation gets
-    an implementation-plan style explanation rather than a prose math-style derivation.
+    Returns examples with an added 'cot_reasoning' field, prepended to the response during
+    training formatting. Whether a task wants this at all is `TaskSpec.cot_annotation`.
 
     Efficiency (B141): examples that ALREADY carry a non-empty 'cot_reasoning' are left
     untouched — e.g. the GSM8K loader ships real gold chains-of-thought, so re-generating
@@ -43,16 +41,6 @@ def annotate_cot(
     annotation are processed concurrently with a bounded thread pool.
     """
     def _build_prompt(prompt_text: str, gold_answer: str) -> str:
-        if task_type == "code_generation":
-            return (
-                f"Explain the reasoning behind this code solution as a concise implementation "
-                f"plan a developer would follow: the approach, key steps, and any edge cases "
-                f"handled. Do NOT restate the full code.\n\n"
-                f"Problem:\n{prompt_text}\n\n"
-                f"Correct solution:\n{gold_answer}\n\n"
-                f"Reply with only the step-by-step implementation reasoning, not the code and "
-                f"not the final answer."
-            )
         return (
             f"Solve this problem step by step, showing your reasoning clearly.\n\n"
             f"Problem: {prompt_text}\n\n"
@@ -123,194 +111,36 @@ def annotate_cot(
 
 def apply_quality_controls(
     dataset: list[dict],
-    task_type: str = "classification",
+    task: str,
     *,
     allowed_labels: set | None = None,
     log=None,
 ) -> list[dict]:
-    """
-    Enforce quality controls from the paper (§2.3):
-    1. Label balancing: no label exceeds 3x count of any other (classification family)
-    2. Context-length matching: remove outliers >3x median length (all types)
-    3. Entity diversification: cap any entity value at 3 occurrences (NER)
-    4. Surface-form dedup: remove near-duplicate texts (all types, Jaccard >0.9)
+    """Run the quality-control steps THIS task declared, in the order it declared them.
 
-    New types route to their natural family:
-      classification          → label balancing + dedup
-      NER                     → entity diversification + length filter
-      math_reasoning          → length filter on prompt + dedup
-      code_generation         → length filter on prompt + dedup
-      generation              → length filter on prompt
+    Previously an `if task_type == ...` chain ending in `else: return dataset`. Measured on
+    2026-08-18, that meant four of the eight tasks were never filtered: `function_call` fell into
+    the `else`, and `math_reasoning`/`generation` entered their branch but keyed length and dedup
+    on a `"prompt"` field their rows do not carry, so a 100,000-character row survived and nothing
+    was logged (B299).
+
+    Every step reports what it removed and why. Quality control is the single biggest consumer of
+    rows in this pipeline — it deleted ~1,500 of 1,549 synthesized rows in
+    slm-clinc150-cse-38155022 — and doing so silently made a curriculum arriving far under target
+    look inexplicable (B228).
     """
     if not dataset:
         return dataset
+    from data.quality_controls import apply_quality_controls as _apply
+    from tasks import get_task
 
-    # Every control reports what it removed and why. Quality control is the single biggest
-    # consumer of rows in this pipeline — it deleted ~1,500 of 1,549 synthesized rows in
-    # slm-clinc150-cse-38155022 — and previously did so completely silently, so a dataset
-    # arriving far under target looked inexplicable (B228).
-    def _report(stage: str, before: int, after: int, reason: str) -> None:
-        if log and after < before:
-            log(f"      [qc] {stage}: removed {before - after} row(s) — {reason}")
-
-    if task_type == "classification":
-        before = len(dataset)
-        clean = [e for e in dataset if "text" in e and "label" in e]
-        _report("schema", before, len(clean), "row missing a 'text' or 'label' field")
-
-        # 0. Label-space validation. A row whose label is not one of the task's established
-        # classes can never match an eval label, so it is pure training noise. This is where
-        # mined sources carrying raw integer class ids ("0"/"1"/"2") get removed (B222/B229).
-        if allowed_labels:
-            before = len(clean)
-            rejected = Counter(
-                str(e["label"]) for e in clean if str(e["label"]) not in allowed_labels
-            )
-            clean = [e for e in clean if str(e["label"]) in allowed_labels]
-            if rejected and log:
-                sample = ", ".join(
-                    f"{lab!r}x{cnt}" for lab, cnt in rejected.most_common(5)
-                )
-                log(
-                    f"      [qc] label-space: removed {before - len(clean)} row(s) — "
-                    f"label not in the task's {len(allowed_labels)} established classes "
-                    f"[{sample}]"
-                )
-
-        # 1. Label balancing (single-label argmax — for multi_label the flag is on
-        # the EvalSet, not here; we balance by the primary label field).
-        counts = Counter(e["label"] for e in clean)
-        if counts:
-            min_count = max(min(counts.values()), 1)
-            max_allowed = 3 * min_count
-            balanced = []
-            seen: Counter = Counter()
-            for ex in clean:
-                if seen[ex["label"]] < max_allowed:
-                    balanced.append(ex)
-                    seen[ex["label"]] += 1
-            _report(
-                "label-balance", len(clean), len(balanced),
-                f"label over the cap of 3x the smallest class ({max_allowed} rows/label; "
-                f"smallest class has {min_count})",
-            )
-            clean = balanced
-
-        before = len(clean)
-        clean = _filter_length_outliers(clean)
-        _report("length-outlier", before, len(clean), "text longer than 3x the median length")
-
-        before = len(clean)
-        clean = _dedup_surface_forms(clean)
-        _report("surface-dedup", before, len(clean), "near-duplicate text (Jaccard > 0.9)")
-        return clean
-
-    elif task_type == "NER":
-        clean = [e for e in dataset if "text" in e and "entities" in e]
-
-        # 3. Entity diversification: no entity surface value appears >3 times.
-        # Also applies to structured_extraction (schema field values).
-        entity_counts: Counter = Counter()
-        for ex in clean:
-            for ent in ex.get("entities", []):
-                entity_counts[ent.get("text", "").lower()] += 1
-        over_represented = {k for k, v in entity_counts.items() if v > 3}
-        if over_represented:
-            result = []
-            running: Counter = Counter()
-            for ex in clean:
-                ent_values = [e.get("text", "").lower() for e in ex.get("entities", [])]
-                skip = False
-                for v in ent_values:
-                    if v in over_represented and running[v] >= 3:
-                        skip = True
-                        break
-                if not skip:
-                    result.append(ex)
-                    for v in ent_values:
-                        running[v] += 1
-            clean = result
-
-        clean = _filter_length_outliers(clean)
-        return clean
-
-    elif task_type in ("math_reasoning", "code_generation", "generation"):
-        clean = [
-            e for e in dataset
-            if ("prompt" in e and "response" in e) or ("text" in e and "label" in e)
-        ]
-        key = "text" if task_type == "code_generation" else "prompt"
-        clean = _filter_length_outliers(clean, key=key)
-        # Dedup on math/code — repeated problem templates inflate the dataset
-        # without adding coverage. Generation is diverse enough to skip dedup.
-        if task_type in ("math_reasoning", "code_generation"):
-            clean = _dedup_surface_forms(clean, key=key)
-        return clean
-
-    else:
-        return dataset
-
-
-# Row provenances that define the task's true length distribution: real rows from the benchmark's
-# own train split. Mined and synthesized rows do not — see _filter_length_outliers.
-_TRUSTED_LENGTH_PROVENANCE = frozenset({"train_anchor", "resample"})
-
-
-def _filter_length_outliers(
-    examples: list[dict], key: str = "text", max_ratio: float = 3.0,
-) -> list[dict]:
-    """Remove examples whose text length exceeds max_ratio × median. Paper §2.3 item 3.
-
-    The median is computed over TRUSTED rows only — the task's own real training data — not over
-    the whole dataset (B260). The ratio is relative, so whatever sets the median sets the cutoff,
-    and that made the filter destroy the real data it was meant to protect:
-
-    RouterBench's real rows have a median length of 715 characters. Mining substituted a foreign
-    dataset (B259) whose rows have a median of 75, which dragged the DATASET median down to 269 and
-    the cutoff from 2145 to 807 — a bound that removes 48% of the real benchmark (17,667 of 36,497
-    rows) instead of the 0.6% it removes on clean data. It is visible in the artifacts: the median
-    length of `train_anchor` rows fell 572 → 432 → 396 across three rebuilds while the pool they
-    were sampled from never changed.
-
-    Anchoring on trusted rows keeps the intended behaviour (drop genuine outliers relative to the
-    task's own distribution) and makes it impossible for injected rows to move the goalposts. Falls
-    back to all rows when nothing is tagged, so untagged callers and unit tests behave as before.
-    """
-    if not examples:
-        return examples
-    trusted = [
-        e for e in examples
-        if str(e.get("_provenance") or "") in _TRUSTED_LENGTH_PROVENANCE
-    ]
-    basis = trusted or examples
-    lengths = sorted(len(e.get(key, "")) for e in basis)
-    median = lengths[len(lengths) // 2] or 1
-    cutoff = median * max_ratio
-    return [e for e in examples if len(e.get(key, "")) <= cutoff]
-
-
-def _dedup_surface_forms(
-    examples: list[dict], threshold: float = 0.9, key: str = "text"
-) -> list[dict]:
-    """Remove near-duplicate texts using word-set Jaccard similarity."""
-    result = []
-    seen_word_sets: list[set] = []
-    for ex in examples:
-        words = set(ex.get(key, "").lower().split())
-        if not words:
-            result.append(ex)
-            continue
-        is_dup = False
-        for seen in seen_word_sets[-50:]:
-            intersection = len(words & seen)
-            union = len(words | seen)
-            if union > 0 and intersection / union >= threshold:
-                is_dup = True
-                break
-        if not is_dup:
-            result.append(ex)
-            seen_word_sets.append(words)
-    return result
+    return _apply(
+        dataset,
+        get_task(task).quality_controls,
+        task_name=task,
+        allowed_labels=allowed_labels,
+        log=log,
+    )
 
 
 def _synth_concurrency(n_tasks: int) -> int:
@@ -363,51 +193,91 @@ def _progress_map(fn, items: list, *, label: str, log, workers: int) -> list:
 # Task families whose rows carry a free-form answer rather than a label, so "synthesis" means
 # generating a whole NEW CORRECT in-distribution example (verified where a verifier exists)
 # in the anchor's JSON schema, rather than a new utterance for a known class.
-_GENERATION_FAMILY = frozenset({
-    "math_reasoning",
-    "code_generation",
-    "generation",
-    "multilingual",
-    "structured_extraction",
-})
+#
+# `function_call` and `diff` were MISSING here until 2026-08-17, and because
+# `synthesize_examples` ends in a bare `return []` for anything it does not recognise, the
+# `synthesize` strategy was a silent no-op on every format-bound task. In xlam run 38566712 the
+# orchestrator chose it for six of eight rebuilds, announced 250-500 rows each time against a
+# reachable teacher endpoint, and produced zero rows on all six with nothing in the log to say so —
+# and the exact verifiers built for exactly this path (`data/synth_verifiers.py`:
+# `verify_function_call_row`, `verify_calendar_row`) had never once executed in production.
+# `_synthesize_new_correct` was clearly written with these tasks in mind: it pins `tools` from the
+# anchor, a field only a function-calling row has.
 
 
-def _new_example_prompt(anchor: dict, task_type: str) -> str:
+# How many worked examples to show the teacher. FIVE, not zero — measured on 2026-08-17: the teacher
+# scores 0.1131 span-F1 zero-shot on BC5CDR NER and 0.7190 with five demonstrations, a 6.4x
+# difference, and the raw outputs show why (wrong casing, a class the task does not have, a markdown
+# fence). Min et al. (arXiv:2202.12837) attribute exactly that to demonstrations supplying "(1) the
+# label space, (2) the distribution of the input text, and (3) the overall format of the sequence".
+# A generator asked for output in a precise contract it has only been described, not shown, is being
+# tested on guessing the contract. B276.
+SYNTH_SHOTS = int(os.environ.get("SLM_SYNTH_SHOTS", "5"))
+
+
+def _demo_block(demos: list[dict], task_description: str) -> str:
+    """Worked examples in the exact JSON shape the teacher is about to be asked for."""
+    import json
+
+    parts = []
+    for demo in demos:
+        payload = {k: demo.get(k) for k in demo if not str(k).startswith("_")}
+        parts.append(json.dumps(payload, ensure_ascii=False))
+    return "\n\n".join(parts)
+
+
+def _new_example_prompt(anchor: dict, task_description: str, demos: list[dict] | None = None,
+                        target_category: str = "") -> str:
     """Prompt to generate ONE new, correct example in the anchor's exact schema.
 
     Generation-family only. The classification/NER path (`_synthesize_new_gold`) never asks the
     teacher for a label — it copies the anchor's — so an out-of-vocabulary label is impossible
     there by construction, and no label list needs to be stated.
+
+    `demos` are SHOWN, not described. See SYNTH_SHOTS for why that matters (B276).
     """
     import json
 
     schema = {k: anchor.get(k) for k in anchor if not str(k).startswith("_")}
+    shown = ""
+    if demos:
+        shown = (
+            f"Here are {len(demos)} real examples of this task, in the exact output format "
+            f"required:\n\n{_demo_block(demos, task_description)}\n\n"
+        )
+    aimed = (
+        f"\nThe model being trained is currently failing on: {target_category}. Favour examples "
+        f"that exercise exactly that difficulty.\n"
+        if target_category else ""
+    )
     return (
-        f"Generate ONE new, correct {task_type} example in EXACTLY this JSON schema "
-        f"(same keys, same value types): {json.dumps(schema, ensure_ascii=False)}. "
-        "It must be a genuinely new, diverse, and CORRECT instance — not a copy or a "
-        "paraphrase of the reference, and never a wrong answer. Return only the JSON "
-        "object, no preamble or code fences."
+        f"{task_description}\n\n"
+        f"{shown}"
+        f"Generate ONE new, correct example in EXACTLY this JSON schema "
+        f"(same keys, same value types): {json.dumps(schema, ensure_ascii=False)}."
+        f"{aimed}"
+        "\nIt must be a genuinely new, diverse, and CORRECT instance — not a copy or a "
+        "paraphrase of the reference, and never a wrong answer. Obey the output contract above "
+        "exactly; a well-formed answer that breaks a stated convention is graded wrong. Return "
+        "only the JSON object, no preamble or code fences."
     )
 
 
-_TASK_DESCRIPTIONS = {
-    "generation": "summarising a conversation in one to three sentences",
-    "function_call": "converting a request into a JSON function call using only the declared tools",
-    "diff": "producing a unified diff that applies the requested edit",
-    "math_reasoning": "solving a math word problem and giving the final numeric answer",
-    "code_generation": "writing code that satisfies the stated problem",
-    "multilingual": "responding correctly in the language of the request",
-    "structured_extraction": "extracting the requested fields into the given schema",
-}
+# The teacher's description of the task is authored by the ORCHESTRATOR at cold start, from real
+# rows, and reaches every prompt here as `task_description` (see agent/task_brief.py). It replaced a
+# table keyed by task TYPE, under which `xlam_bfcl` and `calendar_json` were both described as
+# "converting a request into a JSON function call using only the declared tools" — which omits every
+# convention that makes a calendar row correct (the 60-minute default, ISO-8601, resolving against
+# the reference instant), so a verifier asked to judge against it was judging its own guess (B269).
 
 
 def verify_generated_answers(
     rows: list[dict],
     *,
-    task_type: str,
+    task_description: str,
     generate_fn,
     log=None,
+    reference_rows: list[dict] | None = None,
 ) -> list[dict]:
     """Ask the teacher whether each generated (input, answer) pair is actually correct.
 
@@ -423,7 +293,22 @@ def verify_generated_answers(
     """
     if not rows or generate_fn is None:
         return rows
-    task_desc = _TASK_DESCRIPTIONS.get(task_type, task_type)
+    task_desc = task_description
+    # Real (request, correct answer) pairs, so the verifier has the task's actual conventions in
+    # front of it instead of inferring them. On `calendar_json` those conventions ARE the task
+    # (60-minute default, ISO-8601, resolve against the reference instant) and a verifier that has
+    # to guess them is judging its own guess.
+    shown = ""
+    if reference_rows:
+        pairs = []
+        for ref in reference_rows[:SYNTH_SHOTS]:
+            q = " ".join(str(ref.get("text") or "").split())[:400]
+            a = " ".join(str(ref.get("answer") or "").split())[:400]
+            if q and a:
+                pairs.append(f"Request: {q}\nCorrect answer: {a}")
+        if pairs:
+            shown = ("Real, confirmed examples of this task:\n\n"
+                     + "\n\n".join(pairs) + "\n\n")
 
     def _check(row: dict):
         request = str(row.get("text") or "")
@@ -432,6 +317,7 @@ def verify_generated_answers(
             return row, False, "empty answer"
         prompt = (
             f"You are checking one training example for the task of {task_desc}.\n\n"
+            f"{shown}"
             f"User input / question:\n{request}\n\n"
             f"Proposed answer:\n{answer}\n\n"
             f"Does the proposed answer correctly and directly satisfy the user's request, in the "
@@ -454,7 +340,7 @@ def verify_generated_answers(
         return row, bool(verdict.get("valid", True)), str(verdict.get("reason", ""))[:120]
 
     results = _progress_map(
-        _check, rows, label=f"answer verification ({task_type})", log=log,
+        _check, rows, label="answer verification", log=log,
         workers=_synth_concurrency(len(rows)),
     )
     kept, rejected = [], []
@@ -474,11 +360,12 @@ def verify_generated_answers(
 def _synthesize_new_correct(
     examples: list[dict],
     *,
-    task_type: str,
+    task_description: str,
     n: int,
     generate_fn,
     verify_fn=None,
     log=None,
+    target_category: str = "",
 ) -> list[dict]:
     """Generate ``n`` new CORRECT in-distribution examples (never wrong-answer pairs).
 
@@ -491,19 +378,38 @@ def _synthesize_new_correct(
     anchors = list(examples)
     if not anchors:
         return []
-    random.shuffle(anchors)
+    rng = random.Random(20260817)
+    rng.shuffle(anchors)
+
+    rejections: list[str] = []
+    checker = getattr(verify_fn, "checker", None)
 
     def _one(anchor: dict) -> dict | None:
-        prompt = _new_example_prompt(anchor, task_type)
+        demos = rng.sample(anchors, min(SYNTH_SHOTS, len(anchors))) if SYNTH_SHOTS else []
+        prompt = _new_example_prompt(anchor, task_description, demos=demos,
+                                     target_category=target_category)
         try:
             row = json.loads(generate_fn(prompt, temperature=0.7, max_tokens=512))
         except Exception:  # noqa: BLE001 — a failed generation is skipped, never fatal
             return None
         if not isinstance(row, dict) or not row.get("text"):
             return None
+        # PIN the constraint from the anchor rather than trusting the teacher to reproduce it. The
+        # tool signature is what the call must satisfy, not something being invented — the same
+        # "supply what you can, generate only what you must" principle that makes the
+        # classification path safe. It also makes the row VERIFIABLE: a generated row with no
+        # `tools` cannot be schema-checked at all.
+        for pinned in ("tools", "_instruction"):
+            if pinned in anchor and pinned not in row:
+                row[pinned] = anchor[pinned]
+        # STAGE 1 — exact, programmatic check. Runs BEFORE any model-based verification, because it
+        # is free, cannot be fooled, and a row it rejects should never cost a teacher call.
         if verify_fn is not None and not verify_fn(row):
+            if checker is not None:
+                _ok, reason = checker(row)
+                rejections.append(reason)
             return None
-        row["_source"] = f"synth:{task_type}"
+        row["_source"] = "synth:generated"
         row["_provenance"] = "synthetic_positive"
         return row
 
@@ -522,13 +428,21 @@ def _synthesize_new_correct(
     produced = _progress_map(
         _one,
         planned,
-        label=f"new-correct synthesis ({task_type})",
+        label="new-correct synthesis",
         log=log,
         workers=_synth_concurrency(len(planned)),
     )
     out = [row for row in produced if row is not None][:n]
     if log:
-        log(f"  new-correct synthesis: {len(out)}/{n} kept ({len(planned)} attempts)")
+        shots = f"{SYNTH_SHOTS}-shot" if SYNTH_SHOTS else "zero-shot"
+        log(f"      [synth] new-correct ({shots}): {len(out)}/{n} kept "
+            f"({len(planned)} attempts)")
+        if rejections:
+            counts = Counter(rejections)
+            log(f"      [verify:exact] programmatic verifier rejected {len(rejections)} row(s) "
+                f"before any teacher call:")
+            for reason, count in counts.most_common(_VERIFY_LOG_LIMIT):
+                log(f"        x{count}  {reason}")
     return out
 
 
@@ -576,6 +490,7 @@ def verify_generated_labels(
     log=None,
     label_definitions: dict | None = None,
     all_labels: list[str] | None = None,
+    reference_rows: list[dict] | None = None,
 ) -> list[dict]:
     """Ask the teacher model to confirm each generated row really belongs to its assigned label.
 
@@ -595,13 +510,29 @@ def verify_generated_labels(
     if not rows or generate_fn is None:
         return rows
 
+    # Real in-class examples per label, so the verifier judges against the class as it ACTUALLY
+    # appears rather than against its own reading of the label word. Same reason the generator is
+    # few-shot (B276): a decision boundary is easier to show than to describe.
+    by_label: dict[str, list[str]] = {}
+    for row in (reference_rows or []):
+        if isinstance(row, dict) and row.get("label") is not None:
+            text = str(row.get("text") or "").strip()
+            if text:
+                by_label.setdefault(str(row["label"]), []).append(text)
+
     def _check(row: dict):
         label = str(row.get("label"))
         text = str(row.get("text") or "")
         context = _label_context_block(label, label_definitions, all_labels)
+        examples = by_label.get(label, [])[:SYNTH_SHOTS]
+        shown = ""
+        if examples:
+            joined = "\n".join(f"- {e}" for e in examples)
+            shown = f"Real, confirmed examples of the '{label}' class:\n{joined}\n\n"
         prompt = (
             f"You are checking one training example for a text classifier.\n"
             f"{context}\n"
+            f"{shown}"
             f"Utterance: {text}\n"
             f"Proposed label: {label}\n\n"
             f"Does this utterance genuinely belong to the '{label}' class? Answer strictly as "
@@ -648,11 +579,12 @@ def verify_generated_labels(
 def _synthesize_new_gold(
     examples: list[dict],
     *,
-    task_type: str,
+    task_description: str,
     n: int,
     generate_fn,
     log=None,
     label_definitions: dict | None = None,
+    target_category: str = "",
 ) -> list[dict]:
     """Generate ``n`` NEW CORRECT in-class examples, spread evenly over the label space.
 
@@ -679,17 +611,12 @@ def _synthesize_new_gold(
         # (dropped by the NER schema filter) or carry the ANCHOR sentence's spans against NEW text —
         # fabricated gold. Span synthesis needs its own generator, not this one.
         if log:
-            if task_type == "NER":
-                log(
-                    "      [synth] SKIPPED: NER rows have no 'label' field to anchor in-class "
-                    "generation, and this generator cannot produce entity spans. NER curricula are "
-                    "gold-only by design — no rows generated, no teacher calls made."
-                )
-            else:
-                log(
-                    f"      [synth] SKIPPED: no anchor row carries both a 'label' and non-empty "
-                    f"'text' (task_type={task_type}), so there is nothing to generate in-class from."
-                )
+            log(
+                "      [synth] SKIPPED: no anchor row carries both a 'label' and non-empty "
+                "'text', so there is nothing to generate in-class from. A task whose gold lives "
+                "somewhere else (NER spans, for instance) should declare synthesize=None rather "
+                "than reach this."
+            )
         return []
 
     rng = random.Random(20260804)
@@ -714,12 +641,33 @@ def _synthesize_new_gold(
     def _gold_one(anchor: dict) -> dict | None:
         label = str(anchor.get("label"))
         context = _label_context_block(label, label_definitions, labels)
+        # SHOW several real examples of this class, not one. The teacher's zero-shot score is a poor
+        # guide to what it can produce when the distribution is demonstrated: measured 0.1131 ->
+        # 0.7190 on BC5CDR NER between zero- and five-shot (B276). Demonstrations here come from the
+        # SAME class, so they convey that class's phrasing and length distribution as well as format.
+        same_class = by_label.get(label) or []
+        demos = [row for row in same_class[:SYNTH_SHOTS + 1] if row is not anchor][:SYNTH_SHOTS]
+        shown = ""
+        if demos:
+            joined = "\n".join(f"- {str(d.get('text', '')).strip()}" for d in demos)
+            shown = (
+                f"Real examples of the '{label}' class, showing its typical phrasing and "
+                f"length:\n{joined}\n\n"
+            )
+        aimed = (
+            f"The model being trained is currently failing on: {target_category}. Favour "
+            f"utterances that exercise exactly that difficulty.\n\n"
+            if target_category else ""
+        )
         prompt = (
+            f"{task_description}\n\n"
             f"Write ONE new, realistic user utterance that belongs to the '{label}' class "
             f"of a text classifier.\n"
             f"{context}\n"
+            f"{aimed}"
+            f"{shown}"
             f"It must be genuinely NEW and phrased differently from the "
-            f"reference — not a paraphrase, not a copy — while unambiguously belonging to "
+            f"references — not a paraphrase, not a copy — while unambiguously belonging to "
             f"'{label}'.\n\n"
             f"Reference '{label}' example:\n{anchor.get('text', '')}\n\n"
             f"Output ONLY the new utterance — no preamble, no explanation, no quotation marks, "
@@ -743,7 +691,7 @@ def _synthesize_new_gold(
     produced = _progress_map(
         _gold_one,
         anchors,
-        label=f"new gold ({task_type}, {len(labels)} labels)",
+        label=f"new gold ({len(labels)} labels, {SYNTH_SHOTS}-shot)",
         log=log,
         workers=workers,
     )
@@ -753,33 +701,54 @@ def _synthesize_new_gold(
 def synthesize_examples(
     examples: list[dict],
     *,
-    task_type: str,
+    task: str,
     n: int,
     generate_fn,
     verify_fn=None,
     log=None,
     label_definitions: dict | None = None,
+    brief: dict | None = None,
+    target_category: str = "",
 ) -> list[dict]:
-    """Unified, task-adaptive synthesis entry.
+    """Generate `n` new rows anchored on real `examples`.
 
-    - classification / NER: NEW GOLD (in-class) examples only, spread across the label space
-      and then label-verified by the teacher model.
-    - generation-family (math/code/generation/multilingual/structured): NEW CORRECT
-      in-distribution examples, verified when a ``verify_fn`` is supplied.
+    Which of two shapes is produced is DERIVED from the task, not chosen by a channel:
 
-    Returns synthetic rows in the same format as the real data. Non-fatal: an unavailable or
-    failing backend yields fewer rows, never raises.
+      closed label space  → a new INPUT for the anchor's existing class. The generated row inherits
+                            a real row's label, so the target cannot be wrong; only the phrasing
+                            can. Verified by asking the teacher whether the phrasing really
+                            expresses that class.
+      open-ended target   → a whole new (input, answer) pair in the anchor's schema. This is the one
+                            case where the teacher invents both halves, so it is gated by the task's
+                            exact programmatic verifier first (free, unfoolable, available for the
+                            format-bound tasks) and by the teacher's own answer check second.
+
+    `brief` is the orchestrator's description of the benchmark, authored once at cold start from
+    real rows (see agent/task_brief.py). It replaces a hardcoded one-line description per task
+    TYPE, which could not distinguish two tasks sharing a type and told the teacher nothing about
+    the conventions that make an answer correct (B269).
+
+    `target_category` names the failure category this batch is aimed at, so the teacher is asked
+    for rows that exercise what the model is actually getting wrong rather than for more of the
+    same.
+
+    Non-fatal throughout: an unavailable or failing backend yields fewer rows, never raises.
     """
+    from tasks import get_task
+
+    spec = get_task(task)
     if n <= 0 or not examples:
         return []
-    if task_type in ("classification", "NER"):
+
+    if spec.closed_label_space:
         rows = _synthesize_new_gold(
             examples,
-            task_type=task_type,
+            task_description=_describe(brief, spec),
             n=n,
             generate_fn=generate_fn,
             log=log,
             label_definitions=label_definitions,
+            target_category=target_category,
         )
         if rows and _verify_synth_enabled():
             rows = verify_generated_labels(
@@ -791,29 +760,40 @@ def synthesize_examples(
                     str(row.get("label")) for row in examples
                     if isinstance(row, dict) and row.get("label") is not None
                 }) or None,
+                reference_rows=examples,
             )
         if log:
-            log(f"      [synth] requested {n} new-gold row(s) -> kept {len(rows)}")
+            log(f"      [synth] requested {n} in-class row(s) -> kept {len(rows)}")
         return rows
-    if task_type in _GENERATION_FAMILY:
-        rows = _synthesize_new_correct(
-            examples,
-            task_type=task_type,
-            n=n,
+
+    rows = _synthesize_new_correct(
+        examples,
+        task_description=_describe(brief, spec),
+        n=n,
+        generate_fn=generate_fn,
+        verify_fn=verify_fn if verify_fn is not None else spec.synth_verifier,
+        log=log,
+        target_category=target_category,
+    )
+    # Teacher answer-verification. The programmatic verifier above is exact but only checks FORM;
+    # this asks whether the answer is actually right. Weaker than execution feedback, but the
+    # alternative was keeping 100% of whatever the teacher produced (B269).
+    if rows and _verify_synth_enabled():
+        rows = verify_generated_answers(
+            rows,
+            task_description=_describe(brief, spec),
             generate_fn=generate_fn,
-            verify_fn=verify_fn,
             log=log,
+            reference_rows=examples,
         )
-        # Teacher answer-verification for the generation family. `verify_fn` above is a
-        # PROGRAMMATIC checker (a math answer-checker, a test runner) and is None for every task
-        # type today, which left this path with no check at all. This is the model-based fallback:
-        # weaker than execution feedback, but the alternative was keeping 100% of whatever the
-        # teacher produced (B269).
-        if rows and _verify_synth_enabled():
-            rows = verify_generated_answers(
-                rows, task_type=task_type, generate_fn=generate_fn, log=log,
-            )
-        if log:
-            log(f"      [synth] requested {n} new-correct row(s) -> kept {len(rows)}")
-        return rows
-    return []
+    if log:
+        verifier = "exact+teacher" if (verify_fn or spec.synth_verifier) else "teacher only"
+        log(f"      [synth] requested {n} new-correct row(s) -> kept {len(rows)} ({verifier})")
+    return rows
+
+
+def _describe(brief: dict | None, spec) -> str:
+    """The task description inserted into teacher prompts."""
+    from agent.task_brief import brief_context_block
+
+    return brief_context_block(brief, spec)

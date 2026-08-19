@@ -8,7 +8,7 @@ from types import SimpleNamespace
 import pytest
 import torch
 from unittest.mock import patch, MagicMock
-from training.slm_helpers import infer_batch_gguf
+from training.slm_helpers import _DEFAULT_INFERENCE_SEQ_LENGTH, infer_batch_gguf
 from training.lora_trainer import TrainingOutput
 
 
@@ -165,16 +165,20 @@ class _FakeModel:
 @contextmanager
 def _local_cached_inference(model, tokenizer, *, fake_torch=None):
     fake_torch = fake_torch or _FakeTorch()
-    # The context ceiling is per task type, and the cache is keyed on it, so a fixture that
-    # assumed one global value silently missed the cache and tried a real model load. Seed every
-    # ceiling the production table can produce so the fixture stays task-agnostic.
-    from training.slm_helpers import _DEFAULT_MAX_SEQ_LENGTH, _TASK_MAX_SEQ_LENGTH
+    # The context ceiling is per TASK, and the cache is keyed on it, so a fixture that assumed one
+    # global value silently missed the cache and tried a real model load. Seed every ceiling the
+    # registry can produce so the fixture stays task-agnostic. It used to read the production
+    # `_TASK_MAX_SEQ_LENGTH` table, which is now `TaskSpec.max_seq_length`.
+    from tasks import TASKS
+    from training.slm_helpers import _DEFAULT_INFERENCE_SEQ_LENGTH
 
     override = os.environ.get("SLM_MAX_SEQ_LENGTH")
     lengths = (
         {int(override)}
         if override is not None
-        else set(_TASK_MAX_SEQ_LENGTH.values()) | {_DEFAULT_MAX_SEQ_LENGTH}
+        else {spec.max_seq_length for spec in TASKS.values()}
+        # `infer` and a task-less `infer_batch` have no spec to read, so they take the default.
+        | {_DEFAULT_INFERENCE_SEQ_LENGTH}
     )
     cache = {
         ("/weights", "model-id", length): (model, tokenizer) for length in sorted(lengths)
@@ -408,7 +412,6 @@ def test_qwen35_hf_inference_uses_vision_loader_and_inner_text_tokenizer(
         FastLanguageModel=language_loader,
         FastVisionModel=vision_loader,
     )
-    monkeypatch.setenv("SLM_MAX_SEQ_LENGTH", "1024")
 
     with (
         patch("training.cuda_isolation.isolation_enabled", return_value=False),
@@ -433,9 +436,11 @@ def test_qwen35_hf_inference_uses_vision_loader_and_inner_text_tokenizer(
         "/weights",
     ]
     language_loader.from_pretrained.assert_not_called()
+    # Single-row `infer` takes no task, so it cannot read a per-task ceiling off a spec and uses
+    # the task-less inference default. The batched path resolves the task's own ceiling.
     vision_loader.from_pretrained.assert_called_once_with(
         model_name="/weights",
-        max_seq_length=1024,
+        max_seq_length=_DEFAULT_INFERENCE_SEQ_LENGTH,
         load_in_4bit=False,
         trust_remote_code=True,
     )
@@ -657,7 +662,7 @@ def test_train_delegates_to_disposable_worker_when_enabled(monkeypatch):
             2e-4,
             lora_rank=16,
             output_dir="/out",
-            task_type="classification",
+            task="clinc150",
             lora_alpha=64,
             lora_dropout=0.1,
             weight_decay=0.05,
@@ -682,7 +687,7 @@ def test_train_delegates_to_disposable_worker_when_enabled(monkeypatch):
             "gradient_accumulation_steps": 4,
             "effective_batch_size": 8,
             "output_dir": "/out",
-            "task_type": "classification",
+            "task": "clinc150",
         },
     )
 
@@ -719,7 +724,7 @@ def test_infer_batch_generates_multiple_prompts_once_and_slices_each_continuatio
             "/weights",
             "model-id",
             max_new_tokens=17,
-            task_type="classification",
+            task="clinc150",
         )
 
     assert result == ["1001", "1004"]
@@ -762,7 +767,7 @@ def test_infer_batch_rejects_mixed_overlength_prompts_before_padded_generation(
                 ["short", "too long"],
                 "/weights",
                 "model-id",
-                task_type="classification",
+                task="clinc150",
             )
 
     assert model.generate_calls == []
@@ -770,45 +775,19 @@ def test_infer_batch_rejects_mixed_overlength_prompts_before_padded_generation(
     assert tokenizer.tokenize_calls[0]["truncation"] is False
 
 
-def test_code_inference_reserves_1024_tokens_inside_4096_context(monkeypatch):
-    from training.slm_helpers import infer_batch
-
-    monkeypatch.setenv("SLM_MAX_SEQ_LENGTH", "4096")
-    tokenizer = _FakeTokenizer({"too long": [1] * 3073})
-    model = _FakeModel()
-
-    with _local_cached_inference(model, tokenizer):
-        with pytest.raises(
-            ValueError,
-            match=r"3073 tokens.*input budget 3072.*1024 output tokens",
-        ):
-            infer_batch(
-                ["too long"],
-                "/weights",
-                "model-id",
-                max_new_tokens=1024,
-                task_type="code_generation",
-            )
-
-    assert model.generate_calls == []
-
-
 @pytest.mark.parametrize(
-    "task_type",
-    ["NER", "math_reasoning", "generation", "code_generation"],
+    "task",
+    ["ner_bc5cdr", "gsm8k", "dialogsum", "xlam_bfcl"],
 )
 def test_default_long_task_prompt_budget_fits_or_fails_actionably(
     monkeypatch,
-    task_type,
+    task,
 ):
     from eval.harness import eval_output_token_reserve
     from training.slm_helpers import infer_batch
 
     monkeypatch.setenv("SLM_MAX_SEQ_LENGTH", "4096")
-    reserve = eval_output_token_reserve(
-        task_type,
-        max_seq_length=4096,
-    )
+    reserve = eval_output_token_reserve(task)
     input_budget = 4096 - reserve
     assert input_budget > 0
     tokenizer = _FakeTokenizer({
@@ -824,7 +803,7 @@ def test_default_long_task_prompt_budget_fits_or_fails_actionably(
                 "/weights",
                 "model-id",
                 max_new_tokens=reserve,
-                task_type=task_type,
+                task=task,
             )
         ) == 1
         with pytest.raises(
@@ -841,7 +820,7 @@ def test_default_long_task_prompt_budget_fits_or_fails_actionably(
                 "/weights",
                 "model-id",
                 max_new_tokens=reserve,
-                task_type=task_type,
+                task=task,
             )
 
 
@@ -858,7 +837,7 @@ def test_infer_and_single_item_batch_have_identical_prompt_and_output():
             "/weights",
             "model-id",
             max_new_tokens=9,
-            task_type="classification",
+            task="clinc150",
         )
 
     assert single == batched[0] == "1008"
@@ -866,17 +845,16 @@ def test_infer_and_single_item_batch_have_identical_prompt_and_output():
 
 
 @pytest.mark.parametrize(
-    ("task_type", "prompt_count", "expected_batch_sizes"),
+    ("task", "prompt_count", "expected_batch_sizes"),
     [
-        ("classification", 33, [32, 1]),
-        ("NER", 17, [16, 1]),
-        ("generation", 17, [16, 1]),
-        ("math_reasoning", 17, [16, 1]),
-        ("code_generation", 17, [16, 1]),
+        ("clinc150", 33, [32, 1]),
+        ("ner_bc5cdr", 17, [16, 1]),
+        ("dialogsum", 17, [16, 1]),
+        ("gsm8k", 17, [16, 1]),
     ],
 )
 def test_infer_batch_uses_task_aware_defaults(
-    monkeypatch, task_type, prompt_count, expected_batch_sizes
+    monkeypatch, task, prompt_count, expected_batch_sizes
 ):
     from training.slm_helpers import infer_batch
 
@@ -892,7 +870,7 @@ def test_infer_batch_uses_task_aware_defaults(
             prompts,
             "/weights",
             "model-id",
-            task_type=task_type,
+            task=task,
         )
 
     assert len(result) == prompt_count
@@ -916,7 +894,7 @@ def test_infer_batch_environment_override_controls_batch_size(monkeypatch):
             prompts,
             "/weights",
             "model-id",
-            task_type="classification",
+            task="clinc150",
         )
 
     assert [len(call["input_ids"]) for call in model.generate_calls] == [3, 2]
@@ -939,7 +917,7 @@ def test_invalid_batch_size_records_failed_timing_event(
                 ["prompt"],
                 "/weights",
                 "model-id",
-                task_type="classification",
+                task="clinc150",
             )
 
     event = timing.call_args.args[0]
@@ -977,7 +955,7 @@ def test_infer_batch_halves_after_oom_preserves_order_and_records_timing(monkeyp
                 prompts,
                 "/weights",
                 "model-id",
-                task_type="classification",
+                task="clinc150",
             )
 
     assert result == ["1001", "1002", "1003", "1004", "1005"]
@@ -1040,7 +1018,7 @@ def test_qwen35_oom_releases_generate_traceback_before_cuda_cleanup(monkeypatch)
             ["p0", "p1"],
             "/weights",
             "model-id",
-            task_type="classification",
+            task="clinc150",
         )
 
     assert result == ["1001", "1002"]
@@ -1059,13 +1037,13 @@ def test_infer_batch_raises_diagnostic_when_batch_one_ooms(monkeypatch):
     with _local_cached_inference(model, tokenizer) as (fake_torch, timing):
         with pytest.raises(
             RuntimeError,
-            match=r"CUDA OOM.*batch_size=1.*task_type=classification.*model-id",
+            match=r"CUDA OOM.*batch_size=1.*task=clinc150.*model-id",
         ):
             infer_batch(
                 ["prompt"],
                 "/weights",
                 "model-id",
-                task_type="classification",
+                task="clinc150",
             )
 
     assert fake_torch.cuda.empty_cache_calls == 1
@@ -1084,7 +1062,7 @@ def test_infer_batch_empty_input_does_not_load_or_delegate(monkeypatch):
             [],
             "/weights",
             "model-id",
-            task_type="classification",
+            task="clinc150",
         ) == []
 
     worker.assert_not_called()
@@ -1105,7 +1083,7 @@ def test_infer_batch_delegates_whole_batch_to_disposable_worker(monkeypatch):
             "model-id",
             max_new_tokens=77,
             max_workers=3,
-            task_type="NER",
+            task="ner_bc5cdr",
         )
 
     assert result == ["first", "second"]
@@ -1117,6 +1095,6 @@ def test_infer_batch_delegates_whole_batch_to_disposable_worker(monkeypatch):
             "base_model": "model-id",
             "max_new_tokens": 77,
             "max_workers": 3,
-            "task_type": "NER",
+            "task": "ner_bc5cdr",
         },
     )

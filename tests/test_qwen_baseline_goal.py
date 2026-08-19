@@ -53,7 +53,7 @@ def test_non_numeric_measured_falls_back_to_floor():
 
 def _classification_eval_set():
     rows = [{"text": "win a free prize now", "label": "spam"}]
-    return EvalSet(all=rows, task_type="classification")
+    return EvalSet(all=rows, task="clinc150")
 
 
 def test_measure_endpoint_baseline_scores_with_injected_generate_fn():
@@ -65,7 +65,7 @@ def test_measure_endpoint_baseline_scores_with_injected_generate_fn():
         return "spam"
 
     result = measure_endpoint_baseline(
-        _classification_eval_set(), "classification", generate_fn=fake_generate, log=lambda *a: None
+        _classification_eval_set(), generate_fn=fake_generate, log=lambda *a: None
     )
     assert isinstance(result, EvalResult)
     assert result.f1 == pytest.approx(1.0)
@@ -78,7 +78,7 @@ def test_measure_endpoint_baseline_returns_none_when_endpoint_unreachable(monkey
 
     monkeypatch.setattr(synth, "get_generate_fn", lambda *a, **k: None)
     result = measure_endpoint_baseline(
-        _classification_eval_set(), "classification", generate_fn=None, log=lambda *a: None
+        _classification_eval_set(), generate_fn=None, log=lambda *a: None
     )
     assert result is None
 
@@ -91,7 +91,7 @@ def test_measure_endpoint_baseline_survives_a_failing_row():
 
     # One bad row must not abort the measurement; it scores as an empty output.
     result = measure_endpoint_baseline(
-        _classification_eval_set(), "classification", generate_fn=boom, log=lambda *a: None
+        _classification_eval_set(), generate_fn=boom, log=lambda *a: None
     )
     assert result is not None
     assert 0.0 <= result.f1 <= 1.0
@@ -105,7 +105,7 @@ def test_task_analysis_parks_pending_qwen_baseline(monkeypatch):
 
     monkeypatch.delenv("SLM_STOP_THRESHOLD", raising=False)
     state = {"task_plan": {"benchmark": "CLINC150"}}
-    _calibrate_stop_threshold(state, "classification")
+    _calibrate_stop_threshold(state, "clinc150")
 
     cal = state["threshold_calibration"]
     assert cal["source"] == "pending_qwen_baseline"
@@ -120,7 +120,7 @@ def test_env_override_still_wins_over_qwen(monkeypatch):
 
     monkeypatch.setenv("SLM_STOP_THRESHOLD", "0.5")
     state = {"task_plan": {}}
-    _calibrate_stop_threshold(state, "classification")
+    _calibrate_stop_threshold(state, "clinc150")
     assert state["stop_threshold"] == pytest.approx(0.5)
     assert state["threshold_calibration"]["source"] == "env_override"
 
@@ -129,7 +129,7 @@ def test_env_override_still_wins_over_qwen(monkeypatch):
 
 def _pending_state():
     return {
-        "task_type": "classification",
+        "task": "clinc150",
         "threshold_calibration": {"source": "pending_qwen_baseline", "pending": True,
                                   "floor": 0.8},
     }
@@ -183,7 +183,7 @@ def test_eval_setup_raises_when_measurement_errors(monkeypatch):
 def test_eval_setup_ignores_non_qwen_calibration(monkeypatch):
     import agent.nodes.cold_start.eval_setup as eval_setup
 
-    state = {"task_type": "classification",
+    state = {"task": "clinc150",
              "threshold_calibration": {"source": "registry", "pending": False}}
     eval_setup._calibrate_qwen_goal_if_pending(state, _classification_eval_set())
     # Untouched.

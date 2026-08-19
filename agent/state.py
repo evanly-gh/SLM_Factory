@@ -11,7 +11,7 @@ class AgentState(TypedDict):
     hardware_constraints: HardwareConstraints
 
     # Task analysis outputs
-    task_type: str                    # "classification" | "NER" | "math_reasoning" | "code_generation" | "generation"
+    task: str                         # registry name: "xlam_bfcl", "clinc150", ... (see tasks/)
     selected_model: Optional[ModelSpec]
     feasible_models: list[ModelSpec]       # models that passed hardware_filter (Stages 1+2), largest→smallest
     stop_threshold: float             # calibrated target; iterate_node may lower or RAISE mid-run
@@ -27,10 +27,16 @@ class AgentState(TypedDict):
     #     that cleared it. Banked so raising can never turn an already-successful run into a
     #     reported failure if the stretch goal is then missed.
     #   threshold_raises   — append-only audit of every raise (from, to, score, iteration, reason).
+    #   threshold_lowers   — the same for every LOWER. The orchestrator may lower the goal down to
+    #     `initial_stop_threshold` when the failures look like a capacity limit; that used to leave
+    #     no durable trace, so the goal a run was actually held to was unrecoverable afterwards.
     #   max_stop_threshold — high-water mark. Raises must strictly exceed it, which makes the goal
     #     a ratchet toward THRESHOLD_CEILING and bounds how many raises a run can perform.
+    # The per-iteration value is additionally stamped on each DAG node as `stop_threshold`, which
+    # is what the post-run accuracy chart plots as a step line.
     convergence_banked: Optional[dict]
     threshold_raises: list[dict]
+    threshold_lowers: list[dict]
     max_stop_threshold: float
     # The task's CLOSED label vocabulary, pinned once from the frozen eval set by eval_setup:
     # {"labels": [...], "definitions": {label: what it means}, "benchmark": str|None, "source": str}.
@@ -38,7 +44,7 @@ class AgentState(TypedDict):
     # class — see data/label_space.py (B259). None for task types whose `label` is a constant tag.
     task_label_space: Optional[dict]
     task_plan: Optional[dict]         # orchestrator's autonomous plan (labels, exa_queries, ...)
-    autonomous: bool                  # if True, task_analysis derives task_type/plan via LLM
+    autonomous: bool                  # if True, task_analysis derives task/plan via LLM
 
     # Data
     train_examples: list[dict]
@@ -48,8 +54,22 @@ class AgentState(TypedDict):
     dataset_version: int              # incremented each curate call
     data_rebuild_plan: Optional[dict]  # validated declarative rebuild plan
     data_rebuild_plan_identity: Optional[str]  # canonical plan hash
-    resample_available: bool           # False when whole train pool already in curriculum (resample→synthesize)
-    source_acquire_rounds_used: int    # bounded paid source-mining rounds consumed
+    # --- Curriculum growth bookkeeping (2026-08-19) ---
+    # The curriculum is CUMULATIVE: cold start loads gold rows, every data_rebuild ADDS to them, and
+    # rows leave only via quality control or the eval firewall. Nothing re-draws from a pool it has
+    # already drawn from, which is what the removed `resample`/gold-fill did.
+    #   source_progress          — {source_id: {consumed, asked_for, url, exhausted}}. What we have
+    #                              taken from each dataset, so `mine_new_real` can tell an exhausted
+    #                              corpus from one we only read the first few thousand rows of.
+    #   failed_discovery_rounds  — consecutive web-research rounds that contributed zero novel rows.
+    #                              At MAX_FAILED_DISCOVERY_ROUNDS, mine_new_real is retired and the
+    #                              orchestrator is told only surgical_synthesis remains.
+    #   task_brief               — the orchestrator's own description of this benchmark, authored
+    #                              once at cold start from real rows. Every synthesis and
+    #                              verification prompt is built from it.
+    source_progress: dict
+    failed_discovery_rounds: int
+    task_brief: Optional[dict]
     curation_log_path: str            # run-local durable trajectory path
 
     # Search state
@@ -105,8 +125,10 @@ class AgentState(TypedDict):
 
     # --- Data-size targets chosen by the orchestrator (task_planner), clamped to config
     # floors/ceiling. curate/eval_setup read these instead of a fixed per-type constant.
-    curriculum_size_target: int            # total curriculum examples to aim for
-    eval_size_target: int                  # held-out eval examples to aim for
+    # Curriculum and eval sizes are per-task caps on the spec (`initial_train_cap`, `eval_cap`), not
+    # run state: the loader returns as many rows as it has up to those, and the curriculum then grows
+    # by rebuild. The old `curriculum_size_target`/`eval_size_target` pair was recomputed per model
+    # tier by a novelty x capacity formula whose result nothing read.
 
     # --- Data provenance + contamination control ---
     # Explicit source/split restrictions associated with held-out eval data. This is

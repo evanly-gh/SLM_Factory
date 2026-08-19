@@ -13,10 +13,13 @@
 #SBATCH --signal=B:USR1@7200
 #SBATCH --output=/mmfs1/gscratch/intelligentsystems/evanly/SLM_Factory/logs/slurm/slm-routerbench-l40s-%j.out
 #
-# CURATED BENCHMARK: routerbench (task_type=classification, metric macro_f1). SLM_BENCHMARK_TASK
-# pins the deterministic RouterBench loader (reframed to a binary local-vs-route decision) instead
-# of autonomous web_acquire — run.py starts the run NON-autonomous with the loader's task_type.
-# The dataset is pulled live from HuggingFace on the compute node (public, no token).
+# CURATED BENCHMARK: routerbench (out-of-distribution, metric minority_f1 — the headline number
+# has always been the minority class's F1, and it was reported under a `macro_f1` label until the
+# task registry made each task name its own metric). SLM_BENCHMARK_TASK pins the deterministic
+# RouterBench loader (reframed to a binary local-vs-route decision) instead of autonomous
+# web_acquire — run.py starts the run NON-autonomous against this task's registry spec, which is
+# where its loader, scorer, metric and token budget are declared. The dataset is pulled live from
+# HuggingFace on the compute node (public, no token).
 #
 # Dedicated gpu-l40s-intelligentsystems quota: 2x L40S (synth server on GPU0, pipeline on GPU1 —
 # the auto-2gpu profile in _l40s_task_body.sh). --requeue + USR1 checkpoint contract is a safety

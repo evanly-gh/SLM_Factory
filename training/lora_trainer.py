@@ -1,9 +1,13 @@
 # training/lora_trainer.py
 import collections
+import contextlib
 import json
 import math
 import os
+import re
+import sys
 import tempfile
+import time
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -36,7 +40,7 @@ SFT_LOSS_CONTRACT_VERSION = 2  # explicit assistant/completion-only labels
 NON_THINKING_TEMPLATE_KWARGS = {"enable_thinking": False}
 
 
-def _configured_max_seq_length(task_type: str | None = None) -> int:
+def _configured_max_seq_length(task: str | None = None) -> int:
     """Training-side context ceiling, matched to the eval-side per-task table.
 
     Training and inference must agree: a row that fits training but not eval would be scored on
@@ -45,11 +49,11 @@ def _configured_max_seq_length(task_type: str | None = None) -> int:
     """
     from training.slm_helpers import task_max_seq_length
 
-    try:
-        value = int(task_max_seq_length(task_type))
-    except (TypeError, ValueError):
-        value = 4096
-    return min(max(value, 128), 32768)
+    # No task in hand only on the merge path, which loads a model to rewrite weights and never
+    # tokenizes a training row.
+    if not task:
+        return 4096
+    return min(max(int(task_max_seq_length(task)), 128), 32768)
 
 
 # Rows at or above this fraction of the context window are reported individually. A row
@@ -285,106 +289,26 @@ def _concrete_token_ids(tokenizer, text: str) -> list[int]:
     return list(input_ids)
 
 
-def _training_turn(
-    example: dict,
-    task_type: str,
-    classification_labels: list[str],
-    generation_instruction: str = "",
-) -> tuple[str, str, str]:
-    """Return (user prompt, assistant target, plain-text fallback marker)."""
-    if task_type == "classification":
-        from eval.scorers.classification import build_classify_prompt
+def _training_turn(example: dict, task: str, ctx) -> tuple[str, str, str]:
+    """Build one (prompt, target, fallback marker) turn using the TASK's own builder.
 
-        return (
-            build_classify_prompt(
-                example.get("text", ""),
-                classification_labels,
-            ),
-            str(example.get("label", "")),
-            "Answer",
-        )
-    if task_type == "NER":
-        from eval.scorers.ner import NER_PROMPT
+    This used to be an `if task == ...` chain that raised on anything it did not recognise.
+    The chain was the reason `function_call` and `diff` could be graded but not trained for three
+    months — the scorers were added in August and this function was never extended, so every run
+    of those tasks died here after loading data and measuring a baseline.
 
-        # Same builder the eval harness uses. The training prompt used to be a hand-copied
-        # near-duplicate that omitted the "Reply with [] if there are no entities" sentence, so
-        # the model was fine-tuned on one input shape and scored on another — the same class of
-        # skew as B250, and it went uncorrected through the whole 44.8h BC5CDR run
-        # (slm-ner-l40s-37531245). Importing makes the two incapable of drifting.
-        return (
-            NER_PROMPT.format(text=example["text"]),
-            json.dumps(example.get("entities", [])),
-            "Entities",
-        )
-    if task_type == "code_generation":
-        from eval.scorers.generation import build_code_prompt
+    Each builder imports its prompt from the eval scorer rather than reproducing it, so the text
+    training sees and the text inference sends cannot drift (B250, B290).
+    """
+    from tasks import get_task
 
-        return (
-            build_code_prompt(example),
-            build_code_training_target(example),
-            "Answer",
-        )
-    if task_type in ("generation", "math_reasoning"):
-        from eval.scorers.generation import build_generation_prompt
-
-        # Same builder the eval harness uses. Training used to pass the BARE text here while
-        # eval wrapped it in an instruction, so the model was fine-tuned on one input shape and
-        # scored on another (B250). Importing the eval-side builder — rather than reproducing
-        # the format — is what makes the two incapable of drifting, exactly as the
-        # classification branch above does with build_classify_prompt.
-        user_message = build_generation_prompt(
-            example.get("text", example.get("prompt", "")),
-            generation_instruction,
-        )
-        raw_answer = example.get(
-            "answer",
-            example.get(
-                "response",
-                example.get("label", ""),
-            ),
-        )
-        cot = example.get("cot_reasoning", "")
-        assistant_message = (
-            f"<reasoning>\n{cot}\n</reasoning>\n\n{raw_answer}"
-            if cot
-            else raw_answer
-        )
-        return (
-            str(user_message),
-            str(assistant_message),
-            "Answer",
-        )
-    if task_type in ("function_call", "diff"):
-        # The format-bound task types. Their SCORERS were built on 2026-08-01 but this function
-        # was never extended, so the pipeline could grade `function_call`/`diff` and could not
-        # train them: every run died here with "completion-only SFT does not support
-        # task_type=...". That is the real reason `xlam_bfcl` and `coedit` had never produced a
-        # run log, and it killed both function_call runs of the 2026-08-13 campaign
-        # (slm-xlam-bfcl-cse-38454799, slm-calendar-json-cse-38455147) after they had already
-        # loaded data and measured a baseline.
-        #
-        # Both targets are the gold string the scorer parses out of `answer`: a JSON call list for
-        # function_call, a unified diff for diff. Prompts are imported from the scorers for the
-        # same reason every other branch here imports them.
-        if task_type == "function_call":
-            from eval.scorers.function_call import build_function_call_prompt as _build
-        else:
-            from eval.scorers.diff import build_diff_prompt as _build
-        answer = example.get("answer", "")
-        if not str(answer).strip():
-            raise ValueError(
-                f"{task_type} training row has an empty 'answer'; there is no target to learn"
-            )
-        return (str(_build(example)), str(answer), "Answer")
-    raise ValueError(
-        f"completion-only SFT does not support task_type={task_type!r}"
-    )
+    return get_task(task).build_training_turn(example, ctx)
 
 
 def _build_completion_only_rows(
     raw_rows: list[dict],
     tokenizer,
-    task_type: str,
+    task: str,
 ) -> list[dict]:
     """Render exact train/serve chat text and build assistant completion masks."""
     has_chat_template = (
@@ -398,28 +322,29 @@ def _build_completion_only_rows(
             "Qwen tokenizer has no chat template; cannot enforce non-thinking "
             "train/inference parity."
         )
-    labels = (
+    # Both are resolved ONCE over the training rows, the same way the eval harness resolves them
+    # over the eval rows — so both sides land on the dataset's own vocabulary and instruction
+    # without either being told what they are.
+    from eval.scorers.generation import resolve_generation_instruction
+    from tasks import get_task
+    from tasks._builders import TrainingContext
+
+    spec = get_task(task)
+    labels = tuple(
         sorted({
             str(example.get("label", ""))
             for example in raw_rows
             if example.get("label")
         })
-        if task_type == "classification"
-        else []
+    ) if spec.closed_label_space else ()
+    ctx = TrainingContext(
+        labels=labels,
+        instruction=resolve_generation_instruction(raw_rows),
     )
-    # Resolved once over the training rows, the same way `labels` is above and the same way the
-    # eval harness resolves it over the eval rows — so both sides land on the dataset's own
-    # instruction without either being told what it is.
-    from eval.scorers.generation import resolve_generation_instruction
-
-    generation_instruction = resolve_generation_instruction(raw_rows)
     rows = []
     for row_index, example in enumerate(raw_rows):
         user_message, assistant_message, fallback_marker = _training_turn(
-            example,
-            task_type,
-            labels,
-            generation_instruction,
+            example, task, ctx,
         )
         if not assistant_message:
             raise ValueError(
@@ -520,7 +445,116 @@ def _load_training_model(
                 ],
                 bias="none",
             )
-    return model, text_tokenizer(tokenizer)
+    return model, _pin_serving_chat_template(text_tokenizer(tokenizer), config.base_model)
+
+
+def _pin_serving_chat_template(tokenizer, base_model_id: str):
+    """Replace the loaded tokenizer's chat template with the SERVED model's template (B290).
+
+    `FastLanguageModel.from_pretrained("Qwen/Qwen3-4B-Instruct-2507")` does not load that repo. It
+    silently redirects to `unsloth/qwen3-4b-instruct-2507-unsloth-bnb-4bit`, and returns that mirror's
+    tokenizer. The mirror's chat template is not equivalent: it applies the hybrid Qwen3 convention of
+    inserting `<think>\\n\\n</think>\\n\\n` ahead of assistant content, even though this checkpoint is
+    thinking-free and its official template does no such thing.
+
+        official Qwen/Qwen3-4B-Instruct-2507  -> '<|im_start|>assistant\\nANSWER<|im_end|>\\n'
+        unsloth mirror (what training loads)  -> '<|im_start|>assistant\\n<think>\\n\\n</think>\\n\\nANSWER<|im_end|>\\n'
+
+    Training therefore taught the model to emit a think block that inference never pre-fills — and
+    `merge_for_quantization` pins the OFFICIAL base, so the shipped GGUF is served under the official
+    template. The skew was not an artifact of our harness; it would follow the model onto the phone.
+
+    Pinning the served template here, rather than teaching eval to send Unsloth's, is what keeps the
+    training target and the deployment contract the same object.
+    """
+    # Reach for the transformers already in sys.modules rather than importing it here. Unsloth has
+    # imported it by this point, so nothing is lost, and a fresh import inside a caller that has
+    # patched sys.modules corrupts the partially-initialised module (numpy raises "cannot load module
+    # more than once per process").
+    import sys
+
+    try:
+        # `getattr` on transformers' lazy module triggers a real submodule import, which can itself
+        # fail, so it belongs inside the guard rather than in front of it.
+        auto_tokenizer = getattr(sys.modules.get("transformers"), "AutoTokenizer", None)
+        if auto_tokenizer is None:
+            raise RuntimeError("transformers.AutoTokenizer is unavailable")
+        serving = auto_tokenizer.from_pretrained(base_model_id, trust_remote_code=True)
+    except Exception as exc:  # noqa: BLE001 - fall through to the alignment assert below
+        print(
+            f"[train]   ⚠ could not load the serving tokenizer for {base_model_id} to verify its chat "
+            f"template ({type(exc).__name__}: {exc}). Proceeding on the loaded template; "
+            f"the train/serve prefix assertion still guards the failure this protects against."
+        )
+        return tokenizer
+
+    loaded_template = getattr(tokenizer, "chat_template", None)
+    serving_template = getattr(serving, "chat_template", None)
+    # Require a real template string: under a mocked tokenizer every attribute is a truthy Mock, and
+    # overwriting a live template with one would be a silent corruption of the training text.
+    if isinstance(serving_template, str) and serving_template != loaded_template:
+        tokenizer.chat_template = serving_template
+        print(
+            f"[train]   Pinned chat template to the SERVED model {base_model_id} — the loaded "
+            f"(Unsloth mirror) template differed, which is how B290 taught the model to emit a "
+            f"`<think></think>` block that inference never pre-fills."
+        )
+    return tokenizer
+
+
+def _assert_train_serve_prefix_alignment(tokenizer, base_model_id: str) -> None:
+    """Fail before training if the eval prompt is not a strict prefix of the rendered training text.
+
+    The invariant: whatever precedes the answer in training must also be in the inference prompt, byte
+    for byte. Break it and the model's first generated tokens are the missing scaffolding, which then
+    lands in the scored output — worth checking directly, because it is silent otherwise. B250 was this
+    bug in the user turn; B290 was the same bug in the assistant turn, caused by a swapped-in template
+    rather than by any of our own prompt strings, which is why a source-level review would not have
+    found it and a rendered comparison does.
+
+    Only Qwen models are checked: they are the pool this project ships, and `infer_batch_gguf` refuses
+    to run anything else through the hand-built ChatML path anyway.
+    """
+    from training.slm_helpers import _is_qwen_model_id, _qwen_no_think_prompt
+
+    if not _is_qwen_model_id(base_model_id):
+        return
+
+    sentinel = "__ANSWER_SENTINEL__"
+    try:
+        training_text = apply_non_thinking_chat_template(
+            tokenizer,
+            [
+                {"role": "user", "content": "__PROMPT_SENTINEL__"},
+                {"role": "assistant", "content": sentinel},
+            ],
+            add_generation_prompt=False,
+        )
+    except Exception as exc:  # noqa: BLE001 - a template that cannot render is a separate failure
+        print(f"[train]   ⚠ could not render the chat template to verify prefix alignment: {exc}")
+        return
+
+    if not isinstance(training_text, str):
+        # A mocked tokenizer renders to a Mock; there is no text to compare and no skew to find.
+        return
+
+    eval_prompt = _qwen_no_think_prompt("__PROMPT_SENTINEL__", base_model_id)
+    if training_text.startswith(eval_prompt) and training_text[len(eval_prompt):].startswith(sentinel):
+        return
+
+    inserted = training_text.split("__PROMPT_SENTINEL__<|im_end|>\n", 1)[-1]
+    inserted = inserted.split(sentinel, 1)[0]
+    raise RuntimeError(
+        "TRAIN/SERVE PREFIX SKEW (B290): the inference prompt is not a strict prefix of the rendered "
+        "training text, so the fine-tuned model's first generated tokens will be scaffolding that gets "
+        "scored as its answer.\n"
+        f"  model:              {base_model_id}\n"
+        f"  inference sends:    {eval_prompt!r}\n"
+        f"  training renders:   {training_text!r}\n"
+        f"  assistant turn gets:{inserted!r}\n"
+        "Refusing to train: this silently destroys fine-tuned accuracy (measured 0.0000-0.6120 against "
+        "an untrained baseline of 0.8010 on xlam_bfcl) while looking like a data or capacity problem."
+    )
 
 
 def _completion_collator_for(tokenizer) -> CompletionOnlyDataCollator:
@@ -533,25 +567,6 @@ def _completion_collator_for(tokenizer) -> CompletionOnlyDataCollator:
             "eos_token_id for completion-only collation"
         )
     return CompletionOnlyDataCollator(pad_token_id)
-
-
-def build_code_training_target(example: dict) -> str:
-    """Keep optional implementation reasoning executable and eval-compatible."""
-    code = str(
-        example.get(
-            "answer",
-            example.get("response", example.get("label", "")),
-        )
-        or ""
-    )
-    reasoning = str(example.get("cot_reasoning") or "").strip()
-    if not reasoning:
-        return code
-    comments = "\n".join(
-        f"# {line}" if line else "#"
-        for line in reasoning.splitlines()
-    )
-    return f"{comments}\n{code}"
 
 
 def is_multimodal_model(model_id: str) -> bool:
@@ -610,7 +625,7 @@ class TrainingConfig:
     learning_rate: float
     batch_size: int | None = None  # legacy alias for micro_batch_size
     lora_rank: int | None = None  # None = full fine-tune
-    task_type: str = "classification"
+    task: str = ""
     lora_alpha: int | None = None
     lora_dropout: float = DEFAULT_LORA_DROPOUT
     weight_decay: float = DEFAULT_WEIGHT_DECAY
@@ -794,24 +809,26 @@ def _run_unsloth_training(
     dataset_path: str,
     config: TrainingConfig,
     output_dir: str,
-    task_type: str = "classification",
+    task: str = "",
 ) -> str:
     """
     Run LoRA fine-tuning via Unsloth.
     Returns the path to the saved checkpoint directory.
-    task_type controls the prompt format:
-      - "classification": label classification prompt
-      - "NER": entity extraction prompt
-      - "generation": text-to-answer prompt
+
+    `task` is a registry name (`xlam_bfcl`, `clinc150`, ...). Its spec supplies the prompt format,
+    via the same builder the eval harness uses, and the context ceiling.
     """
     import torch
     from agent.logging_setup import quiet_ml_logging
     quiet_ml_logging()
 
-    max_seq_length = _configured_max_seq_length(config.task_type)
+    max_seq_length = _configured_max_seq_length(config.task)
     _ensure_model_cached(config.base_model)
 
     model, tokenizer = _load_training_model(config, max_seq_length)
+    # Before spending an hour of GPU time, confirm that what we are about to teach the model matches
+    # what inference will ask of it. B290 cost two full runs precisely because nothing checked this.
+    _assert_train_serve_prefix_alignment(tokenizer, config.base_model)
     # Unsloth must patch TRL before SFTTrainer is imported.
     from trl import SFTTrainer
 
@@ -834,7 +851,7 @@ def _run_unsloth_training(
     _formatted = _build_completion_only_rows(
         raw,
         tokenizer,
-        task_type,
+        task,
     )
     _validate_training_sequence_lengths(
         _formatted,
@@ -1033,7 +1050,7 @@ def _run_unsloth_training(
         fallback_rows = _build_completion_only_rows(
             raw,
             tokenizer,
-            task_type,
+            task,
         )
         _validate_training_sequence_lengths(
             fallback_rows,
@@ -1096,6 +1113,83 @@ def _purge_trainer_checkpoints(output_dir: str) -> None:
             _shutil.rmtree(checkpoint_dir, ignore_errors=True)
 
 
+class _MergeProgressLine:
+    """Collapse Unsloth's merge chatter into a single self-updating status line.
+
+    A 3-shard merge emitted 16 lines: two tqdm bars replayed at every step, one "Copied
+    model-0000N.safetensors" per shard, the local-snapshot and hub-cache banners, and a final
+    "Merge process complete". None of it is actionable — the merge either produces a verified
+    snapshot or raises — so it is reduced to one carriage-returned line that advances in place
+    and is terminated once with a newline. In a log file that is literally a single line.
+
+    Stands in for ``sys.stdout``/``sys.stderr`` for the duration of the merge call. tqdm and
+    Unsloth's ``print`` calls both resolve those attributes when they run, which is inside the
+    call, so a Python-level swap catches both.
+    """
+
+    _PHASES = (
+        ("Preparing safetensor model files", "staging shards"),
+        ("Merging weights into 16bit", "merging weights"),
+    )
+
+    def __init__(self, out, label: str):
+        self._out = out
+        self._label = label
+        self._status = "loading base"
+        self._dirty = True
+        self._finished = False
+        self.elapsed_s = 0.0
+
+    def write(self, chunk):
+        for line in str(chunk or "").replace("\r", "\n").splitlines():
+            for marker, phase in self._PHASES:
+                if marker not in line:
+                    continue
+                match = re.search(r"(\d+)/(\d+)", line)
+                status = f"{phase} {match.group(0)}" if match else phase
+                if status != self._status:
+                    self._status = status
+                    self._dirty = True
+        if self._dirty:
+            self._out.write(f"\r      [merge] {self._label}: {self._status}")
+            self._out.flush()
+            self._dirty = False
+        return len(str(chunk or ""))
+
+    def flush(self):
+        self._out.flush()
+
+    def isatty(self):
+        return False
+
+    def finish(self, summary: str) -> None:
+        if self._finished:
+            return
+        self._finished = True
+        self._out.write(f"\r      [merge] {self._label}: {summary}\n")
+        self._out.flush()
+
+
+@contextlib.contextmanager
+def _collapsed_merge_log(label: str):
+    """Run the merge with its library chatter reduced to one updating line."""
+    line = _MergeProgressLine(sys.stdout, label)
+    saved_out, saved_err = sys.stdout, sys.stderr
+    sys.stdout = sys.stderr = line
+    started = time.monotonic()
+    try:
+        yield line
+    except BaseException:
+        # Terminate the in-place line before the traceback is written, or the two interleave.
+        sys.stdout, sys.stderr = saved_out, saved_err
+        line.elapsed_s = time.monotonic() - started
+        line.finish(f"FAILED after {line.elapsed_s:.0f}s")
+        raise
+    finally:
+        sys.stdout, sys.stderr = saved_out, saved_err
+        line.elapsed_s = time.monotonic() - started
+
+
 def merge_for_quantization(
     checkpoint_path: str,
     output_dir: str,
@@ -1117,7 +1211,58 @@ def merge_for_quantization(
     quiet_ml_logging()
     merged_dir = os.path.join(output_dir, "merged")
     os.makedirs(merged_dir, exist_ok=True)
+    label = base_model_id or os.path.basename(checkpoint_path.rstrip("/")) or "adapter"
+    with _collapsed_merge_log(label) as progress:
+        notes = _merge_into(
+            checkpoint_path,
+            merged_dir,
+            base_model_id,
+            language_loader=FastLanguageModel,
+            vision_loader=FastVisionModel,
+        )
+    # unsloth_zoo refuses a 16-bit merge from a 4-bit base by warning and returning without
+    # writing anything, so an empty directory here means the merge silently no-opped rather
+    # than that some file went missing. Say so, instead of leaving the opaque
+    # "snapshot is incomplete" from verify_hf_model_snapshot as the only clue (B219).
+    if not any(os.scandir(merged_dir)):
+        progress.finish("FAILED (merge wrote no files)")
+        raise RuntimeError(
+            f"save_pretrained_merged wrote no files to {merged_dir}. This is the unsloth_zoo "
+            "no-op for a 16-bit merge from a quantized base — check the adapter's "
+            "base_model_name_or_path and pass base_model_id to pin a 16-bit base."
+        )
+    try:
+        verify_hf_model_snapshot(merged_dir)
+    except BaseException:
+        # Close the in-place line first, so the traceback does not land on top of it.
+        progress.finish("FAILED (merged snapshot did not verify)")
+        raise
+    shards = sum(1 for entry in os.scandir(merged_dir) if entry.name.endswith(".safetensors"))
+    progress.finish(
+        f"merged to 16-bit in {progress.elapsed_s:.0f}s "
+        f"({shards} shard(s)) → {merged_dir}"
+    )
+    for note in notes:
+        print(note)
+    return merged_dir
+
+
+def _merge_into(
+    checkpoint_path: str,
+    merged_dir: str,
+    base_model_id: str | None,
+    *,
+    language_loader,
+    vision_loader,
+) -> list[str]:
+    """Load the adapter against a pinned 16-bit base and write the merged snapshot.
+
+    Returns notes the caller should print AFTER the collapsed progress line is terminated —
+    printing them inline would be swallowed by the single-line rewrite.
+    """
+    notes: list[str] = []
     adapter_config = os.path.join(checkpoint_path, "adapter_config.json")
+    output_dir = os.path.dirname(merged_dir.rstrip("/")) or "."
     if os.path.isfile(adapter_config):
         try:
             with open(adapter_config, encoding="utf-8") as handle:
@@ -1136,17 +1281,17 @@ def merge_for_quantization(
             )
         if base_model_id and base_model_id.strip():
             if base_model_id != base_identity:
-                print(
-                    f"      [merge] pinning merge base to {base_model_id!r} "
+                notes.append(
+                    f"      [merge] pinned merge base to {base_model_id!r} "
                     f"(adapter recorded {base_identity!r})"
                 )
             base_identity = base_model_id
 
         local_base = resolve_cached_hf_snapshot(base_identity)
         loader = (
-            FastVisionModel
+            vision_loader
             if is_multimodal_model(base_identity)
-            else FastLanguageModel
+            else language_loader
         )
         with tempfile.TemporaryDirectory(
             prefix=".local-merge-adapter-",
@@ -1183,9 +1328,9 @@ def merge_for_quantization(
             )
     else:
         loader = (
-            FastVisionModel
+            vision_loader
             if is_multimodal_model(checkpoint_path)
-            else FastLanguageModel
+            else language_loader
         )
         model, tokenizer = loader.from_pretrained(
             model_name=checkpoint_path,
@@ -1198,25 +1343,14 @@ def merge_for_quantization(
             tokenizer,
             save_method="merged_16bit",
         )
-    # unsloth_zoo refuses a 16-bit merge from a 4-bit base by warning and returning without
-    # writing anything, so an empty directory here means the merge silently no-opped rather
-    # than that some file went missing. Say so, instead of leaving the opaque
-    # "snapshot is incomplete" from verify_hf_model_snapshot as the only clue (B219).
-    if not any(os.scandir(merged_dir)):
-        raise RuntimeError(
-            f"save_pretrained_merged wrote no files to {merged_dir}. This is the unsloth_zoo "
-            "no-op for a 16-bit merge from a quantized base — check the adapter's "
-            "base_model_name_or_path and pass base_model_id to pin a 16-bit base."
-        )
-    verify_hf_model_snapshot(merged_dir)
-    return merged_dir
+    return notes
 
 
 def run_lora_training(
     dataset_path: str,
     config: TrainingConfig,
     output_dir: str = "artifacts",
-    task_type: str | None = None,
+    task: str | None = None,
 ) -> TrainingOutput:
     """
     Train model with LoRA (or full fine-tune if lora_rank is None).
@@ -1224,9 +1358,9 @@ def run_lora_training(
     weights_ref is a path string usable by infer() and infer_batch().
     gguf_path is always None here — set by the quantize step in evaluate_node.
     Always trains from the base model, never from a prior checkpoint.
-    task_type defaults to config.task_type if not provided.
+    task defaults to config.task if not provided.
     """
     os.makedirs(output_dir, exist_ok=True)
-    effective_task_type = task_type if task_type is not None else config.task_type
-    checkpoint_path = _run_unsloth_training(dataset_path, config, output_dir, task_type=effective_task_type)
+    effective_task = task if task is not None else config.task
+    checkpoint_path = _run_unsloth_training(dataset_path, config, output_dir, task=effective_task)
     return TrainingOutput(weights_ref=checkpoint_path, gguf_path=None)

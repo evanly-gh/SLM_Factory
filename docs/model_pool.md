@@ -12,9 +12,15 @@ thinking-only models (e.g. Qwen3-4B-Thinking-2507). Two families:
   `FastVisionModel` with `finetune_vision_layers=False`.
 
 Each base model is expanded into 3 deployment variants (`Q4_K_M`, `Q8_0`, `bf16`), so the pool is
-**6 base models → 18 variants**. Tier is a **peak-RAM bucket** of each variant (`_ram_tier`:
-<750 / 750–1500 / 1500–2500 / ≥2500 MB), so a model's quant variants can span tiers — this is
-what lets model selection start small and escalate.
+**6 base models → 18 variants**. Tier is an **on-disk weight-size bucket** of each variant
+(`_size_tier`: <750 / 750–1500 / 1500–2500 / ≥2500 MB), so a model's quant variants can span
+tiers — this is what lets model selection start small and escalate.
+
+> **Correction.** This previously said tier bucketed a *modelled peak-inference-RAM* figure
+> (`_ram_tier`). That function is gone. Tier is used only to order and group candidates by rough
+> scale, which real weight size serves equally well without inventing a runtime number — and
+> inventing runtime numbers is what the 2026-07-27 change below removed everywhere else in the pool.
+> The bucket boundaries are unchanged, so tier assignments did not move.
 
 Every variant has a stable selector: `<model_id>@bf16`, `<model_id>@Q8_0`, or
 `<model_id>@Q4_K_M`. Prompts, force overrides, baselines, and histories use that selector.
@@ -23,6 +29,17 @@ A legacy bare model ID deterministically resolves to its lowest-peak-RAM feasibl
 Capability values and sources below were checked **2026-07-21**. MMLU, MMLU-Pro, and
 MMLU-Redux are different evaluations and their raw values are not interchangeable. Missing
 GSM8K is reported as unknown, never as zero or an estimate.
+
+**Which published metric ranks candidates is decided by the TASK, not by this file** (added
+2026-08-19). `filter_pool_by_task` reads `TaskSpec.model_ranking_metric`: `GSM8K` for `gsm8k`,
+`MMLU` (falling back to MMLU-Pro) for the three classification tasks, and **`None`** for
+`xlam_bfcl`, `calendar_json`, `ner_bc5cdr` and `dialogsum` — which says plainly that no published
+benchmark in this pool is a fair proxy for function calling, span extraction or summarisation, so
+the deterministic resource ordering is kept rather than a proxy being invented. A metric ranks only
+when every candidate carries a present measurement with an identical metric/mode/protocol key;
+mixed metrics or any missing value fall back to resource order. Note the interaction with the table
+above: **no pool entry reports GSM8K**, so `gsm8k`'s ranking metric currently has no effect and
+candidates fall back to resource order — which is the honest outcome, not a gap to paper over.
 
 ---
 

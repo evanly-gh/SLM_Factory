@@ -4,6 +4,10 @@ Generates from the base model and from the production eval loader with a trained
 Identical outputs mean the adapter is inert and every "fine-tuned" score for that tier is
 really the base model's score.
 
+The probe runs against `dialogsum`, whose adapter the original defect was found on. Naming the
+task is not optional any more: batch size and the context ceiling are read from the task's spec,
+so `infer_batch` with no task raises rather than silently taking a generic default.
+
 Run under .venv_gpu on a GPU node. Diagnostic only; not part of the pipeline.
 """
 import os
@@ -15,18 +19,35 @@ os.environ.setdefault("EXA_API_KEY", "diag")
 BASE = sys.argv[1] if len(sys.argv) > 1 else "Qwen/Qwen3.5-0.8B"
 ADAPTER = sys.argv[2]
 
-PROMPTS = [
-    "Summarize the following conversation in one to three sentences. Write only the summary "
-    "— do not continue the conversation or reply to it.\n\n"
+TASK = "dialogsum"
+
+DIALOGUES = [
     "#Person1#: Hey, are you coming to the team lunch tomorrow?\n"
     "#Person2#: I wish I could, but I have a dentist appointment at noon.\n"
     "#Person1#: That's too bad. I'll save you a slice of cake.\n",
-    "Summarize the following conversation in one to three sentences. Write only the summary "
-    "— do not continue the conversation or reply to it.\n\n"
     "#Person1#: Did you finish the quarterly report?\n"
     "#Person2#: Almost. I still need the numbers from marketing.\n"
     "#Person1#: I'll ping them now so you can wrap it up today.\n",
 ]
+
+
+def build_prompts():
+    """The prompts the eval harness would send for these dialogues.
+
+    Built through the task's own prompt builder rather than pasted in, because a diagnostic that
+    asks "does the adapter change the output" is worthless if it asks a question the adapter was
+    never trained on — the summarization instruction is carried on the rows and resolved by the
+    scorer, and a hand-copied prefix is exactly what drifts (B250).
+    """
+    from data.eval_set import EvalSet
+    from data.loaders.dialogsum_samsum import SUMMARIZATION_INSTRUCTION
+    from tasks import get_task
+
+    rows = [
+        {"text": dialogue, "answer": "", "_instruction": SUMMARIZATION_INSTRUCTION}
+        for dialogue in DIALOGUES
+    ]
+    return get_task(TASK).build_prompts(EvalSet(all=rows, task=TASK))
 
 
 def lora_b_report(model, label):
@@ -44,11 +65,11 @@ def lora_b_report(model, label):
     return nonzero
 
 
-def run(weights_ref, label):
+def run(prompts, weights_ref, label):
     from training.slm_helpers import clear_inference_cache, infer_batch
 
     clear_inference_cache()
-    outs = infer_batch(PROMPTS, weights_ref, BASE, max_new_tokens=64, task_type="generation")
+    outs = infer_batch(prompts, weights_ref, BASE, max_new_tokens=64, task=TASK)
     print(f"\n===== {label} =====")
     for i, out in enumerate(outs):
         print(f"  [{i}] {out.strip()[:200]!r}")
@@ -56,15 +77,20 @@ def run(weights_ref, label):
 
 
 def main():
-    from training.slm_helpers import _load_inference_model, clear_inference_cache
+    from training.slm_helpers import (
+        _load_inference_model,
+        clear_inference_cache,
+        task_max_seq_length,
+    )
 
+    prompts = build_prompts()
     clear_inference_cache()
-    model, _ = _load_inference_model(ADAPTER, BASE, 4096)
+    model, _ = _load_inference_model(ADAPTER, BASE, task_max_seq_length(TASK))
     print("\n--- adapter weights resident in the loaded model ---")
     nonzero = lora_b_report(model, "production eval loader")
 
-    base_out = run(BASE, "BASE (no adapter)")
-    tuned_out = run(ADAPTER, "BASE + trained adapter")
+    base_out = run(prompts, BASE, "BASE (no adapter)")
+    tuned_out = run(prompts, ADAPTER, "BASE + trained adapter")
 
     identical = base_out == tuned_out
     print("\n" + "=" * 72)

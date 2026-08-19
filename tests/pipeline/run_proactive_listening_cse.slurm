@@ -13,7 +13,8 @@
 #SBATCH --signal=B:USR1@7200
 #SBATCH --output=/mmfs1/gscratch/intelligentsystems/evanly/SLM_Factory/logs/slurm/slm-proactive-listening-cse-%j.out
 #
-# CURATED BENCHMARK: proactive_listening (task_type=classification, metric = F1 on `interrupt`).
+# CURATED BENCHMARK: proactive_listening (out-of-distribution, metric minority_f1 — F1 on the
+# minority `interrupt` class).
 #
 # THE TASK — LlamaPIE's "when to respond" decision (arXiv:2505.04066 §2.3.1). An in-ear assistant
 # listens to a conversation; at each pause it must decide whether to whisper a 1-3 word hint to its

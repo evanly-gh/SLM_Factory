@@ -7,10 +7,11 @@ per-difficulty test report (easy/medium/hard), the dataset composition (gold / s
 mined), the chosen intervention and the orchestrator's free-text hypothesis. This module reads
 that structure and emits four artifacts into ``logs/graphics/<run_id>/``:
 
-    accuracy.png             metric across iterations (+ baseline & stop-threshold lines,
-                             tier-escalation boundaries)
+    accuracy.png             metric across iterations (+ baseline line, the stop threshold as a
+                             STEP line since it moves mid-run, tier-escalation boundaries)
     difficulty.png           easy / medium / hard accuracy across iterations
-    dataset_composition.png  stacked gold / synthetic / mined rows per iteration (+ total line)
+    dataset_composition.png  stacked gold / synthetic / mined rows per iteration, labelled with
+                             row counts, gold subdivided by originating dataset
     hypotheses.md            per-iteration hypothesis + intervention (prose, not a chart)
     summary.png              the three charts as one combined panel
 
@@ -31,14 +32,21 @@ import json
 import os
 from pathlib import Path
 
-# What the comparison scalar actually measures per task type (name-only; the value lives in the
-# EvalResult.f1 field). Imported lazily-safe: this is a plain dict, no heavy deps.
-from eval.harness import TASK_METRIC_NAMES
 
 
 # --------------------------------------------------------------------------
 # Data model
 # --------------------------------------------------------------------------
+def _metric_for(task: str) -> str | None:
+    """The task's metric name, or None for a DAG written by a task the registry no longer has."""
+    if not task:
+        return None
+    from tasks import TASKS
+
+    spec = TASKS.get(str(task))
+    return spec.metric_name if spec else None
+
+
 def _iteration_records(progression: list[dict]) -> tuple[list[dict], dict]:
     """Flatten a progression (list of per-model entries) into ordered iteration records.
 
@@ -69,12 +77,8 @@ def _iteration_records(progression: list[dict]) -> tuple[list[dict], dict]:
         for node in dag:
             eval_state = node.get("evaluation_state") or {}
             last_eval = eval_state.get("last_eval") or {}
-            task_type = ((node.get("pi") or {}).get("S") or {}).get("task_type", "")
-            metric_name = (
-                last_eval.get("metric")
-                or TASK_METRIC_NAMES.get(task_type)
-                or metric_name
-            )
+            task = ((node.get("pi") or {}).get("S") or {}).get("task", "")
+            metric_name = last_eval.get("metric") or _metric_for(task) or metric_name
             report = eval_state.get("test_report") or {}
             by_diff = report.get("by_difficulty") or {}
             comp = (((node.get("pi") or {}).get("D") or {}).get("composition")) or {}
@@ -87,14 +91,23 @@ def _iteration_records(progression: list[dict]) -> tuple[list[dict], dict]:
                 "selector": entry.get("selector"),
                 "tier": entry.get("tier"),
                 "score": node.get("score"),
+                # The goal THIS iteration was judged against, stamped by evaluate_node. The
+                # threshold moves mid-run in both directions, so a single run-level value drawn as
+                # one flat line misrepresented every iteration that was held to a different bar.
+                # Older DAGs predate the field; those records carry None and fall back to the
+                # run-level constant.
+                "stop_threshold": node.get("stop_threshold"),
                 "per_class": last_eval.get("per_class") or {},
                 "by_difficulty": by_diff,
                 "n_gold": int(comp.get("n_gold", 0) or 0),
+                # Gold rows per originating dataset, so the gold band can be divided when a run
+                # draws its real data from more than one corpus.
+                "gold_by_source": dict(comp.get("gold_by_source") or {}),
                 # Prefer `n_synth_total`, which counts every teacher-generated row. The older
-                # `n_hard_generated` counted only the plan's `synthesize` strategy, so synth-fill
-                # and generation-family positives fell into the grey "unattributed" band and the
-                # synthetic share of the curriculum was drawn far smaller than it really was.
-                # Older runs predate the field, so fall back for them.
+                # `n_hard_generated` counted only the plan's `synthesize` strategy, so
+                # generation-family positives fell into the grey untagged band and the synthetic
+                # share of the curriculum was drawn far smaller than it really was. Older runs
+                # predate the field, so fall back for them.
                 "n_generated": int(
                     comp.get(
                         "n_synth_total",
@@ -193,18 +206,45 @@ def _mark_tiers(ax, records: list[dict], boundaries: list[int]) -> None:
 
 
 def _iteration_axis(ax, xs) -> None:
-    """Label the x-axis as whole-numbered iterations.
+    """Label the x-axis with one tick per iteration.
 
     Iterations are a counting index, so matplotlib's default float locator was wrong twice
     over: it invented fractional ticks ("1.5", "2.5") for iterations that cannot exist, and
-    its automatic margin pushed the left edge below the first iteration.
+    its automatic margin pushed the left edge below the first iteration. `MaxNLocator(integer=True)`
+    fixed the fractions but still thinned the ticks to a round stride, so a 16-iteration tier was
+    labelled 2, 4, 6, … and reading a point off the chart meant counting markers. Every iteration
+    now gets its own tick; past ~24 the labels are shrunk and rotated rather than dropped.
     """
-    from matplotlib.ticker import MaxNLocator
+    from matplotlib.ticker import MultipleLocator
 
     ax.set_xlabel("iteration")
-    ax.xaxis.set_major_locator(MaxNLocator(integer=True, min_n_ticks=1))
+    ax.xaxis.set_major_locator(MultipleLocator(1))
     if xs:
         ax.set_xlim(min(xs) - 0.5, max(xs) + 0.5)
+        if len(xs) > 24:
+            ax.tick_params(axis="x", labelsize=6, labelrotation=90)
+        elif len(xs) > 12:
+            ax.tick_params(axis="x", labelsize=7)
+
+
+def _threshold_series(records, stop_threshold):
+    """Per-iteration stop threshold, or None if the run never recorded one.
+
+    Missing values (older DAGs, or an iteration written before the field existed) are carried
+    forward from the previous known value and, failing that, backfilled from the run-level
+    constant — so the line is continuous and never silently drops to zero.
+    """
+    raw = [r.get("stop_threshold") for r in records]
+    if not any(value is not None for value in raw):
+        return None
+    series, last = [], stop_threshold
+    for value in raw:
+        if value is not None:
+            last = float(value)
+        series.append(last)
+    # A leading run of unknowns has nothing to carry forward; take the first known value back.
+    first_known = next((v for v in series if v is not None), None)
+    return [first_known if v is None else v for v in series]
 
 
 def _plot_accuracy(ax, records, meta, stop_threshold) -> None:
@@ -216,7 +256,34 @@ def _plot_accuracy(ax, records, meta, stop_threshold) -> None:
             meta["baseline_f1"], color="#d62728", linestyle="--", linewidth=1,
             label=f"base-model {meta['baseline_f1']:.3f}",
         )
-    if stop_threshold is not None:
+    # The goal is not a constant. iterate_node lowers it when the failure profile looks like a
+    # model-capacity limit and raises it as a stretch goal once one is cleared, so drawing the
+    # final value as a single horizontal line claimed every earlier iteration had been measured
+    # against a bar that did not yet exist — and on a run that lowered its goal, that line sat
+    # BELOW iterations the loop had actually judged as failures. Plotted as a step: the threshold
+    # holds its value until the iteration that changed it.
+    thresholds = _threshold_series(records, stop_threshold)
+    if thresholds is not None:
+        moved = len(set(thresholds)) > 1
+        label = (
+            f"threshold {thresholds[0]:.3f}→{thresholds[-1]:.3f}"
+            if moved
+            else f"threshold {thresholds[-1]:.3f}"
+        )
+        ax.step(
+            xs, thresholds, where="post", color="#2ca02c", linestyle="--", linewidth=1,
+            label=label,
+        )
+        if moved:
+            for prev, curr, x in zip(thresholds, thresholds[1:], xs[1:]):
+                if curr == prev:
+                    continue
+                ax.annotate(
+                    f"{'▲' if curr > prev else '▼'} {curr:.3f}",
+                    xy=(x, curr), xytext=(2, 4 if curr > prev else -12),
+                    textcoords="offset points", fontsize=7, color="#2ca02c",
+                )
+    elif stop_threshold is not None:
         ax.axhline(
             stop_threshold, color="#2ca02c", linestyle="--", linewidth=1,
             label=f"threshold {stop_threshold:.3f}",
@@ -253,39 +320,123 @@ def _plot_difficulty(ax, records, meta) -> None:
     ax.legend(fontsize=8, loc="best")
 
 
+def _gold_source_order(records) -> list[str]:
+    """Gold source datasets across the run, largest total contribution first."""
+    totals: dict[str, int] = {}
+    for record in records:
+        for source, rows in (record.get("gold_by_source") or {}).items():
+            totals[str(source)] = totals.get(str(source), 0) + int(rows or 0)
+    return sorted(totals, key=lambda s: (-totals[s], s))
+
+
+def _annotate_band(ax, x, bottom, height, total, *, color="white") -> None:
+    """Write a band's row count inside the band, when it is tall enough to hold the text.
+
+    "How much of each type of data went into this iteration" was previously only answerable by
+    measuring a bar against the y-axis by eye, which for a 3,235-row gold band under a 90-row
+    synthetic band is not a readable comparison. The number is now on the band.
+    """
+    if not height or not total or height < total * 0.06:
+        return
+    ax.text(
+        x, bottom + height / 2, f"{height:,}", ha="center", va="center",
+        fontsize=6, color=color,
+    )
+
+
 def _plot_composition(ax, records) -> None:
     xs = [r["global_idx"] for r in records]
     gold = [r["n_gold"] for r in records]
     gen = [r["n_generated"] for r in records]
     src = [r["n_source"] for r in records]
-    # The three attributed buckets do NOT always sum to the dataset total: rows added by the
-    # synth-fill top-up are recorded under an "unattributed" strategy, and in
-    # slm-clinc150-cse-38180646 that was 2,063 of 5,758 rows at iteration 1 — more than a third
-    # of the curriculum, absent from the chart. Show the remainder as its own band so the stack
-    # height really is the dataset size, which is what makes a separate "total" series redundant.
+    # The attributed buckets do NOT always sum to the dataset total (a producer that forgets to
+    # tag `_provenance` lands here), and in slm-clinc150-cse-38180646 the untagged remainder was
+    # 2,063 of 5,758 rows at iteration 1 — more than a third of the curriculum, absent from the
+    # chart. Show it as its own band so the stack height really is the dataset size, which is what
+    # makes a separate "total" series redundant.
     other = [max(0, r["total"] - g - e - s) for r, g, e, s in zip(records, gold, gen, src)]
+
+    # Gold subdivided by originating dataset. A run whose real data comes from one corpus gets one
+    # solid band; a run mixing corpora gets one sub-band per source with a divider between them,
+    # because "3,235 gold rows" says nothing about whether they are all the same distribution.
+    sources = _gold_source_order(records)
+    multi_source = len(sources) > 1
+    gold_shades = ["#1f77b4", "#4c94c7", "#7fb3d8", "#a6cae4", "#c6dcef", "#dbe9f6"]
+
+    tops = [g + e + s + o for g, e, s, o in zip(gold, gen, src, other)]
+    peak = max(tops) if tops else 0
+
+    if multi_source:
+        bottoms = [0.0] * len(records)
+        for position, source in enumerate(sources):
+            heights = [
+                int((r.get("gold_by_source") or {}).get(source, 0) or 0) for r in records
+            ]
+            if not any(heights):
+                continue
+            ax.bar(
+                xs, heights, bottom=bottoms, color=gold_shades[position % len(gold_shades)],
+                label=f"gold — {source}",
+            )
+            for x, bottom, height in zip(xs, bottoms, heights):
+                _annotate_band(ax, x, bottom, height, peak)
+                if bottom > 0:
+                    # The divider is what makes two adjacent shades read as two datasets rather
+                    # than as a gradient.
+                    ax.hlines(bottom, x - 0.4, x + 0.4, color="white", linewidth=1.2)
+            bottoms = [b + h for b, h in zip(bottoms, heights)]
+    else:
+        label = f"gold — {sources[0]}" if sources else "gold"
+        ax.bar(xs, gold, color=gold_shades[0], label=label)
+        for x, height in zip(xs, gold):
+            _annotate_band(ax, x, 0, height, peak)
+
     bottom_gen = gold
     bottom_src = [g + e for g, e in zip(gold, gen)]
     bottom_other = [g + e + s for g, e, s in zip(gold, gen, src)]
-    ax.bar(xs, gold, color="#1f77b4", label="gold")
-    ax.bar(xs, gen, bottom=bottom_gen, color="#ff7f0e", label="synthetic (generated)")
-    ax.bar(xs, src, bottom=bottom_src, color="#9467bd", label="mined (source)")
+    ax.bar(xs, gen, bottom=bottom_gen, color="#ff7f0e", label="synthetic (teacher-generated)")
+    ax.bar(xs, src, bottom=bottom_src, color="#9467bd", label="mined (new real rows)")
     if any(other):
-        ax.bar(xs, other, bottom=bottom_other, color="#bbbbbb", label="unattributed")
-    # No separate "total" series: the stack height IS the total, so plotting it again drew a
-    # line exactly along the top of the bars and added a legend entry for information already
-    # on screen. (An earlier version put it on a twin right-hand axis, which was worse — the
-    # different scale made it look like an unrelated quantity.)
+        ax.bar(xs, other, bottom=bottom_other, color="#bbbbbb", label="untagged")
+    for x, base, height in zip(xs, bottom_gen, gen):
+        _annotate_band(ax, x, base, height, peak, color="black")
+    for x, base, height in zip(xs, bottom_src, src):
+        _annotate_band(ax, x, base, height, peak)
+    for x, base, height in zip(xs, bottom_other, other):
+        _annotate_band(ax, x, base, height, peak, color="black")
+    # Above each stack: the total, and beneath it the non-gold additions. The additions are the
+    # whole point of a rebuild and they are exactly what an inline band label cannot carry — a
+    # 90-row synthetic band on a 3,235-row curriculum is under 3% of the bar height, so it is a
+    # sliver of colour with nowhere to put a number. Stating them here is what makes "what did
+    # this iteration actually add" readable off the chart instead of inferable from bar heights.
+    for x, top, generated, mined in zip(xs, tops, gen, src):
+        if not top:
+            continue
+        ax.annotate(
+            f"{top:,}", xy=(x, top), xytext=(0, 10), textcoords="offset points",
+            ha="center", fontsize=6, color="0.25",
+        )
+        added = []
+        if generated:
+            added.append(f"+{generated:,} syn")
+        if mined:
+            added.append(f"+{mined:,} mined")
+        if added:
+            # One line, not one per kind: a two-line block grew upward into the total above it.
+            ax.annotate(
+                " ".join(added), xy=(x, top), xytext=(0, 2), textcoords="offset points",
+                ha="center", va="bottom", fontsize=5,
+                color="#c05000" if generated else "#6a3d9a",
+            )
     _iteration_axis(ax, xs)
     ax.set_ylabel("rows")
-    ax.set_title("Dataset composition per iteration")
+    ax.set_title("Dataset composition per iteration (rows by origin)")
     ax.grid(True, alpha=0.3, axis="y")
     # Bars run to the top of the axes, so reserve headroom rather than letting the legend sit
     # on top of the first stack.
-    stack_tops = [g + e + s + o for g, e, s, o in zip(gold, gen, src, other)]
-    if any(stack_tops):
-        ax.set_ylim(0, max(stack_tops) * 1.18)
-    ax.legend(fontsize=8, loc="upper left")
+    if peak:
+        ax.set_ylim(0, peak * 1.24)
+    ax.legend(fontsize=7, loc="upper left", ncol=1 if not multi_source else 2)
 
 
 def _write_hypotheses(records, out_path: Path, meta: dict) -> None:
@@ -362,6 +513,16 @@ def _plot_summary(records, meta, stop_threshold, out_path: Path) -> None:
     _plot_composition(axes[1][0], records)
     axes[1][1].axis("off")
     latest = records[-1] if records else {}
+    thresholds = _threshold_series(records, stop_threshold)
+    if thresholds and len(set(thresholds)) > 1:
+        threshold_text = (
+            f"{thresholds[0]:.3f} → {thresholds[-1]:.3f} "
+            f"({len(set(thresholds)) - 1} change(s))"
+        )
+    elif thresholds:
+        threshold_text = f"{thresholds[-1]:.3f}"
+    else:
+        threshold_text = "n/a" if stop_threshold is None else f"{stop_threshold:.3f}"
     note = [
         f"selector: {meta.get('selector') or 'n/a'}",
         f"iterations: {len(records)}",
@@ -369,7 +530,7 @@ def _plot_summary(records, meta, stop_threshold, out_path: Path) -> None:
         + ("n/a" if not records or latest.get("score") is None else f"{latest['score']:.3f}"),
         f"baseline: "
         + ("n/a" if meta.get("baseline_f1") is None else f"{meta['baseline_f1']:.3f}"),
-        f"threshold: " + ("n/a" if stop_threshold is None else f"{stop_threshold:.3f}"),
+        f"threshold: {threshold_text}",
     ]
     axes[1][1].text(
         0.02, 0.98, "\n".join(note), va="top", ha="left", fontsize=11, family="monospace",

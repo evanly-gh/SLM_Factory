@@ -137,22 +137,15 @@ def model_ladder_enabled(strategy: str | None = None) -> bool:
     return str(name) not in _SINGLE_MODEL_STRATEGIES
 
 # --- Data-size targets: floor, ceiling, and per-tier sizing ---
-# The per-task `DATASET_SIZE_BY_TYPE` table was REMOVED on 2026-08-05. Every value in it
-# (classification 150, NER 200, generation 600, …) sat far below CURRICULUM_SIZE_FLOOR, so it was
-# clamped away on every code path — it only created the impression that per-task sizes were being
-# honoured. Sizing is now computed per model tier by `agent/data_sizing.py` from two measured
-# signals: task novelty (1 − zero-shot baseline) and model capacity (inverse parameter count),
-# then clamped to [CURRICULUM_SIZE_FLOOR, DATA_SIZE_CEILING].
-#   - CURRICULUM_SIZE_FLOOR: never train on fewer than this (small on-device models need
-#     more data than 8B models — selection→instillation regime shift). Curricula are
-#     synth-filled toward the target, though quality control may land the final dataset below it.
-#   - EVAL_SET_SIZE: held-out eval floor. Larger eval sets give statistically reliable
-#     metrics — F1 CIs under-cover below n≈100; per-class macro-F1 needs ≥30–50/class or a
-#     3-example rare class swings it wildly (the main source of the earlier score oscillation).
-#   - DATA_SIZE_CEILING: hard cap so an over-eager target can't blow the wall clock.
-CURRICULUM_SIZE_FLOOR = int(os.environ.get("SLM_CURRICULUM_FLOOR", "5000"))
-EVAL_SET_SIZE = int(os.environ.get("SLM_EVAL_SET_SIZE", "800"))
-DATA_SIZE_CEILING = int(os.environ.get("SLM_DATA_CEILING", "25000"))
+# Curriculum and eval sizes are per-task caps on `TaskSpec` (`initial_train_cap`, `eval_cap`), not
+# config constants. Two earlier attempts lived here and both were fictions:
+#   * `DATASET_SIZE_BY_TYPE` (classification 150, NER 200, generation 600, ...) sat entirely below
+#     the floor, so every value was clamped away on every path and it only created the impression
+#     that per-task sizes were honoured. Removed 2026-08-05.
+#   * `CURRICULUM_SIZE_FLOOR`/`DATA_SIZE_CEILING` then bounded a per-tier target computed from task
+#     novelty and model capacity. Removed 2026-08-19 — the curriculum has no target: it starts at
+#     whatever the loader supplied and grows by rebuild. The only thing that ever read the computed
+#     figure was the `x 0.65` split behind the mystery 3,250-row curriculum.
 
 # --- Local curriculum-synthesis model (contamination-safe, no Claude) ---
 # Served by a vLLM OpenAI-compatible endpoint co-located with the run on its own GPU, launched
