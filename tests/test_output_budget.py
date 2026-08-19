@@ -8,7 +8,9 @@ parseable JSON", the reask therefore told the model to "return valid JSON", it w
 over-long answer, and the run fell back to the score-band default. The orchestrator had chosen
 `data_rebuild`; `hyperparameter` was executed instead.
 """
-from unittest.mock import MagicMock
+import sys
+from types import ModuleType
+from unittest.mock import MagicMock, patch
 
 from agent.nodes.iterate import (
     HYPOTHESIS_MAX_CHARS,
@@ -70,8 +72,6 @@ class TestReaskCorrectsLengthNotFormat:
     """
 
     def _capture_reask_prompt(self, validation_error):
-        from unittest.mock import patch
-
         from agent.nodes.iterate import _reask_json_only
 
         captured = {}
@@ -85,14 +85,18 @@ class TestReaskCorrectsLengthNotFormat:
                         '"hyperparams":{"lora_rank":32}}',
             )
 
+        # A stub module, not a patch of the real one: patching would import langchain_anthropic,
+        # which costs about a minute of wall clock here, to replace the one class it exports.
+        stub = ModuleType("langchain_anthropic")
+        stub.ChatAnthropic = lambda *_args, **_kwargs: MagicMock()
         with (
-            patch("langchain_anthropic.ChatAnthropic", return_value=MagicMock()),
+            patch.dict(sys.modules, {"langchain_anthropic": stub}),
             patch("agent.nodes.iterate.tracked_chat_anthropic_invoke", side_effect=fake_invoke),
         ):
             _reask_json_only(
                 [MagicMock(content="sys"), MagicMock(content="user")],
                 validation_error=validation_error,
-                task_type="classification",
+                task="clinc150",
                 state={},
             )
         return captured["text"]

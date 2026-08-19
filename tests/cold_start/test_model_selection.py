@@ -274,6 +274,9 @@ class TestRegistry:
         from agent.nodes.cold_start.model_selection import STRATEGIES
         assert set(STRATEGIES.keys()) == {
             "smallest_first", "largest_first", "interpolation", "orchestrator_choice",
+            # Added 2026-08-16: the naive-baseline ablation control. Picks one model via the
+            # orchestrator and never escalates or regresses, so it isolates what the ladder buys.
+            "single_model",
         }
 
     def test_get_unknown_raises(self):

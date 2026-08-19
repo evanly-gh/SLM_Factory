@@ -16,7 +16,7 @@ def _state(hw_gating):
         "turn_budget": 1000,
         "stop_threshold": 0.96,
         "initial_stop_threshold": 0.96,
-        "task_type": "classification",
+        "task": "clinc150",
         "last_eval": None,
         "hw_gating_enabled": hw_gating,
         "hardware_constraints": MagicMock(),

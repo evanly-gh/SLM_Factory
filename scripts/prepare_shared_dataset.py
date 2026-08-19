@@ -6,9 +6,16 @@ previously gave each model-selection strategy a different dataset/eval set.
 
 Point the runs at the output with SLM_SHARED_DATASET_DIR=<out_dir>.
 
+The task is a REGISTRY NAME, not a natural-language description. It used to be prose that was fed
+to the orchestrator's planner, and the resulting plan's abstract `task_type` was written into the
+manifest — but `agent/nodes/cold_start/eval_setup.py::_load_shared_dataset` now checks the
+manifest's `task` against the run's task and reads the row schema from that task's spec, so a
+bundle built from a channel is unloadable. Naming the task also means the bundle is built by the
+same loader, with the same train/eval sizing, as the run it will feed.
+
 Usage:
-    python scripts/prepare_shared_dataset.py --task "<natural-language task>" --out <dir>
-    # optional: --curriculum 2000 --eval 800
+    python scripts/prepare_shared_dataset.py --task ner_bc5cdr --out <dir>
+    # optional: --curriculum 5000 --eval 800
 """
 import argparse
 import json
@@ -23,6 +30,7 @@ os.chdir(PROJ)
 from data.loaders.dataset_integrity import (  # noqa: E402
     NORMALIZATION_VERSION,
     normalized_text_overlap,
+    remove_normalized_train_overlap,
     required_fields_for_task,
     sha256_file,
     validate_rows,
@@ -41,32 +49,16 @@ SHARED_CONTENT_FILES = (
 SHARED_CHECKSUM_FILES = SHARED_CONTENT_FILES + ("manifest.json",)
 
 
-def _build_requested_eval_set(examples, plan, eval_size):
-    """Build the frozen eval set at the same dynamic size target as runs."""
-    from agent.nodes.cold_start.eval_setup import _eval_target
-    from data.eval_set import build_eval_set
-
-    return build_eval_set(
-        examples,
-        task_type=plan["task_type"],
-        target=_eval_target(eval_size),
-        multi_label=plan.get("multi_label", False),
-        schema=plan.get("schema"),
-        multilingual=plan.get("multilingual", False),
-    )
-
-
 def _write_jsonl(path: Path, rows: list[dict]) -> None:
     with path.open("w", encoding="utf-8") as handle:
         for row in rows:
             handle.write(json.dumps(row, ensure_ascii=False) + "\n")
 
 
-def _write_shared_bundle(out, train, test, *, plan, difficulty, meta):
+def _write_shared_bundle(out, train, test, *, task, plan, difficulty, meta):
     """Write and integrity-seal one frozen train/eval bundle."""
     out = Path(out)
-    task_type = plan["task_type"]
-    required = required_fields_for_task(task_type)
+    required = required_fields_for_task(task)
     validate_rows(train, required, bundle_name=out.name, split="train")
     validate_rows(test, required, bundle_name=out.name, split="test")
     overlap = normalized_text_overlap(train, test)
@@ -100,7 +92,11 @@ def _write_shared_bundle(out, train, test, *, plan, difficulty, meta):
     manifest = {
         "schema_version": SHARED_SCHEMA_VERSION,
         "bundle_type": "shared_dataset",
-        "task_type": task_type,
+        # The registry task name. `_load_shared_dataset` refuses a bundle whose task does not
+        # equal the run's, which is the check that stops one task's frozen data being served to
+        # another — the failure the abstract channel could not detect, because several tasks
+        # shared each channel.
+        "task": task,
         "counts": {
             "train": len(train),
             "test": len(test),
@@ -130,57 +126,81 @@ def _write_shared_bundle(out, train, test, *, plan, difficulty, meta):
 
 
 def main():
+    import tasks
+
     ap = argparse.ArgumentParser()
-    ap.add_argument("--task", required=True, help="natural-language task description")
+    ap.add_argument("--task", required=True, choices=tasks.task_names(),
+                    help="registry task name to freeze")
     ap.add_argument("--out", required=True, help="output dir for the frozen dataset")
     ap.add_argument("--curriculum", type=int, default=None)
     ap.add_argument("--eval", type=int, default=None)
     args = ap.parse_args()
 
+    # Before any loader import: xLAM is a GATED repo and resolves only via the HF_TOKEN kept in
+    # .env, so a task whose loader needs it would otherwise fail at the download rather than here.
     from dotenv import load_dotenv
     load_dotenv(os.path.join(PROJ, ".env"))
 
-    from agent.task_planner import plan_task
+    from agent.nodes.cold_start.eval_setup import _eval_target
     from config.android_pool import ANDROID_POOL
-    from config.config import CURRICULUM_SIZE_FLOOR, EVAL_SET_SIZE, DATA_SIZE_CEILING
-    from data.loaders.web_acquire import acquire_dataset
+    from data.eval_set import build_eval_set
     from agent.nodes.test_agent import label_difficulty
-    from agent.nodes.cold_start.hardware_filter import run_hardware_filter
-    from agent.nodes.cold_start.hardware_research import research_device
 
-    print(f"[shared] planning task: {args.task}")
-    plan = plan_task(args.task, model_pool=ANDROID_POOL)
-    task_type = plan["task_type"]
-    curriculum = args.curriculum or max(int(plan.get("curriculum_size") or CURRICULUM_SIZE_FLOOR),
-                                        CURRICULUM_SIZE_FLOOR)
-    eval_size = args.eval or max(int(plan.get("eval_size") or EVAL_SET_SIZE), EVAL_SET_SIZE)
-    curriculum = min(curriculum, DATA_SIZE_CEILING)
-    eval_size = min(eval_size, DATA_SIZE_CEILING)
-    gold_target = int(curriculum * 0.65)
-    bench_train = min(int(gold_target * 1.15) + 40, DATA_SIZE_CEILING)
-    print(f"[shared] task_type={task_type} curriculum={curriculum} (train≤{bench_train}) eval={eval_size}")
+    spec = tasks.get_task(args.task)
+    # The task's own initial cap, overridable for a one-off. There is no global floor or ceiling any
+    # more; the curriculum grows by rebuild rather than aiming at a number.
+    curriculum = int(args.curriculum or spec.initial_train_cap)
+    # The task's own eval cap unless overridden, so the frozen eval set is the size the runs that
+    # consume it would have built for themselves.
+    eval_size = int(args.eval or spec.eval_cap)
+    # Same sizing arithmetic as `eval_setup._load_named_benchmark`: the loader is asked for the
+    # task's own share of the curriculum target as gold rows.
+    max_train = max(int(curriculum * spec.train_fraction), 60)
+    print(f"[shared] task={spec.name} ({spec.title}) curriculum={curriculum} "
+          f"(train\u2264{max_train}) eval\u2264{eval_size}")
 
-    meta = {}
-    train, test = acquire_dataset(
-        plan, description=args.task, target_examples=max(gold_target, 120),
-        benchmark_max_train=bench_train, benchmark_max_test=eval_size, meta=meta,
-    )
-    print(f"[shared] acquired train={len(train)} test={len(test)} source={meta.get('source')}")
+    train, test = spec.load(max_train=max_train, max_test=eval_size, log=print)
+    # Stage-0 decontamination, exactly as the curated path does it: official splits are not
+    # guaranteed disjoint (CLINC150 ships the same utterance in both under two intents), and the
+    # bundle writer below treats any remaining overlap as fatal. Held-out rows are authoritative
+    # and never modified; the training row is dropped.
+    train, overlap_removed = remove_normalized_train_overlap(train, test)
+    if overlap_removed:
+        print(f"[shared] Stage-0 normalized overlap removal: dropped {overlap_removed} train row(s)")
+    print(f"[shared] loaded train={len(train)} test={len(test)}")
 
-    eval_set = _build_requested_eval_set(
-        test,
-        plan,
-        eval_size,
-    )
+    meta = {
+        "source": spec.title,
+        "source_records": [
+            {"kind": "hf", "id": spec.name, "split": "train", "role": "curriculum"},
+            {"kind": "hf", "id": spec.name, "split": "test", "role": "eval"},
+        ],
+        "eval_ban": [{"kind": "hf", "id": spec.name, "split": "test", "role": "eval"}],
+    }
 
-    # Difficulty labeling needs the feasible pool (device-independent here → use whole pool).
-    HW, _ = research_device(args.task, log=print)
-    feasible = sorted(run_hardware_filter(HW), key=lambda m: m.size_mb, reverse=True)
-    difficulty = label_difficulty(eval_set, feasible, task_type, log=print)
+    eval_set = build_eval_set(test, task=spec.name, target=_eval_target(eval_size))
 
+    # Difficulty labeling is device-independent here, so the whole Android pool is the candidate
+    # set. The script used to resolve a device first by passing the TASK description to
+    # `research_device`, which researches a phone — it spent an orchestrator call to be told
+    # nothing, and the pool it produced was the fallback anyway.
+    feasible = sorted(ANDROID_POOL, key=lambda m: m.size_mb, reverse=True)
+    difficulty = label_difficulty(eval_set, feasible, spec.name, log=print)
+
+    # Recorded for provenance only: nothing reads plan.json back, but it is covered by the
+    # bundle's checksums, so it must exist and must describe what was frozen.
+    plan = {
+        "task": spec.name,
+        "title": spec.title,
+        "category": spec.category,
+        "family": spec.family,
+        "metric": spec.metric_name,
+        "curriculum_size": curriculum,
+        "eval_size": eval_size,
+    }
     out = args.out
     _write_shared_bundle(
-        out, train, eval_set.all, plan=plan, difficulty=difficulty, meta=meta
+        out, train, eval_set.all, task=spec.name, plan=plan, difficulty=difficulty, meta=meta
     )
     print(f"[shared] wrote frozen dataset to {out}. Point runs at it with SLM_SHARED_DATASET_DIR={out}")
 

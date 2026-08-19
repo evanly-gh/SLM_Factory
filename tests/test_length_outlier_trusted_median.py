@@ -6,11 +6,21 @@ exists to protect. Measured on RouterBench: real rows have a median of 715 chara
 foreign rows 75; the dataset median fell to 269 and the cutoff from 2145 to 807, a bound that removes
 48% of the real benchmark instead of 0.6%.
 """
-from data.curriculum import _filter_length_outliers, apply_quality_controls
+from data.curriculum import apply_quality_controls
+from data.quality_controls import QCContext, length_outliers
 
 # RouterBench-shaped: real prompts are long and vary a lot, mined foreign rows are short.
 REAL_LENGTHS = [200, 400, 715, 715, 900, 1200, 1800, 2000]
 MINED_LENGTH = 75
+
+
+def _filter_length_outliers(rows):
+    """The step as RouterBench declares it: keyed on `text`, the field its rows actually carry.
+
+    The key is stated by the task rather than guessed. Guessing is what made this step a silent
+    no-op for gsm8k and dialogsum, whose rows have no `"prompt"` field (B299).
+    """
+    return length_outliers(key="text")(rows, QCContext(task_name="routerbench"))
 
 
 def _real(n_chars, i=0):
@@ -80,7 +90,7 @@ def test_end_to_end_through_quality_controls():
         for i in range(100)
     ]
     kept = apply_quality_controls(
-        real + mined, task_type="classification", allowed_labels={"local", "route"}
+        real + mined, "routerbench", allowed_labels={"local", "route"}
     )
     survived_long = [r for r in kept if len(r["text"]) >= 1800]
     assert survived_long, "long real rows must survive QC on a contaminated dataset"

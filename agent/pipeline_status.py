@@ -115,6 +115,69 @@ def build_run_progression(
     return progression
 
 
+def _mined_source_labels(composition: dict) -> list[str]:
+    """Where this rebuild's mined rows actually came from, most-used first.
+
+    `source_usage` counts every source that contributed to the curriculum, including the run's
+    original train pool, so it is filtered to entries that carry a url or a hub-style key — those
+    are the ones a mining round added. Falls back to the mining report's own `source_records`,
+    which is populated even when the accepted rows were later dropped by the eval firewall.
+    """
+    labels: list[str] = []
+    for entry in composition.get("source_usage") or []:
+        if not isinstance(entry, dict) or not entry.get("novel_rows"):
+            continue
+        label = entry.get("url") or entry.get("source")
+        if label and label not in labels:
+            labels.append(str(label))
+    if labels:
+        return labels
+    for record in (composition.get("source_novelty") or {}).get("source_records") or []:
+        if not isinstance(record, dict):
+            continue
+        label = record.get("url") or f"{record.get('kind', 'source')}:{record.get('id', '?')}"
+        if label not in labels:
+            labels.append(str(label))
+    return labels
+
+
+def format_intervention_detail(node: dict) -> str:
+    """Name what a DAG node's intervention actually did, for the trajectory table.
+
+    `data_rebuild` on its own is the least informative thing the column could say: it covers
+    generating synthetic rows from train anchors and mining new real rows off the hub, which have
+    different costs and different failure modes, and it hides the only number that matters —
+    how many rows the rebuild actually added. Both are recorded on the node
+    (``pi.D.composition``, a snapshot of ``state["last_curation"]``), so the column reports the
+    sub-strategy, the row count it produced, and for mining the source it came from.
+    """
+    intervention = str(node.get("intervention") or "?")
+    if intervention != "data_rebuild":
+        return intervention
+    dag_data = (node.get("pi") or {}).get("D") or {}
+    composition = dag_data.get("composition") or {}
+    strategy = str((dag_data.get("plan") or {}).get("strategy") or "?")
+    novel = int((composition.get("plan_yield") or {}).get("novel_rows", 0) or 0)
+
+    if strategy == "synthesize":
+        generated = int(composition.get("n_synth_total", 0) or 0)
+        if not generated:
+            return "data_rebuild/synthesize: 0 synthetic rows kept"
+        return f"data_rebuild/synthesize: +{generated} synthetic row(s) ({novel} novel)"
+    if strategy == "acquire":
+        mined = int(composition.get("n_hard_source", 0) or 0)
+        report = composition.get("source_novelty") or {}
+        if not mined:
+            rejected = int(report.get("rejected_sources", 0) or 0)
+            reason = str(report.get("status") or "no_novelty")
+            suffix = f", {rejected} source(s) rejected" if rejected else ""
+            return f"data_rebuild/mine-new-real: 0 new rows ({reason}{suffix})"
+        sources = _mined_source_labels(composition)
+        origin = f" from {', '.join(sources[:2])}" if sources else ""
+        return f"data_rebuild/mine-new-real: +{mined} mined row(s){origin}"
+    return f"data_rebuild/{strategy}"
+
+
 def format_downward_probe_history(history: dict | None) -> list[str]:
     """Render exact-selector downward attempts for the final run report."""
     history = history or {}

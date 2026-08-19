@@ -24,7 +24,9 @@ These come from the HF Trainer's PrinterCallback (active when `disable_tqdm=True
 prints via plain `print()` and is NOT gated by the transformers logging verbosity. So
 silencing the loggers/progress bars removes the noise without hiding the loss.
 """
+import contextlib
 import os
+import sys
 import warnings
 
 _ENV_APPLIED = False
@@ -89,3 +91,55 @@ def quiet_ml_logging() -> None:
     except Exception:
         pass
     _LIBS_QUIETED = True
+
+
+@contextlib.contextmanager
+def quiet_output():
+    """Discard everything the enclosed block writes to stdout/stderr, at the fd level.
+
+    `DATASETS_VERBOSITY=error` cannot hide the `datasets` loader noise, because the lines that
+    matter are themselves logged at ERROR ("Failed to load JSON from file ... ArrowInvalid" is
+    emitted once per shard of a malformed repo) and the download/split progress bars are raw
+    tqdm writes rather than HF progress-bar API calls. Redirecting at the file-descriptor level
+    is the only interception point that covers Python logging, tqdm and pyarrow's own C-level
+    writes at once.
+
+    Callers must already be capturing whatever they need to report: the acquisition path
+    accumulates its own verdict lines in a list and replays them afterwards, so nothing of value
+    goes through the descriptors being discarded here.
+    """
+    devnull = os.open(os.devnull, os.O_WRONLY)
+    saved = None
+    try:
+        sys.stdout.flush()
+        sys.stderr.flush()
+    except (ValueError, OSError):
+        pass
+    try:
+        saved = (os.dup(1), os.dup(2))
+        os.dup2(devnull, 1)
+        os.dup2(devnull, 2)
+    except OSError:
+        # No real descriptors to swap (embedded/pytest capture). Fall back to the Python-level
+        # redirect, which still covers logging and tqdm's default stream.
+        if saved is not None:
+            for fd in saved:
+                os.close(fd)
+        saved = None
+        os.close(devnull)
+        with open(os.devnull, "w") as sink, \
+                contextlib.redirect_stdout(sink), contextlib.redirect_stderr(sink):
+            yield
+        return
+    try:
+        yield
+    finally:
+        try:
+            sys.stdout.flush()
+            sys.stderr.flush()
+        except (ValueError, OSError):
+            pass
+        os.dup2(saved[0], 1)
+        os.dup2(saved[1], 2)
+        for fd in (*saved, devnull):
+            os.close(fd)

@@ -222,6 +222,69 @@ def _accept_correct(accept_calls: list, pred_calls: list[dict], allowed: set[str
     return not unmatched
 
 
+def _gold_names(example: dict, gold_calls: list[dict]) -> list[str]:
+    """Function names the gold answer expects, from either xLAM gold or BFCL's accept map."""
+    accept = example.get("_accept")
+    if isinstance(accept, list) and accept:
+        names = []
+        for entry in accept:
+            if isinstance(entry, dict) and len(entry) == 1:
+                names.append(str(next(iter(entry))))
+        if names:
+            return names
+    return [str(call.get("name")) for call in gold_calls]
+
+
+def failure_category(
+    example: dict,
+    pred: list[dict] | None,
+    gold_calls: list[dict],
+    allowed: set[str] | None,
+) -> str:
+    """Name WHY this row failed, in a category the orchestrator can act on.
+
+    The per-difficulty report previously labelled every open-ended failure with the constant
+    string `gold_verifier -> incorrect`, whose count is just the failure count the orchestrator
+    already has. In xlam run 38566712 that produced pages of reasoning about "the dominant
+    confusion gold_verifier->incorrect (147) essentially unchanged" — a sentence about a constant.
+
+    Every distinction below is already computed by the scorer, so this costs nothing and separates
+    the four failures that call for genuinely different interventions: unparseable output is a
+    format/template problem, an undeclared function is an unwinnable-row or prompt problem, the
+    wrong function is a tool-selection problem, and wrong arguments is an extraction problem.
+    """
+    if pred is None:
+        return "unparseable_output"
+    if not pred:
+        return "empty_call_list"
+    if allowed is not None:
+        undeclared = [call["name"] for call in pred if call["name"] not in allowed]
+        if undeclared:
+            return "undeclared_function"
+    expected = _gold_names(example, gold_calls)
+    if expected and len(pred) != len(expected):
+        return "wrong_call_count"
+    predicted_names = [call["name"] for call in pred]
+    if expected and predicted_names != expected and sorted(predicted_names) != sorted(expected):
+        return "wrong_function"
+    return "wrong_arguments"
+
+
+def failure_category_of(failure: dict) -> str:
+    """Read the category `score` stamped on this failure, recomputing it if absent.
+
+    Failure records written before the taxonomy existed carry no `error_type`; recomputing rather
+    than reporting "unknown" keeps a resumed checkpoint's report as informative as a fresh one.
+    """
+    stamped = failure.get("error_type")
+    if stamped:
+        return str(stamped)
+    gold_calls = _parse_calls(failure.get("answer", "")) or []
+    return failure_category(
+        failure, failure.get("predicted"), gold_calls, _allowed_names(failure)
+    )
+
+
 def score(eval_set: EvalSet, predictions: list[list[dict] | None]) -> dict:
     content_scores: list[float] = []
     format_scores: list[float] = []
@@ -242,7 +305,12 @@ def score(eval_set: EvalSet, predictions: list[list[dict] | None]) -> dict:
         format_scores.append(format_valid)
         content_scores.append(content)
         if content < 1.0:
-            failures.append({**ex, "predicted": pred, "format_valid": format_valid})
+            failures.append({
+                **ex,
+                "predicted": pred,
+                "format_valid": format_valid,
+                "error_type": failure_category(ex, pred, gold_calls, allowed),
+            })
 
     n = len(content_scores)
     f1 = sum(content_scores) / n if n else 0.0
@@ -252,5 +320,6 @@ def score(eval_set: EvalSet, predictions: list[list[dict] | None]) -> dict:
         "f1": f1,
         "metric": "ast_arg_match",
         "per_class": {"ast_arg_match": f1, "format_valid": format_valid_mean},
+        "format_valid": format_valid_mean,
         "failures": failures,
     }

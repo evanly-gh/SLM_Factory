@@ -4,7 +4,7 @@ Autonomous task-analysis stage (Pioneer Agent cold-start, arXiv:2604.09791v1 §2
 
 Given ONLY a natural-language task description, the orchestrator LLM
 (config.config.ORCHESTRATOR_MODEL) decides:
-  - task_type      : classification | NER | math_reasoning | code_generation | generation | function_call | diff
+  - task      : classification | NER | math_reasoning | code_generation | generation | function_call | diff
   - flags          : multi_label, schema, multilingual (on task_plan dict)
   - labels         : class names / entity types / schema fields / [] for generation types
   - exa_queries    : web-search query per label/topic
@@ -123,7 +123,7 @@ specific enough that the top results ARE examples of that label. Good queries na
 the phenomenon and the medium; weak queries just repeat the label word.
 
 Reply with ONLY a JSON object (no prose, no code fences) with these keys:
-- "task_type": one of "classification", "NER", "math_reasoning", "code_generation", "generation", "function_call", "diff"
+- "task": one of "classification", "NER", "math_reasoning", "code_generation", "generation", "function_call", "diff"
 - "task_name": short slug
 - "labels": list as described above
 - "multi_label": true | false (default false; classification only)
@@ -133,11 +133,11 @@ Reply with ONLY a JSON object (no prose, no code fences) with these keys:
 - "benchmark": well-known public benchmark name, or null
 - "curriculum_size": integer — total training examples to curate (bias up for obscure tasks)
 - "eval_size": integer — held-out eval examples (bigger = more reliable metrics)
-- "rationale": one sentence: task_type + flag choices + your data-size reasoning
+- "rationale": one sentence: task + flag choices + your data-size reasoning
 
 EXAMPLE (task: "detect spam vs legitimate SMS on a Pixel 8"):
 {{
-  "task_type": "classification",
+  "task": "classification",
   "task_name": "sms-spam",
   "labels": ["spam", "ham"],
   "multi_label": false,
@@ -253,8 +253,8 @@ def plan_task(description: str, anthropic_client=None, log=print, model_pool=Non
     )
     plan = _extract_json(response_text(resp))
 
-    if plan.get("task_type") not in _VALID:
-        raise ValueError(f"Planner returned invalid task_type: {plan.get('task_type')!r}")
+    if plan.get("task") not in _VALID:
+        raise ValueError(f"Planner returned invalid task: {plan.get('task')!r}")
 
     plan.setdefault("labels", [])
     plan.setdefault("exa_queries", {})
@@ -272,7 +272,7 @@ def plan_task(description: str, anthropic_client=None, log=print, model_pool=Non
     plan.setdefault("eval_size", None)
 
     log(
-        f"      [planner] task_type={plan['task_type']}  "
+        f"      [planner] task={plan['task']}  "
         f"multi_label={plan['multi_label']}  schema={'set' if plan['schema'] else 'null'}  "
         f"multilingual={plan['multilingual']}  labels={plan['labels']}  "
         f"benchmark={plan['benchmark']}"

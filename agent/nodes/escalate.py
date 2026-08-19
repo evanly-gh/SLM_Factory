@@ -37,18 +37,27 @@ _CHOOSE_SYSTEM = (
 
 # Which published benchmark matters most, per task type. Steers the LLM away from
 # defaulting to GSM8K (a math benchmark) when the task is, e.g., NER or code.
-_BENCHMARK_HINT = {
+_FAMILY_HINT = {
     "classification": "like-for-like knowledge metrics and instruction-following.",
-    "NER": "instruction-following and structured extraction; use only like-for-like metrics.",
-    "math_reasoning": "GSM8K when reported; missing GSM8K is unknown rather than zero.",
-    "code_generation": "APPS introductory pass@1; do not substitute a different code metric.",
-    "generation": "instruction-following and task-specific generation evidence.",
+    "extraction": "instruction-following and structured extraction; use only like-for-like metrics.",
+    "generation": "GSM8K when the task is arithmetic; otherwise instruction-following and "
+                  "task-specific generation evidence. Missing metrics are unknown, not zero.",
+    "structured_output": "instruction-following and JSON/schema adherence; a general knowledge "
+                         "score is not evidence for emitting a valid call.",
 }
+
+
+def _benchmark_hint(task: str) -> str:
+    """Steer the model-choice prompt toward metrics that mean something for THIS task."""
+    from tasks import TASKS
+
+    spec = TASKS.get(str(task or ""))
+    return _FAMILY_HINT.get(spec.family, "") if spec else ""
 
 
 def _llm_choose_model(
     candidates: list[ModelSpec],
-    task_type: str,
+    task: str,
     task_plan: dict,
     current_best_score: float,
     log=print,
@@ -84,11 +93,10 @@ def _llm_choose_model(
         f"    notes: {getattr(m, 'notes', '') or 'n/a'}"
         for m in candidates
     )
-    task_name = task_plan.get("task_name", task_type)
+    task_name = task_plan.get("task_name", task)
     task_labels = task_plan.get("labels", [])
-    benchmark_hint = _BENCHMARK_HINT.get(
-        task_type,
-        "task-specific sourced evidence; compare only like-for-like named metrics.",
+    benchmark_hint = _benchmark_hint(task) or (
+        "task-specific sourced evidence; compare only like-for-like named metrics."
     )
 
     # Offline capability descriptions plus the named-metric comparability contract (B161).
@@ -97,13 +105,13 @@ def _llm_choose_model(
 
     prompt = (
         f"Task to fine-tune for:\n"
-        f"  type: {task_type}\n"
+        f"  type: {task}\n"
         f"  name: {task_name}\n"
         f"  labels/schema: {task_labels}\n"
         f"  current best F1 (previous model): {current_best_score:.4f}\n\n"
         f"Selection direction: {'upward escalation' if direction == 'up' else 'downward resource probe'}\n"
         f"Target peak-RAM tier: {candidates[0].tier}\n\n"
-        f"For a {task_type} task, prioritise: {benchmark_hint}\n\n"
+        f"For a {task} task, prioritise: {benchmark_hint}\n\n"
         f"CAPABILITY DESCRIPTIONS (judge task fit from these, not raw numbers):\n{cap_doc}\n\n"
         f"METRIC COMPARABILITY CONTRACT: {METRIC_COMPARABILITY_CAVEAT}\n\n"
         f"'quant' is the on-device weight format: none/bf16 (highest quality, largest), "
@@ -253,7 +261,7 @@ def escalate_node(state: AgentState) -> AgentState:
     # LLM picks the best model from the next tier for this task (reason logged via _log).
     chosen = _llm_choose_model(
         candidates=next_tier_candidates,
-        task_type=state.get("task_type", "classification"),
+        task=state.get("task", "classification"),
         task_plan=state.get("task_plan") or {},
         current_best_score=state["best_score"],
         log=lambda m: _log(mlabel, m),

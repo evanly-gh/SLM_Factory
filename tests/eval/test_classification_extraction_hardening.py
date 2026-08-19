@@ -19,13 +19,13 @@ from data.eval_set import EvalSet
 from eval.scorers.classification import (
     build_classify_prompt,
     extract_predictions,
-    score,
+    score_minority_f1,
 )
 
 
-def _eval_set(labels=("local", "route")):
+def _eval_set(labels=("local", "route"), task="routerbench"):
     rows = [{"text": f"row {i}", "label": lab} for i, lab in enumerate(labels)]
-    return EvalSet(all=rows, task_type="classification")
+    return EvalSet(all=rows, task=task)
 
 
 ROUTER = _eval_set(("local", "route", "route"))
@@ -101,17 +101,17 @@ def test_empty_output_is_a_failure():
 
 
 def test_longest_label_wins_on_a_genuine_match():
-    es = _eval_set(("positive", "very_positive"))
+    es = _eval_set(("positive", "very_positive"), task="clinc150")
     assert extract_predictions(["very_positive"], es) == ["very_positive"]
 
 
 def test_word_boundary_still_prevents_substring_confusion():
-    es = _eval_set(("positive", "very_positive"))
+    es = _eval_set(("positive", "very_positive"), task="clinc150")
     assert extract_predictions(["The sentiment is positive"], es) == ["positive"]
 
 
 def test_multiword_labels_survive():
-    es = _eval_set(("accept_reservations", "oos"))
+    es = _eval_set(("accept_reservations", "oos"), task="clinc150")
     assert extract_predictions(["accept_reservations"], es) == ["accept_reservations"]
 
 
@@ -120,20 +120,22 @@ def test_multiword_labels_survive():
 # --------------------------------------------------------------------------
 
 def test_binary_scores_minority_class_and_refuses_to_reward_collapse():
+    """A binary task names `score_minority_f1` on its spec. It used to be selected implicitly by
+    counting classes, and the returned `metric` said `macro_f1` whichever branch ran."""
     labels = ["route"] * 60 + ["local"] * 40
     es = EvalSet(
         all=[{"text": f"r{i}", "label": lab} for i, lab in enumerate(labels)],
-        task_type="classification",
+        task="routerbench",
     )
-    assert score(es, labels)["f1"] == 1.0
+    assert score_minority_f1(es, labels)["f1"] == 1.0
     # Always answering the majority class earns nothing, though it is 60% "accurate".
-    assert score(es, ["route"] * 100)["f1"] == 0.0
+    assert score_minority_f1(es, ["route"] * 100)["f1"] == 0.0
 
 
 def test_extraction_failures_count_against_the_score():
     labels = ["route"] * 60 + ["local"] * 40
     es = EvalSet(
         all=[{"text": f"r{i}", "label": lab} for i, lab in enumerate(labels)],
-        task_type="classification",
+        task="routerbench",
     )
-    assert score(es, ["__EXTRACTION_FAILED__"] * 100)["f1"] == 0.0
+    assert score_minority_f1(es, ["__EXTRACTION_FAILED__"] * 100)["f1"] == 0.0

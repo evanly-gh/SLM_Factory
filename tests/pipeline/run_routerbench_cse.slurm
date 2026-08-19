@@ -13,7 +13,7 @@
 #SBATCH --signal=B:USR1@7200
 #SBATCH --output=/mmfs1/gscratch/intelligentsystems/evanly/SLM_Factory/logs/slurm/slm-routerbench-cse-%j.out
 #
-# CURATED BENCHMARK: routerbench (task_type=classification, metric minority-class F1).
+# CURATED BENCHMARK: routerbench (out-of-distribution, metric minority_f1).
 #
 # The task: given a prompt, decide whether an on-device model can answer it (`local`) or it must
 # be escalated to a larger cloud model (`route`).

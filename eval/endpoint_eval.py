@@ -13,28 +13,11 @@ import logging
 from concurrent.futures import ThreadPoolExecutor
 
 from data.eval_set import EvalSet
-from eval.harness import EvalResult, TASK_METRIC_NAMES, eval_output_token_reserve
+from eval.harness import EvalResult, eval_output_token_reserve
 
 logger = logging.getLogger(__name__)
 
 _DEFAULT_MAX_WORKERS = 16
-
-
-def _scorer_for(task_type: str):
-    """Resolve the same scorer module the live harness dispatches to."""
-    if task_type == "classification":
-        from eval.scorers import classification as scorer
-    elif task_type == "NER":
-        from eval.scorers import ner as scorer
-    elif task_type in ("math_reasoning", "code_generation", "generation"):
-        from eval.scorers import generation as scorer
-    elif task_type == "function_call":
-        from eval.scorers import function_call as scorer
-    elif task_type == "diff":
-        from eval.scorers import diff as scorer
-    else:
-        raise ValueError(f"endpoint baseline: unknown task_type {task_type!r}")
-    return scorer
 
 
 def _generate_all(
@@ -56,7 +39,6 @@ def _generate_all(
 
 def measure_endpoint_baseline(
     eval_set: EvalSet,
-    task_type: str,
     generate_fn=None,
     *,
     max_workers: int = _DEFAULT_MAX_WORKERS,
@@ -76,21 +58,25 @@ def measure_endpoint_baseline(
         log("      [baseline] reference endpoint unavailable — no zero-shot baseline measured")
         return None
 
-    scorer = _scorer_for(task_type)
-    prompts = scorer.build_prompts(eval_set)
-    max_tokens = eval_output_token_reserve(task_type)
+    # The SAME spec the live harness uses, so the reference number is directly comparable to what
+    # the fine-tuned model will be judged on — previously these were two separate dispatch chains
+    # that had to be kept in sync by hand.
+    spec = eval_set.spec
+    prompts = spec.build_prompts(eval_set)
+    max_tokens = eval_output_token_reserve(spec.name)
     log(f"      [baseline] scoring reference model on {len(prompts)} eval rows "
-        f"(task_type={task_type}, max_new_tokens={max_tokens})")
+        f"(task={spec.name}, max_new_tokens={max_tokens})")
     raw_outputs = _generate_all(generate_fn, prompts, max_tokens, max_workers)
-    predictions = scorer.extract_predictions(raw_outputs, eval_set)
-    result = scorer.score(eval_set, predictions)
+    predictions = spec.extract_predictions(raw_outputs, eval_set)
+    result = spec.score(eval_set, predictions)
 
-    metric = result.get("metric", TASK_METRIC_NAMES.get(task_type, "f1"))
-    log(f"      [baseline] reference {metric}={result['f1']:.4f}")
+    metric = result.get("metric", spec.metric_name)
+    log(f"      [baseline] reference {metric}={result['f1']:.4f} "
+        f"format_valid={float(result.get('format_valid', 1.0)):.4f}")
     return EvalResult(
         f1=result["f1"],
         per_class=result["per_class"],
         failures=result["failures"],
-        execution_diagnostics=result.get("execution_diagnostics", []),
         metric=metric,
+        format_valid=float(result.get("format_valid", 1.0)),
     )

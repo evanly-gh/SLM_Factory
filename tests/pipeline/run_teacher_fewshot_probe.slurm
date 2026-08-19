@@ -93,7 +93,7 @@ for TASK in $TASKS; do
     echo ""
     echo "############ probing $TASK ############"
     .venv/bin/python scripts/probe_teacher_fewshot.py \
-        --task "$TASK" --shots 0 1 3 5 --n "${SLM_PROBE_N:-200}"
+        --task "$TASK" --shots 0 1 3 5 --corrupt-shots 5 --n "${SLM_PROBE_N:-200}"
 done
 
 echo "=== probe complete ==="

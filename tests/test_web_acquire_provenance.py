@@ -21,7 +21,7 @@ def test_exa_round_tags_rows_with_source_url(monkeypatch):
 
     rows = wa._exa_round(
         exa=object(),
-        task_type="classification",
+        task="clinc150",
         plan={"labels": ["spam"], "exa_queries": {"spam": "spam example texts"}},
         description="spam detection",
         n_per_label=5,
@@ -49,7 +49,7 @@ def test_exa_round_groups_rows_by_page_via_source_key(monkeypatch):
 
     rows = wa._exa_round(
         exa=object(),
-        task_type="generation",
+        task="dialogsum",
         plan={"exa_queries": {"general": "some query"}},
         description="general",
         n_per_label=5,

@@ -582,31 +582,31 @@ log("")
 # --------------------------------------------------------------------------
 # Initial state
 # --------------------------------------------------------------------------
-# Curated-benchmark pin: SLM_BENCHMARK_TASK selects one of the six deterministic loaders instead
-# of the autonomous web_acquire path. eval_setup only consults that env on the NON-autonomous
-# branch (task_plan is None), so we must start the run non-autonomous with the loader's task_type
-# preset — otherwise task_analysis would plan a task and the env would be silently ignored.
+# SLM_BENCHMARK_TASK names the task from the registry. Every run is a named task now — the
+# autonomous "plan a task type and go discover data for it" path was removed with the task_type
+# channels, because a task the registry does not know has no loader, no scorer and no synthesis
+# path, and pretending otherwise is what produced silent no-ops.
+import tasks as _tasks
+
 _benchmark_task = (os.environ.get("SLM_BENCHMARK_TASK") or "").strip().lower()
-_initial_autonomous = True
-_initial_task_type = ""
-if _benchmark_task:
-    _bench_map = _eval_setup_mod.NAMED_BENCHMARK_TASK_TYPES
-    if _benchmark_task not in _bench_map:
-        raise SystemExit(
-            f"SLM_BENCHMARK_TASK={_benchmark_task!r} is not a known benchmark; "
-            f"choose one of {sorted(_bench_map)}"
-        )
-    _initial_task_type = _bench_map[_benchmark_task][0]
-    _initial_autonomous = False
-    os.environ["SLM_BENCHMARK_TASK"] = _benchmark_task  # normalized for eval_setup
-    log(f"  benchmark: SLM_BENCHMARK_TASK={_benchmark_task} "
-        f"(curated loader, task_type={_initial_task_type}, non-autonomous)")
+if not _benchmark_task:
+    raise SystemExit(
+        "SLM_BENCHMARK_TASK is required; choose one of " + ", ".join(_tasks.task_names())
+    )
+try:
+    _spec = _tasks.get_task(_benchmark_task)
+except ValueError as exc:
+    raise SystemExit(str(exc)) from None
+_initial_task = _spec.name
+_initial_autonomous = False
+os.environ["SLM_BENCHMARK_TASK"] = _initial_task  # normalized for eval_setup
+log(f"  task: {_initial_task} ({_spec.title}) — {_spec.category}, metric {_spec.metric_name}")
 
 fresh_initial_state = {
     "description": description,
     "target_metric": "F1",
     "hardware_constraints": HW,
-    "task_type": _initial_task_type,
+    "task": _initial_task,
     "autonomous": _initial_autonomous,
     "task_plan": None,
     # Pinned by eval_setup from the frozen eval set, then closed for the rest of the run.
@@ -623,15 +623,18 @@ fresh_initial_state = {
     # which is what makes repeated raising a terminating ratchet rather than an open loop.
     "convergence_banked": None,
     "threshold_raises": [],
+    "threshold_lowers": [],
     "max_stop_threshold": 0.0,
     "train_examples": [],
+    "source_progress": {},
+    "failed_discovery_rounds": 0,
+    "task_brief": None,
     "eval_set": None,
     "data_source": None,
     "current_dataset_path": None,
     "dataset_version": 0,
     "data_rebuild_plan": None,
     "data_rebuild_plan_identity": None,
-    "source_acquire_rounds_used": 0,
     "curation_log_path": CUR_LOG_PATH,
     "best_weights_ref": None,
     "best_score": 0.0,
@@ -660,8 +663,6 @@ fresh_initial_state = {
     "_pending_training_outputs": None,
     "_pending_configs": None,
     # Redesign additions (B161+)
-    "curriculum_size_target": config.CURRICULUM_SIZE_FLOOR,
-    "eval_size_target": config.EVAL_SET_SIZE,
     "eval_source_ban": [],
     "data_sources": [],
     "data_source_usage": [],
@@ -1002,9 +1003,7 @@ if config.HW_VERIFY_ON_DEVICE:
                     f"peakRSS={hw_result.peak_memory_mb}MB  power={hw_result.avg_watts}W  "
                     f"→ constraints {'PASS' if passed else 'FAIL'}")
                 # The verified artifact is recorded in hardware_eval.json above
-                # (weights_ref + constraint_check + all_constraints_pass). The former
-                # `deployed_model_ref` state field was production-mode-only and write-only;
-                # it was removed with production mode on 2026-07-29.
+                # (weights_ref + constraint_check + all_constraints_pass).
             else:
                 log(f"      [hw-verify] measurement failed: {hw_result.error}")
     except Exception as exc:
@@ -1067,9 +1066,10 @@ atomic_write_json(
         # re-deriving whether the floor or the teacher's own measurement set the bar.
         "initial_stop_threshold": last_state.get("initial_stop_threshold"),
         "threshold_calibration": last_state.get("threshold_calibration"),
-        # Stretch-goal audit: the goal actually cleared, and every raise applied after it.
+        # Goal-movement audit: the goal actually cleared, plus every raise and lower applied.
         "convergence_banked": last_state.get("convergence_banked"),
         "threshold_raises": last_state.get("threshold_raises") or [],
+        "threshold_lowers": last_state.get("threshold_lowers") or [],
     },
 )
 
@@ -1161,11 +1161,12 @@ _metric_name = getattr(
     last_state.get("last_eval"),
     "metric",
     None,
-) or TASK_METRIC_NAMES.get(last_state.get("task_type", ""), "f1")
+) or TASK_METRIC_NAMES.get(last_state.get("task", ""), "f1")
 log(f"score metric: {_metric_name} (carried in the EvalResult.f1 field)")
 from agent.pipeline_status import (
     build_run_progression,
     format_downward_probe_history,
+    format_intervention_detail,
     outcome_text,
     process_exit_code,
     run_heading,
@@ -1186,7 +1187,7 @@ log("")
 log(f"{'='*70}")
 log(f"  {run_heading(pipeline_error)} — {elapsed:.1f}s")
 log(f"{'='*70}")
-log(f"  task_type : {last_state.get('task_type')}")
+log(f"  task : {last_state.get('task')}")
 log(f"  model     : {m.selector if m else None}")
 log(f"  iterations: {_final_entry.get('iterations', 0)}")
 log(f"  best F1   : {best:.4f}  (threshold {threshold:.4f})  "
@@ -1276,8 +1277,8 @@ if progression:
     # those indistinguishable — BC5CDR's +0.8098 was almost entirely the first iteration
     # (0.0000 → 0.7701), with 4 further iterations adding 0.0397.
     log(f"  {'Tier':>4}  {'Model':<32} {'Quant':<8} {'Baseline':>9} {'First FT':>9} "
-        f"{'Best FT':>9} {'Δ base':>9} {'Δ search':>9}")
-    log(f"  {'-'*100}")
+        f"{'Best FT':>9} {'Δ base':>9} {'Δ search':>9} {'Format':>8}")
+    log(f"  {'-'*110}")
     for p in progression:
         bl = p.get("baseline_f1")
         ft = p.get("best_score")
@@ -1296,9 +1297,17 @@ if progression:
             if first is not None and ft is not None
             else "n/a"
         )
+        # Format rate of the BEST iteration on this variant: a strong content score reached with a
+        # format rate well below 1.0 means the ceiling is a parsing problem, not a capability one.
+        _best_fmt = next(
+            (node.get("format_valid") for node in reversed(p.get("dag") or [])
+             if node.get("format_valid") is not None),
+            None,
+        )
+        fmt_text = f"{_best_fmt:.4f}" if isinstance(_best_fmt, (int, float)) else "n/a"
         log(f"  {str(p.get('tier','?')):>4}  {p.get('model_id','?'):<32} "
             f"{str(p.get('quant') or 'bf16'):<8} {bl_text:>9} {first_text:>9} "
-            f"{ft_text:>9} {delta_text:>9} {search_text:>9}")
+            f"{ft_text:>9} {delta_text:>9} {search_text:>9} {fmt_text:>8}")
 
 # DAG Traversal for EVERY model tested (not just the final one). Each escalation reset the
 # DAG, so escalate_node stashed each model's per-iteration DAG in escalation_history; here
@@ -1314,12 +1323,19 @@ if progression:
         if not pdag:
             log(f"     (no completed iterations recorded)")
             continue
-        log(f"     {'Iter':>4}  {'Score':>7}  {'Pruned':>6}  {'Config':<25}  {'Intervention'}")
+        # Content and FORMAT side by side per iteration. They answer different questions — a low
+        # content score with high format is a data problem, a low format score is a prompt or
+        # chat-template problem — and reporting only the first is what let B290 look like
+        # "fine-tuning does not help this task" for two whole runs.
+        log(f"     {'Iter':>4}  {'Content':>8}  {'Format':>7}  {'Pruned':>6}  "
+            f"{'Config':<34}  {'Intervention'}")
         for node in pdag:
             pruned_str = "✗" if node.get("pruned") else ""
-            log(f"     {node.get('iteration','?'):>4}  {node.get('score',0):.4f}  "
-                f"{pruned_str:>6}  {str(node.get('best_config','?')):<25}  "
-                f"{node.get('intervention','?')}")
+            fmt = node.get("format_valid")
+            fmt_text = f"{fmt:.4f}" if isinstance(fmt, (int, float)) else "n/a"
+            log(f"     {node.get('iteration','?'):>4}  {node.get('score',0):8.4f}  "
+                f"{fmt_text:>7}  {pruned_str:>6}  {str(node.get('best_config','?')):<34}  "
+                f"{format_intervention_detail(node)}")
 
 log("")
 _anthropic_cost = cost["by_provider"].get("anthropic", {})

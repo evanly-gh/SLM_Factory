@@ -13,7 +13,7 @@
 #SBATCH --signal=B:USR1@7200
 #SBATCH --output=/mmfs1/gscratch/intelligentsystems/evanly/SLM_Factory/logs/slurm/slm-ner-bc5cdr-l40s-%j.out
 #
-# CURATED BENCHMARK: ner_bc5cdr (task_type=NER, metric span_f1). Promoted 2026-08-13 from the
+# CURATED BENCHMARK: ner_bc5cdr (format-bound, metric span_f1). Promoted 2026-08-13 from the
 # autonomous path, where it reached BC5CDR only because the orchestrator happened to emit a plan
 # web_acquire could resolve — not reproducible. SLM_BENCHMARK_TASK pins the loader.
 #

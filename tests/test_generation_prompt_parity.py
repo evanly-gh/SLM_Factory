@@ -23,9 +23,19 @@ from eval.scorers.generation import (
     build_prompts,
     resolve_generation_instruction,
 )
+from tasks._builders import TrainingContext
 from training.lora_trainer import _training_turn
 
 _RAW = [{"dialogue": "Amanda: I baked cookies.\nJerry: Sure!", "summary": "Amanda baked cookies."}]
+
+
+def _ctx(rows):
+    """The dataset-level context a training turn needs, resolved the way the trainer resolves it.
+
+    `dialogsum` has no closed label space, so there is no class vocabulary to pass — the trainer
+    reads that off the spec rather than being told.
+    """
+    return TrainingContext(labels=(), instruction=resolve_generation_instruction(rows))
 
 
 class TestTrainEvalParity:
@@ -33,17 +43,13 @@ class TestTrainEvalParity:
 
     def test_trainer_and_eval_produce_the_identical_prompt(self):
         rows = convert_dialogsum_rows(_RAW)
-        eval_prompt = build_prompts(EvalSet(all=rows, task_type="generation"))[0]
-        train_prompt, _target, _marker = _training_turn(
-            rows[0], "generation", [], resolve_generation_instruction(rows)
-        )
+        eval_prompt = build_prompts(EvalSet(all=rows, task="dialogsum"))[0]
+        train_prompt, _target, _marker = _training_turn(rows[0], "dialogsum", _ctx(rows))
         assert train_prompt == eval_prompt
 
     def test_training_target_is_the_summary_not_the_prompt(self):
         rows = convert_dialogsum_rows(_RAW)
-        _prompt, target, _marker = _training_turn(
-            rows[0], "generation", [], resolve_generation_instruction(rows)
-        )
+        _prompt, target, _marker = _training_turn(rows[0], "dialogsum", _ctx(rows))
         assert target == "Amanda baked cookies."
 
     def test_synthetic_rows_without_an_instruction_share_the_dataset_instruction(self):
@@ -55,10 +61,8 @@ class TestTrainEvalParity:
         rows = convert_dialogsum_rows(_RAW) + [
             {"text": "A: hi\nB: hello", "answer": "They greet.", "label": "generation"}
         ]
-        instruction = resolve_generation_instruction(rows)
-        prompts = [
-            _training_turn(row, "generation", [], instruction)[0] for row in rows
-        ]
+        ctx = _ctx(rows)
+        prompts = [_training_turn(row, "dialogsum", ctx)[0] for row in rows]
         assert all(p.startswith(SUMMARIZATION_INSTRUCTION) for p in prompts)
 
 
@@ -69,7 +73,7 @@ class TestTheInstructionActuallyDescribesTheTask:
 
     def test_the_prompt_says_summarize_not_answer(self):
         rows = convert_dialogsum_rows(_RAW)
-        prompt = build_prompts(EvalSet(all=rows, task_type="generation"))[0]
+        prompt = build_prompts(EvalSet(all=rows, task="dialogsum"))[0]
         assert "Summarize" in prompt
         assert "Answer the following question" not in prompt
 
@@ -79,7 +83,7 @@ class TestTheInstructionActuallyDescribesTheTask:
 
     def test_the_dialogue_is_still_in_the_prompt(self):
         rows = convert_dialogsum_rows(_RAW)
-        prompt = build_prompts(EvalSet(all=rows, task_type="generation"))[0]
+        prompt = build_prompts(EvalSet(all=rows, task="dialogsum"))[0]
         assert "Amanda: I baked cookies." in prompt
 
 
@@ -108,7 +112,12 @@ class TestInstructionIsMetadata:
         `_new_example_prompt` builds the teacher's JSON schema from non-underscore keys, so an
         underscore-prefixed instruction is never shown to the teacher and cannot be regenerated.
         """
+        from agent.task_brief import brief_context_block
         from data.curriculum import _new_example_prompt
+        from tasks import get_task
 
         row = convert_dialogsum_rows(_RAW)[0]
-        assert "_instruction" not in _new_example_prompt(row, "generation")
+        # The description now comes from the orchestrator's task brief rather than a table keyed by
+        # task type; what the row must not leak is unchanged.
+        description = brief_context_block(None, get_task("dialogsum"))
+        assert "_instruction" not in _new_example_prompt(row, description)

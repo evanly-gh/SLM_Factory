@@ -1,107 +1,67 @@
 # tests/eval/test_harness_tokens.py
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 import pytest
 
+from data.eval_set import EvalSet
 from eval.harness import eval_output_token_reserve, run_eval
-import eval.scorers.classification  # ensure attribute exists on package for patching
-import eval.scorers.generation  # ensure attribute exists on package for patching
+from tasks import TASKS, get_task
 
 
-def _mock_scorer():
-    s = MagicMock()
-    s.build_prompts.return_value = ["p1"]
-    s.extract_predictions.return_value = ["ans"]
-    s.score.return_value = {
-        "f1": 0.8, "per_class": {},
-        "failures": [],
-    }
-    return s
-
-
-def _eval_set():
-    return MagicMock(task_type="classification")
+def _eval_set(task):
+    """A real eval set for `task`. The harness reads its budget off the task's spec, so the spec
+    is what the assertions below are really about."""
+    return EvalSet(all=[{"text": "p1", "label": "local", "answer": "42"}], task=task)
 
 
 @patch("eval.harness.infer_batch")
-def test_classification_uses_50_tokens(mock_infer):
-    mock_infer.return_value = ["spam"]
-    with patch("eval.scorers.classification", _mock_scorer()):
-        run_eval(_eval_set(), "/w", "m", "classification")
-    _, kwargs = mock_infer.call_args
-    assert kwargs.get("max_new_tokens", mock_infer.call_args[0][3] if len(mock_infer.call_args[0]) > 3 else None) == 50
+def test_a_short_answer_task_asks_for_few_tokens(mock_infer, monkeypatch):
+    monkeypatch.delenv("SLM_CUDA_ISOLATION", raising=False)
+    mock_infer.return_value = ["local"]
+    run_eval(_eval_set("routerbench"), "/w", "m")
+    assert mock_infer.call_args.kwargs["max_new_tokens"] == 50
 
 
 @patch("eval.harness.infer_batch")
-def test_math_uses_long_token_budget(mock_infer):
+def test_a_chain_of_thought_task_asks_for_room_to_reason(mock_infer, monkeypatch):
+    monkeypatch.delenv("SLM_CUDA_ISOLATION", raising=False)
     mock_infer.return_value = ["42"]
-    with patch("eval.scorers.generation", _mock_scorer()):
-        run_eval(_eval_set(), "/w", "m", "math_reasoning")
-    _, kwargs = mock_infer.call_args
-    max_tok = kwargs.get("max_new_tokens")
-    assert max_tok == 512, f"Expected 512 for math_reasoning (CoT room), got {max_tok}"
+    run_eval(_eval_set("gsm8k"), "/w", "m")
+    assert mock_infer.call_args.kwargs["max_new_tokens"] == 512
 
 
-@patch("eval.harness.infer_batch")
-def test_code_generation_uses_1024_token_output_budget(mock_infer):
-    mock_infer.return_value = ["print(1)"]
-    with patch("eval.scorers.generation", _mock_scorer()):
-        run_eval(_eval_set(), "/w", "m", "code_generation")
+@pytest.mark.parametrize("task", sorted(TASKS))
+def test_every_task_reserve_leaves_a_nonzero_prompt_budget(monkeypatch, task):
+    """The reserve and the context window are BOTH the task's own, and the spec validated their
+    relationship at import time. The reserve used to be a dict keyed by task_type read against a
+    `max_seq_length` the caller passed in separately, so the two could disagree."""
+    monkeypatch.delenv("SLM_EVAL_MAX_NEW_TOKENS", raising=False)
 
-    _, kwargs = mock_infer.call_args
-    assert kwargs["max_new_tokens"] == 1024
+    reserve = eval_output_token_reserve(task)
 
-
-@pytest.mark.parametrize(
-    ("task_type", "expected_reserve"),
-    [
-        ("NER", 512),
-        ("math_reasoning", 512),
-        ("generation", 512),
-        ("code_generation", 1024),
-    ],
-)
-def test_default_long_task_reserves_leave_nonzero_4096_prompt_budget(
-    monkeypatch,
-    task_type,
-    expected_reserve,
-):
-    setting = {
-        "NER": "SLM_EVAL_MAX_NEW_TOKENS_NER",
-        "math_reasoning": "SLM_EVAL_MAX_NEW_TOKENS_MATH",
-        "generation": "SLM_EVAL_MAX_NEW_TOKENS_GENERATION",
-        "code_generation": "SLM_EVAL_MAX_NEW_TOKENS_APPS",
-    }[task_type]
-    monkeypatch.delenv(setting, raising=False)
-
-    reserve = eval_output_token_reserve(
-        task_type,
-        max_seq_length=4096,
-    )
-
-    assert reserve == expected_reserve
-    assert 4096 - reserve > 0
+    spec = get_task(task)
+    assert reserve == spec.max_new_tokens
+    assert spec.max_seq_length - reserve > 0
 
 
-def test_zero_prompt_budget_fails_before_generation_with_actionable_context():
+def test_zero_prompt_budget_fails_before_generation_with_actionable_context(monkeypatch):
+    monkeypatch.setenv("SLM_EVAL_MAX_NEW_TOKENS", "4096")
+
     with pytest.raises(
         ValueError,
         match=(
-            r"task_type=NER.*512 output tokens.*no prompt budget"
-            r".*SLM_MAX_SEQ_LENGTH"
+            r"task=ner_bc5cdr reserves 4096 output tokens.*no prompt budget"
+            r".*max_seq_length"
         ),
     ):
-        eval_output_token_reserve("NER", max_seq_length=512)
+        eval_output_token_reserve("ner_bc5cdr")
 
 
 def test_nonpositive_task_output_reserve_is_rejected(monkeypatch):
-    monkeypatch.setenv("SLM_EVAL_MAX_NEW_TOKENS_APPS", "0")
+    monkeypatch.setenv("SLM_EVAL_MAX_NEW_TOKENS", "0")
 
     with pytest.raises(
         ValueError,
-        match=r"SLM_EVAL_MAX_NEW_TOKENS_APPS.*positive integer",
+        match=r"SLM_EVAL_MAX_NEW_TOKENS.*positive integer",
     ):
-        eval_output_token_reserve(
-            "code_generation",
-            max_seq_length=4096,
-        )
+        eval_output_token_reserve("xlam_bfcl")

@@ -12,7 +12,6 @@ def _log(model_id: str, msg: str):
 def should_rollback(state: AgentState) -> bool:
     """
     Cold-start simple rollback: if f(π_i+1) < f(π_i), revert.
-    No dual-gate in cold-start (that is production mode only).
     """
     scores = state["scores"]
     if len(scores) < 2:

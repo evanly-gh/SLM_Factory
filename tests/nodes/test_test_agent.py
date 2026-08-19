@@ -13,7 +13,7 @@ from eval.harness import EvalResult
 class _FakeEvalSet:
     def __init__(self, texts):
         self.all = [{"text": t, "label": "x"} for t in texts]
-        self.task_type = "classification"
+        self.task = "clinc150"
 
 
 def test_length_heuristic_buckets_partition():
@@ -57,7 +57,7 @@ def test_report_exposes_aggregate_confusion_counts_without_eval_text():
         result,
         {"easy": [secret_a], "medium": [], "hard": [secret_b]},
         0.9,
-        "classification",
+        "clinc150",
     )
 
     assert report["confusion_pairs"] == [
@@ -69,21 +69,21 @@ def test_report_exposes_aggregate_confusion_counts_without_eval_text():
 
 
 def test_diagnose_converged():
-    d = diagnose({"easy": {"accuracy": 0.9, "n": 10}}, 0.9, 0.85, "classification")
+    d = diagnose({"easy": {"accuracy": 0.9, "n": 10}}, 0.9, 0.85, "clinc150")
     assert d["suggested_intervention"] == "none" and d["band"] == "converged"
 
 
 def test_diagnose_easy_failing_is_data_problem():
     bd = {"easy": {"accuracy": 0.3, "n": 10}, "medium": {"accuracy": 0.2, "n": 10},
           "hard": {"accuracy": 0.1, "n": 10}}
-    d = diagnose(bd, 0.2, 0.85, "classification")
+    d = diagnose(bd, 0.2, 0.85, "clinc150")
     assert d["suggested_intervention"] == "data_rebuild" and d["band"] == "data"
 
 
 def test_diagnose_hard_failing_is_optimization():
     bd = {"easy": {"accuracy": 0.9, "n": 10}, "medium": {"accuracy": 0.8, "n": 10},
           "hard": {"accuracy": 0.3, "n": 10}}
-    d = diagnose(bd, 0.7, 0.85, "classification")
+    d = diagnose(bd, 0.7, 0.85, "clinc150")
     assert d["suggested_intervention"] == "hyperparameter" and d["band"] == "optimization"
 
 
@@ -98,7 +98,7 @@ def test_label_difficulty_zeroshot_gradient():
         return {"both": True, "onlybig": True, "neither": False}  # big
 
     os.environ["SLM_DIFFICULTY"] = "zeroshot"
-    b = label_difficulty(es, models, "classification", log=lambda *_: None, correctness_fn=cf)
+    b = label_difficulty(es, models, "clinc150", log=lambda *_: None, correctness_fn=cf)
     assert b["easy"] == ["both"]
     assert b["medium"] == ["onlybig"]
     assert b["hard"] == ["neither"]
@@ -136,7 +136,7 @@ def test_label_difficulty_uses_unique_base_model_capacity_endpoints():
     buckets = label_difficulty(
         es,
         models,
-        "classification",
+        "clinc150",
         log=lambda *_: None,
         correctness_fn=cf,
     )

@@ -9,18 +9,7 @@ from typing import Iterable
 
 NORMALIZATION_VERSION = "nfkc_casefold_whitespace_v1"
 CHECKSUM_FILENAMES = ("train.jsonl", "test.jsonl", "manifest.json")
-TASK_REQUIRED_FIELDS = {
-    "classification": ("text", "label"),
-    "NER": ("text", "entities"),
-    "math_reasoning": ("text", "answer"),
-    # Code eval is execution-based: APPS test rows can legitimately omit gold code.
-    # Split-aware validation below requires gold only for training rows.
-    "code_generation": ("text",),
-    "generation": ("text", "answer"),
-    # Format-bound (2026-08-01): answer holds the gold call JSON / gold unified diff.
-    "function_call": ("text", "answer"),
-    "diff": ("text", "answer"),
-}
+# Required fields are declared per task (`TaskSpec.required_fields`), not per channel.
 
 
 def normalize_text(value: object) -> str:
@@ -73,11 +62,11 @@ def sha256_file(path: str | Path) -> str:
     return digest.hexdigest()
 
 
-def required_fields_for_task(task_type: str) -> tuple[str, ...]:
-    try:
-        return TASK_REQUIRED_FIELDS[task_type]
-    except KeyError as error:
-        raise ValueError(f"unsupported dataset task_type={task_type!r}") from error
+def required_fields_for_task(task: str) -> tuple[str, ...]:
+    """The fields every row of `task` must carry, from its spec."""
+    from tasks import get_task
+
+    return get_task(task).required_fields
 
 
 def validate_rows(
@@ -106,74 +95,6 @@ def validate_rows(
             raise ValueError(f"{bundle_name}: {split} row {index} has invalid answer")
         if "entities" in required and not isinstance(row.get("entities"), list):
             raise ValueError(f"{bundle_name}: {split} row {index} has invalid entities")
-    if required == set(TASK_REQUIRED_FIELDS["code_generation"]):
-        validate_code_generation_rows(
-            rows,
-            bundle_name=bundle_name,
-            split=split,
-            require_gold=split == "train",
-        )
-
-
-def validate_code_generation_rows(
-    rows: Iterable[dict],
-    *,
-    bundle_name: str,
-    split: str,
-    require_gold: bool,
-) -> None:
-    """Validate the executable APPS-or-MBPP union schema."""
-    from data.loaders.apps import valid_apps_input_output
-
-    for index, row in enumerate(rows):
-        if require_gold and (
-            not isinstance(row.get("answer"), str)
-            or not row["answer"].strip()
-        ):
-            raise ValueError(
-                f"{bundle_name}: {split} row {index} has no usable gold solution"
-            )
-        if "answer" in row and (
-            not isinstance(row["answer"], str) or not row["answer"].strip()
-        ):
-            raise ValueError(
-                f"{bundle_name}: {split} row {index} has invalid answer"
-            )
-
-        input_output = row.get("input_output")
-        apps_tests = valid_apps_input_output(input_output)
-        mbpp_tests = row.get("test_list")
-        mbpp_tests_valid = (
-            isinstance(mbpp_tests, list)
-            and bool(mbpp_tests)
-            and all(
-                isinstance(statement, str) and statement.strip()
-                for statement in mbpp_tests
-            )
-        )
-        if not apps_tests and not mbpp_tests_valid:
-            raise ValueError(
-                f"{bundle_name}: {split} row {index} lacks executable "
-                "input_output or test_list metadata"
-            )
-
-        if apps_tests:
-            fn_name = input_output.get("fn_name")
-            expected_mode = "call_based" if fn_name else "stdin"
-            mode = row.get("execution_mode", expected_mode)
-            if mode != expected_mode:
-                raise ValueError(
-                    f"{bundle_name}: {split} row {index} has execution_mode "
-                    f"{mode!r}, expected {expected_mode!r}"
-                )
-        if mbpp_tests_valid:
-            imports = row.get("test_imports", [])
-            if not isinstance(imports, list) or not all(
-                isinstance(statement, str) for statement in imports
-            ):
-                raise ValueError(
-                    f"{bundle_name}: {split} row {index} has invalid test_imports"
-                )
 
 
 def write_checksum_sidecar(

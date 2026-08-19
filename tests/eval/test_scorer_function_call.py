@@ -16,7 +16,7 @@ def _row(text, gold_calls, tools=None):
 
 
 def _eval_set(rows):
-    return EvalSet(all=list(rows), task_type="function_call")
+    return EvalSet(all=list(rows), task="xlam_bfcl")
 
 
 TOOLS = [

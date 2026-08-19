@@ -31,7 +31,7 @@ def _make_state(quant=None):
     eval_set = MagicMock(spec=EvalSet)
     eval_set.all = [{"text": f"ex{i}"} for i in range(10)]
     return {
-        "task_type": "classification",
+        "task": "clinc150",
         "selected_model": _make_model(quant=quant),
         "eval_set": eval_set,
         "iteration": 2,
@@ -160,7 +160,9 @@ def test_base_model_gguf_converts_pinned_snapshot_without_merge_or_deletion(
     quantize.assert_called_once()
     assert quantize.call_args.args[0] == snapshot
     merge.assert_not_called()
-    validate.assert_called_once_with("/gguf/base-q4_k_m.gguf")
+    validate.assert_called_once_with(
+        "/gguf/base-q4_k_m.gguf", base_model="Qwen/Qwen3.5-2B"
+    )
     rmtree.assert_not_called()
 
 
@@ -212,7 +214,7 @@ def test_unvalidated_missing_layer_cache_is_invalidated_and_rebuilt(
         )
 
     quantize.assert_called_once()
-    validate.assert_called_once_with(result)
+    validate.assert_called_once_with(result, base_model=model_id)
     assert cached.read_bytes() == b"335 tensors; complete"
 
 
@@ -248,7 +250,9 @@ def test_qwen35_gguf_build_merges_multimodal_adapter_before_exact_quant():
     quantize.assert_called_once()
     assert quantize.call_args.args[0] == "/merged/qwen35"
     assert quantize.call_args.args[2] == "Q4_K_M"
-    validate.assert_called_once_with("/gguf/qwen35-q4_k_m.gguf")
+    validate.assert_called_once_with(
+        "/gguf/qwen35-q4_k_m.gguf", base_model="Qwen/Qwen3.5-0.8B"
+    )
 
 
 @patch("agent.nodes.evaluate.config.QUANT_ACCURACY_EVAL", True)
@@ -305,7 +309,9 @@ def test_generation_baseline_reraises_local_judge_infrastructure_error(mock_eval
     from eval.judge_client import JudgeInfrastructureError
 
     state = _make_state(quant=None)
-    state["task_type"] = "generation"
+    # A judge-scored task: `needs_judge` is on the spec, so a judge outage fails loudly on the
+    # tasks that call the judge instead of scoring them zero.
+    state["task"] = "dialogsum"
     state["iteration"] = 1
     mock_eval.side_effect = [
         JudgeInfrastructureError("local judge unavailable"),
@@ -354,10 +360,10 @@ def test_evaluate_node_uses_bf16_path_when_quant_none(mock_hw, mock_profile, moc
     state = _make_state(quant=None)
     plan = normalize_data_rebuild_plan(
         {
-            "strategy": "synthesize",
-            "target_rows": 64,
+            "strategy": "surgical_synthesis",
+            "rows": 64,
         },
-        task_type="classification",
+        task="clinc150",
         hypothesis="rebalance aggregate classes",
     )
     state["data_rebuild_plan"] = plan
@@ -371,7 +377,7 @@ def test_evaluate_node_uses_bf16_path_when_quant_none(mock_hw, mock_profile, moc
         "data_rebuild_plan": plan,
         "rebuild_config": {"target_rows": 64, "seed": 17},
         "strategy_composition": [{
-            "strategy": "synthesize",
+            "strategy": "surgical_synthesis",
             "rows": 12,
         }],
         "plan_yield": {"status": "novel", "novel_rows": 12},
@@ -489,7 +495,9 @@ def test_evaluate_node_quantizes_and_uses_gguf_path_when_quant_set(
     # quantize was called with correct quant string
     mock_quantize.assert_called_once()
     assert mock_quantize.call_args[0][2] == "Q4_K_M"
-    mock_validate.assert_called_once_with("/gguf/model.gguf")
+    mock_validate.assert_called_once_with(
+        "/gguf/model.gguf", base_model="test/Model-1B"
+    )
     # run_eval called with gguf_path
     mock_eval.assert_called_once()
     call_kwargs = mock_eval.call_args[1]

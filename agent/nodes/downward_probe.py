@@ -54,7 +54,7 @@ def _train_and_eval(
 ):
     """Train `model` on dataset_path and return (weights_ref, EvalResult).
     Uses the honest quantized-eval path when model.quant is set."""
-    task_type = state["task_type"]
+    task = state["task"]
     model_id = model.model_id
     realized_h, _ = normalize_hyperparams(
         hparams or DOWNWARD_PROBE_H
@@ -85,7 +85,7 @@ def _train_and_eval(
             ),
             effective_batch_size=realized_h["effective_batch_size"],
             output_dir=output_dir,
-            task_type=task_type,
+            task=task,
         )
 
     weights_ref = run_training_atomically(
@@ -115,7 +115,7 @@ def _train_and_eval(
         )
     result = run_eval(
         state["eval_set"], weights_ref, model_id,
-        task_type=task_type, quant=model.quant, gguf_path=gguf_path,
+        task=task, quant=model.quant, gguf_path=gguf_path,
     )
     return weights_ref, result
 
@@ -348,7 +348,7 @@ def downward_probe_step_node(state: AgentState) -> AgentState:
     try:
         chosen = _llm_choose_model(
             candidates=candidates,
-            task_type=state.get("task_type", "classification"),
+            task=state.get("task", "classification"),
             task_plan=state.get("task_plan") or {},
             current_best_score=state["best_score"],
             log=lambda message: _plog(f"  {message}"),

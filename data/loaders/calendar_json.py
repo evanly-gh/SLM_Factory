@@ -32,6 +32,7 @@ of certainly-correct gold beats a larger one containing rows no model can win.
 from __future__ import annotations
 
 import hashlib
+import os
 import json
 import re
 from collections.abc import Iterable
@@ -267,6 +268,31 @@ def reference_for(key: str) -> datetime:
     return datetime(2026, 1, 1, hour, 0, 0) + timedelta(days=day_offset % 365)
 
 
+def _reference_before_event(key: str, date_text: str, time_text: str) -> datetime | None:
+    """A per-row reference instant placed 1-21 days BEFORE the event, so no year rollforward is
+    needed and the year is inferable from the prompt.
+
+    Two passes: resolve the date against a neutral probe reference to find out WHEN the event is,
+    then place the real reference a hashed 1-21 days earlier and hand that back. Returns None when
+    the date cannot be resolved at all, so the caller drops the row rather than guessing.
+    """
+    probe = datetime(2026, 1, 1, 9, 0, 0)
+    when = resolve_datetime(f"{date_text} {time_text}", probe)
+    if when is None:
+        return None
+    digest = hashlib.sha256(f"ref:{key}".encode("utf-8")).digest()
+    days_before = 1 + (digest[0] % 21)
+    hour = 8 + (digest[1] % 10)
+    reference = (when - timedelta(days=days_before)).replace(
+        hour=hour, minute=0, second=0, microsecond=0
+    )
+    # Guard the boundary: the reference must be strictly before the event, or the rollforward this
+    # exists to prevent would fire anyway.
+    if reference >= when:
+        reference = when - timedelta(days=1)
+    return reference
+
+
 def build_calendar_row(
     utterance: str, summary: str, when: datetime, *,
     location: str | None = None, key: str = "",
@@ -423,16 +449,35 @@ def convert_sgd_rows(dialogues: Iterable[dict]) -> list[dict]:
         if not summary or not date_text or not time_text:
             continue
         key = f"sgd:{dialogue.get('dialogue_id')}"
-        reference = reference_for(key)
+        # Anchor the reference instant just BEFORE the event, instead of scattering it across the
+        # year (B-cal-year). SGD's calendar dialogues are almost all set in March, while
+        # `reference_for` drew uniformly from 2026 — so for most rows the reference fell AFTER the
+        # event's month, `_parse_date`'s "if it already passed, roll to next year" rule fired, and
+        # the gold landed in 2027. That made **82% of the eval set** depend on a year-rollforward the
+        # prompt never states: the model answered 2026-03-02 for "on 2nd of March", which is the more
+        # natural reading, and was marked wrong. It scored 0.0000 for a convention, not for the task.
+        #
+        # Resolving against a reference 1-21 days earlier means no rollforward is ever needed, so the
+        # year is unambiguous from the prompt and the row tests date ARITHMETIC rather than
+        # convention-guessing. The offset still varies per row, so a fixed "today" cannot be
+        # memorised.
+        reference = _reference_before_event(key, date_text, time_text)
+        if reference is None:
+            continue
         when = resolve_datetime(f"{date_text} {time_text}", reference)
         if when is None:
             continue
         # SGD dialogues are multi-turn; the final utterance alone ("You got it.") is not a
         # request. Restate the accumulated state as the single-shot request the task is about.
+        #
+        # The title is QUOTED. It used to read `Schedule {summary} on {date}`, so a row whose event
+        # was called `Food` produced "Schedule Food on March 1st" and the model reasonably extracted
+        # `summary="Schedule Food"` — the word added to make it a sentence became part of the thing
+        # being extracted. Quoting makes the span unambiguous without changing the task.
         location = first("event_location")
-        request = f"Schedule {summary} on {date_text} at {time_text}"
+        request = f'Add "{summary}" to my calendar on {date_text} at {time_text}'
         if location:
-            request += f" at {location}"
+            request += f", at {location}"
         row = build_calendar_row(
             _with_reference(request, reference), summary, when,
             location=location, key=key)
@@ -466,14 +511,47 @@ def _fetch_sgd_split(split: str, max_files: int = 128, log=print) -> list[dict]:
     return dialogues
 
 
+SGD_LOCAL_BUNDLE = os.path.join("data", "local", "calendar_sgd")
+
+
+def _read_local_sgd(log=print) -> list[dict] | None:
+    """The vendored SGD Calendar dialogues, or None when the bundle is absent.
+
+    Preferred over the network path. The loader used to fetch these from
+    raw.githubusercontent.com AT LOAD TIME and never cache them, which meant one upstream commit
+    silently changed the eval set (so past scores stopped being comparable and were not
+    reproducible) and the run could not start without network access. `data/local/calendar_sgd/`
+    holds the 1,602 Calendar-service dialogues with a manifest and a sha256, the same treatment
+    `bc5cdr` and `proactive_listening` get. Override with SLM_CALENDAR_SGD_DIR.
+    """
+    base = os.environ.get("SLM_CALENDAR_SGD_DIR") or SGD_LOCAL_BUNDLE
+    path = os.path.join(base, "dialogues.jsonl")
+    if not os.path.isfile(path):
+        return None
+    with open(path, encoding="utf-8") as fh:
+        dialogues = [json.loads(line) for line in fh if line.strip()]
+    log(f"      [sgd] {len(dialogues)} Calendar dialogue(s) from the frozen bundle at {base}")
+    return dialogues
+
+
 def load_sgd_calendar(max_test: int = 800, log=print) -> list[dict]:
-    """Load SGD `Calendar_1` AddEvent eval rows. Train split holds nearly all calendar dialogues,
-    so dev and test are pulled too and everything is pooled before sampling."""
-    rows: list[dict] = []
-    for split, count in (("train", 127), ("dev", 20), ("test", 34)):
-        rows.extend(convert_sgd_rows(_fetch_sgd_split(split, count, log=log)))
-        if len(rows) >= max_test:
-            break
+    """Load SGD `Calendar_1` AddEvent eval rows.
+
+    Reads the vendored bundle when present; otherwise falls back to the network fetch (train split
+    holds nearly all calendar dialogues, so dev and test are pulled too and pooled before sampling).
+    """
+    local = _read_local_sgd(log=log)
+    if local is not None:
+        rows = convert_sgd_rows(local)
+    else:
+        log("      [sgd] frozen bundle not found — falling back to a LIVE fetch from GitHub. "
+            "Scores from this run are not reproducible against an upstream change; see "
+            "data/local/calendar_sgd/manifest.json.")
+        rows = []
+        for split, count in (("train", 127), ("dev", 20), ("test", 34)):
+            rows.extend(convert_sgd_rows(_fetch_sgd_split(split, count, log=log)))
+            if len(rows) >= max_test:
+                break
     log(f"      [sgd] {len(rows)} usable AddEvent rows")
     return rows[:max_test]
 

@@ -76,7 +76,10 @@ def _build_or_reuse_gguf(weights_ref: str, model_id: str, quant: str, mlabel: st
             cleanup_path = source_path
         gguf_path = quantize_from_model_spec(source_path, gguf_dir, quant)
         try:
-            validate_and_record_gguf(gguf_path)
+            # The load is the gate. The generation smoke test only reports (B289): as a fatal check it
+            # ended three healthy runs, because a small base model answering a trivial prompt is not a
+            # corrupt artifact. A near-zero eval score is the reliable signal, and rollback handles it.
+            validate_and_record_gguf(gguf_path, base_model=model_id)
         except Exception:
             invalidate_gguf_cache(gguf_path)
             raise
@@ -180,7 +183,7 @@ def evaluate_node(state: AgentState) -> AgentState:
     base model without any adapter to record the zero-shot baseline. This
     baseline is stored in state["model_baselines"] and printed at run end.
     """
-    task_type = state["task_type"]
+    task = state["task"]
     model_id = state["selected_model"].model_id
     selector = state["selected_model"].selector
     mlabel = state["selected_model"].label  # log prefix includes quant
@@ -210,7 +213,7 @@ def evaluate_node(state: AgentState) -> AgentState:
                 eval_set,
                 model_id,
                 model_id,
-                task_type=task_type,
+                task=task,
                 quant=baseline_quant,
                 gguf_path=baseline_gguf_path,
             )
@@ -222,7 +225,12 @@ def evaluate_node(state: AgentState) -> AgentState:
                 == "QuantizationInfrastructureError"
             ):
                 raise
-            if task_type == "generation":
+            # A judge outage on a judge-scored task is infrastructure, not a model result. Letting
+            # it fall through would record a baseline of zero and set the loop chasing a phantom
+            # regression for the rest of the run.
+            from tasks import get_task
+
+            if get_task(task).needs_judge:
                 from eval.judge_client import JudgeInfrastructureError
 
                 remote_error_type = getattr(e, "remote_error_type", "")
@@ -240,11 +248,18 @@ def evaluate_node(state: AgentState) -> AgentState:
             baseline_result = None
             baseline_f1 = None
 
-        _log(
-            mlabel,
-            f"Baseline F1 = {baseline_f1:.4f}" if baseline_f1 is not None
-            else "Baseline F1 = n/a (measurement failed)",
-        )
+        # Content AND format, always both. A score alone cannot distinguish "picked the wrong
+        # answer" from "produced something the scorer could not read", and that gap is exactly what
+        # diagnosed B290 — every fine-tuned prediction carried two stray `<think>` tags, so content
+        # collapsed while format told the real story.
+        if baseline_f1 is not None:
+            _log(
+                mlabel,
+                f"Baseline {baseline_result.metric}={baseline_f1:.4f} "
+                f"format_valid={baseline_result.format_valid:.4f}",
+            )
+        else:
+            _log(mlabel, "Baseline = n/a (measurement failed)")
         baselines = state.get("model_baselines") or []
         if not any(e.get("selector", e.get("model_id")) == selector for e in baselines):
             baselines.append({
@@ -278,12 +293,13 @@ def evaluate_node(state: AgentState) -> AgentState:
         want_gguf_eval = config.QUANT_ACCURACY_EVAL or config.HW_ONDEVICE_BACKEND != "theoretical"
         if quant is not None and want_gguf_eval:
             gguf_path = _build_gguf_for_eval(weights_ref, model_id, quant, mlabel)
-        result = run_eval(eval_set, weights_ref, model_id, task_type=task_type, quant=quant, gguf_path=gguf_path)
+        result = run_eval(eval_set, weights_ref, model_id, task=task, quant=quant, gguf_path=gguf_path)
         gguf_by_label[label] = gguf_path
         scored[label] = (weights_ref, result)
         _log(
             mlabel,
-            f"  → F1={result.f1:.4f}  failures={len(result.failures)}/{len(eval_set.all)}",
+            f"  → {result.metric}={result.f1:.4f}  format_valid={result.format_valid:.4f}  "
+            f"failures={len(result.failures)}/{len(eval_set.all)}",
         )
 
     if not scored:
@@ -360,8 +376,9 @@ def evaluate_node(state: AgentState) -> AgentState:
     state["last_eval"] = best_result
 
     _log(mlabel,
-         f"Score: {current_score:.4f}  (Δ={delta:+.4f} from best {prev_best:.4f})  "
-         f"failures={len(best_result.failures)}/{len(eval_set.all)}  "
+         f"Score: {best_result.metric}={current_score:.4f} "
+         f"format_valid={best_result.format_valid:.4f}  (Δ={delta:+.4f} from best "
+         f"{prev_best:.4f})  failures={len(best_result.failures)}/{len(eval_set.all)}  "
          f"trajectory={[f'{s:.3f}' for s in state['scores']]}")
 
     # Stop-threshold calibration (B32) is completed in eval_setup from the Qwen-3.6 baseline on
@@ -374,7 +391,7 @@ def evaluate_node(state: AgentState) -> AgentState:
         from agent.nodes.test_agent import build_test_report
         report = build_test_report(
             eval_set, best_result, state.get("eval_difficulty"),
-            state.get("stop_threshold", 0.9), task_type,
+            state.get("stop_threshold", 0.9), task,
         )
         state["test_report"] = report
         _bd = report["by_difficulty"]
@@ -437,6 +454,16 @@ def evaluate_node(state: AgentState) -> AgentState:
         "quant": state["selected_model"].quant,
         "weights_ref": best_weights_ref,
         "score": current_score,
+        "format_valid": best_result.format_valid,
+        "metric": best_result.metric,
+        # The goal this iteration was actually judged against. The threshold MOVES mid-run —
+        # iterate_node lowers it when the failures look like a capacity limit and raises it as a
+        # stretch goal once one is cleared — so a single final value cannot say whether any given
+        # iteration converged. Only raises were ever recorded (`threshold_raises`); lowers just
+        # overwrote `stop_threshold`, which left the post-run accuracy chart drawing one flat line
+        # at the last value and implying every earlier iteration had been held to it. evaluate_node
+        # runs before iterate_node, so the value here is the one in force for this score.
+        "stop_threshold": state.get("stop_threshold"),
         "best_config": best_label,
         "intervention": dag_intervention,
         # Free-text orchestrator rationale for this iteration. Mirrors the value written to
@@ -484,7 +511,7 @@ def evaluate_node(state: AgentState) -> AgentState:
                 "batch_size": best_cfg.get("batch_size"),
             },
             "S": {
-                "task_type": task_type,
+                "task": task,
                 "supervision": "direct",
                 "loss_masking": "assistant_only",
                 "loss_contract_version": SFT_LOSS_CONTRACT_VERSION,
@@ -507,7 +534,7 @@ def evaluate_node(state: AgentState) -> AgentState:
     log = CurationLog(state.get("curation_log_path"))
     log.write_iteration(
         iteration=state["iteration"],
-        task_type=task_type,
+        task=task,
         dataset_version=f"v{state['dataset_version']}",
         total_examples=curation.get(
             "total_examples",

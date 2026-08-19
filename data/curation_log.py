@@ -28,7 +28,7 @@ class CurationLog:
     def write_iteration(
         self,
         iteration: int,
-        task_type: str,
+        task: str,
         dataset_version: str,
         n_gold: int,
         n_hard: int,
@@ -145,7 +145,7 @@ class CurationLog:
 ## Iteration {iteration} — {timestamp}
 
 ### Dataset
-- Task type: {task_type}
+- Task type: {task}
 - Version: {dataset_version}
 - Total examples: {actual_total}
 - Initial gold: {n_gold} ({n_gold / ratio_total * 100:.0f}%)

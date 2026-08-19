@@ -13,6 +13,14 @@ evaluation source restriction, and normalized-text contamination checks. Some pu
 contain rows duplicated across their official train/test files. Those rows are removed from
 train (the official test split is kept intact), recorded in the manifest, and the final
 bundle is required to have zero case/whitespace-normalized ``text`` overlap.
+
+Every bundle declares the registry TASK it supplies rows for, and the manifest carries that name.
+``data.loaders.web_acquire.load_local_dataset`` matches on it, so a bundle whose ``task`` is not a
+registry key is unreachable — which is why the catalog below holds only datasets that feed one of
+the eight live tasks. The APPS, MBPP, emotion and go_emotions bundles were removed on 2026-08-18
+along with the code-execution scorer and the classification channel they belonged to: nothing in
+the suite could consume them, and `required_fields_for_task` has no answer for a task that does not
+exist.
 """
 
 import argparse
@@ -35,7 +43,6 @@ from data.loaders.dataset_integrity import (  # noqa: E402
     sha256_file,
     validate_rows,
 )
-from data.loaders.apps import APPS_SOURCE_REVISION  # noqa: E402
 
 SCHEMA_VERSION = 2
 _BC5CDR_TAG_NAMES = ["O", "B-Chemical", "B-Disease", "I-Disease", "I-Chemical"]
@@ -61,27 +68,8 @@ def _hf_source(
 # paths and are attempted only when the preceding source cannot be loaded.
 _DATASETS = [
     {
-        "name": "emotion",
-        "task_type": "classification",
-        "converter": "classification",
-        "text_col": "text",
-        "label_col": "label",
-        "row_schema": {"required": ["text", "label"], "optional": []},
-        "sources": [_hf_source("dair-ai/emotion")],
-    },
-    {
-        "name": "go_emotions",
-        "task_type": "classification",
-        "converter": "classification",
-        "text_col": "text",
-        "label_col": "labels",
-        "multilabel_take_first": True,
-        "row_schema": {"required": ["text", "label"], "optional": []},
-        "sources": [_hf_source("google-research-datasets/go_emotions", config="simplified")],
-    },
-    {
         "name": "bc5cdr",
-        "task_type": "NER",
+        "task": "ner_bc5cdr",
         "converter": "bc5cdr",
         "row_schema": {"required": ["text", "entities"], "optional": []},
         "sources": [
@@ -110,92 +98,27 @@ _DATASETS = [
     },
     {
         "name": "gsm8k",
-        "task_type": "math_reasoning",
+        "task": "gsm8k",
         "converter": "gsm8k",
         "row_schema": {
             "required": ["text", "answer", "cot_reasoning", "label"],
-            "optional": [],
+            "optional": ["_instruction"],
         },
         "sources": [_hf_source("openai/gsm8k", config="main")],
     },
     {
-        "name": "apps",
-        "task_type": "code_generation",
-        "converter": "apps",
-        "row_schema": {
-            "required": [
-                "text",
-                "starter_code",
-                "difficulty",
-                "input_output",
-                "execution_mode",
-                "label",
-            ],
-            "optional": [
-                "answer",
-                "code",
-                "solutions",
-                "fn_name",
-                "entry_point",
-                "problem_id",
-                "url",
-                "gold_validation_status",
-                "runner_compatible",
-            ],
-        },
-        "split_row_schema": {
-            "train": {"required": ["answer", "solutions"]},
-            "test": {"required": []},
-        },
-        "source_counts": {"train": 2639, "test": 1000},
-        "sources": [
-            _hf_source(
-                "codeparrot/apps",
-                config="introductory",
-                revision=APPS_SOURCE_REVISION,
-            ),
-            # datasets>=4 refuses script-based repositories. Stream the same official
-            # JSONL files and apply the builder's introductory filter in our converter.
-            _hf_source(
-                "codeparrot/apps",
-                config="introductory",
-                loader="json",
-                streaming=True,
-                data_files={
-                    "train": (
-                        "https://huggingface.co/datasets/codeparrot/apps/"
-                        f"resolve/{APPS_SOURCE_REVISION}/train.jsonl"
-                    ),
-                    "test": (
-                        "https://huggingface.co/datasets/codeparrot/apps/"
-                        f"resolve/{APPS_SOURCE_REVISION}/test.jsonl"
-                    ),
-                },
-                revision=APPS_SOURCE_REVISION,
-            ),
-        ],
-    },
-    {
-        "name": "mbpp",
-        "task_type": "code_generation",
-        "converter": "mbpp",
-        "row_schema": {
-            "required": ["text", "answer", "code", "test_list", "label"],
-            "optional": ["test_imports", "task_id"],
-        },
-        "sources": [
-            _hf_source("google-research-datasets/mbpp", config="sanitized"),
-        ],
-    },
-    {
         "name": "samsum",
-        "task_type": "generation",
+        # SAMSum is one of the two corpora behind the `dialogsum` task; its live loader
+        # concatenates DialogSum and SAMSum. This bundle is therefore a PARTIAL offline copy of
+        # that task's data — enough to run without network access, not a replacement for the
+        # loader's merged split.
+        "task": "dialogsum",
         "converter": "samsum",
-        "row_schema": {"required": ["text", "answer", "label"], "optional": []},
-        "sources": [
-            _hf_source("samsum"),
-            _hf_source("knkarthick/samsum"),
-        ],
+        "row_schema": {"required": ["text", "answer", "label"], "optional": ["_instruction"]},
+        # The bare `samsum` alias was withdrawn from the Hub and now raises
+        # DatasetNotFoundError (B249); this mirror carries the same dialogue/summary columns
+        # and the same split sizes.
+        "sources": [_hf_source("knkarthick/samsum")],
     },
 ]
 DATASETS_BY_NAME = {spec["name"]: spec for spec in _DATASETS}
@@ -241,24 +164,6 @@ def _bio_to_entities(tokens: list, tags: list, names: list[str] | None) -> tuple
     return text, entities
 
 
-def _convert_classification(ds, spec: dict) -> tuple[list[dict], list[str]]:
-    text_col, label_col = spec["text_col"], spec["label_col"]
-    names = _label_names(ds, label_col)
-    out, labels_seen = [], set()
-    for example in ds:
-        raw = example.get(label_col)
-        if spec.get("multilabel_take_first"):
-            if not raw:
-                continue
-            raw = raw[0]
-        label = names[raw] if isinstance(raw, int) and names else raw
-        text = example.get(text_col)
-        if text and label is not None:
-            out.append({"text": str(text), "label": str(label)})
-            labels_seen.add(str(label))
-    return out, sorted(labels_seen)
-
-
 def _convert_bc5cdr(ds, source: dict | None = None) -> tuple[list[dict], list[str]]:
     source = source or {}
     tokens_col = source.get("tokens_col", "tokens")
@@ -285,132 +190,45 @@ def _convert_bc5cdr(ds, source: dict | None = None) -> tuple[list[dict], list[st
     return out, sorted(labels_seen)
 
 
-def _split_gsm8k_answer(raw_answer: object) -> tuple[str, str]:
-    answer = str(raw_answer or "")
-    if "####" not in answer:
-        return answer.strip(), ""
-    reasoning, _, final = answer.rpartition("####")
-    return final.strip(), reasoning.strip()
-
-
 def _convert_gsm8k(ds) -> tuple[list[dict], list[str]]:
-    out = []
-    for example in ds:
-        question = str(example.get("question") or "").strip()
-        if not question or example.get("answer") is None:
-            continue
-        answer, reasoning = _split_gsm8k_answer(example["answer"])
-        if answer:
-            out.append(
-                {
-                    "text": question,
-                    "answer": answer,
-                    "cot_reasoning": reasoning,
-                    "label": "math_reasoning",
-                }
-            )
-    return out, ["math_reasoning"] if out else []
+    """Shape raw GSM8K through the live loader's own converter.
 
+    Reproducing the `####` split here is how the bundle and the loader came to disagree: the
+    bundle wrote `label="math_reasoning"` and no `_instruction`, so a run served from the offline
+    copy silently fell back to the "Answer the following question:" default while a run served
+    from the loader got GSM8K's real instruction (the B250 failure mode).
+    """
+    from data.loaders.gsm8k import convert_gsm8k_rows
+    from tasks.gsm8k import INSTRUCTION
 
-def _convert_mbpp(ds) -> tuple[list[dict], list[str]]:
-    out = []
-    for example in ds:
-        prompt = str(example.get("prompt") or "").strip()
-        code = str(example.get("code") or "").strip()
-        tests = example.get("test_list")
-        if not prompt or not code or not isinstance(tests, (list, tuple)):
-            continue
-        out.append(
-            {
-                "text": prompt,
-                "answer": code,
-                "code": code,
-                "test_imports": list(example.get("test_imports") or []),
-                "test_list": list(tests),
-                "task_id": example.get("task_id"),
-                "label": "code_generation",
-            }
-        )
-    return out, ["code_generation"] if out else []
-
-
-def _convert_apps(
-    ds,
-    split: str | None = None,
-    gold_validator=None,
-    conversion_stats: dict | None = None,
-) -> tuple[list[dict], list[str]]:
-    from data.loaders.apps import convert_apps_rows
-
-    return convert_apps_rows(
-        ds,
-        split=split,
-        gold_validator=gold_validator,
-        conversion_stats=conversion_stats,
-    )
+    rows = convert_gsm8k_rows(ds, INSTRUCTION)
+    return rows, sorted({str(row["label"]) for row in rows})
 
 
 def _convert_samsum(ds) -> tuple[list[dict], list[str]]:
-    out = []
-    for example in ds:
-        dialogue = str(example.get("dialogue") or "").strip()
-        summary = str(example.get("summary") or "").strip()
-        if dialogue and summary:
-            out.append({"text": dialogue, "answer": summary, "label": "generation"})
-    return out, ["generation"] if out else []
+    """Shape raw SAMSum through the live loader's own converter, for the same reason as GSM8K."""
+    from data.loaders.dialogsum_samsum import convert_samsum_rows
+
+    rows = convert_samsum_rows(ds)
+    return rows, sorted({str(row["label"]) for row in rows})
 
 
-def _convert(
-    ds,
-    spec: dict,
-    source: dict | None = None,
-    *,
-    split: str | None = None,
-    gold_validator=None,
-    conversion_stats: dict | None = None,
-) -> tuple[list[dict], list[str]]:
+def _convert(ds, spec: dict, source: dict | None = None) -> tuple[list[dict], list[str]]:
     """Convert one source split to the pipeline's task-specific row schema."""
-    converter = spec.get("converter", "classification")
-    if converter == "classification":
-        return _convert_classification(ds, spec)
+    converter = spec["converter"]
     if converter == "bc5cdr":
         return _convert_bc5cdr(ds, source)
     if converter == "gsm8k":
         return _convert_gsm8k(ds)
-    if converter == "apps":
-        return _convert_apps(
-            ds,
-            split=split,
-            gold_validator=gold_validator,
-            conversion_stats=conversion_stats,
-        )
-    if converter == "mbpp":
-        return _convert_mbpp(ds)
     if converter == "samsum":
         return _convert_samsum(ds)
     raise ValueError(f"unknown converter {converter!r}")
 
 
-def _drop_train_overlap(
-    train_rows: list[dict],
-    test_rows: list[dict],
-    spec: dict | None = None,
-) -> tuple[list[dict], int]:
-    """Keep the official test split fixed and remove normalized duplicates from train."""
-    removed = 0
-    if spec and spec.get("name") == "apps":
-        from data.loaders.apps import remove_apps_train_fingerprint_overlap
-
-        train_rows, fingerprint_removed = remove_apps_train_fingerprint_overlap(
-            train_rows,
-            test_rows,
-        )
-        removed += fingerprint_removed
-    train_rows, text_removed = remove_normalized_train_overlap(
-        train_rows,
-        test_rows,
-    )
-    return train_rows, removed + text_removed
+# Decontamination is `dataset_integrity.remove_normalized_train_overlap` called directly. The
+# local `_drop_train_overlap` wrapper existed only to run APPS's URL/solution fingerprint pass
+# first; with APPS gone it was a second name for one function, which is the kind of duplicate that
+# drifts.
 
 
 def _source_descriptor(source: dict, source_revision: str | None = None) -> dict:
@@ -434,8 +252,6 @@ def _build_manifest(
     test_rows: list[dict],
     labels: list[str],
     removed_train_overlap: int = 0,
-    fingerprint_removed_from_train: int = 0,
-    conversion_stats: dict | None = None,
     source_revision: str | None = None,
     content_hashes: dict[str, str] | None = None,
 ) -> dict:
@@ -464,7 +280,10 @@ def _build_manifest(
     manifest = {
         "schema_version": SCHEMA_VERSION,
         "name": spec["name"],
-        "task_type": spec["task_type"],
+        # The registry task this bundle supplies rows for. `load_local_dataset` rejects a bundle
+        # whose `task` does not equal the run's task, so this key is what makes the bundle
+        # reachable at all — it replaced the `task_type` channel on 2026-08-18.
+        "task": spec["task"],
         # Compatibility fields consumed by the pre-manifest-v1 local loader.
         "hf_id": source["id"],
         "config": source.get("config"),
@@ -498,23 +317,6 @@ def _build_manifest(
             "files": content_hashes,
         },
     }
-    if spec.get("name") == "apps":
-        manifest["overlap"][
-            "fingerprint_removed_from_train"
-        ] = fingerprint_removed_from_train
-        source_counts = dict(spec["source_counts"])
-        manifest["filtering"] = {
-            "source_counts": source_counts,
-            "removed_unusable": {
-                "train": source_counts["train"]
-                - len(train_rows)
-                - removed_train_overlap,
-                "test": source_counts["test"] - len(test_rows),
-            },
-            "conversion": dict(conversion_stats or {}),
-        }
-    if spec.get("split_row_schema"):
-        manifest["split_row_schema"] = spec["split_row_schema"]
     return manifest
 
 
@@ -533,12 +335,13 @@ def _write_bundle(
     *,
     labels: list[str],
     removed_train_overlap: int = 0,
-    fingerprint_removed_from_train: int = 0,
-    conversion_stats: dict | None = None,
     source_revision: str | None = None,
 ) -> dict:
     common_required = tuple(spec["row_schema"]["required"])
-    canonical_required = required_fields_for_task(spec["task_type"])
+    # Both schemas are checked: the bundle's own declared shape, and the fields the TASK requires
+    # of every row it ever sees. A bundle that satisfies only the first would load and then fail
+    # somewhere downstream that assumed the task's contract.
+    canonical_required = required_fields_for_task(spec["task"])
     for split, rows in (("train", train_rows), ("test", test_rows)):
         validate_rows(
             rows,
@@ -552,32 +355,7 @@ def _write_bundle(
             bundle_name=spec["name"],
             split=split,
         )
-        split_required = set(
-            ((spec.get("split_row_schema") or {}).get(split) or {}).get(
-                "required",
-                [],
-            )
-        )
-        for index, row in enumerate(rows):
-            missing = split_required - set(row)
-            if missing:
-                raise ValueError(
-                    f"{spec['name']}: {split} row {index} missing split schema "
-                    f"fields {sorted(missing)}"
-                )
 
-    if spec["name"] == "apps":
-        from data.loaders.apps import apps_fingerprint_overlap
-
-        fingerprint_overlap = apps_fingerprint_overlap(
-            train_rows,
-            test_rows,
-        )
-        if fingerprint_overlap:
-            raise ValueError(
-                f"{spec['name']}: train/test URL or solution fingerprint "
-                f"overlap ({len(fingerprint_overlap)} fingerprints)"
-            )
     overlap = normalized_text_overlap(train_rows, test_rows)
     if overlap:
         sample = sorted(overlap)[:3]
@@ -607,8 +385,6 @@ def _write_bundle(
             test_rows,
             labels,
             removed_train_overlap=removed_train_overlap,
-            fingerprint_removed_from_train=fingerprint_removed_from_train,
-            conversion_stats=conversion_stats,
             source_revision=source_revision,
             content_hashes=content_hashes,
         )
@@ -716,52 +492,16 @@ def _download_dataset(
         try:
             raw_train = _load_source_split(load_dataset_fn, source, "train")
             raw_test = _load_source_split(load_dataset_fn, source, "test")
-            gold_validator = None
-            if spec["name"] == "apps":
-                from eval.scorers.generation import _run_apps_tests
-
-                def gold_validator(solution, row):
-                    return _run_apps_tests(solution, row)
-
-            train_stats: dict = {}
-            test_stats: dict = {}
-            train_rows, train_labels = _convert(
-                raw_train,
-                spec,
-                source,
-                split="train",
-                gold_validator=gold_validator,
-                conversion_stats=train_stats,
-            )
-            test_rows, test_labels = _convert(
-                raw_test,
-                spec,
-                source,
-                split="test",
-                gold_validator=gold_validator,
-                conversion_stats=test_stats,
-            )
-            fingerprint_removed = 0
-            if spec["name"] == "apps":
-                from data.loaders.apps import (
-                    remove_apps_train_fingerprint_overlap,
-                )
-
-                train_rows, fingerprint_removed = (
-                    remove_apps_train_fingerprint_overlap(
-                        train_rows,
-                        test_rows,
-                    )
-                )
-            train_rows, text_removed = remove_normalized_train_overlap(
+            train_rows, train_labels = _convert(raw_train, spec, source)
+            test_rows, test_labels = _convert(raw_test, spec, source)
+            train_rows, removed = remove_normalized_train_overlap(
                 train_rows,
                 test_rows,
             )
-            removed = fingerprint_removed + text_removed
             if removed:
                 print(
-                    f"    decontamination: removed {removed} held-out text/URL/"
-                    "solution-overlap row(s) from official train"
+                    f"    decontamination: removed {removed} held-out text-overlap "
+                    "row(s) from official train"
                 )
             labels = sorted(set(train_labels) | set(test_labels))
             source_revision = source.get("revision") or _hf_revision(
@@ -775,11 +515,6 @@ def _download_dataset(
                 test_rows,
                 labels=labels,
                 removed_train_overlap=removed,
-                fingerprint_removed_from_train=fingerprint_removed,
-                conversion_stats={
-                    "train": train_stats,
-                    "test": test_stats,
-                },
                 source_revision=source_revision,
             )
             print(
@@ -829,7 +564,7 @@ def _list_catalog(output_dir: Path) -> None:
                 installed_manifest = None
         item = {
             "name": spec["name"],
-            "task_type": spec["task_type"],
+            "task": spec["task"],
             "sources": [
                 {"id": source["id"], "config": source.get("config")}
                 for source in spec["sources"]
@@ -852,7 +587,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--list",
         action="store_true",
-        help="list supported datasets, task types, sources, and local install status",
+        help="list supported datasets, their tasks, sources, and local install status",
     )
     args = parser.parse_args(argv)
     output_dir = _local_dataset_dir()

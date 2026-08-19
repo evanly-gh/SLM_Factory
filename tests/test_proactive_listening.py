@@ -220,7 +220,11 @@ def test_real_bundle_scores_one_on_gold_and_zero_on_a_degenerate_answer():
     from eval.scorers import classification
 
     _train, test = load_proactive_listening(max_train=50, max_test=300, log=lambda _m: None)
-    eval_set = build_eval_set(test, task_type="classification", target=300)
+    eval_set = build_eval_set(test, task="proactive_listening", target=300)
     gold = [e["label"] for e in eval_set.all]
-    assert classification.score(eval_set, gold)["f1"] == pytest.approx(1.0)
-    assert classification.score(eval_set, [LABEL_WAIT] * len(eval_set.all))["f1"] == 0.0
+    # The task NAMES minority-class F1 on its spec. It used to be selected implicitly by counting
+    # classes, and the metric string said `macro_f1` either way.
+    score = eval_set.spec.score
+    assert score is classification.score_minority_f1
+    assert score(eval_set, gold)["f1"] == pytest.approx(1.0)
+    assert score(eval_set, [LABEL_WAIT] * len(eval_set.all))["f1"] == 0.0

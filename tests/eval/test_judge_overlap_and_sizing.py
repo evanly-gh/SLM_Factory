@@ -1,8 +1,14 @@
-"""B257/B258: curriculum never shrinks, and judging overlaps generation.
+"""B258: per-task context ceilings, eval batching, and judging that overlaps generation.
 
-Run 38303490 dropped 754 already-curated rows when a bigger model's sizing formula returned a
-smaller number, and spent 22% of wall time judging AFTER all generation had finished, with a
-measured 0.0% overlap between the two GPUs.
+Run 38303490 spent 22% of its wall time judging AFTER all generation had finished, with a measured
+0.0% overlap between the two GPUs.
+
+This file used to open with B257, the curriculum-size ratchet: a per-tier sizing formula could
+return a smaller number for a bigger model and drop 754 already-curated rows, so the target was
+made monotonic. Both the formula and the target are gone (2026-08-19) — the curriculum is
+cumulative and only `_dedupe_into` grows it, which makes shrinking structurally impossible rather
+than something a ratchet has to prevent. The surviving invariant is asserted end to end in
+`tests/nodes/test_cumulative_curriculum.py`.
 """
 import os
 
@@ -12,62 +18,23 @@ os.environ.setdefault("ANTHROPIC_API_KEY", "test-key")
 os.environ.setdefault("EXA_API_KEY", "test-key")
 
 
-# --- curriculum ratchet -------------------------------------------------------
-
-def test_curriculum_target_never_shrinks_between_tiers(monkeypatch):
-    from agent import data_sizing
-
-    monkeypatch.delenv("SLM_CURRICULUM_SIZE", raising=False)
-    monkeypatch.setattr(
-        data_sizing, "compute_curriculum_target", lambda **_: (5000, "formula said 5000")
-    )
-    state = {"curriculum_size_target": 5754, "selected_model": None}
-
-    target = data_sizing.resize_curriculum_for_tier(state, log=lambda *_: None)
-
-    assert target == 5754
-    assert state["curriculum_size_target"] == 5754
-
-
-def test_curriculum_target_still_grows_when_the_formula_asks_for_more(monkeypatch):
-    from agent import data_sizing
-
-    monkeypatch.delenv("SLM_CURRICULUM_SIZE", raising=False)
-    monkeypatch.setattr(
-        data_sizing, "compute_curriculum_target", lambda **_: (6838, "formula said 6838")
-    )
-    state = {"curriculum_size_target": 5754, "selected_model": None}
-
-    assert data_sizing.resize_curriculum_for_tier(state, log=lambda *_: None) == 6838
-
-
-def test_explicit_pin_still_wins_over_the_ratchet(monkeypatch):
-    from agent import data_sizing
-
-    monkeypatch.setenv("SLM_CURRICULUM_SIZE", "1200")
-    state = {"curriculum_size_target": 5754, "selected_model": None}
-
-    assert data_sizing.resize_curriculum_for_tier(state, log=lambda *_: None) == 1200
-
-
 # --- per-task context ceilings ------------------------------------------------
 
 def test_context_ceiling_is_task_aware_and_leaves_headroom(monkeypatch):
+    from tasks import TASKS
     from training.slm_helpers import task_max_seq_length
 
     monkeypatch.delenv("SLM_MAX_SEQ_LENGTH", raising=False)
 
-    assert task_max_seq_length("classification") == 1024
-    assert task_max_seq_length("generation") == 2048
-    # APPS prompts plus a 1024-token completion genuinely need the full window.
-    assert task_max_seq_length("code_generation") == 4096
-    # Unknown/None falls back to the safe maximum rather than a tight guess.
-    assert task_max_seq_length(None) == 4096
+    # A one-word answer needs no room to reason; a summary or a chain of thought does.
+    assert task_max_seq_length("clinc150") == 1024
+    assert task_max_seq_length("dialogsum") == 2048
 
-    # Every ceiling must still clear the task's own output reserve.
+    # Every ceiling must still clear the task's own output reserve. The spec enforces this at
+    # import time, which is why an unknown task can no longer receive a generous 4096 default.
     from eval.harness import eval_output_token_reserve
 
-    for task in ("classification", "generation", "math_reasoning", "NER", "code_generation"):
+    for task in sorted(TASKS):
         assert eval_output_token_reserve(task) < task_max_seq_length(task), task
 
 
@@ -75,17 +42,18 @@ def test_explicit_max_seq_length_overrides_every_task(monkeypatch):
     from training.slm_helpers import task_max_seq_length
 
     monkeypatch.setenv("SLM_MAX_SEQ_LENGTH", "3000")
-    assert task_max_seq_length("classification") == 3000
-    assert task_max_seq_length("code_generation") == 3000
+    assert task_max_seq_length("clinc150") == 3000
+    assert task_max_seq_length("gsm8k") == 3000
 
 
 def test_training_and_eval_agree_on_context(monkeypatch):
     """A row that fits training but not eval would be scored on a truncated prompt."""
+    from tasks import TASKS
     from training.lora_trainer import _configured_max_seq_length
     from training.slm_helpers import task_max_seq_length
 
     monkeypatch.delenv("SLM_MAX_SEQ_LENGTH", raising=False)
-    for task in ("classification", "generation", "code_generation"):
+    for task in sorted(TASKS):
         assert _configured_max_seq_length(task) == task_max_seq_length(task), task
 
 
@@ -95,10 +63,10 @@ def test_eval_batches_are_larger_than_the_pre_measurement_defaults(monkeypatch):
     from training.slm_helpers import _eval_batch_size
 
     monkeypatch.delenv("SLM_EVAL_BATCH_SIZE", raising=False)
-    assert _eval_batch_size("generation") >= 16
-    assert _eval_batch_size("classification") >= 32
+    assert _eval_batch_size("dialogsum") >= 16
+    assert _eval_batch_size("clinc150") >= 32
     monkeypatch.setenv("SLM_EVAL_BATCH_SIZE", "3")
-    assert _eval_batch_size("generation") == 3
+    assert _eval_batch_size("dialogsum") == 3
 
 
 # --- judge / generation overlap ----------------------------------------------
@@ -109,7 +77,7 @@ def test_judge_is_warmed_per_chunk_while_generation_continues(monkeypatch):
     from eval import harness
 
     rows = [{"text": f"dialogue {i}", "answer": f"summary {i}"} for i in range(10)]
-    eval_set = EvalSet(all=rows, task_type="generation")
+    eval_set = EvalSet(all=rows, task="dialogsum")
     monkeypatch.setenv("SLM_EVAL_JUDGE_OVERLAP_CHUNK", "4")
 
     order: list[str] = []
@@ -150,7 +118,7 @@ def test_overlap_warm_failure_never_breaks_the_eval(monkeypatch):
     import eval.judge_client as judge_client
 
     rows = [{"text": "d", "answer": "s"}]
-    eval_set = EvalSet(all=rows, task_type="generation")
+    eval_set = EvalSet(all=rows, task="dialogsum")
 
     class BrokenJudge:
         def score_many(self, triples):

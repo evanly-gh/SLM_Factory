@@ -12,6 +12,7 @@ import hashlib
 import json
 import os
 import platform
+import re
 import shutil
 import subprocess
 import tempfile
@@ -36,6 +37,17 @@ _QUANT_SUBPROCESS_TIMEOUT_S = int(os.environ.get("SLM_QUANT_TIMEOUT_S", "600"))
 
 class QuantizationInfrastructureError(RuntimeError):
     """The required quantized artifact could not be built or validated."""
+
+
+class GgufDegenerateOutputError(RuntimeError):
+    """A GGUF loads but decodes to nothing usable — a corrupt artifact, not a bad model.
+
+    Kept separate from `QuantizationInfrastructureError` because the two need opposite responses.
+    An infrastructure error means the toolchain is broken, so it re-raises and stops the run; retrying
+    would just fail again. Degenerate output has been observed to be TRANSIENT (B289): the same adapter
+    and dataset produced a corrupt GGUF on one iteration and a good one on the next, so the correct
+    response is to rebuild once. Only if the rebuild is also degenerate is it an infrastructure fault.
+    """
 
 
 @dataclass
@@ -110,8 +122,68 @@ def _atomic_write_json(path: str, payload: dict) -> None:
             os.remove(temporary)
 
 
-def validate_and_record_gguf(gguf_path: str) -> dict:
-    """Load every tensor with llama.cpp, then atomically record file identity."""
+def _smoke_test_generation(model, gguf_path: str, base_model: str | None = None) -> str:
+    """Generate a few tokens and report — do NOT raise — if the result looks degenerate.
+
+    **This check warns and never fails the run.** It was originally fatal, and that was wrong twice
+    over. It killed three healthy runs on 2026-08-16 (`38569605`, `38569606`, `38569608`), including a
+    BC5CDR run already four iterations deep, because the base `Qwen3-0.6B` Q4_K_M decodes
+    `'////////////////////////////////'` for a bare `Hello` — a small model given an unformatted prompt
+    is not a corrupt model, and the same run's fine-tuned 0.6B artifacts passed the identical check.
+
+    It is also a heuristic whose motivating evidence evaporated: the 0.0000 scores it was written to
+    catch turned out to be B290's train/serve skew, not GGUF corruption, so it has now produced three
+    false positives and zero true ones. A heuristic that can end a multi-hour run needs far more
+    certainty than this one has. The eval itself remains the real detector — a genuinely broken artifact
+    scores near zero and the loop's rollback discards it — and this check's job is only to leave a
+    legible note in the log so a human is not left guessing, which is what was actually missing.
+
+    The prompt is rendered through the model's chat template when we know how. A raw `Hello` asks the
+    model to *continue* an unformatted string, which is not how it is ever used and not something a
+    small model handles gracefully; asking it as a chat turn is both a fairer probe and closer to what
+    the eval will do.
+
+    Returns the decoded text, or None if it could not decode at all.
+    """
+    prompt = "Hello"
+    if base_model and "qwen" in base_model.lower():
+        from training.slm_helpers import _qwen_no_think_prompt
+
+        prompt = _qwen_no_think_prompt("Hello", base_model)
+
+    try:
+        response = model(prompt, max_tokens=16, temperature=0.0, echo=False)
+        text = response["choices"][0]["text"]
+    except Exception as exc:  # noqa: BLE001 - report and let the eval be the judge
+        print(
+            f"[quantize]   ⚠ GGUF smoke test could not decode ({type(exc).__name__}: {exc}). "
+            f"Continuing to eval, which will show a near-zero score if the artifact really is bad. "
+            f"Path: {gguf_path}"
+        )
+        return None
+
+    # Deliberately permissive: separating "produced language" from "produced nothing", not judging
+    # quality. Markup has to come out before the alphanumeric test — XML-ish tags like `</tool_call>`
+    # and the `<|...|>` special-token spelling used for `<|im_end|>`/`<|endoftext|>` — since output made
+    # only of those carries no content.
+    stripped = text.strip()
+    without_markup = re.sub(r"<\|[^|>]*\|>|</?[A-Za-z_][\w:.-]*/?>", "", stripped)
+    if not stripped or not re.search(r"\w", without_markup):
+        print(
+            f"[quantize]   ⚠ GGUF smoke test produced no word characters: {text!r}. This is often "
+            f"benign — a small base model given a trivial prompt — so the run continues and the eval "
+            f"decides. Worth a look only if the score also collapses. Path: {gguf_path}"
+        )
+    return text
+
+
+def validate_and_record_gguf(gguf_path: str, base_model: str | None = None) -> dict:
+    """Load every tensor with llama.cpp, smoke-test generation, then record file identity.
+
+    The load is the gate; the smoke test only reports. `base_model` lets the smoke test format its
+    prompt as a chat turn, which is the difference between probing the model the way it is used and
+    asking it to continue a bare string.
+    """
     if not os.path.isfile(gguf_path):
         raise RuntimeError(f"GGUF validation failed: file not found: {gguf_path}")
     initial_size = os.path.getsize(gguf_path)
@@ -136,6 +208,9 @@ def validate_and_record_gguf(gguf_path: str) -> dict:
         )
     except Exception as exc:  # noqa: BLE001 - preserve llama.cpp loader detail
         raise RuntimeError(f"GGUF model-load validation failed: {exc}") from exc
+
+    try:
+        _smoke_test_generation(model, gguf_path, base_model)
     finally:
         if model is not None:
             close = getattr(model, "close", None)

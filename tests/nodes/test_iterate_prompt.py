@@ -5,12 +5,28 @@ from unittest.mock import MagicMock, patch
 from config.android_pool import ANDROID_POOL
 
 
+def _stub_chat_anthropic(monkeypatch, chat):
+    """Install a stub `langchain_anthropic` rather than patching the real one.
+
+    `patch("langchain_anthropic.ChatAnthropic", ...)` has to IMPORT the package to patch it, and on
+    this cluster's shared filesystem that import costs about a minute of wall clock — for a class
+    every one of these tests then replaces. `iterate` imports it lazily inside the function, so a
+    stub module is indistinguishable from the patch and the assertions are unchanged.
+    """
+    import sys
+    from types import ModuleType
+
+    module = ModuleType("langchain_anthropic")
+    module.ChatAnthropic = lambda *_args, **_kwargs: chat
+    monkeypatch.setitem(sys.modules, "langchain_anthropic", module)
+
+
 @patch.dict(
     "os.environ",
     {"ANTHROPIC_API_KEY": "fake", "EXA_API_KEY": "fake"},
     clear=False,
 )
-def test_iterate_prompt_receives_complete_curation_counts():
+def test_iterate_prompt_receives_complete_curation_counts(monkeypatch):
     from agent.nodes.iterate import _llm_iterate
 
     trajectory = """### Dataset
@@ -35,14 +51,15 @@ def test_iterate_prompt_receives_complete_curation_counts():
                 # identically, and this test's real assertion (that the curation counts reach the
                 # prompt) had stopped running.
                 '{"intervention":"data_rebuild","hypothesis":"counts verified",'
-                '"data_rebuild":{"strategy":"synthesize"},'
+                '"data_rebuild":{"strategy":"surgical_synthesis"},'
                 '"threshold_adjustment":{"new_threshold":null,"reason":""}}'
             ),
         )
 
     chat = MagicMock()
+    _stub_chat_anthropic(monkeypatch, chat)
     state = {
-        "task_type": "classification",
+        "task": "clinc150",
         "selected_model": ANDROID_POOL[0],
         "iteration": 1,
         "scores": [0.5],
@@ -54,7 +71,6 @@ def test_iterate_prompt_receives_complete_curation_counts():
         "test_report": None,
     }
     with (
-        patch("langchain_anthropic.ChatAnthropic", return_value=chat),
         patch("data.curation_log.CurationLog.read_latest", return_value=trajectory),
         patch("agent.context_manager.should_compact", return_value=False),
         patch(
@@ -107,7 +123,7 @@ def test_concurrent_iterate_runs_read_only_their_explicit_curation_logs(
 
     def state(path):
         return {
-            "task_type": "classification",
+            "task": "clinc150",
             "selected_model": ANDROID_POOL[0],
             "iteration": 1,
             "scores": [0.5],
@@ -119,13 +135,13 @@ def test_concurrent_iterate_runs_read_only_their_explicit_curation_logs(
             "curation_log_path": str(path),
         }
 
+    _stub_chat_anthropic(monkeypatch, MagicMock())
     with (
         patch.dict(
             os.environ,
             {"ANTHROPIC_API_KEY": "fake", "EXA_API_KEY": "fake"},
             clear=False,
         ),
-        patch("langchain_anthropic.ChatAnthropic", return_value=MagicMock()),
         patch("agent.context_manager.should_compact", return_value=False),
         patch(
             "agent.nodes.iterate.tracked_chat_anthropic_invoke",

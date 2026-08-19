@@ -80,10 +80,7 @@ def runtime_config_snapshot(mode: str) -> dict[str, Any]:
     import config.config as config
     from agent.data_rebuild import (
         DATA_REBUILD_SCHEMA_VERSION,
-        MAX_PAID_ACQUIRE_ROUNDS_PER_RUN,
-    )
-    from data.acquisition_budget import (
-        ACQUISITION_LEDGER_SCHEMA_VERSION,
+        MAX_FAILED_DISCOVERY_ROUNDS,
     )
     from training.hparams import (
         LORA_SEARCH_SPACE_VERSION,
@@ -95,9 +92,6 @@ def runtime_config_snapshot(mode: str) -> dict[str, Any]:
         "MODEL_SELECTION_STRATEGY",
         "MAX_TURNS_MAIN",
         "DEFAULT_STOP_THRESHOLD",
-        "CURRICULUM_SIZE_FLOOR",
-        "EVAL_SET_SIZE",
-        "DATA_SIZE_CEILING",
         "MAX_WALLCLOCK_S",
         "QUANT_ACCURACY_EVAL",
         "HW_GATING_ENABLED",
@@ -125,12 +119,11 @@ def runtime_config_snapshot(mode: str) -> dict[str, Any]:
         "LORA_MAX_EFFECTIVE_BATCH_SIZE": MAX_EFFECTIVE_BATCH_SIZE,
         "SFT_LOSS_CONTRACT_VERSION": SFT_LOSS_CONTRACT_VERSION,
         "DATA_REBUILD_SCHEMA_VERSION": DATA_REBUILD_SCHEMA_VERSION,
-        "DATA_REBUILD_MAX_PAID_ROUNDS_PER_RUN": (
-            MAX_PAID_ACQUIRE_ROUNDS_PER_RUN
-        ),
-        "ACQUISITION_BUDGET_SCHEMA_VERSION": (
-            ACQUISITION_LEDGER_SCHEMA_VERSION
-        ),
+        # Replaced the paid-acquisition ledger's per-run round cap. Mining now re-reads datasets we
+        # already sourced (free), and only falls through to web research once those are exhausted —
+        # so what is resume-sensitive is how many fruitless discovery rounds are allowed, not how
+        # many API calls were budgeted.
+        "MAX_FAILED_DISCOVERY_ROUNDS": MAX_FAILED_DISCOVERY_ROUNDS,
     }
     for name in names:
         if hasattr(config, name):
@@ -393,7 +386,7 @@ def checkpoint_has_graph_progress(
             f"checkpoint state progress is invalid: {exc}"
         ) from exc
     if (
-        state.get("task_type")
+        state.get("task")
         or state.get("selected_model") is not None
         or state.get("eval_set") is not None
         or state.get("current_dataset_path")
@@ -607,10 +600,7 @@ def _sqlite_encode(value: Any) -> Any:
             _SQLITE_TYPE_KEY: "eval_set",
             "value": {
                 "all": _sqlite_encode(value.all),
-                "task_type": value.task_type,
-                "multi_label": value.multi_label,
-                "schema": _sqlite_encode(value.schema),
-                "multilingual": value.multilingual,
+                "task": value.task,
             },
         }
     if isinstance(value, EvalResult):

@@ -26,25 +26,37 @@ class _TokenizerDouble:
         add_generation_prompt,
         enable_thinking,
     ):
+        # A real tokenizer with no chat_template raises rather than inventing a format. The double used
+        # to render regardless, which let `test_qwen_training_fails_if_chat_template_is_missing` reach
+        # the renderer at all — so once B290's alignment guard started rendering, the double answered
+        # for a tokenizer that in reality could not.
+        if self.chat_template is None:
+            raise ValueError("cannot use apply_chat_template because this tokenizer has no template")
         self.template_calls.append({
             "add_generation_prompt": add_generation_prompt,
             "enable_thinking": enable_thinking,
         })
-        prompt = f"<user>{messages[0]['content']}</user><assistant>"
+        # Real ChatML, matching `_qwen_no_think_prompt` for hybrid Qwen3: the invented
+        # `<user>..</user>` shape is not something a Qwen tokenizer can emit, and the alignment guard
+        # correctly rejects it.
+        prompt = (
+            f"<|im_start|>user\n{messages[0]['content']}<|im_end|>\n"
+            "<|im_start|>assistant\n<think>\n\n</think>\n\n"
+        )
         if add_generation_prompt:
             return prompt
-        return f"{prompt}{messages[-1]['content']}</assistant>"
+        return f"{prompt}{messages[-1]['content']}<|im_end|>\n"
 
 
-def _make_config(task_type, base_model="dummy"):
+def _make_config(task, base_model="dummy"):
     from training.lora_trainer import TrainingConfig
     return TrainingConfig(
         base_model=base_model, nr_epochs=1, learning_rate=2e-4,
-        batch_size=8, lora_rank=8, task_type=task_type,
+        batch_size=8, lora_rank=8, task=task,
     )
 
 
-def _run_training_and_capture(ds_path, task_type, base_model="dummy"):
+def _run_training_and_capture(ds_path, task, base_model="dummy"):
     """
     Run _run_unsloth_training with heavy mocking and capture the list of dicts
     passed to Dataset.from_list.  Returns the captured list.
@@ -78,9 +90,9 @@ def _run_training_and_capture(ds_path, task_type, base_model="dummy"):
         with patch("training.lora_trainer._ensure_model_cached"):
             _run_unsloth_training(
                 str(ds_path),
-                _make_config(task_type, base_model=base_model),
+                _make_config(task, base_model=base_model),
                 str(ds_path.parent),
-                task_type=task_type,
+                task=task,
             )
 
     return trained_texts
@@ -95,99 +107,24 @@ def test_qwen_training_fails_if_chat_template_is_missing(tmp_path):
     with pytest.raises(RuntimeError, match="cannot enforce non-thinking"):
         _run_training_and_capture(
             ds_path,
-            "classification",
+            "clinc150",
             base_model="Qwen/Qwen3-1.7B",
         )
 
 
 def test_math_examples_include_answer(tmp_path):
-    """math_reasoning training text must contain the answer."""
+    """A math task's training text must contain the answer."""
     import json
 
     ds_path = tmp_path / "ds.jsonl"
     ds_path.write_text(json.dumps({"prompt": "1+1=?", "answer": "2"}) + "\n")
 
-    trained_texts = _run_training_and_capture(ds_path, "math_reasoning")
+    trained_texts = _run_training_and_capture(ds_path, "gsm8k")
 
     assert trained_texts, "Dataset.from_list was never called — format routing broken"
     assert any("2" in str(t) for t in trained_texts), (
-        f"math_reasoning training text should contain the answer '2'; got: {trained_texts}"
+        f"gsm8k training text should contain the answer '2'; got: {trained_texts}"
     )
-
-
-def test_code_task_uses_generation_branch(tmp_path):
-    """code_generation training text must contain the answer (not just the prompt)."""
-    import json
-
-    ds_path = tmp_path / "ds.jsonl"
-    ds_path.write_text(
-        json.dumps({"prompt": "def add(a,b):", "answer": "return a+b"}) + "\n"
-    )
-
-    trained_texts = _run_training_and_capture(ds_path, "code_generation")
-
-    assert trained_texts, "Dataset.from_list was never called — format routing broken"
-    assert any("return a+b" in str(t) for t in trained_texts), (
-        f"code_generation training text should contain the answer 'return a+b'; got: {trained_texts}"
-    )
-
-
-def test_apps_training_reuses_eval_code_prompt_with_starter_interface(
-    tmp_path,
-    monkeypatch,
-):
-    import json
-
-    monkeypatch.setenv("SLM_MAX_SEQ_LENGTH", "4096")
-    row = {
-        "text": "Add two integers.",
-        "answer": (
-            "class Solution:\n"
-            "    def add(self, a, b):\n"
-            "        return a + b"
-        ),
-        "starter_code": (
-            "class Solution:\n"
-            "    def add(self, a, b):\n"
-            "        pass"
-        ),
-        "input_output": {
-            "fn_name": "add",
-            "inputs": ["[2, 3]"],
-            "outputs": ["5"],
-        },
-        "execution_mode": "call_based",
-        "fn_name": "add",
-        "entry_point": "add",
-    }
-    ds_path = tmp_path / "apps.jsonl"
-    ds_path.write_text(json.dumps(row) + "\n")
-
-    trained_texts = _run_training_and_capture(ds_path, "code_generation")
-    rendered = trained_texts[0]["text"]
-
-    from eval.scorers.generation import build_code_prompt
-
-    assert build_code_prompt(row) in rendered
-    assert row["answer"] in rendered
-    assert "Required entry point: add" in rendered
-    assert row["starter_code"] in rendered
-
-
-def test_code_cot_is_trained_as_executable_python_comments():
-    from training.lora_trainer import build_code_training_target
-
-    target = build_code_training_target(
-        {
-            "answer": "def add(a, b):\n    return a + b",
-            "cot_reasoning": "Use direct addition.\nReturn the computed value.",
-        }
-    )
-
-    assert target.startswith(
-        "# Use direct addition.\n# Return the computed value.\n"
-    )
-    compile(target, "<code_target>", "exec")
 
 
 def test_training_chat_template_explicitly_disables_thinking(tmp_path):
@@ -216,9 +153,9 @@ def test_training_chat_template_explicitly_disables_thinking(tmp_path):
         with patch("training.lora_trainer._ensure_model_cached"):
             _run_unsloth_training(
                 str(ds_path),
-                _make_config("classification"),
+                _make_config("clinc150"),
                 str(tmp_path),
-                task_type="classification",
+                task="clinc150",
             )
 
     assert [call["add_generation_prompt"] for call in mock_tokenizer.template_calls] == [

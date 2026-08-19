@@ -12,7 +12,7 @@ def _state(dataset: Path) -> dict:
         "selected_model": ANDROID_POOL[0],
         "current_dataset_path": str(dataset),
         "iteration": 0,
-        "task_type": "classification",
+        "task": "clinc150",
         "dag": [],
         "last_intervention": "data_rebuild",
         "llm_iterate_decision": None,

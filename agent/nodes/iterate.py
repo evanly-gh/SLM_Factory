@@ -16,8 +16,8 @@ from agent.cost import tracked_chat_anthropic_invoke
 from agent.data_rebuild import (
     fallback_data_rebuild_plan,
     normalize_data_rebuild_plan,
-    remaining_paid_acquire_rounds,
-    resample_available_for_state,
+    mining_available_for_state,
+    unexhausted_sources,
 )
 from agent.state import AgentState
 from config.android_pool import check_hardware_constraints, all_constraints_pass
@@ -186,7 +186,7 @@ def _reask_json_only(
     messages,
     *,
     validation_error: ValueError,
-    task_type: str = "classification",
+    task: str = "classification",
     state=None,
 ) -> dict:
     """One tool-free follow-up that forces a JSON-only answer, then parse it.
@@ -235,7 +235,7 @@ def _reask_json_only(
     try:
         return _parse_decision_json(
             resp.content,
-            task_type=task_type,
+            task=task,
             state=state,
         )
     except ValueError as error:
@@ -250,7 +250,7 @@ def _reask_json_only(
         if salvaged is None:
             raise
         decision = _validate_decision_json(
-            salvaged, task_type=task_type, state=state
+            salvaged, task=task, state=state
         )
         decision["_dropped_fields"] = sorted(
             set(decision.get("_dropped_fields") or []) | {"retired_hyperparams"}
@@ -288,7 +288,7 @@ def _strip_retired_hyperparams(raw):
 def _validate_decision_json(
     parsed,
     *,
-    task_type: str = "classification",
+    task: str = "classification",
     state=None,
     allow_internal: bool = False,
 ) -> dict:
@@ -366,21 +366,14 @@ def _validate_decision_json(
         ]
         if dropped:
             validated["_dropped_fields"] = dropped
+        # A `mine_new_real` plan is rewritten to `surgical_synthesis` once every source is
+        # exhausted and web research has spent its allowance, because it provably cannot add a row.
         plan = normalize_data_rebuild_plan(
             validated.get("data_rebuild"),
-            task_type=task_type,
+            task=task,
             hypothesis=hypothesis,
-            target_rows=int(state.get("curriculum_size_target", 3000) or 3000),
-            default_dataset_version=int(
-                state.get("dataset_version", 0) or 0
-            ),
-            remaining_acquire_rounds=remaining_paid_acquire_rounds(state),
-            forbidden_eval_texts=forbidden_eval_texts,
-            resample_available=bool(state.get("resample_available", True)),
+            mining_available=mining_available_for_state(state),
         )
-        # Non-deterministic redesign: no elite resolution, no untried-plan dedup/rotation.
-        # resample_available is False when the whole pool is already in the curriculum, in
-        # which case a resample plan is redirected to synthesize (reshuffling adds nothing).
         validated["data_rebuild"] = plan
 
     if intervention == "hyperparameter":
@@ -561,7 +554,7 @@ def _hit_output_cap(response) -> bool:
 def _parse_decision_json(
     raw,
     *,
-    task_type: str = "classification",
+    task: str = "classification",
     state=None,
 ) -> dict:
     """Robustly parse the orchestrator's decision JSON (B143 fix for JSONDecodeError).
@@ -585,7 +578,7 @@ def _parse_decision_json(
     else:
         return _validate_decision_json(
             parsed,
-            task_type=task_type,
+            task=task,
             state=state,
         )
 
@@ -600,7 +593,7 @@ def _parse_decision_json(
     else:
         return _validate_decision_json(
             parsed,
-            task_type=task_type,
+            task=task,
             state=state,
         )
 
@@ -648,14 +641,10 @@ Valid data_rebuild JSON example:
   "intervention": "data_rebuild",
   "hypothesis": "Aggregate hard-bucket errors indicate insufficient difficult examples.",
   "data_rebuild": {
-    "strategy": "synthesize",
-    "resample_fraction": 0.65,
-    "new_real_rows": 0,
-    "synth_rows": 400,
-    "max_acquire_rounds": 0,
-    "difficulty_buckets": {"easy": 0.1, "medium": 0.3, "hard": 0.6},
-    "confusion_pairs": [{"gold": "label_a", "predicted": "label_b", "count": 4}],
-    "pattern_hint": "aggregate label_a to label_b confusion"
+    "strategy": "surgical_synthesis",
+    "rows": 400,
+    "target_categories": [{"category": "wrong_arguments", "count": 61}],
+    "pattern_hint": "arguments extracted from the wrong slot of the request"
   },
   "threshold_adjustment": {"new_threshold": null, "reason": ""}
 }
@@ -684,37 +673,37 @@ reasoned function of THAT evidence — not a fixed default and not a guess. In y
 that each non-trivial field value is responding to.
 
 Data-rebuild payload constraints (how to set each from the failure analysis):
-- strategy: EXACTLY ONE of — pick by WHERE the failure is:
-    "acquire"    -> the DATA is wrong or too thin: the EASY bucket is failing, or prior
-                    source novelty/yield was low — bring in new real rows from the task's
-                    own benchmark, local bundles, or (bounded) paid discovery.
-    "synthesize" -> a specific hard/confusable region is failing: MEDIUM/HARD buckets are
-                    weak or confusion pairs dominate — generate targeted new rows there.
-                    Generation is anchored to a real row and INHERITS its label, so it grows
-                    coverage of a class you are already failing; it cannot invent a class.
-  There is no "resample" option. Re-drawing from the pool the curriculum was already built
-  from cannot add information, and every rebuild already refills from that pool for you.
-  If neither strategy fits the evidence, prefer a hyperparameter intervention instead.
-- target_rows is NOT yours to set and must NOT appear in your plan. The curriculum size is
-  computed deterministically for the current model from its measured zero-shot baseline and
-  parameter count.
-- resample_fraction: float [0.10,1.00], step 0.05. HIGHER when the existing pool is sound
-  and you are mainly rebalancing; LOWER when the pool is implicated in the failures (leave
-  room for new/synthetic rows).
-- new_real_rows: integer [0,500], step 5 (used by "acquire"). Scale to the size of the
-  failing region and remaining acquire budget; more when the easy bucket fails or novelty
-  was low.
-- synth_rows: integer [100,500], step 5 (used by "synthesize"). Scale to failure SEVERITY:
-  toward 500 when MANY difficulty tiers or confusion pairs are failing; toward 100 when the
-  failing region is small/narrow.
-- max_acquire_rounds: integer [0,3], further limited by remaining budget. Higher when prior
-  source novelty/yield was low (you must search harder for genuinely new data).
-- difficulty_buckets: numeric weights for easy/medium/hard. Weight INVERSELY to measured
-  per-difficulty accuracy — put the most weight on the worst-scoring bucket(s).
-- confusion_pairs: echo the dominant aggregate confusion counts you were given for the
-  failing categories (aggregate only).
-- pattern_hint: describe the dominant failure mode from the diagnosis/confusion (aggregate
-  categories only, never raw eval text).
+- strategy: EXACTLY ONE of two. These are the ONLY two ways the curriculum can grow.
+    "mine_new_real"      -> add REAL rows. Taken first from datasets this run has already
+                            sourced but not exhausted, and only if those are used up, from a
+                            new dataset found by web research. Real data carries no teacher
+                            error, so prefer this whenever rows are available: the best result
+                            this project has measured came from a gold-only curriculum.
+                            Choose it when the failure looks like THINNESS — broad errors, the
+                            easy bucket failing, or a curriculum much smaller than the task
+                            deserves.
+    "surgical_synthesis" -> add TEACHER-GENERATED rows aimed at named failure categories.
+                            Choose it when the failure is CONCENTRATED: a few categories
+                            dominate and you want many more examples of exactly those.
+  You will be told when mine_new_real is unavailable (every source exhausted and web research
+  already spent). A mine_new_real plan sent after that is rewritten to surgical_synthesis,
+  because it provably cannot add a row.
+  There is no "resample" and no untargeted "synthesize". Re-drawing from the pool the
+  curriculum was built from cannot add information, and generating rows for class balance
+  rather than for observed failures wastes the same teacher calls.
+- The curriculum is CUMULATIVE and has no target size. It starts at whatever the loader
+  supplied and every rebuild ADDS to it; rows leave only via quality control or the eval
+  firewall. So "rows" is how many NEW rows to add, not a size to reach.
+- rows: integer [50,2000]. How many new rows this rebuild should add. Scale to the size of the
+  failing region: toward 2000 when many categories are failing badly or the curriculum is
+  thin, toward 50 when one narrow category is left.
+- target_categories: the failure categories to aim at, echoed from the report's confusion
+  counts, most-costly first, at most 8. Each is {"category": <name>, "count": <failures>}.
+  These names come from the task's own scorer, so use the names you were given — do not
+  invent one. A category you already targeted whose count did not fall will be skipped as
+  exhausted, so prefer ones you have not spent on yet.
+- pattern_hint: describe the dominant failure mode in your own words (aggregate categories
+  only, never raw eval text). It is inserted into the generation prompt.
 
 Rules:
 - "hypothesis" is REQUIRED and must causally justify the action AND tie each non-trivial
@@ -731,11 +720,15 @@ Rules:
 - There is NO restriction on which strategy you may choose: any strategy is valid for any
   task type and at any score. Choose ONLY from the failure analysis (per-difficulty
   accuracy + confusion pairs + diagnosis), not from mechanical eligibility.
-- "synthesize" is task-adaptive and always produces CORRECT training targets: new in-class
-  gold rows for classification/NER (each generated row keeps its anchor's label), and new
-  CORRECT in-distribution examples for math/code/generation (never wrong-answer data).
-- Regardless of strategy, the curriculum is synth-filled up to the system-computed target when
-  real data falls short, so that target is the size you are actually training on.
+- "surgical_synthesis" always produces CORRECT training targets, never wrong-answer data. For
+  a task with a fixed label set the generated row inherits a real row's label, so the target
+  cannot be wrong — only the phrasing can. For an open-ended task the teacher writes both the
+  input and the answer, and the row is checked first by an exact programmatic verifier where
+  one exists (the format-bound tasks) and then by the teacher itself.
+- The curriculum is NEVER padded to the system-computed target. That target is an upper
+  aspiration; whatever real data and your chosen strategy supply, after quality control, is the
+  size you are actually training on, and it is routinely well below target. If you want a bigger
+  curriculum you have to choose a strategy that produces rows — nothing tops it up for you.
 - use confusion counts and a pattern hint only at aggregate level
 - EXACTLY FIVE hyperparameters are tunable: lora_rank, alpha_ratio, weight_decay,
   learning_rate, nr_epochs. Emitting any other key is rejected.
@@ -1045,12 +1038,12 @@ def _llm_iterate(state: AgentState) -> dict:
         "Data-rebuild plans are not deduplicated — you may repeat or vary any strategy "
         "freely; judge from the trajectory and prior-plan yield below."
     )
-    resample_available = bool(state.get("resample_available", True))
-    if not resample_available:
+    if not mining_available_for_state(state):
         rebuild_trials_block += (
             "\nRESAMPLE IS UNAVAILABLE THIS TURN: the entire training pool is already in the "
-            "curriculum, so a reshuffle would produce the identical set. Choose acquire or "
-            "synthesize (a resample plan would be auto-redirected to synthesize)."
+            "mine_new_real is UNAVAILABLE: every dataset this run has sourced is exhausted and "
+            "web research has already spent its allowance without finding another. "
+            "surgical_synthesis is the only data intervention that can still add rows."
         )
 
     last_curation = state.get("last_curation") or {}
@@ -1069,7 +1062,22 @@ def _llm_iterate(state: AgentState) -> dict:
     turn_budget = int(state.get("turn_budget", 0) or 0)
     turns_used = (int(state.get("iteration", 0) or 0) + 1) * 2
     remaining_turns = max(0, turn_budget - turns_used) if turn_budget else "unbounded"
-    remaining_acquisition = remaining_paid_acquire_rounds(state)
+    # State the mining position concretely rather than as a budget count. "3 paid rounds left" told
+    # the orchestrator about an API allowance; what it actually needs to know is whether any dataset
+    # still has rows it has not seen.
+    _unexhausted = unexhausted_sources(state)
+    if _unexhausted:
+        mining_status = ", ".join(
+            f"{s['source']} (taken {s.get('consumed', 0)} so far)" for s in _unexhausted
+        )
+    else:
+        _failed = int(state.get("failed_discovery_rounds", 0) or 0)
+        mining_status = (
+            f"NONE — all sourced datasets exhausted; web research has failed {_failed} time(s). "
+            + ("mine_new_real is RETIRED for this run."
+               if not mining_available_for_state(state)
+               else "One more web-research round is available.")
+        )
 
     # ALREADY-TRIED hyperparameter configs, incl. rolled-back ones (the memory the LLM was
     # missing — rollback pops scores so the trajectory hides these). Training is deterministic,
@@ -1118,7 +1126,7 @@ def _llm_iterate(state: AgentState) -> dict:
 {trajectory if trajectory else "(no iterations logged yet)"}
 
 ## Current iteration summary
-- Task type: {state['task_type']}
+- Task type: {state['task']}
 - Model variant: {state['selected_model'].selector if state.get('selected_model') else 'unknown'}
 - Iteration: {state['iteration']}
 - Current f(π): {current_score:.4f}
@@ -1133,7 +1141,7 @@ def _llm_iterate(state: AgentState) -> dict:
 - Stop threshold: {state['stop_threshold']} (initial floor: {state.get('initial_stop_threshold', state['stop_threshold']):.3f})
 - Prior causal hypothesis: {state.get('last_hypothesis') or '(none)'}
 - Remaining turn budget: {remaining_turns}
-- Remaining paid acquisition rounds: {remaining_acquisition}
+- Datasets with rows left to mine: {mining_status}
 
 ## Test-data agent report (difficulty-stratified — use this to target your fix)
 {test_agent_block}
@@ -1198,7 +1206,7 @@ escalate to a larger model. Never inspect raw eval rows. Return only the decisio
             validation_error=ValueError(
                 "model attempted tool calls instead of returning final JSON"
             ),
-            task_type=state["task_type"],
+            task=state["task"],
             state=state,
         )
     try:
@@ -1214,7 +1222,7 @@ escalate to a larger model. Never inspect raw eval rows. Return only the decisio
             )
         return _parse_decision_json(
             response.content,
-            task_type=state["task_type"],
+            task=state["task"],
             state=state,
         )
     except Exception as error:  # noqa: BLE001 — see below
@@ -1237,7 +1245,7 @@ escalate to a larger model. Never inspect raw eval rows. Return only the decisio
                 validation_error=(
                     error if isinstance(error, ValueError) else ValueError(str(error))
                 ),
-                task_type=state["task_type"],
+                task=state["task"],
                 state=state,
             )
         except Exception as reask_error:  # noqa: BLE001
@@ -1260,7 +1268,7 @@ def apply_iteration_policy(score: float) -> dict:
         return {
             "band": "<0.80",
             "intervention": "data_rebuild",
-            "data_rebuild_strategy": "acquire",
+            "data_rebuild_strategy": "mine_new_real",
             "description": "Score below 0.80 — data problem. Rebuild dataset.",
         }
     elif score < 0.95:
@@ -1273,7 +1281,7 @@ def apply_iteration_policy(score: float) -> dict:
         return {
             "band": ">=0.95",
             "intervention": "data_rebuild",
-            "data_rebuild_strategy": "synthesize",
+            "data_rebuild_strategy": "surgical_synthesis",
             "description": (
                 "Score ≥0.95 — refine remaining aggregate confusion with a "
                 "bounded data rebuild."
@@ -1378,7 +1386,7 @@ def _llm_threshold_raise(
         return None
 
     user_content = "\n".join([
-        f"Task type            : {state.get('task_type')}",
+        f"Task type            : {state.get('task')}",
         f"Model                : {model_id}",
         f"Current accuracy goal: {threshold:.4f}",
         f"Goal provenance      : {describe_threshold_provenance(calibration)}",
@@ -1863,10 +1871,10 @@ def iterate_node(state: AgentState) -> AgentState:
         return state
 
     # Resample availability for THIS turn: if the whole train pool is already in the
-    # curriculum, a reshuffle adds nothing, so resample is taken off the menu (the plan
-    # validator/fallback redirect it to synthesize, and the prompt tells the orchestrator).
+    # Mining availability is recomputed each turn: a source with rows left keeps it on the menu,
+    # and it comes off only once every source is exhausted AND web research has spent its allowance.
     # Advisory here; curate re-derives it precisely from the decontaminated pool at execution.
-    state["resample_available"] = resample_available_for_state(state)
+
 
     # Not escalating → consult the orchestrator LLM for the intervention type.
     # NOTE: this runs in cheap mode too — cheap mode keeps the agent's bounded,
@@ -1883,7 +1891,7 @@ def iterate_node(state: AgentState) -> AgentState:
         # threshold and intervention contracts and crash after the fallback guard.
         llm_decision = _validate_decision_json(
             _llm_iterate(state),
-            task_type=state["task_type"],
+            task=state["task"],
             state=state,
             allow_internal=True,
         )
@@ -1962,8 +1970,6 @@ def iterate_node(state: AgentState) -> AgentState:
             rebuild_plan = fallback_data_rebuild_plan(
                 state,
                 hypothesis=hypothesis or "safe aggregate data refresh",
-                score=current_score,
-                resample_available=bool(state.get("resample_available", True)),
             )
         state["data_rebuild_plan"] = rebuild_plan
 
@@ -1979,6 +1985,18 @@ def iterate_node(state: AgentState) -> AgentState:
                      f"  Lowering stop_threshold "
                      f"{state['stop_threshold']:.3f} → {clamped:.3f} "
                      f"(floor={floor:.3f}). Reason: {reason}")
+                # Audit the lower the same way raises are audited. Without this the only record of
+                # a lowered goal was one log line, so a converged run could not be checked against
+                # the bar it was actually held to.
+                state["threshold_lowers"] = list(
+                    state.get("threshold_lowers") or []
+                ) + [{
+                    "from": round(float(state["stop_threshold"]), 4),
+                    "to": round(clamped, 4),
+                    "score_at_lower": round(float(current_score), 4),
+                    "iteration": int(state.get("iteration", 0) or 0),
+                    "reason": reason,
+                }]
                 state["stop_threshold"] = clamped
 
     # A threshold adjustment from the LLM can make the current score converged.

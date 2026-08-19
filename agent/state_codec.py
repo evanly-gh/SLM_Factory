@@ -52,10 +52,7 @@ def _encode_eval_set(value: EvalSet | None) -> dict | None:
     return _json_safe(
         {
             "all": value.all,
-            "task_type": value.task_type,
-            "multi_label": value.multi_label,
-            "schema": value.schema,
-            "multilingual": value.multilingual,
+            "task": value.task,
         },
         "state.eval_set",
     )

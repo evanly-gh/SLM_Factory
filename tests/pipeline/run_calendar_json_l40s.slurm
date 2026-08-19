@@ -13,7 +13,7 @@
 #SBATCH --signal=B:USR1@7200
 #SBATCH --output=/mmfs1/gscratch/intelligentsystems/evanly/SLM_Factory/logs/slurm/slm-calendar-json-l40s-%j.out
 #
-# CURATED BENCHMARK: calendar_json (task_type=function_call, metric ast_arg_match). NEW 2026-08-13.
+# CURATED BENCHMARK: calendar_json (format-bound, metric ast_arg_match). NEW 2026-08-13.
 #
 # The task: turn "Schedule a meeting at 5pm tomorrow" into a Google Calendar API v3
 # events.insert request body with a RESOLVED ISO-8601 timestamp, ready for the host app to post.

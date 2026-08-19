@@ -13,10 +13,11 @@
 #SBATCH --signal=B:USR1@7200
 #SBATCH --output=/mmfs1/gscratch/intelligentsystems/evanly/SLM_Factory/logs/slurm/slm-clinc150-l40s-%j.out
 #
-# CURATED BENCHMARK: clinc150 (task_type=classification, metric macro_f1). SLM_BENCHMARK_TASK
+# CURATED BENCHMARK: clinc150 (out-of-distribution, metric macro_f1). SLM_BENCHMARK_TASK
 # pins the deterministic CLINC150 loader (150 intents + out-of-scope) instead of autonomous
-# web_acquire — run.py starts the run NON-autonomous with the loader's task_type. The dataset is
-# pulled live from HuggingFace on the compute node (public, no token).
+# web_acquire — run.py starts the run NON-autonomous against this task's registry spec, which is
+# where its loader, scorer, metric and token budget are declared. The dataset is pulled live from
+# HuggingFace on the compute node (public, no token).
 #
 # Dedicated gpu-l40s-intelligentsystems quota: 2x L40S (synth server on GPU0, pipeline on GPU1 —
 # the auto-2gpu profile in _l40s_task_body.sh). --requeue + USR1 checkpoint contract is a safety

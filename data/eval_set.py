@@ -1,107 +1,102 @@
 # data/eval_set.py
+"""The frozen held-out eval set.
+
+Carries the TASK NAME (`xlam_bfcl`, `clinc150`, ...), not an abstract `task_type` channel. The
+channel was what let two tasks sharing a type receive each other's behaviour; every consumer now
+resolves `tasks.get_task(eval_set.task)` and reads the decision it needs from that task's spec.
+"""
 import random
 from dataclasses import dataclass
-
-# Canonical task types. See task_analysis.py for the full rationale behind each.
-# multi_label is a flag on classification, not a separate type here —
-# only the scorer and metric differ.
-TASK_TYPES = {
-    "classification", "NER", "math_reasoning", "code_generation", "generation",
-    # Format-bound types (2026-08-01): executable, judge-free verifiers.
-    #   function_call — BFCL-style AST argument match ({text, answer=gold call JSON}).
-    #   diff          — prose edit as a unified diff, verified with `git apply --check`.
-    "function_call", "diff",
-}
-
-# Flags that travel alongside task_type as separate state fields:
-#   multi_label: bool  — set by planner; changes scorer from argmax to per-label threshold
-#   schema: dict|None  — set by planner for structured_extraction; changes eval to field-F1
-#   multilingual: bool — set by planner; changes eval to target-language metrics
 
 
 @dataclass
 class EvalSet:
-    """The frozen held-out eval set. A single flat sample of examples (`all`).
+    """A single flat sample of held-out examples (`all`), tagged with the task that owns them.
 
-    The eval set used to carry pos/neg/boundary slices, but they had no functional effect —
-    every consumer used the `all` union, the difficulty stratification (easy/medium/hard) is the
-    real difficulty signal, and for the NER/generation families the slices were a meaningless
-    random partition. They were removed 2026-08-02; `all` is the sole content.
+    The eval set used to carry pos/neg/boundary slices, but they had no functional effect — every
+    consumer used the `all` union, and the difficulty stratification (easy/medium/hard) is the real
+    difficulty signal. They were removed 2026-08-02; `all` is the sole content.
     """
+
     all: list[dict]
-    task_type: str
-    # Optional flags passed through from the task plan
-    multi_label: bool = False
-    schema: dict | None = None
-    multilingual: bool = False
+    task: str
 
     def __post_init__(self):
-        if self.task_type not in TASK_TYPES:
-            raise ValueError(f"task_type must be one of {TASK_TYPES}, got {self.task_type!r}")
+        from tasks import get_task
+
+        # Resolving here means an eval set can never exist for a task the registry does not know,
+        # so no downstream consumer has to handle that case.
+        get_task(self.task)
+
+    @property
+    def spec(self):
+        from tasks import get_task
+
+        return get_task(self.task)
 
     @classmethod
     def from_serialized(cls, d: dict) -> "EvalSet":
-        """Rebuild from a serialized dict, folding legacy pos/neg/boundary into `all`
-        for backward compatibility with checkpoints/artifacts written before the slices
-        were removed."""
+        """Rebuild from a serialized dict, folding legacy pos/neg/boundary slices into `all`."""
         rows = d.get("all")
         if rows is None:
-            rows = list(d.get("pos") or []) + list(d.get("neg") or []) + list(d.get("boundary") or [])
-        return cls(
-            all=list(rows),
-            task_type=d["task_type"],
-            multi_label=d.get("multi_label", False),
-            schema=d.get("schema"),
-            multilingual=d.get("multilingual", False),
-        )
+            rows = (
+                list(d.get("pos") or [])
+                + list(d.get("neg") or [])
+                + list(d.get("boundary") or [])
+            )
+        task = d.get("task")
+        if not task:
+            # Checkpoints written before 2026-08-18 stored an abstract `task_type`, which does not
+            # identify a task: `function_call` was both xlam_bfcl and calendar_json, and
+            # `classification` was three tasks. Guessing would silently evaluate one task with
+            # another's configuration, so refuse.
+            legacy = d.get("task_type")
+            raise ValueError(
+                "this eval set was written before the task registry existed and records only "
+                f"task_type={legacy!r}, which does not identify a task (several tasks shared each "
+                "type). Start a fresh run rather than resuming this checkpoint."
+            )
+        return cls(all=list(rows), task=str(task))
 
 
 def build_eval_set(
     examples: list[dict],
-    task_type: str,
+    task: str,
     target: int = 100,
     seed: int = 42,
-    multi_label: bool = False,
-    schema: dict | None = None,
-    multilingual: bool = False,
 ) -> EvalSet:
-    """Build the held-out eval set as a single sample of up to `target` rows.
+    """Build the held-out eval set as a sample of up to `target` rows.
 
-    Multi-class classification keeps label-coverage stratification (round-robin across every
-    label) so the eval set spans the full label range; every other task type is a plain
-    shuffled top-N sample.
+    Sampling strategy is the task's own `eval_sampling` choice. `label_balanced` round-robins
+    across classes so every class appears even when the target is smaller than the pool — which
+    matters enormously for CLINC150's 151 classes and not at all for a task with no classes.
     """
-    if task_type not in TASK_TYPES:
-        raise ValueError(f"task_type must be one of {TASK_TYPES}")
+    from tasks import get_task
 
+    spec = get_task(task)
     rng = random.Random(seed)
     target = max(int(target), 0)
 
-    if task_type == "classification" and len({e["label"] for e in examples}) > 2:
-        # Multi-class: round-robin across labels so the eval set covers every class even when
-        # the target is smaller than the pool. Binary pos/neg has no meaning with >2 classes.
+    if spec.eval_sampling == "label_balanced":
         by_label: dict[str, list[dict]] = {}
-        for e in examples:
-            by_label.setdefault(e["label"], []).append(e)
-        for lbl in by_label:
-            rng.shuffle(by_label[lbl])
-        pools = {lbl: list(v) for lbl, v in by_label.items()}
+        for example in examples:
+            by_label.setdefault(example["label"], []).append(example)
+        for pool in by_label.values():
+            rng.shuffle(pool)
 
         out: list[dict] = []
         remaining = target
-        while remaining > 0 and any(pools.values()):
+        while remaining > 0 and any(by_label.values()):
             progressed = False
-            for lbl in list(pools.keys()):
-                if pools[lbl] and remaining > 0:
-                    out.append(pools[lbl].pop())
+            for label in list(by_label):
+                if by_label[label] and remaining > 0:
+                    out.append(by_label[label].pop())
                     remaining -= 1
                     progressed = True
             if not progressed:
                 break
-        return EvalSet(all=out, task_type=task_type,
-                       multi_label=multi_label, schema=schema, multilingual=multilingual)
+        return EvalSet(all=out, task=task)
 
-    examples = list(examples)
-    rng.shuffle(examples)
-    return EvalSet(all=examples[:target], task_type=task_type,
-                   multi_label=multi_label, schema=schema, multilingual=multilingual)
+    shuffled = list(examples)
+    rng.shuffle(shuffled)
+    return EvalSet(all=shuffled[:target], task=task)

@@ -84,15 +84,14 @@ def test_stray_hyperparams_on_a_data_rebuild_is_recorded_for_logging():
         "hypothesis": "hard bucket is weak",
         "hyperparams": {"lora_rank": 32},
         "data_rebuild": {
-            "strategy": "synthesize",
-            "target_rows": 128,
+            "strategy": "surgical_synthesis",
         },
     }
     validated = _validate_decision_json(
         decision,
-        task_type="NER",
-        state={"curriculum_size_target": 128},
+        task="ner_bc5cdr",
+        state={},
     )
     assert "hyperparams" not in validated, "must not reach the trainer"
     assert validated["_dropped_fields"] == ["hyperparams"]
-    assert validated["data_rebuild"]["strategy"] == "synthesize"
+    assert validated["data_rebuild"]["strategy"] == "surgical_synthesis"

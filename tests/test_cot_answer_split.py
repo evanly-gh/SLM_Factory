@@ -61,36 +61,25 @@ class TestSplit:
 
 class TestOnlyTheAnswerIsJudged:
     def test_extract_predictions_strips_reasoning_for_generation(self):
-        eval_set = EvalSet(all=[{"text": "t", "answer": "a"}], task_type="generation")
+        eval_set = EvalSet(all=[{"text": "t", "answer": "a"}], task="dialogsum")
         assert extract_predictions([COT], eval_set) == ["They agree to meet at 4pm."]
-
-    def test_code_generation_path_is_unchanged(self):
-        eval_set = EvalSet(all=[{"text": "t", "answer": "a"}], task_type="code_generation")
-        out = extract_predictions(["```python\nprint(1)\n```"], eval_set)
-        assert out == ["print(1)"]
 
 
 class TestReasoningIsStoredOnFailures:
     def test_failure_records_carry_the_reasoning(self):
-        eval_set = EvalSet(all=[{"text": "t", "answer": "a"}], task_type="generation")
+        eval_set = EvalSet(all=[{"text": "t", "answer": "a"}], task="dialogsum")
         predictions = ["They agree to meet at 4pm."]
         result = {"failures": [{"text": "t", "predicted": predictions[0], "judge_score": 0.1}]}
         _attach_reasoning_to_failures(result, eval_set, [COT], predictions)
         assert "The two speakers agree on a time." in result["failures"][0]["reasoning"]
 
     def test_no_reasoning_key_when_the_model_emitted_none(self):
-        eval_set = EvalSet(all=[{"text": "t", "answer": "a"}], task_type="generation")
+        eval_set = EvalSet(all=[{"text": "t", "answer": "a"}], task="dialogsum")
         result = {"failures": [{"text": "t", "predicted": "plain", "judge_score": 0.1}]}
         _attach_reasoning_to_failures(result, eval_set, ["plain"], ["plain"])
         assert "reasoning" not in result["failures"][0]
 
-    def test_is_a_noop_for_code_generation(self):
-        eval_set = EvalSet(all=[{"text": "t"}], task_type="code_generation")
-        result = {"failures": [{"predicted": "print(1)"}]}
-        _attach_reasoning_to_failures(result, eval_set, [COT], ["print(1)"])
-        assert "reasoning" not in result["failures"][0]
-
     def test_empty_failures_do_not_crash(self):
-        eval_set = EvalSet(all=[{"text": "t"}], task_type="generation")
+        eval_set = EvalSet(all=[{"text": "t"}], task="dialogsum")
         _attach_reasoning_to_failures({"failures": []}, eval_set, [COT], ["x"])
         _attach_reasoning_to_failures({}, eval_set, [COT], ["x"])

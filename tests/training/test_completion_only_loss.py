@@ -50,14 +50,17 @@ class CharTokenizer:
         return {"input_ids": [ord(char) + 10 for char in text]}
 
 
+# One case per SHAPE of training turn a task can declare. Two tasks naming the same builder is
+# fine and expected (xlam and calendar both use `function_call_turn`); what matters is that each
+# builder masks the prompt and trains the target.
 TASK_CASES = [
     (
-        "classification",
+        "clinc150",
         {"text": "A joyful message", "label": "joy"},
         "joy",
     ),
     (
-        "NER",
+        "ner_bc5cdr",
         {
             "text": "Aspirin treats pain.",
             "entities": [{"text": "Aspirin", "type": "CHEMICAL"}],
@@ -65,7 +68,7 @@ TASK_CASES = [
         '"CHEMICAL"',
     ),
     (
-        "generation",
+        "dialogsum",
         {
             "text": "Summarize this.",
             "answer": "A short summary.",
@@ -74,7 +77,7 @@ TASK_CASES = [
         "<reasoning>\nIdentify the key point.",
     ),
     (
-        "math_reasoning",
+        "gsm8k",
         {
             "prompt": "What is 2 + 2?",
             "answer": "4",
@@ -83,20 +86,20 @@ TASK_CASES = [
         "<reasoning>\nAdd the two values.",
     ),
     (
-        "code_generation",
+        "xlam_bfcl",
         {
-            "text": "Return the sum.",
-            "answer": "def add(a, b):\n    return a + b",
-            "cot_reasoning": "Use addition.",
+            "text": "What is the weather in Paris?",
+            "answer": '[{"name": "get_weather", "arguments": {"city": "Paris"}}]',
+            "tools": [{"name": "get_weather", "parameters": {"city": "string"}}],
         },
-        "# Use addition.",
+        '"get_weather"',
     ),
 ]
 
 
-@pytest.mark.parametrize(("task_type", "example", "target_text"), TASK_CASES)
+@pytest.mark.parametrize(("task", "example", "target_text"), TASK_CASES)
 def test_completion_only_mask_trains_targets_not_prompts(
-    task_type,
+    task,
     example,
     target_text,
 ):
@@ -105,7 +108,7 @@ def test_completion_only_mask_trains_targets_not_prompts(
     row = _build_completion_only_rows(
         [example],
         tokenizer,
-        task_type,
+        task,
     )[0]
     batch = CompletionOnlyDataCollator(tokenizer.pad_token_id)([row])
     labels = batch["labels"][0].tolist()
@@ -135,7 +138,7 @@ def test_completion_only_collator_masks_padding_and_prompt_tokens():
             {"text": "a much longer prompt", "label": "no"},
         ],
         tokenizer,
-        "classification",
+        "clinc150",
     )
 
     batch = CompletionOnlyDataCollator(tokenizer.pad_token_id)(rows)
@@ -160,7 +163,7 @@ def test_multimodal_text_only_uses_inner_tokenizer_completion_mask():
     row = _build_completion_only_rows(
         [{"text": "happy", "label": "joy"}],
         text_tokenizer(processor),
-        "classification",
+        "clinc150",
     )[0]
     labels = CompletionOnlyDataCollator(inner.pad_token_id)([row])[
         "labels"
