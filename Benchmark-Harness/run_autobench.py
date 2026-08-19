@@ -13,6 +13,7 @@ import importlib.util
 import json
 import os
 import re
+import shlex
 import shutil
 import statistics
 import subprocess
@@ -34,7 +35,9 @@ APP_FILES_DIR = f"/sdcard/Android/data/{PACKAGE}/files"
 
 FALLBACK_ADB = str(Path.home() / "Library/Android/sdk/platform-tools/adb")
 
-CONVERT_SCRIPT = str(Path.home() / "SLM_Factory_Krishna_Personal/Model-Conversion/convert_to_gguf.py")
+MONSOON_SCRIPT = str(Path.home() / "SLM_Factory_Krishna_Personal/Power-Monitor/monsoon_single_reading.py")
+
+CONVERT_SCRIPT = str(Path.home() / "SLM_Factory-SmolChat/Model-Conversion/convert_to_gguf.py")
 # Fallback locations only - the real, guaranteed location is computed
 # per-call in convert_to_gguf() once the model's output directory is known,
 # since we now pass --output explicitly rather than relying on the tool's
@@ -70,6 +73,19 @@ COLD_LOAD_NOTE = (
     "Without a reboot, the OS file cache may make cold_load_ms appear faster than a true cold read "
     "from storage, especially for larger model files."
 )
+
+# Set from args.quiet at the top of main(). qprint() (used for routine
+# progress/informational output, including the final "DONE" summary line)
+# checks this; [ERROR]/[WARN] lines and "Results saved" always use plain
+# print() regardless, so --quiet suppresses routine noise without hiding
+# real problems or where the output file ended up.
+_QUIET = False
+
+
+def qprint(*args, **kwargs):
+    if not _QUIET:
+        print(*args, **kwargs)
+
 
 DEFAULT_QUESTIONS = [
     "What is the capital of France?",
@@ -112,9 +128,24 @@ class Adb:
             # dumps the full unfiltered buffer), and text=True's strict
             # decoding crashes the whole process on the first bad byte.
             # errors="replace" substitutes instead.
+            #
+            # stdin=DEVNULL: none of our adb calls ever need to read from
+            # stdin. Without this, subprocess.run() leaves stdin inherited
+            # from this process - fine when run_autobench.py itself has a
+            # real TTY, but when it's invoked as a subprocess by another
+            # script (capture_output=True, no stdin= set there either),
+            # that inherited descriptor is a non-TTY pipe. "adb shell ..."
+            # specifically negotiates PTY/stdin duplexing based on whether
+            # its own stdin looks like a terminal, and can hang on that
+            # negotiation before ever dispatching the command to the
+            # device when stdin is an ambiguous inherited pipe - confirmed
+            # as the cause of broadcasts never firing under exactly that
+            # nested-subprocess condition. An explicit null stdin removes
+            # the ambiguity entirely.
             return subprocess.run(
                 self.base + args, capture_output=True,
                 encoding="utf-8", errors="replace", timeout=timeout,
+                stdin=subprocess.DEVNULL,
             )
         except subprocess.TimeoutExpired:
             return subprocess.CompletedProcess(self.base + args, returncode=1, stdout="", stderr="TIMEOUT")
@@ -132,7 +163,7 @@ def check_device(adb: Adb, device_kind: str):
         print("adb devices -l output:")
         print(diag.stdout.strip() or "(empty)")
         sys.exit(1)
-    print(f"[OK] {device_kind.capitalize()} connected via adb {adb.flag}")
+    qprint(f"[OK] {device_kind.capitalize()} connected via adb {adb.flag}")
 
 
 def check_smolchat_installed(adb: Adb):
@@ -140,11 +171,11 @@ def check_smolchat_installed(adb: Adb):
     if PACKAGE not in result.stdout:
         print(f"[ERROR] SmolChat ({PACKAGE}) is not installed on the target device.")
         sys.exit(1)
-    print(f"[OK] SmolChat ({PACKAGE}) is installed")
+    qprint(f"[OK] SmolChat ({PACKAGE}) is installed")
 
 
 def print_thermal_reminder():
-    print(
+    qprint(
         "[NOTE] Thermal state affects TTFT/TPS. For comparable results, ideally "
         "start with the phone rested (not hot from prior use). Continuing anyway."
     )
@@ -176,7 +207,7 @@ def check_battery(adb: Adb) -> dict:
             "phone and let it discharge below ~95% before running this benchmark."
         )
     else:
-        print(f"[OK] Battery at {level}% ({status_name}) -- Power readings should be trustworthy")
+        qprint(f"[OK] Battery at {level}% ({status_name}) -- Power readings should be trustworthy")
 
     return {"battery_warning": warning, "battery_level_pct": level, "battery_status": status_name}
 
@@ -203,12 +234,12 @@ def push_to_app_files_dir(adb: Adb, local_path) -> str:
     filename = os.path.basename(local_path)
     device_path = f"{APP_FILES_DIR}/{filename}"
     adb.run(["shell", "mkdir", "-p", APP_FILES_DIR], timeout=15)
-    print(f"\n[DEPLOY] Pushing {local_path} -> {device_path} ...")
+    qprint(f"\n[DEPLOY] Pushing {local_path} -> {device_path} ...")
     result = adb.run(["push", local_path, device_path], timeout=600)
     if result.returncode != 0:
         print(f"[ERROR] adb push failed: {result.stderr}")
         sys.exit(1)
-    print(f"[OK] Push complete. Device path: {device_path}")
+    qprint(f"[OK] Push complete. Device path: {device_path}")
     return device_path
 
 
@@ -228,7 +259,7 @@ def _load_convert_module():
 
 
 def convert_to_gguf(model_id: str, quant: str, adb: Adb) -> str:
-    print(f"\n[CONVERSION] Converting {model_id} to GGUF ({quant})...")
+    qprint(f"\n[CONVERSION] Converting {model_id} to GGUF ({quant})...")
     if not os.path.exists(CONVERT_SCRIPT):
         print(f"[ERROR] Conversion script not found: {CONVERT_SCRIPT}")
         sys.exit(1)
@@ -280,7 +311,7 @@ def convert_to_gguf(model_id: str, quant: str, adb: Adb) -> str:
         print(f"[ERROR] Converted GGUF not found on disk: {local_gguf_path}")
         sys.exit(1)
 
-    print(f"[OK] Conversion complete: {local_gguf_path}")
+    qprint(f"[OK] Conversion complete: {local_gguf_path}")
     return push_to_app_files_dir(adb, local_gguf_path)
 
 
@@ -307,7 +338,7 @@ def resolve_model(model_arg: str, quant: str, adb: Adb) -> tuple:
 
 def load_questions(questions_path) -> list:
     if not questions_path:
-        print(f"[OK] Using {len(DEFAULT_QUESTIONS)} built-in default questions")
+        qprint(f"[OK] Using {len(DEFAULT_QUESTIONS)} built-in default questions")
         return list(DEFAULT_QUESTIONS)
 
     path = os.path.expanduser(questions_path)
@@ -319,7 +350,7 @@ def load_questions(questions_path) -> list:
     if not questions:
         print(f"[ERROR] Questions file is empty: {path}")
         sys.exit(1)
-    print(f"[OK] Loaded {len(questions)} questions from {path}")
+    qprint(f"[OK] Loaded {len(questions)} questions from {path}")
     return questions
 
 
@@ -331,16 +362,30 @@ def clear_logcat(adb: Adb):
     adb.run(["logcat", "-c"], timeout=15)
 
 
-def fire_broadcast(adb: Adb, model_path: str, question: str, run_id: str):
-    prompt_arg = question.replace(" ", "_")
-    adb.run([
-        "shell", "am", "broadcast",
-        "-a", BROADCAST_ACTION,
-        "-n", RECEIVER_COMPONENT,
-        "--es", "model_path", model_path,
-        "--es", "prompt", prompt_arg,
-        "--es", "run_id", run_id,
-    ], timeout=20)
+def fire_broadcast(adb: Adb, model_path: str, question: str, run_id: str, max_tokens: int):
+    # CONFIRMED BUG (real A/B test: apostrophes in the prompt text produced
+    # response=None/near-instant EOS; the exact same question with
+    # apostrophes stripped worked fine): passing model_path/prompt/run_id
+    # as SEPARATE argv elements here means "adb shell <args...>" re-joins
+    # them into ONE remote command string before it reaches the device's
+    # shell. The old question.replace(" ", "_") only protected against
+    # word-splitting on spaces - it did nothing for apostrophes (or other
+    # shell metacharacters: $, `, ", \, ;, &, |, (, )). An unescaped
+    # apostrophe in the rejoined remote command opens an unterminated
+    # quote, corrupting/truncating everything after it before "am
+    # broadcast" ever sees it. Building the full command as a single,
+    # already shell-quoted string - the same fix already proven for
+    # run_mnn_autobench.py's own fire_broadcast() - sidesteps the rejoining
+    # hazard entirely: real spaces and apostrophes both survive intact, so
+    # the underscore-encoding hack is no longer needed at all.
+    cmd = (
+        f"am broadcast -a {BROADCAST_ACTION} -n {RECEIVER_COMPONENT} "
+        f"--es model_path {shlex.quote(model_path)} "
+        f"--es prompt {shlex.quote(question)} "
+        f"--es run_id {shlex.quote(run_id)} "
+        f"--ei max_tokens {int(max_tokens)}"
+    )
+    adb.run(["shell", cmd], timeout=20)
 
 
 KNOWN_TAGS = ["RUN_DONE", "RUN_ERROR", "BROADCAST_RECEIVER", "COLD_LOAD", "TTFT", "TPS", "MEMORY", "POWER", "THERMAL_TEMP_CPU", "THERMAL_TEMP_SKIN", "THERMAL"]
@@ -439,7 +484,7 @@ def poll_for_result(adb: Adb, run_id: str, timeout: int) -> tuple:
 
 
 def restart_smolchat(adb: Adb):
-    print("  [RESTART] force-stopping and relaunching SmolChat...")
+    qprint("  [RESTART] force-stopping and relaunching SmolChat...")
     adb.run(["shell", "am", "force-stop", PACKAGE], timeout=15)
     adb.run(["shell", "am", "start", "-n", MAIN_ACTIVITY_COMPONENT], timeout=15)
     time.sleep(3)
@@ -500,16 +545,16 @@ def reset_smolchat_for_clean_process(adb: Adb):
     high-water mark left over from a model loaded in a prior, separate
     invocation of this script (see run_benchmark's mid-run context-size
     reset for the unrelated, per-question retry logic)."""
-    print("[RESET] Force-stopping and restarting SmolChat for a clean process state (required for accurate Peak RSS)...")
+    qprint("[RESET] Force-stopping and restarting SmolChat for a clean process state (required for accurate Peak RSS)...")
     adb.run(["shell", "am", "force-stop", PACKAGE], timeout=15)
     adb.run(["shell", "am", "start", "-n", MAIN_ACTIVITY_COMPONENT], timeout=15)
     time.sleep(4)
 
 
-def run_one(adb: Adb, model_path: str, question: str, n: int, timeout: int) -> dict:
+def run_one(adb: Adb, model_path: str, question: str, n: int, timeout: int, max_tokens: int) -> dict:
     run_id = f"run_{n}_{int(time.time() * 1000)}"
     clear_logcat(adb)
-    fire_broadcast(adb, model_path, question, run_id)
+    fire_broadcast(adb, model_path, question, run_id, max_tokens)
     status, lines = poll_for_result(adb, run_id, timeout)
     return {"run_id": run_id, "status": status, "lines": lines}
 
@@ -529,7 +574,7 @@ def wait_for_broadcast_receipt(adb: Adb, run_id: str, poll_seconds: int) -> bool
     return False
 
 
-def run_first_question_after_reboot(adb: Adb, model_path: str, question: str, n: int, timeout: int) -> dict:
+def run_first_question_after_reboot(adb: Adb, model_path: str, question: str, n: int, timeout: int, max_tokens: int) -> dict:
     """Fire the first broadcast after a --reboot-before reboot, retrying
     with the SAME run_id if BROADCAST_RECEIVER never confirms pickup
     within a short window.
@@ -543,7 +588,7 @@ def run_first_question_after_reboot(adb: Adb, model_path: str, question: str, n:
 
     for attempt in range(1, BROADCAST_RECEIPT_MAX_ATTEMPTS + 1):
         clear_logcat(adb)
-        fire_broadcast(adb, model_path, question, run_id)
+        fire_broadcast(adb, model_path, question, run_id, max_tokens)
         if wait_for_broadcast_receipt(adb, run_id, BROADCAST_RECEIPT_POLL_SECONDS):
             print(f"[COLD] Broadcast received on attempt {attempt}/{BROADCAST_RECEIPT_MAX_ATTEMPTS}")
             received = True
@@ -565,6 +610,29 @@ def run_first_question_after_reboot(adb: Adb, model_path: str, question: str, n:
     return {"run_id": run_id, "status": status, "lines": lines}
 
 
+def get_monsoon_power(duration_seconds=5):
+    """One Monsoon HVPM power reading via monsoon_single_reading.py, for
+    side-by-side comparison against the existing BatteryManager-based
+    power_ma metric. Never raises - any failure returns power_ma_mean=None
+    with an error description instead of crashing the calling script.
+
+    Uses sys.executable (not a hardcoded "python3") and encoding="utf-8",
+    errors="replace" (not text=True) rather than the originally-proposed
+    snippet verbatim - both match Adb.run()'s and convert_to_gguf()'s own
+    established conventions elsewhere in this file (the text=True ->
+    encoding/errors switch in particular was a confirmed fix for a real
+    UnicodeDecodeError crash, not a stylistic choice).
+    """
+    try:
+        result = subprocess.run(
+            [sys.executable, MONSOON_SCRIPT, "--duration-seconds", str(duration_seconds)],
+            capture_output=True, encoding="utf-8", errors="replace", timeout=30,
+        )
+        return json.loads(result.stdout)
+    except Exception as e:
+        return {"power_ma_mean": None, "error": str(e)}
+
+
 def build_metrics(lines: dict) -> dict:
     def num(tag, cast):
         v = extract_value(lines[tag]) if tag in lines else None
@@ -574,6 +642,8 @@ def build_metrics(lines: dict) -> dict:
             return cast(v)
         except ValueError:
             return None
+
+    monsoon = get_monsoon_power()
 
     return {
         "cold_load_ms": num("COLD_LOAD", int),
@@ -586,6 +656,9 @@ def build_metrics(lines: dict) -> dict:
         # on ValueError, which is exactly the "unknown reading" value we want.
         "thermal_temp_cpu_c": num("THERMAL_TEMP_CPU", float),
         "thermal_temp_skin_c": num("THERMAL_TEMP_SKIN", float),
+        # Independent reading, captured alongside power_ma (BatteryManager)
+        # rather than replacing it - both coexist side by side.
+        "power_ma_monsoon": monsoon.get("power_ma_mean"),
     }
 
 
@@ -593,28 +666,28 @@ def build_metrics(lines: dict) -> dict:
 # Main per-question loop
 # ---------------------------------------------------------------------------
 
-def run_benchmark(adb: Adb, model_path: str, questions: list, timeout: int, reboot_before: bool = False) -> tuple:
+def run_benchmark(adb: Adb, model_path: str, questions: list, timeout: int, max_tokens: int, reboot_before: bool = False) -> tuple:
     results = []
     context_resets = 0
     total = len(questions)
 
     for n, question in enumerate(questions, start=1):
         if n == 1 and reboot_before:
-            outcome = run_first_question_after_reboot(adb, model_path, question, n, timeout)
+            outcome = run_first_question_after_reboot(adb, model_path, question, n, timeout, max_tokens)
         else:
-            outcome = run_one(adb, model_path, question, n, timeout)
+            outcome = run_one(adb, model_path, question, n, timeout, max_tokens)
         status, lines, run_id = outcome["status"], outcome["lines"], outcome["run_id"]
         context_reset_for_this_q = False
 
         if status == "error":
             reason, message = extract_error(lines.get("RUN_ERROR", ""))
             if message and CONTEXT_SIZE_PHRASE in message.lower():
-                print(f"\n[{n}/{total}] \"{question}\"")
-                print(f"  CONTEXT WINDOW FULL (reason={reason}, message={message}) -- restarting SmolChat and retrying once")
+                qprint(f"\n[{n}/{total}] \"{question}\"")
+                qprint(f"  CONTEXT WINDOW FULL (reason={reason}, message={message}) -- restarting SmolChat and retrying once")
                 restart_smolchat(adb)
                 context_resets += 1
                 context_reset_for_this_q = True
-                outcome = run_one(adb, model_path, question, n, timeout)
+                outcome = run_one(adb, model_path, question, n, timeout, max_tokens)
                 status, lines, run_id = outcome["status"], outcome["lines"], outcome["run_id"]
 
         entry = {
@@ -641,24 +714,24 @@ def run_benchmark(adb: Adb, model_path: str, questions: list, timeout: int, rebo
             if metrics["thermal_temp_skin_c"] is not None:
                 temp_parts.append(f"Skin:{metrics['thermal_temp_skin_c']}°C")
             temp_suffix = f" ({' '.join(temp_parts)})" if temp_parts else ""
-            print(f"\n[{n}/{total}] \"{question}\"")
-            print(
+            qprint(f"\n[{n}/{total}] \"{question}\"")
+            qprint(
                 f"  ColdLoad={metrics['cold_load_ms']}ms TTFT={metrics['ttft_ms']}ms TPS={metrics['tps']} "
                 f"RSS={metrics['memory_kb']}KB Power={metrics['power_ma']}mA Thermal={metrics['thermal']}{temp_suffix}"
             )
             preview = response if response and len(response) <= 160 else (response[:157] + "..." if response else "")
-            print(f"  Response: \"{preview}\"")
+            qprint(f"  Response: \"{preview}\"")
         elif status == "error":
             reason, message = extract_error(lines.get("RUN_ERROR", ""))
             entry["status"] = "failed"
             entry["error"] = {"reason": reason, "message": message}
-            print(f"\n[{n}/{total}] \"{question}\"")
-            print(f"  FAILED: reason={reason} message={message}")
+            qprint(f"\n[{n}/{total}] \"{question}\"")
+            qprint(f"  FAILED: reason={reason} message={message}")
         else:  # timeout
             entry["status"] = "failed"
             entry["error"] = {"reason": "timeout", "message": f"No RUN_DONE/RUN_ERROR within {timeout}s"}
-            print(f"\n[{n}/{total}] \"{question}\"")
-            print(f"  FAILED: timeout after {timeout}s")
+            qprint(f"\n[{n}/{total}] \"{question}\"")
+            qprint(f"  FAILED: timeout after {timeout}s")
 
         results.append(entry)
         time.sleep(2)
@@ -724,24 +797,24 @@ def compute_summary(results: list) -> dict:
 
 
 def print_summary_table(summary: dict, run_info: dict):
-    print("\n" + "=" * 60)
-    print("SUMMARY")
-    print("=" * 60)
+    qprint("\n" + "=" * 60)
+    qprint("SUMMARY")
+    qprint("=" * 60)
     header = f"{'Metric':<10}{'Mean':>12}{'Std':>12}{'Min':>12}{'Max':>12}"
-    print(header)
-    print("-" * len(header))
+    qprint(header)
+    qprint("-" * len(header))
     for label, key in [("TTFT_ms", "ttft_ms"), ("TPS", "tps"), ("RSS_KB", "memory_kb"), ("Power_mA", "power_ma"), ("ThermalCPU_C", "thermal_temp_cpu_c"), ("ThermalSkin_C", "thermal_temp_skin_c")]:
         s = summary[key]
         row = f"{label:<10}" + "".join(
             f"{(s[k] if s[k] is not None else 'N/A'):>12}" for k in ("mean", "std", "min", "max")
         )
-        print(row)
+        qprint(row)
     cold_load_q1 = summary.get("first_question_cold_load_ms")
-    print(f"{'ColdLoad_Q1':<10}{(cold_load_q1 if cold_load_q1 is not None else 'N/A'):>12}{'N/A':>12}{'N/A':>12}{'N/A':>12}")
-    print(f"\nThermal states observed: {', '.join(summary['thermal_states_observed']) or 'none'}")
-    print(summary["note"])
-    print(summary["rss_note"])
-    print(f"{run_info['cold_load_note']} (rebooted_before_run={run_info['rebooted_before_run']})")
+    qprint(f"{'ColdLoad_Q1':<10}{(cold_load_q1 if cold_load_q1 is not None else 'N/A'):>12}{'N/A':>12}{'N/A':>12}{'N/A':>12}")
+    qprint(f"\nThermal states observed: {', '.join(summary['thermal_states_observed']) or 'none'}")
+    qprint(summary["note"])
+    qprint(summary["rss_note"])
+    qprint(f"{run_info['cold_load_note']} (rebooted_before_run={run_info['rebooted_before_run']})")
 
 
 def save_results(output_path: str, run_info: dict, summary: dict, results: list):
@@ -762,19 +835,27 @@ def parse_args():
     p.add_argument("--questions", default=None, help="Path to .txt file, one question per line")
     p.add_argument("--output", default="autobench_results.json")
     p.add_argument("--quant", choices=["Q4_K_M", "Q5_K_M", "Q8_0"], default="Q4_K_M")
-    p.add_argument("--timeout", type=int, default=60, help="Seconds to wait for RUN_DONE/RUN_ERROR per question")
+    p.add_argument("--timeout", type=int, default=180, help="Seconds to wait for RUN_DONE/RUN_ERROR per question")
+    p.add_argument("--max-tokens", type=int, default=512, dest="max_tokens",
+                    help="Max tokens the receiver should generate per response (matches MNN's default)")
     p.add_argument("--reboot-before", action="store_true",
                     help="Reboot the device before benchmarking for a genuine cold-load read (adds ~30-60s)")
+    p.add_argument("--quiet", action="store_true",
+                    help="Suppress routine per-question and pre-flight progress output. [ERROR]/[WARN] lines "
+                         "and the final 'Results saved'/'DONE' confirmation are still always printed.")
     return p.parse_args()
 
 
 def main():
     args = parse_args()
 
-    print("=" * 60)
-    print("SmolChat Automated Benchmark Pipeline")
-    print(f"  Model: {args.model}  Device: {args.device}  Quant: {args.quant}  Timeout: {args.timeout}s")
-    print("=" * 60)
+    global _QUIET
+    _QUIET = args.quiet
+
+    qprint("=" * 60)
+    qprint("SmolChat Automated Benchmark Pipeline")
+    qprint(f"  Model: {args.model}  Device: {args.device}  Quant: {args.quant}  Timeout: {args.timeout}s  MaxTokens: {args.max_tokens}")
+    qprint("=" * 60)
 
     adb_bin = find_adb()
     adb = Adb(adb_bin, args.device)
@@ -794,7 +875,7 @@ def main():
     questions = load_questions(args.questions)
 
     start_time = datetime.now(timezone.utc).isoformat()
-    results, context_resets = run_benchmark(adb, model_path, questions, args.timeout, reboot_before=args.reboot_before)
+    results, context_resets = run_benchmark(adb, model_path, questions, args.timeout, args.max_tokens, reboot_before=args.reboot_before)
     end_time = datetime.now(timezone.utc).isoformat()
 
     completed = sum(1 for r in results if r["status"] == "success")
@@ -822,9 +903,9 @@ def main():
     save_results(args.output, run_info, summary, results)
     print_summary_table(summary, run_info)
 
-    print("\n" + "=" * 60)
-    print(f"DONE - {completed}/{len(questions)} completed, {failed} failed, {context_resets} context reset(s)")
-    print("=" * 60)
+    qprint("\n" + "=" * 60)
+    qprint(f"DONE - {completed}/{len(questions)} completed, {failed} failed, {context_resets} context reset(s)")
+    qprint("=" * 60)
 
 
 if __name__ == "__main__":

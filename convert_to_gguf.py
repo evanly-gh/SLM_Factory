@@ -25,7 +25,7 @@ from pathlib import Path
 
 # llama.cpp is expected to be cloned here. All conversion and quantization
 # tools are built from this source tree.
-LLAMA_CPP_DIR = Path.home() / "SmolChat-Android" / "llama.cpp"
+LLAMA_CPP_DIR = Path(__file__).resolve().parent / "SmolChat-Android" / "llama.cpp"
 
 # Python script that converts a HuggingFace checkpoint directory into GGUF format.
 # Ships with llama.cpp; handles both safetensors and .bin weight files.

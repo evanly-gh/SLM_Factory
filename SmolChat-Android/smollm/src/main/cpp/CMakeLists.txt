@@ -9,6 +9,36 @@ set(GGML_DIR ${LLAMA_DIR}/ggml)
 set(COMMON_DIR ${LLAMA_DIR}/common)
 set(VENDOR_DIR ${LLAMA_DIR}/vendor)
 
+# llama-common is built by upstream llama.cpp as a SHARED library whenever
+# BUILD_SHARED_LIBS is on (the Android default), but its headers (common.h,
+# chat.h, ...) declare functions with no export macro (unlike llama.h's
+# LLAMA_API), so with -fvisibility=hidden those symbols never get exported
+# from libllama-common.so, and linking against it fails at link time.
+# Rather than patching upstream headers, compile llama-common's own sources
+# into our own STATIC library here, so its symbols link directly into each
+# libsmollm*.so and never cross a shared-library visibility boundary.
+# llama and ggml are left untouched and continue to build SHARED as before.
+file(GLOB_RECURSE LLAMA_COMMON_STATIC_SOURCES CONFIGURE_DEPENDS ${COMMON_DIR}/*.cpp)
+add_library(llama-common-static STATIC ${LLAMA_COMMON_STATIC_SOURCES})
+target_include_directories(
+        llama-common-static
+        PUBLIC
+        ${COMMON_DIR}
+        ${VENDOR_DIR}
+        ${LLAMA_DIR}/include
+        ${GGML_DIR}/include
+        ${GGML_DIR}/src
+        ${GGML_DIR}/src/ggml-cpu
+)
+target_compile_features(llama-common-static PUBLIC cxx_std_17)
+target_compile_options(llama-common-static PUBLIC -fvisibility=hidden -fvisibility-inlines-hidden)
+set_target_properties(llama-common-static PROPERTIES POSITION_INDEPENDENT_CODE ON)
+if (LLAMA_SUBPROCESS)
+    target_compile_definitions(llama-common-static PUBLIC LLAMA_SUBPROCESS)
+endif()
+target_link_libraries(llama-common-static PUBLIC llama-common-base)
+target_link_libraries(llama-common-static PRIVATE cpp-httplib)
+
 # -fvisibility=hidden: hide all symbols by default
 # -fvisibility-inlines-hidden: hide all inline symbols by default
 target_compile_options(
@@ -66,7 +96,7 @@ function(build_library target_name)
     )
     target_link_libraries(
             ${target_name}
-            android log llama common vulkan
+            android log llama llama-common-static vulkan
     )
     # -Wl,--gc-sections: remove unused sections (garbage collection)
     # -flto: link-time optimization

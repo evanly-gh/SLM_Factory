@@ -18,3 +18,6 @@ Model-Conversion/output-*/
 
 # macOS
 .DS_Store
+Benchmark-Harness/old_test_results/
+Benchmark-Harness/*.json
+!Benchmark-Harness/test_questions.txt

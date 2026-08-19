@@ -35,10 +35,21 @@ class LLMInference {
     int64_t _responseGenerationTime = 0;
     long    _responseNumTokens      = 0;
 
+    // hard cap on tokens generated per completion, set by startCompletion()
+    int _maxTokens = 256;
+
+    // set when max_tokens/repetition triggers on a call that still returned a real piece;
+    // the *next* completionLoop() call finalizes (records history + returns "[EOG]") without
+    // decoding another token, so the triggering piece itself is never dropped.
+    bool _pendingStop = false;
+
     // length of context window consumed during the conversation
     int _nCtxUsed = 0;
 
     bool _isValidUtf8(const char* response);
+
+    // true if the tail of `text` consists of a 10-20 char substring repeated 5+ times in a row
+    static bool _hasRepetition(const std::string& text);
 
   public:
     void loadModel(const char* modelPath, float minP, float temperature, bool storeChats, long contextSize,
@@ -53,7 +64,9 @@ class LLMInference {
     int getContextSizeUsed() const;
 
     // Returns true if Jinja template was used, false if legacy fallback was needed.
-    bool startCompletion(const char* query);
+    // maxTokens caps the number of tokens completionLoop() will generate before it force-stops
+    // (returns "[EOG]"), defaulting to 256 when not provided by the caller.
+    bool startCompletion(const char* query, int maxTokens = 256);
 
     std::string completionLoop();
 

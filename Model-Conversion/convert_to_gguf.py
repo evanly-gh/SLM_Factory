@@ -25,7 +25,7 @@ from pathlib import Path
 
 # llama.cpp is expected to be cloned here. All conversion and quantization
 # tools are built from this source tree.
-LLAMA_CPP_DIR = Path.home() / "SLM_Factory_Krishna_Personal" / "SmolChat-Android" / "llama.cpp"
+LLAMA_CPP_DIR = Path(__file__).resolve().parent.parent / "SmolChat-Android" / "llama.cpp"
 
 # Python script that converts a HuggingFace checkpoint directory into GGUF format.
 # Ships with llama.cpp; handles both safetensors and .bin weight files.
@@ -492,12 +492,13 @@ def find_adb() -> Path | None:
 
 
 def deploy_via_adb(quant_files: dict[str, Path], preferred: str = "Q4_K_M") -> None:
-    """Push the chosen GGUF file to a connected Android device via ADB.
-
-    Prefers `preferred` (Q4_K_M by default) as the smallest file that still
-    runs well on budget phones. Falls back to the first available quant level
-    if the preferred one wasn't produced. Prints manual copy instructions if
-    ADB isn't found or no device is connected, rather than failing hard.
+    """Push EVERY successfully converted/existing GGUF file to a connected
+    Android device via ADB - not just `preferred`. `preferred` (Q4_K_M by
+    default) remains the validation report's recommended level; it plays no
+    special role here beyond being referenced in the manual-instructions
+    fallback if ADB/device isn't available at all. Each file is pushed with
+    the same single-push logic, just repeated; one file failing to push
+    doesn't stop the rest from being attempted.
     """
     print("\n[DEPLOY] Checking ADB connection …")
 
@@ -525,28 +526,23 @@ def deploy_via_adb(quant_files: dict[str, Path], preferred: str = "Q4_K_M") -> N
     device_line = lines[0]
     print(f"[DEPLOY] Device found: {device_line}")
 
-    gguf_path = quant_files.get(preferred)
-    if not gguf_path:
-        # Preferred level wasn't built; use whatever is available
-        available = list(quant_files.keys())
-        if not available:
-            print("[DEPLOY] No quantized GGUF files to deploy.")
-            return
-        gguf_path = quant_files[available[0]]
-        preferred = available[0]
+    if not quant_files:
+        print("[DEPLOY] No quantized GGUF files to deploy.")
+        return
 
-    remote_path = f"/sdcard/Download/{gguf_path.name}"
-    print(f"[DEPLOY] Pushing {gguf_path.name} ({file_size_mb(gguf_path):.0f} MB) → {remote_path}")
-    r = run([str(adb), "push", str(gguf_path), remote_path])
-    if r.returncode == 0:
-        print("[DEPLOY] ✓ Pushed successfully.")
-        print(f"\nTo import in SmolChat:")
-        print(f"  1. Open SmolChat on your Android device")
-        print(f"  2. Tap ☰ → Models → Import model")
-        print(f"  3. Navigate to Downloads → {gguf_path.name}")
-    else:
-        print("[DEPLOY] Push failed.")
-        _print_manual_instructions(quant_files, preferred)
+    for level, gguf_path in quant_files.items():
+        remote_path = f"/sdcard/Download/{gguf_path.name}"
+        print(f"[DEPLOY] Pushing {level} {gguf_path.name} ({file_size_mb(gguf_path):.0f} MB) → {remote_path}")
+        r = run([str(adb), "push", str(gguf_path), remote_path])
+        if r.returncode == 0:
+            print(f"[DEPLOY] ✓ {level} pushed successfully.")
+        else:
+            print(f"[DEPLOY] {level} push failed.")
+
+    print(f"\nTo import in SmolChat:")
+    print(f"  1. Open SmolChat on your Android device")
+    print(f"  2. Tap ☰ → Models → Import model")
+    print(f"  3. Navigate to Downloads → select the pushed .gguf file")
 
 
 def _print_manual_instructions(quant_files: dict[str, Path], preferred: str) -> None:

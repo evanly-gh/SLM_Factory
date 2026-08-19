@@ -28,8 +28,15 @@ LLMInference::loadModel(const char *model_path, float minP, float temperature, b
 
     // create an instance of llama_model
     llama_model_params model_params = llama_model_default_params();
-    model_params.use_mmap = useMmap;
-    model_params.use_mlock = useMlock;
+    if (useMmap && useMlock) {
+        model_params.load_mode = LLAMA_LOAD_MODE_MMAP_MLOCK;
+    } else if (useMmap) {
+        model_params.load_mode = LLAMA_LOAD_MODE_MMAP;
+    } else if (useMlock) {
+        model_params.load_mode = LLAMA_LOAD_MODE_MLOCK;
+    } else {
+        model_params.load_mode = LLAMA_LOAD_MODE_NONE;
+    }
     _model = llama_model_load_from_file(model_path, model_params);
     if (!_model) {
         LOGe("failed to load model from %s", model_path);
@@ -82,13 +89,15 @@ LLMInference::getContextSizeUsed() const {
 }
 
 bool
-LLMInference::startCompletion(const char *query) {
+LLMInference::startCompletion(const char *query, int maxTokens) {
     if (!_storeChats) {
         _formattedMessages.clear();
         _formattedMessages = std::vector<char>(llama_n_ctx(_ctx));
     }
     _responseGenerationTime = 0;
     _responseNumTokens = 0;
+    _maxTokens = maxTokens;
+    _pendingStop = false;
     addChatMessage(query, "user");
     // apply the chat-template
     std::vector<common_chat_msg> messages;
@@ -99,9 +108,11 @@ LLMInference::startCompletion(const char *query) {
         messages.push_back(msg);
     }
     auto templates = common_chat_templates_init(_model, _chatTemplate ? _chatTemplate : "");
+    LOGi("chat template supports enable_thinking: %d", common_chat_templates_support_enable_thinking(templates.get()));
 
     common_chat_templates_inputs inputs;
     inputs.messages = messages;
+    inputs.enable_thinking = false;
 
     // Try Jinja rendering first with tools defined to prevent "tojson on Undefined" errors.
     // If Jinja fails (e.g. unsupported filters like lstrip), fall back to legacy rendering.
@@ -116,6 +127,7 @@ LLMInference::startCompletion(const char *query) {
         LOGe("Jinja template failed: %s — retrying with legacy renderer", e.what());
         inputs.use_jinja = false;
         inputs.chat_template_kwargs.clear();
+        inputs.enable_thinking = false;
         prompt = common_chat_templates_apply(templates.get(), inputs).prompt;
         usedJinja = false;
     }
@@ -167,8 +179,44 @@ LLMInference::_isValidUtf8(const char *response) {
     return true;
 }
 
+bool
+LLMInference::_hasRepetition(const std::string &text) {
+    static constexpr int kMinPatternLen = 10;
+    static constexpr int kMaxPatternLen = 20;
+    static constexpr int kMinRepeats = 5;
+
+    for (int patternLen = kMinPatternLen; patternLen <= kMaxPatternLen; ++patternLen) {
+        size_t needed = (size_t) patternLen * kMinRepeats;
+        if (text.size() < needed) {
+            continue;
+        }
+        std::string pattern = text.substr(text.size() - patternLen, patternLen);
+        bool repeated = true;
+        for (int i = 1; i < kMinRepeats; ++i) {
+            size_t start = text.size() - (size_t) patternLen * (i + 1);
+            if (text.compare(start, patternLen, pattern) != 0) {
+                repeated = false;
+                break;
+            }
+        }
+        if (repeated) {
+            return true;
+        }
+    }
+    return false;
+}
+
 std::string
 LLMInference::completionLoop() {
+    // a previous call already returned the final real piece and flagged a stop (max_tokens or
+    // repetition) — finalize now, without decoding another token, so that piece is never dropped
+    if (_pendingStop) {
+        _pendingStop = false;
+        addChatMessage(strdup(_response.data()), "assistant");
+        _response.clear();
+        return "[EOG]";
+    }
+
     // check if the length of the inputs to the model
     // have exceeded the context size of the model
     uint32_t contextSize = llama_n_ctx(_ctx);
@@ -207,6 +255,26 @@ LLMInference::completionLoop() {
         _response += _cacheResponseTokens;
         std::string valid_utf8_piece = _cacheResponseTokens;
         _cacheResponseTokens.clear();
+
+        // hard cap: force-stop once the max token budget for this completion is spent.
+        // Still return this call's real piece — flag the stop so the *next* call finalizes
+        // instead, otherwise this piece would be silently dropped from the caller's stream.
+        if (_responseNumTokens >= _maxTokens) {
+            LOGi("completionLoop: max_tokens (%d) reached after %zu response bytes, stopping",
+                 _maxTokens, _response.size());
+            _pendingStop = true;
+            return valid_utf8_piece;
+        }
+
+        // repetition guard: bail out if the tail is a short substring looping 5+ times in a row.
+        // Same deferred-stop handling as above so the triggering piece is still returned.
+        if (_hasRepetition(_response)) {
+            LOGi("completionLoop: repetition detected after %zu response bytes, stopping: \"%s\"",
+                 _response.size(), _response.c_str());
+            _pendingStop = true;
+            return valid_utf8_piece;
+        }
+
         return valid_utf8_piece;
     }
 
