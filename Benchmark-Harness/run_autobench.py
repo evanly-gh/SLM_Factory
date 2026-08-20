@@ -836,7 +836,7 @@ def parse_args():
     p.add_argument("--output", default="autobench_results.json")
     p.add_argument("--quant", choices=["Q4_K_M", "Q5_K_M", "Q8_0"], default="Q4_K_M")
     p.add_argument("--timeout", type=int, default=180, help="Seconds to wait for RUN_DONE/RUN_ERROR per question")
-    p.add_argument("--max-tokens", type=int, default=512, dest="max_tokens",
+    p.add_argument("--max-tokens", type=int, default=4096, dest="max_tokens",
                     help="Max tokens the receiver should generate per response (matches MNN's default)")
     p.add_argument("--reboot-before", action="store_true",
                     help="Reboot the device before benchmarking for a genuine cold-load read (adds ~30-60s)")

@@ -69,6 +69,28 @@ class BenchmarkService : Service() {
         const val CHANNEL_ID = "benchmark_channel"
         private const val NOTIF_ID = 9002
 
+        // Default headless max_tokens budget. Matches the UI's own default exactly — its
+        // getResponse() call sites (ChatScreenViewModel.kt) pass no maxTokens, so SmolLM.kt's
+        // default of 256 applies there too. Keeping this identical to the UI, together with
+        // CONTEXT_SIZE below, means every generation config value (context size, token budget,
+        // sampler seed, chat template construction, storeChats/isTask handling) is now the same
+        // between the two paths — no headless-specific divergence left to A/B against.
+        private const val DEFAULT_MAX_TOKENS = 256
+
+        // Pinned to 2048, exactly matching the UI's default chat.contextSize (AppDB.kt). This is
+        // NOT an arbitrary/conservative guess — it's the confirmed-stable value from direct A/B
+        // testing (same model, same prompt, headless vs. UI). Root cause: n_ctx/n_batch changes
+        // llama.cpp's batch/ubatch splitting and KV-cache layout, which can alter the exact
+        // floating-point logits computed at a given step — with a fixed sampler seed (see
+        // loadModel()'s LLAMA_DEFAULT_SEED), that's enough to flip which token gets sampled and
+        // reproducibly diverge generation. Confirmed: 6144 diverged (stopped after ~4-5 words on
+        // a verified prompt where the UI's 2048-context run completed correctly); 3072 held up on
+        // the same prompt. 2048 is chosen anyway, over the also-verified 3072, purely to stay
+        // bit-for-bit identical to the UI's own context size rather than merely "not yet observed
+        // to diverge" — 3072 was correct on one prompt, not proven safe in general. Do not raise
+        // this without re-running the same A/B methodology against real prompts first.
+        private const val CONTEXT_SIZE = 2048L
+
         private val CURRENT_SYSFS_PATHS = listOf(
             "/sys/class/power_supply/battery/current_now",
             "/sys/class/power_supply/Battery/current_now",
@@ -82,6 +104,8 @@ class BenchmarkService : Service() {
         val modelPath = intent?.getStringExtra("model_path")
         val prompt    = intent?.getStringExtra("prompt")
         val runId     = intent?.getStringExtra("run_id")
+        // Optional broadcast extra; defaults to 4096 when absent or not a valid int.
+        val maxTokens = intent?.getStringExtra("max_tokens")?.toIntOrNull() ?: DEFAULT_MAX_TOKENS
 
         if (modelPath == null || prompt == null || runId == null) {
             Log.d("RUN_ERROR", "run_id=${runId ?: "unknown"} reason=missing_extras")
@@ -121,7 +145,7 @@ class BenchmarkService : Service() {
         }
 
         serviceScope.launch(exceptionHandler) {
-            runBenchmark(modelPath, prompt, runId)
+            runBenchmark(modelPath, prompt, runId, maxTokens)
             stopSelf(startId)
         }
 
@@ -135,15 +159,17 @@ class BenchmarkService : Service() {
 
     // ── Core pipeline ──────────────────────────────────────────────────────────
 
-    private suspend fun runBenchmark(modelPath: String, prompt: String, runId: String) {
+    private suspend fun runBenchmark(modelPath: String, prompt: String, runId: String, maxTokens: Int) {
         try {
-            runBenchmarkInternal(modelPath, prompt, runId)
+            runBenchmarkInternal(modelPath, prompt, runId, maxTokens)
         } catch (e: Exception) {
             Log.e("RUN_ERROR", "run_id=$runId reason=unexpected_error message=${e.message}", e)
         }
     }
 
-    private suspend fun runBenchmarkInternal(rawModelPath: String, prompt: String, runId: String) {
+    private suspend fun runBenchmarkInternal(
+        rawModelPath: String, prompt: String, runId: String, maxTokens: Int,
+    ) {
         val modelPath = resolveReadableModelPath(rawModelPath, runId) ?: return
 
         // Resolve the real target chat up front so the DB writes further down (question, answer,
@@ -178,6 +204,7 @@ class BenchmarkService : Service() {
             modelPath = modelPath,
             onError   = { e -> loadDeferred.complete(Result.failure(e)) },
             onSuccess = {    loadDeferred.complete(Result.success(Unit)) },
+            contextSizeOverride = CONTEXT_SIZE,
         )
         loadDeferred.await().getOrElse { e ->
             Log.d("RUN_ERROR", "run_id=$runId reason=model_load_failed message=${e.message}")
@@ -300,6 +327,7 @@ class BenchmarkService : Service() {
                 Result.failure(Exception("Inference cancelled"))) },
             onError    = { e -> inferenceDeferred.complete(Result.failure(e)) },
             saveToDb   = false,
+            maxTokens  = maxTokens,
         )
 
         // Await inference before cancelling the power monitor.

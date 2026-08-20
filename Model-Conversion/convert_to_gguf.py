@@ -133,6 +133,128 @@ def file_size_mb(path: Path) -> float:
     return path.stat().st_size / (1024 ** 2)
 
 
+# ---------------------------------------------------------------------------
+# Real-load validation + hash-based caching for GGUF outputs
+#
+# On top of the plain "does the file exist" check, we optionally load each
+# produced GGUF with llama-cpp-python and record a sha256 sidecar
+# (<file>.validation.json). On the next run, a cache hit requires the sidecar
+# to match the current file size and hash, so a corrupted or hand-edited
+# GGUF is not silently reused. This is best-effort: if llama-cpp-python isn't
+# installed, or validation fails for any reason, callers fall back to the
+# original exists()-only check rather than blocking the pipeline.
+# ---------------------------------------------------------------------------
+
+def gguf_validation_sidecar_path(gguf_path: Path) -> Path:
+    return gguf_path.with_name(gguf_path.name + ".validation.json")
+
+
+def _sha256_file(path: Path) -> str:
+    import hashlib
+    digest = hashlib.sha256()
+    with open(path, "rb") as handle:
+        while chunk := handle.read(8 * 1024 * 1024):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _atomic_write_json(path: Path, payload: dict) -> None:
+    import tempfile
+    directory = path.parent
+    directory.mkdir(parents=True, exist_ok=True)
+    descriptor, temporary = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=directory)
+    try:
+        with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
+            json.dump(payload, handle, indent=2, sort_keys=True)
+            handle.write("\n")
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary, path)
+    finally:
+        if os.path.exists(temporary):
+            os.remove(temporary)
+
+
+def validate_and_record_gguf(gguf_path: Path) -> dict | None:
+    """Best-effort: load the GGUF with llama-cpp-python and record a hash sidecar.
+
+    Returns the validation record on success, or None if validation could not
+    be performed (e.g. llama-cpp-python missing) or failed for a reason that
+    should not block the pipeline. Raises only if the file itself is clearly
+    broken (missing or empty) or changed size during the load.
+    """
+    if not gguf_path.is_file():
+        raise RuntimeError(f"GGUF validation failed: file not found: {gguf_path}")
+    initial_size = gguf_path.stat().st_size
+    if initial_size <= 0:
+        raise RuntimeError(f"GGUF validation failed: empty file: {gguf_path}")
+
+    try:
+        import llama_cpp
+    except ImportError:
+        print(f"[VALIDATE] llama-cpp-python not installed; skipping load validation for {gguf_path.name}.")
+        return None
+
+    model = None
+    try:
+        model = llama_cpp.Llama(
+            model_path=str(gguf_path.resolve()), n_ctx=128, n_batch=16, n_gpu_layers=0, verbose=False
+        )
+    except Exception as exc:
+        print(f"[WARN] GGUF load validation failed for {gguf_path.name}: {exc}")
+        return None
+    finally:
+        if model is not None:
+            close = getattr(model, "close", None)
+            if callable(close):
+                close()
+
+    final_size = gguf_path.stat().st_size
+    if final_size != initial_size:
+        raise RuntimeError(f"GGUF changed during validation: {initial_size} -> {final_size} bytes")
+
+    import platform
+    record = {
+        "schema_version": 1,
+        "file_size": final_size,
+        "sha256": _sha256_file(gguf_path),
+        "tool_versions": {
+            "llama_cpp_python": str(getattr(llama_cpp, "__version__", "unknown")),
+            "python": platform.python_version(),
+        },
+    }
+    try:
+        _atomic_write_json(gguf_validation_sidecar_path(gguf_path), record)
+    except OSError as exc:
+        print(f"[WARN] Could not write validation sidecar for {gguf_path.name}: {exc}")
+        return None
+    return record
+
+
+def validated_gguf_cache_hit(gguf_path: Path) -> bool:
+    """True if gguf_path exists and its validation sidecar matches (size + sha256).
+
+    Falls back to False (i.e. "not a validated cache hit") on any error reading
+    the sidecar, so callers should still fall back to plain exists()-based
+    reuse when this returns False but the file is otherwise present.
+    """
+    sidecar_path = gguf_validation_sidecar_path(gguf_path)
+    if not gguf_path.is_file() or not sidecar_path.is_file():
+        return False
+    try:
+        with open(sidecar_path, encoding="utf-8") as handle:
+            record = json.load(handle)
+        return (
+            record.get("schema_version") == 1
+            and record.get("file_size") == gguf_path.stat().st_size
+            and isinstance(record.get("tool_versions"), dict)
+            and bool(record["tool_versions"])
+            and record.get("sha256") == _sha256_file(gguf_path)
+        )
+    except (OSError, TypeError, ValueError):
+        return False
+
+
 def check_disk_space(path: Path, required_gb: float) -> bool:
     """Warn if the filesystem holding `path` has less than `required_gb` free.
 
@@ -286,7 +408,10 @@ def convert_to_base(model_dir: Path, output_dir: Path, prefix: str, base_dtype: 
 
     base_path = output_dir / f"{prefix}-{base_dtype}.gguf"
     if base_path.exists():
-        print(f"[CONVERT] {base_path.name} already exists, skipping conversion.")
+        if validated_gguf_cache_hit(base_path):
+            print(f"[CONVERT] {base_path.name} already exists and passed validated-cache check, skipping conversion.")
+        else:
+            print(f"[CONVERT] {base_path.name} already exists, skipping conversion.")
         return base_path
 
     # The base GGUF will be roughly the same size as the source weights
@@ -308,6 +433,10 @@ def convert_to_base(model_dir: Path, output_dir: Path, prefix: str, base_dtype: 
 
     require(base_path.exists(), f"Expected {base_path} after conversion but it was not created.")
     print(f"[CONVERT] ✓ {base_path.name}  ({file_size_mb(base_path):.0f} MB)")
+    try:
+        validate_and_record_gguf(base_path)
+    except RuntimeError as exc:
+        print(f"[WARN] Post-conversion validation of {base_path.name} raised: {exc}")
     return base_path
 
 
@@ -359,7 +488,10 @@ def quantize_model(f16_path: Path, output_dir: Path, levels: list[str], prefix: 
         out_path = output_dir / out_name
 
         if out_path.exists():
-            print(f"[QUANTIZE] {out_name} already exists, skipping.")
+            if validated_gguf_cache_hit(out_path):
+                print(f"[QUANTIZE] {out_name} already exists and passed validated-cache check, skipping.")
+            else:
+                print(f"[QUANTIZE] {out_name} already exists, skipping.")
             results[level] = out_path
             continue
 
@@ -372,6 +504,10 @@ def quantize_model(f16_path: Path, output_dir: Path, levels: list[str], prefix: 
 
         if out_path.exists():
             print(f"[QUANTIZE] ✓ {out_name}  ({file_size_mb(out_path):.0f} MB)")
+            try:
+                validate_and_record_gguf(out_path)
+            except RuntimeError as exc:
+                print(f"[WARN] Post-quantization validation of {out_name} raised: {exc}")
             results[level] = out_path
         else:
             print(f"[WARN] {out_name} not created after quantization.")

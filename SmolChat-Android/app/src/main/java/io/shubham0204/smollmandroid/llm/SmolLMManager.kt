@@ -242,6 +242,10 @@ class SmolLMManager(private val appDB: AppDB) {
         modelPath: String,
         onError: (Exception) -> Unit,
         onSuccess: () -> Unit,
+        // Overrides chat.contextSize for this load only — e.g. the headless benchmark path uses
+        // this to run with a larger context window (to fit a raised max_tokens budget) without
+        // touching chat.contextSize itself, which the manual chat UI also reads.
+        contextSizeOverride: Long? = null,
     ) {
         unload()
         load(
@@ -251,7 +255,7 @@ class SmolLMManager(private val appDB: AppDB) {
                 chat.minP,
                 chat.temperature,
                 false,
-                chat.contextSize.toLong(),
+                contextSizeOverride ?: chat.contextSize.toLong(),
                 chat.chatTemplate.takeIf { it.isNotBlank() && ("{%" in it || "{{" in it) },
                 chat.nThreads,
                 chat.useMmap,
@@ -302,6 +306,7 @@ class SmolLMManager(private val appDB: AppDB) {
         onCancelled: () -> Unit,
         onError: (Exception) -> Unit,
         saveToDb: Boolean = true,
+        maxTokens: Int = 256,
     ) {
         stateLock.withLock {
             // Check if model is loaded
@@ -333,7 +338,7 @@ class SmolLMManager(private val appDB: AppDB) {
                     }
 
                     val duration = measureTime {
-                        instance.getResponseAsFlow(query).collect { piece ->
+                        instance.getResponseAsFlow(query, maxTokens).collect { piece ->
                             if (!firstTokenReceived) {
                                 ttftMs = System.currentTimeMillis() - promptSubmitTime
                                 firstTokenReceived = true

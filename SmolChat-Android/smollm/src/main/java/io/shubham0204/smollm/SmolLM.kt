@@ -256,9 +256,9 @@ class SmolLM {
     var usedJinjaTemplate: Boolean = true
         private set
 
-    fun getResponseAsFlow(query: String): Flow<String> = flow {
+    fun getResponseAsFlow(query: String, maxTokens: Int = 256): Flow<String> = flow {
         verifyHandle()
-        usedJinjaTemplate = startCompletion(nativePtr, query)
+        usedJinjaTemplate = startCompletion(nativePtr, query, maxTokens)
         var piece = completionLoop(nativePtr)
         while (piece != "[EOG]") {
             emit(piece)
@@ -275,9 +275,9 @@ class SmolLM {
      * @return The complete response from the LLM.
      * @throws IllegalStateException if the model is not loaded.
      */
-    fun getResponse(query: String): String {
+    fun getResponse(query: String, maxTokens: Int = 256): String {
         verifyHandle()
-        usedJinjaTemplate = startCompletion(nativePtr, query)
+        usedJinjaTemplate = startCompletion(nativePtr, query, maxTokens)
         var piece = completionLoop(nativePtr)
         var response = ""
         while (piece != "[EOG]") {
@@ -340,7 +340,7 @@ class SmolLM {
     private external fun close(modelPtr: Long)
 
     // Returns true if Jinja template was used, false if legacy fallback was needed.
-    private external fun startCompletion(modelPtr: Long, prompt: String): Boolean
+    private external fun startCompletion(modelPtr: Long, prompt: String, maxTokens: Int): Boolean
 
     private external fun completionLoop(modelPtr: Long): String
 

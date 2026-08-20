@@ -33,12 +33,17 @@ import io.shubham0204.smollmandroid.ui.screens.chat.ChatActivity
  *   prompt     — text to send for inference
  *   run_id     — unique string used to correlate log lines
  *
+ * Optional extras:
+ *   max_tokens — hard cap on generated tokens (defaults to 4096 if absent; see
+ *                BenchmarkService.DEFAULT_MAX_TOKENS / CONTEXT_SIZE for the paired context window)
+ *
  * Example ADB command:
  *   adb shell am broadcast -a com.smollmandroid.RUN_PROMPT \
  *     -n io.shubham0204.smollmandroid/.headless.HeadlessBenchmarkReceiver \
  *     --es model_path /sdcard/Download/model-q4_k_m.gguf \
  *     --es prompt "What is the capital of France?" \
- *     --es run_id run_001
+ *     --es run_id run_001 \
+ *     --es max_tokens 4096
  */
 class HeadlessBenchmarkReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
@@ -47,6 +52,7 @@ class HeadlessBenchmarkReceiver : BroadcastReceiver() {
         val modelPath = intent.getStringExtra("model_path")
         val prompt = intent.getStringExtra("prompt")
         val runId = intent.getStringExtra("run_id")
+        val maxTokens = intent.getStringExtra("max_tokens")
 
         if (modelPath == null || prompt == null || runId == null) {
             Log.d("RUN_ERROR", "run_id=${runId ?: "unknown"} reason=missing_extras" +
@@ -98,6 +104,8 @@ class HeadlessBenchmarkReceiver : BroadcastReceiver() {
             putExtra("model_path", modelPath)
             putExtra("prompt", prompt)
             putExtra("run_id", runId)
+            // Optional; BenchmarkService defaults to 4096 when absent.
+            if (maxTokens != null) putExtra("max_tokens", maxTokens)
         }
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
