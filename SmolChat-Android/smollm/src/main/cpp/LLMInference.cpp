@@ -62,6 +62,34 @@ LLMInference::loadModel(const char *model_path, float minP, float temperature, b
     llama_sampler_chain_add(_sampler, llama_sampler_init_temp(temperature));
     llama_sampler_chain_add(_sampler, llama_sampler_init_dist(LLAMA_DEFAULT_SEED));
 
+    // second chain, identical except for a leading logit-bias stage that suppresses this
+    // model's own EOG token(s) — enumerated dynamically via llama_vocab_is_eog() over the whole
+    // vocab, never hardcoded (different models/tokenizers use different EOG token ids). Built
+    // once here so completionLoop() can just pick a chain per-token with no per-call rebuild
+    // cost. See startCompletion()'s suppressEarlyEos parameter for how/when it's selected.
+    const llama_vocab *vocab = llama_model_get_vocab(_model);
+    int32_t nVocab = llama_vocab_n_tokens(vocab);
+    std::vector<llama_logit_bias> eogBias;
+    for (llama_token t = 0; t < nVocab; ++t) {
+        if (llama_vocab_is_eog(vocab, t)) {
+            eogBias.push_back({t, -100.0f});
+        }
+    }
+    _samplerEosSuppressed = llama_sampler_chain_init(sampler_params);
+    llama_sampler_chain_add(_samplerEosSuppressed,
+                             llama_sampler_init_logit_bias(nVocab, (int32_t) eogBias.size(), eogBias.data()));
+    llama_sampler_chain_add(_samplerEosSuppressed, llama_sampler_init_temp(temperature));
+    llama_sampler_chain_add(_samplerEosSuppressed, llama_sampler_init_dist(LLAMA_DEFAULT_SEED));
+
+    // TEMPORARY DIAGNOSTIC: confirm the EOG enumeration actually found token(s) to bias — an
+    // empty list here would make the logit_bias sampler a no-op ("?logit-bias" empty-sampler
+    // fallback in llama_sampler_init_logit_bias when n_logit_bias<=0), silently defeating
+    // suppressEarlyEos entirely.
+    LOGi("EOS-suppress diag: nVocab=%d eogTokenCount=%zu", nVocab, eogBias.size());
+    for (const auto &lb : eogBias) {
+        LOGi("EOS-suppress diag: eog token id=%d bias=%.1f", lb.token, lb.bias);
+    }
+
     _formattedMessages = std::vector<char>(llama_n_ctx(_ctx));
     _messages.clear();
 
@@ -89,7 +117,7 @@ LLMInference::getContextSizeUsed() const {
 }
 
 bool
-LLMInference::startCompletion(const char *query, int maxTokens) {
+LLMInference::startCompletion(const char *query, int maxTokens, bool suppressEarlyEos) {
     if (!_storeChats) {
         _formattedMessages.clear();
         _formattedMessages = std::vector<char>(llama_n_ctx(_ctx));
@@ -98,6 +126,7 @@ LLMInference::startCompletion(const char *query, int maxTokens) {
     _responseNumTokens = 0;
     _maxTokens = maxTokens;
     _pendingStop = false;
+    _suppressEarlyEos = suppressEarlyEos;
     addChatMessage(query, "user");
     // apply the chat-template
     std::vector<common_chat_msg> messages;
@@ -231,10 +260,25 @@ LLMInference::completionLoop() {
         throw std::runtime_error("llama_decode() failed");
     }
 
-    // sample a token and check if it is an EOG (end of generation token)
+    // sample a token and check if it is an EOG (end of generation token).
+    // For the first kEosSuppressTokenWindow tokens of a completion that requested it, use the
+    // EOG-suppressed chain instead — _responseNumTokens is still the pre-increment count here,
+    // so this covers tokens 0..kEosSuppressTokenWindow-1.
+    llama_sampler *activeSampler =
+        (_suppressEarlyEos && _responseNumTokens < kEosSuppressTokenWindow) ? _samplerEosSuppressed : _sampler;
+
+    // TEMPORARY DIAGNOSTIC: one line per token showing exactly what the selection logic decided,
+    // so it's visible from logcat whether suppression is actually engaging for early tokens.
+    LOGi("EOS-suppress diag: token#=%ld suppressEarlyEos=%d selected=%s",
+         _responseNumTokens, _suppressEarlyEos,
+         (activeSampler == _samplerEosSuppressed) ? "EOS_SUPPRESSED" : "NORMAL");
+
     // convert the integer token to its corresponding word-piece
-    _currToken = llama_sampler_sample(_sampler, _ctx, -1);
+    _currToken = llama_sampler_sample(activeSampler, _ctx, -1);
     if (llama_vocab_is_eog(llama_model_get_vocab(_model), _currToken)) {
+        LOGi("EOS-suppress diag: token#=%ld sampled EOG token id=%d despite selected=%s",
+             _responseNumTokens, _currToken,
+             (activeSampler == _samplerEosSuppressed) ? "EOS_SUPPRESSED" : "NORMAL");
         addChatMessage(strdup(_response.data()), "assistant");
         _response.clear();
         return "[EOG]";
@@ -300,6 +344,7 @@ LLMInference::~LLMInference() {
     llama_model_free(_model);
     delete _batch;
     llama_sampler_free(_sampler);
+    llama_sampler_free(_samplerEosSuppressed);
 }
 
 std::string

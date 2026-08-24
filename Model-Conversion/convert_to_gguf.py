@@ -35,10 +35,17 @@ CONVERT_SCRIPT = LLAMA_CPP_DIR / "convert_hf_to_gguf.py"
 # Built from llama.cpp source via cmake (see build_quantize()).
 QUANTIZE_BIN = LLAMA_CPP_DIR / "build" / "bin" / "llama-quantize"
 
-# Quantization levels produced by default, ordered from smallest to largest.
-# Q4_K_M is the sweet spot for most Android phones; Q8_0 is near-lossless but
-# requires significantly more RAM.
+# All quantized levels the pipeline knows how to produce, ordered from
+# smallest to largest. Q4_K_M is the sweet spot for most Android phones;
+# Q8_0 is near-lossless but requires significantly more RAM. Each remains
+# individually selectable via --quant even if not part of ALL_LEVELS below.
 QUANT_LEVELS = ["Q4_K_M", "Q5_K_M", "Q8_0"]
+
+# The project's standard "give me everything" set for --quant ALL: the
+# unquantized base file plus the two quantized levels actually shipped.
+# Q5_K_M is deliberately excluded from this set (still selectable on its
+# own via --quant Q5_K_M) — it's not part of the project's standard three.
+ALL_QUANT_LEVELS = ["Q4_K_M", "Q8_0"]
 
 # Bits-per-parameter used to estimate loaded model RAM.
 # f16/bf16 = 16 bits = 2 bytes; quantized formats store fewer bits per weight.
@@ -391,7 +398,7 @@ def detect_weight_format(model_dir: Path) -> str:
     require(False, f"No .safetensors or .bin weight files found in {model_dir}")
 
 
-def convert_to_base(model_dir: Path, output_dir: Path, prefix: str, base_dtype: str = "f16") -> Path:
+def convert_to_base(model_dir: Path, output_dir: Path, prefix: str, base_dtype: str = "f16", no_mtp: bool = False) -> Path:
     """Convert a HuggingFace checkpoint to a full-precision GGUF file.
 
     Calls llama.cpp's convert_hf_to_gguf.py, which reads the model architecture
@@ -400,6 +407,10 @@ def convert_to_base(model_dir: Path, output_dir: Path, prefix: str, base_dtype: 
     variants are produced from it in the next step so we only need to run this
     conversion once.
     Skips conversion if the output file already exists (idempotent reruns).
+    `no_mtp` forwards --no-mtp to convert_hf_to_gguf.py, excluding the
+    multi-token-prediction head — needed for LoRA-merged checkpoints where the
+    base model's MTP head wasn't loaded/merged by AutoModelForCausalLM, which
+    otherwise makes convert_hf_to_gguf.py expect a tensor block that's missing.
     """
     require(CONVERT_SCRIPT.exists(), f"convert_hf_to_gguf.py not found at {CONVERT_SCRIPT}")
 
@@ -423,10 +434,10 @@ def convert_to_base(model_dir: Path, output_dir: Path, prefix: str, base_dtype: 
     # initialized." KMP_DUPLICATE_LIB_OK=TRUE is the same fix already proven in
     # agent_quantize.py's find_convert_interpreter() call site for this exact error.
     convert_env = {**os.environ, "KMP_DUPLICATE_LIB_OK": "TRUE"}
-    result = run(
-        [sys.executable, str(CONVERT_SCRIPT), str(model_dir), "--outfile", str(base_path), "--outtype", base_dtype],
-        env=convert_env,
-    )
+    convert_cmd = [sys.executable, str(CONVERT_SCRIPT), str(model_dir), "--outfile", str(base_path), "--outtype", base_dtype]
+    if no_mtp:
+        convert_cmd.append("--no-mtp")
+    result = run(convert_cmd, env=convert_env)
     if result.returncode != 0:
         print(f"[ERROR] Conversion failed (exit {result.returncode})", file=sys.stderr)
         sys.exit(result.returncode)
@@ -703,9 +714,12 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--output", default="./output", help="Output directory (default: ./output)")
     p.add_argument(
         "--quant",
-        choices=QUANT_LEVELS + ["ALL"],
+        choices=QUANT_LEVELS + ["F16", "ALL"],
         default="ALL",
-        help="Quantization level(s) to produce (default: ALL)",
+        help="Quantization level(s) to produce (default: ALL = F16, Q4_K_M, Q8_0 — the "
+             "project's standard set; Q5_K_M is excluded from ALL but still selectable on "
+             "its own). F16 alone stops after the unquantized base conversion (whatever "
+             "--base-dtype is set to) and produces no quantized files.",
     )
     p.add_argument("--deploy", action="store_true", help="Push Q4_K_M to connected Android via ADB")
     p.add_argument("--skip-f16", action="store_true", help="Skip conversion if model-f16.gguf already exists")
@@ -714,6 +728,13 @@ def parse_args() -> argparse.Namespace:
         choices=["f16", "bf16"],
         default="f16",
         help="Unquantized base GGUF dtype to convert to before quantizing (default: f16)",
+    )
+    p.add_argument(
+        "--no-mtp",
+        action="store_true",
+        help="Pass --no-mtp through to convert_hf_to_gguf.py, excluding the multi-token-prediction "
+             "head. Needed for LoRA-merged models whose base MTP head wasn't loaded/merged by "
+             "AutoModelForCausalLM. Default off; leave unset for complete/official checkpoints.",
     )
     return p.parse_args()
 
@@ -727,7 +748,15 @@ def main() -> None:
     output_dir = Path(args.output).expanduser().resolve()
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    quant_levels = QUANT_LEVELS if args.quant == "ALL" else [args.quant]
+    if args.quant == "ALL":
+        # F16 is always produced regardless of quant_levels (step 2 below is
+        # unconditional and never deletes its output) — ALL_QUANT_LEVELS is
+        # just the quantized subset layered on top of that base deliverable.
+        quant_levels = ALL_QUANT_LEVELS
+    elif args.quant == "F16":
+        quant_levels = []
+    else:
+        quant_levels = [args.quant]
 
     require(LLAMA_CPP_DIR.exists(), f"llama.cpp not found at {LLAMA_CPP_DIR}. Clone it first.")
 
@@ -741,10 +770,14 @@ def main() -> None:
     print(f"[INFO] Output filename prefix: {prefix}")
 
     # 2. Convert to full-precision GGUF (all quant levels are derived from this)
-    f16_path = convert_to_base(model_dir, output_dir, prefix, args.base_dtype)
+    f16_path = convert_to_base(model_dir, output_dir, prefix, args.base_dtype, no_mtp=args.no_mtp)
 
-    # 3. Compress to each requested quantization level
-    quant_files = quantize_model(f16_path, output_dir, quant_levels, prefix)
+    # 3. Compress to each requested quantization level (skipped entirely for
+    # --quant F16, where the base-precision file from step 2 is the deliverable)
+    if quant_levels:
+        quant_files = quantize_model(f16_path, output_dir, quant_levels, prefix)
+    else:
+        quant_files = {}
 
     conversion_time = time.time() - t_start
 

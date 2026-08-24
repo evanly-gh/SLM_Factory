@@ -77,18 +77,27 @@ class BenchmarkService : Service() {
         // between the two paths — no headless-specific divergence left to A/B against.
         private const val DEFAULT_MAX_TOKENS = 256
 
-        // Pinned to 2048, exactly matching the UI's default chat.contextSize (AppDB.kt). This is
-        // NOT an arbitrary/conservative guess — it's the confirmed-stable value from direct A/B
-        // testing (same model, same prompt, headless vs. UI). Root cause: n_ctx/n_batch changes
-        // llama.cpp's batch/ubatch splitting and KV-cache layout, which can alter the exact
-        // floating-point logits computed at a given step — with a fixed sampler seed (see
-        // loadModel()'s LLAMA_DEFAULT_SEED), that's enough to flip which token gets sampled and
-        // reproducibly diverge generation. Confirmed: 6144 diverged (stopped after ~4-5 words on
-        // a verified prompt where the UI's 2048-context run completed correctly); 3072 held up on
-        // the same prompt. 2048 is chosen anyway, over the also-verified 3072, purely to stay
-        // bit-for-bit identical to the UI's own context size rather than merely "not yet observed
-        // to diverge" — 3072 was correct on one prompt, not proven safe in general. Do not raise
-        // this without re-running the same A/B methodology against real prompts first.
+        // Pinned to 2048, exactly matching the UI's default chat.contextSize (AppDB.kt).
+        //
+        // CORRECTION (see conversation): earlier comments here claimed n_ctx/n_batch changes
+        // were a "confirmed root cause" of premature stopping, reasoning that llama.cpp's
+        // batch/ubatch splitting alters logits enough to flip sampled tokens "at a fixed sampler
+        // seed". That premise was wrong: loadModel() calls llama_sampler_init_dist with
+        // LLAMA_DEFAULT_SEED (0xFFFFFFFF), which llama.cpp's own get_rng_seed()
+        // (llama-sampler.cpp) treats as "pick a new random seed" via std::random_device/system
+        // clock — NOT a fixed value. Every model (re)load, including every single headless call,
+        // gets a genuinely different RNG seed. Generation was never reproducible run-to-run.
+        //
+        // What was actually observed: exactly one run each at 6144 (truncated) and at
+        // 3072/2048 (complete) on one prompt. Under a randomized seed, a single run per
+        // configuration cannot distinguish "context size causes divergence" from "sampling
+        // variance happened to differ" — this is an unconfirmed, non-reproducible single-sample
+        // observation, not demonstrated causation. 2048 is kept here only because it's the most
+        // conservative choice (bit-for-bit identical to the UI's own default) while this is
+        // unresolved, not because larger values were proven unsafe. Don't cite this as a settled
+        // root cause, and don't raise this value based on a small number of manual runs — any
+        // real conclusion needs a repeated-trial batch (see the suppressEarlyEos experiment run
+        // via SUPPRESS_EARLY_EOS_OVERRIDE below) comparing failure *rates*, not anecdotes.
         private const val CONTEXT_SIZE = 2048L
 
         private val CURRENT_SYSFS_PATHS = listOf(
@@ -106,6 +115,11 @@ class BenchmarkService : Service() {
         val runId     = intent?.getStringExtra("run_id")
         // Optional broadcast extra; defaults to 4096 when absent or not a valid int.
         val maxTokens = intent?.getStringExtra("max_tokens")?.toIntOrNull() ?: DEFAULT_MAX_TOKENS
+        // DIAGNOSTIC override for the suppressEarlyEos rate-comparison experiment (see
+        // conversation): lets a batch of test broadcasts force it off to compare against the
+        // true-by-default headless behavior, without touching the actual default.
+        val suppressEarlyEos =
+            intent?.getStringExtra("suppress_early_eos")?.toBooleanStrictOrNull() ?: true
 
         if (modelPath == null || prompt == null || runId == null) {
             Log.d("RUN_ERROR", "run_id=${runId ?: "unknown"} reason=missing_extras")
@@ -145,7 +159,7 @@ class BenchmarkService : Service() {
         }
 
         serviceScope.launch(exceptionHandler) {
-            runBenchmark(modelPath, prompt, runId, maxTokens)
+            runBenchmark(modelPath, prompt, runId, maxTokens, suppressEarlyEos)
             stopSelf(startId)
         }
 
@@ -159,16 +173,18 @@ class BenchmarkService : Service() {
 
     // ── Core pipeline ──────────────────────────────────────────────────────────
 
-    private suspend fun runBenchmark(modelPath: String, prompt: String, runId: String, maxTokens: Int) {
+    private suspend fun runBenchmark(
+        modelPath: String, prompt: String, runId: String, maxTokens: Int, suppressEarlyEos: Boolean,
+    ) {
         try {
-            runBenchmarkInternal(modelPath, prompt, runId, maxTokens)
+            runBenchmarkInternal(modelPath, prompt, runId, maxTokens, suppressEarlyEos)
         } catch (e: Exception) {
             Log.e("RUN_ERROR", "run_id=$runId reason=unexpected_error message=${e.message}", e)
         }
     }
 
     private suspend fun runBenchmarkInternal(
-        rawModelPath: String, prompt: String, runId: String, maxTokens: Int,
+        rawModelPath: String, prompt: String, runId: String, maxTokens: Int, suppressEarlyEos: Boolean,
     ) {
         val modelPath = resolveReadableModelPath(rawModelPath, runId) ?: return
 
@@ -328,6 +344,16 @@ class BenchmarkService : Service() {
             onError    = { e -> inferenceDeferred.complete(Result.failure(e)) },
             saveToDb   = false,
             maxTokens  = maxTokens,
+            // Headless-only: suppresses this model's EOG token for the first ~40 generated
+            // tokens (see LLMInference.h's kEosSuppressTokenWindow) when true (the default —
+            // see the suppress_early_eos override above, added only to run a repeated-trial
+            // rate comparison; not exposed to normal callers). The manual chat UI's getResponse()
+            // calls never pass this, so it stays false/off there — deliberately the one
+            // remaining difference from the UI path, unlike contextSize/max_tokens which were
+            // unified earlier. Whether this default actually reduces premature-stop *rate* vs.
+            // off is still being measured (single before/after runs aren't reproducible evidence
+            // — see CONTEXT_SIZE's comment above for why) — don't treat "true" as proven correct.
+            suppressEarlyEos = suppressEarlyEos,
         )
 
         // Await inference before cancelling the power monitor.

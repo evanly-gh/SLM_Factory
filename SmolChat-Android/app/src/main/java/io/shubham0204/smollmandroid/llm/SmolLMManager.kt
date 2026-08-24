@@ -307,6 +307,7 @@ class SmolLMManager(private val appDB: AppDB) {
         onError: (Exception) -> Unit,
         saveToDb: Boolean = true,
         maxTokens: Int = 256,
+        suppressEarlyEos: Boolean = false,
     ) {
         stateLock.withLock {
             // Check if model is loaded
@@ -338,7 +339,7 @@ class SmolLMManager(private val appDB: AppDB) {
                     }
 
                     val duration = measureTime {
-                        instance.getResponseAsFlow(query, maxTokens).collect { piece ->
+                        instance.getResponseAsFlow(query, maxTokens, suppressEarlyEos).collect { piece ->
                             if (!firstTokenReceived) {
                                 ttftMs = System.currentTimeMillis() - promptSubmitTime
                                 firstTokenReceived = true

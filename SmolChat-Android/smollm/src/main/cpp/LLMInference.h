@@ -10,6 +10,11 @@ class LLMInference {
     llama_context* _ctx;
     llama_model*   _model;
     llama_sampler* _sampler;
+    // Identical chain to _sampler plus a logit-bias stage suppressing this model's own
+    // EOG token(s) (read dynamically at load time via llama_vocab_is_eog() — never hardcoded).
+    // Used in place of _sampler for the first kEosSuppressTokenWindow tokens of a completion
+    // when the caller requested it (see startCompletion()'s suppressEarlyEos parameter).
+    llama_sampler* _samplerEosSuppressed;
     llama_token    _currToken;
     llama_batch*   _batch;
 
@@ -43,6 +48,13 @@ class LLMInference {
     // decoding another token, so the triggering piece itself is never dropped.
     bool _pendingStop = false;
 
+    // whether this completion should suppress EOG sampling for the first
+    // kEosSuppressTokenWindow tokens, set by startCompletion(). Off by default so the manual
+    // chat UI (which never passes this) is unaffected — only the headless benchmark path
+    // requests it, to avoid premature stops observed on multi-step reasoning prompts.
+    bool _suppressEarlyEos = false;
+    static constexpr int kEosSuppressTokenWindow = 40;
+
     // length of context window consumed during the conversation
     int _nCtxUsed = 0;
 
@@ -66,7 +78,9 @@ class LLMInference {
     // Returns true if Jinja template was used, false if legacy fallback was needed.
     // maxTokens caps the number of tokens completionLoop() will generate before it force-stops
     // (returns "[EOG]"), defaulting to 256 when not provided by the caller.
-    bool startCompletion(const char* query, int maxTokens = 256);
+    // suppressEarlyEos, when true, blocks this model's EOG token(s) from being sampled for the
+    // first kEosSuppressTokenWindow tokens (see _samplerEosSuppressed). Defaults to false.
+    bool startCompletion(const char* query, int maxTokens = 256, bool suppressEarlyEos = false);
 
     std::string completionLoop();
 

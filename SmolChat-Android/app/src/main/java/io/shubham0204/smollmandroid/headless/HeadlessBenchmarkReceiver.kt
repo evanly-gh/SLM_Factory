@@ -53,6 +53,8 @@ class HeadlessBenchmarkReceiver : BroadcastReceiver() {
         val prompt = intent.getStringExtra("prompt")
         val runId = intent.getStringExtra("run_id")
         val maxTokens = intent.getStringExtra("max_tokens")
+        // DIAGNOSTIC-only override for a repeated-trial rate comparison; see BenchmarkService.
+        val suppressEarlyEos = intent.getStringExtra("suppress_early_eos")
 
         if (modelPath == null || prompt == null || runId == null) {
             Log.d("RUN_ERROR", "run_id=${runId ?: "unknown"} reason=missing_extras" +
@@ -106,6 +108,7 @@ class HeadlessBenchmarkReceiver : BroadcastReceiver() {
             putExtra("run_id", runId)
             // Optional; BenchmarkService defaults to 4096 when absent.
             if (maxTokens != null) putExtra("max_tokens", maxTokens)
+            if (suppressEarlyEos != null) putExtra("suppress_early_eos", suppressEarlyEos)
         }
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
