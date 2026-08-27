@@ -33,6 +33,36 @@ MAIN_ACTIVITY_COMPONENT = f"{PACKAGE}/.MainActivity"
 # via a real EACCES reading from Download otherwise).
 APP_FILES_DIR = f"/sdcard/Android/data/{PACKAGE}/files"
 
+# Confirmed device-specific fallback target (Galaxy S23 / Android 16): even
+# though APP_FILES_DIR above is the normal, working location on most devices
+# (e.g. our OnePlus 8 Pro), some devices enforce a stricter external-storage
+# restriction where the app still gets EACCES reading a file pushed there -
+# confirmed genuine, not a code bug, since even "run-as <pkg> cp ..." into
+# the same external directory fails with Permission denied on that device.
+# The app's own INTERNAL data directory has no such restriction (the app
+# owns it outright), so push_to_app_files_dir() falls back to writing here
+# via a run-as pipe when the external push's readability check fails.
+INTERNAL_CACHE_DIR = f"/data/user/0/{PACKAGE}/files/headless_benchmark_cache"
+
+# Staging area for the known-affected-device path below - NOT app-owned,
+# scoped, or external-storage-restricted in any way (it's the standard adb
+# staging directory, universally readable/writable by the shell user), so
+# it's a safe place to land the file on-device before piping it into
+# INTERNAL_CACHE_DIR, without ever touching APP_FILES_DIR at all.
+ADB_STAGING_DIR = "/data/local/tmp"
+
+# Devices confirmed to have the external-storage read restriction (dd via
+# run-as sometimes passes here even when the app's real read later fails -
+# the probe itself is unreliable on this device, not just occasionally
+# slow), keyed by (ro.product.model, ro.build.version.sdk). For these,
+# push_to_app_files_dir() skips the external push + readability probe
+# entirely and goes straight to the internal-storage pipe method, which has
+# been reliable every time it's been used. Extend this list as further
+# affected devices are confirmed.
+KNOWN_AFFECTED_DEVICES = {
+    ("SM-S911U", "36"),  # Galaxy S23 (US model), Android 16
+}
+
 FALLBACK_ADB = str(Path.home() / "Library/Android/sdk/platform-tools/adb")
 
 MONSOON_SCRIPT = str(Path.home() / "SLM_Factory_Krishna_Personal/Power-Monitor/monsoon_single_reading.py")
@@ -85,6 +115,43 @@ _QUIET = False
 def qprint(*args, **kwargs):
     if not _QUIET:
         print(*args, **kwargs)
+
+
+# Set True the first time warm_up_app_once() actually runs, so it only
+# fires once per script invocation regardless of how many times
+# push_to_app_files_dir() is called (once per model in a multi-model run).
+_APP_WARMED_UP = False
+
+
+def warm_up_app_once(adb: Adb):
+    """One-time workaround for a confirmed Android 16 / Galaxy S23 quirk: a
+    freshly-installed app cannot reliably read ANY file pushed to its
+    external files directory - even a run-as read attempt right after push
+    reports success, but the app's own real process still gets EACCES
+    moments later. The only thing that reliably fixes this is manually
+    opening the app's UI once through the launcher; this automates that.
+
+    Deliberately launched via the LAUNCHER-category monkey intent, not
+    "am start -n <component>" - reset_smolchat_for_clean_process() already
+    does that immediately before every push, and the bug still occurs, so
+    that alone is confirmed NOT sufficient. Only a genuine launcher-
+    initiated open appears to trigger whatever permission grant Android is
+    otherwise withholding.
+
+    Cached via _APP_WARMED_UP: runs at most once per script invocation, not
+    before every push. Harmless on unaffected devices (e.g. our OnePlus 8
+    Pro) even run unconditionally - caching it is purely for efficiency
+    there, not correctness.
+    """
+    global _APP_WARMED_UP
+    if _APP_WARMED_UP:
+        return
+
+    qprint(f"[WARMUP] Launching {PACKAGE} via the launcher once (Android 16/Galaxy S23 external-storage permission workaround)...")
+    adb.run(["shell", "monkey", "-p", PACKAGE, "-c", "android.intent.category.LAUNCHER", "1"], timeout=20)
+    time.sleep(3)
+    adb.run(["shell", "am", "force-stop", PACKAGE], timeout=15)
+    _APP_WARMED_UP = True
 
 
 DEFAULT_QUESTIONS = [
@@ -216,22 +283,120 @@ def check_battery(adb: Adb) -> dict:
 # Model resolution / conversion / deploy
 # ---------------------------------------------------------------------------
 
+def _get_device_model_and_sdk(adb: Adb) -> tuple:
+    model_result = adb.run(["shell", "getprop", "ro.product.model"], timeout=10)
+    sdk_result = adb.run(["shell", "getprop", "ro.build.version.sdk"], timeout=10)
+    return (model_result.stdout or "").strip(), (sdk_result.stdout or "").strip()
+
+
+def _is_known_affected_device(adb: Adb) -> bool:
+    """Whether this device is in KNOWN_AFFECTED_DEVICES - confirmed to have
+    an external-storage read restriction that the dd-based readability probe
+    (_app_can_read()) doesn't reliably catch on its own (sometimes passes
+    right after push even though the app's real read later fails)."""
+    model, sdk = _get_device_model_and_sdk(adb)
+    return (model, sdk) in KNOWN_AFFECTED_DEVICES
+
+
+def _app_can_read(adb: Adb, device_path: str) -> bool:
+    """Whether PACKAGE can actually read device_path - checked via a real
+    read attempt ("run-as <pkg> dd if=<path> of=/dev/null bs=1 count=1"),
+    not "test -r". Confirmed real false-positive on a Galaxy S23: test -r
+    only checks Unix permission bits and reported success even though the
+    app's actual FileInputStream still got EACCES - the real restriction
+    (likely FUSE/SELinux enforcement specific to external storage) only
+    triggers on an actual read() syscall. Reading just 1 byte (count=1)
+    keeps this fast and harmless on devices where it already works fine.
+    """
+    result = adb.run(
+        ["shell", "run-as", PACKAGE, "dd", f"if={device_path}", "of=/dev/null", "bs=1", "count=1"],
+        timeout=15,
+    )
+    return result.returncode == 0
+
+
+def _push_via_internal_pipe(adb: Adb, source_device_path: str, filename: str) -> str:
+    """Pipe a file that's already somewhere on-device (source_device_path,
+    readable by adb's own shell user) into the app's internal storage,
+    which it owns outright and is never subject to the external-storage
+    restriction. Piping "cat <source>" into "run-as <pkg> sh -c 'cat >
+    ...'" re-writes those bytes as the app's own UID - no re-transfer from
+    the host needed. Built as one shell-quoted string (not separate argv
+    elements) for the same reason fire_broadcast() is: "adb shell
+    <args...>" rejoins separate elements into one remote command anyway, so
+    any unescaped metacharacter in a path would corrupt the pipeline -
+    shlex.quote() on each piece avoids that regardless of what the
+    filename/paths happen to contain. Exits on failure; returns the
+    internal path on success (verified actually readable first).
+    """
+    internal_path = f"{INTERNAL_CACHE_DIR}/{filename}"
+    adb.run(["shell", "run-as", PACKAGE, "mkdir", "-p", INTERNAL_CACHE_DIR], timeout=15)
+    pipe_cmd = (
+        f"cat {shlex.quote(source_device_path)} | run-as {shlex.quote(PACKAGE)} "
+        f"sh -c {shlex.quote('cat > ' + internal_path)}"
+    )
+    pipe_result = adb.run(["shell", pipe_cmd], timeout=600)
+    if pipe_result.returncode != 0:
+        print(f"[ERROR] Internal-storage push failed: {pipe_result.stderr}")
+        sys.exit(1)
+
+    if not _app_can_read(adb, internal_path):
+        print(f"[ERROR] Internal-storage push completed but {PACKAGE} still cannot read {internal_path}")
+        sys.exit(1)
+
+    return internal_path
+
+
 def push_to_app_files_dir(adb: Adb, local_path) -> str:
-    """Push a local GGUF file to the app's external files dir.
+    """Push a local GGUF file to wherever BenchmarkService can actually
+    read it from.
 
     Shared by both model-resolution branches (a local .gguf path, and a
     HuggingFace ID that gets converted first) so this is the one place that
-    decides where BenchmarkService can actually read a model from - unlike
-    /sdcard/Download/, this location is exempt from scoped storage and
-    doesn't require the model to have been manually imported through
-    SmolChat's UI first (confirmed via a real EACCES otherwise).
+    decides where the app can read a model from - unlike /sdcard/Download/,
+    APP_FILES_DIR is exempt from scoped storage and doesn't require the
+    model to have been manually imported through SmolChat's UI first
+    (confirmed via a real EACCES otherwise).
     """
     local_path = os.path.expanduser(str(local_path))
     if not os.path.exists(local_path):
         print(f"[ERROR] GGUF file not found: {local_path}")
         sys.exit(1)
 
+    warm_up_app_once(adb)
+
     filename = os.path.basename(local_path)
+
+    # Confirmed device-specific gap (Galaxy S23 / Android 16): on this
+    # device, the dd-based readability probe below is itself unreliable -
+    # it's sometimes reported success right after push even though the
+    # app's real read later still fails, so it can't be trusted to catch
+    # every case. Rather than keep relying on a probe known to be flaky on
+    # this device, skip the external push + probe entirely and go straight
+    # to the internal-storage pipe method, which has been reliable every
+    # time it's been used. Staged through ADB_STAGING_DIR (not
+    # APP_FILES_DIR) since that's a generic, non-scoped location the shell
+    # user can always read/write, letting this avoid APP_FILES_DIR
+    # completely rather than just skipping a check against it.
+    if _is_known_affected_device(adb):
+        staged_path = f"{ADB_STAGING_DIR}/{filename}"
+        qprint(f"\n[DEPLOY] Known-affected device detected - staging {local_path} -> {staged_path} ...")
+        result = adb.run(["push", local_path, staged_path], timeout=600)
+        if result.returncode != 0:
+            print(f"[ERROR] adb push failed: {result.stderr}")
+            sys.exit(1)
+        print(
+            f"[WARN] {PACKAGE} - known-affected device (external-storage read restriction confirmed "
+            "unreliable to probe) - going straight to the internal-storage pipe method, skipping the "
+            "external push and readability check entirely."
+        )
+        internal_path = _push_via_internal_pipe(adb, staged_path, filename)
+        print(f"[OK] Internal-storage push succeeded. Device path: {internal_path}")
+        return internal_path
+
+    # Everything below is unchanged for all other devices: external push
+    # first, verify readability, and only fall back to internal storage if
+    # that verification actually fails.
     device_path = f"{APP_FILES_DIR}/{filename}"
     adb.run(["shell", "mkdir", "-p", APP_FILES_DIR], timeout=15)
     qprint(f"\n[DEPLOY] Pushing {local_path} -> {device_path} ...")
@@ -240,7 +405,26 @@ def push_to_app_files_dir(adb: Adb, local_path) -> str:
         print(f"[ERROR] adb push failed: {result.stderr}")
         sys.exit(1)
     qprint(f"[OK] Push complete. Device path: {device_path}")
-    return device_path
+
+    # Confirmed device-specific gap (Galaxy S23 / Android 16): the push
+    # above can succeed while BenchmarkService still gets EACCES reading the
+    # result - a genuine per-device external-storage restriction, not a
+    # code bug (even "run-as <pkg> cp ..." into the same directory fails
+    # with Permission denied there). Verify the app can actually read what
+    # was just pushed before trusting device_path; unaffected devices (e.g.
+    # our OnePlus 8 Pro) pass this check every time and return exactly as
+    # before, with no other behavior change.
+    if _app_can_read(adb, device_path):
+        return device_path
+
+    print(
+        f"[WARN] {PACKAGE} cannot read {device_path} despite a successful push "
+        "(confirmed device-specific external-storage restriction) - falling back "
+        "to the app's internal storage via a run-as pipe..."
+    )
+    internal_path = _push_via_internal_pipe(adb, device_path, filename)
+    print(f"[OK] Internal-storage fallback succeeded. Device path: {internal_path}")
+    return internal_path
 
 
 def _load_convert_module():
