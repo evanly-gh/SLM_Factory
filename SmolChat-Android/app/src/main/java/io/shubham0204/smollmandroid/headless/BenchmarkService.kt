@@ -100,6 +100,12 @@ class BenchmarkService : Service() {
         // via SUPPRESS_EARLY_EOS_OVERRIDE below) comparing failure *rates*, not anecdotes.
         private const val CONTEXT_SIZE = 2048L
 
+        // Minimum size (bytes) for a file already sitting at resolveReadableModelPath()'s
+        // destFile to be trusted as a valid pre-placed model rather than a zero-byte/partial
+        // artifact. GGUF model files are always far larger than this in practice — this is only
+        // a cheap sanity floor, not real validation (no magic-byte/GGUF-header check).
+        private const val MIN_PLAUSIBLE_MODEL_FILE_BYTES = 1L * 1024 * 1024
+
         private val CURRENT_SYSFS_PATHS = listOf(
             "/sys/class/power_supply/battery/current_now",
             "/sys/class/power_supply/Battery/current_now",
@@ -464,6 +470,26 @@ class BenchmarkService : Service() {
 
         val cacheDir = File(filesDir, "headless_benchmark_cache").apply { mkdirs() }
         val destFile = File(cacheDir, fileName)
+
+        // A file may already be sitting at destFile because it was pushed there directly (e.g.
+        // the Python-side `run-as`-based pipe workaround for devices — confirmed on a Galaxy S23
+        // on Android 16 — where FileInputStream(rawPath) on the app's own external files dir
+        // fails with EACCES even though the same read works fine on other devices). On those
+        // devices the FileInputStream(rawPath) copy below is doomed to fail anyway, and blindly
+        // attempting it would overwrite/corrupt a valid pre-placed file with a failed partial
+        // write. So: if a plausibly-valid file already exists at destFile, trust it and skip the
+        // copy attempt entirely, on every device — this is a no-op on devices where the read
+        // works fine, since nothing will have pre-placed a file there and this check simply
+        // finds nothing.
+        if (destFile.exists() && destFile.length() >= MIN_PLAUSIBLE_MODEL_FILE_BYTES) {
+            Log.d(
+                "BENCHMARK",
+                "run_id=$runId '$fileName' already present at ${destFile.absolutePath} " +
+                "(${destFile.length()} bytes) — reusing it instead of re-copying from $rawPath"
+            )
+            return destFile.absolutePath
+        }
+
         return try {
             FileInputStream(rawPath).use { input ->
                 FileOutputStream(destFile).use { output -> input.copyTo(output) }
