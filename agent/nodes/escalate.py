@@ -68,9 +68,10 @@ def _llm_choose_model(
     The chosen model AND the orchestrator's one-sentence reason are printed via `log`
     (Q13) so the model-selection rationale is visible in the run log, not just logging.
 
-    Direction-neutral: used both for UPWARD escalation (bigger tier) and the DOWNWARD
-    probe (smaller tier). The prompt frames the choice as "best task fit", which is
-    correct in both directions since all candidates already satisfy the hardware budget.
+    Direction-neutral: used for UPWARD escalation (bigger tier), the DOWNWARD probe (smaller
+    tier), and — since 2026-08-24 — the INITIAL pick that `smallest_first` makes inside the
+    smallest feasible tier. The prompt frames the choice as "best task fit", which is correct in
+    all three cases since every candidate already satisfies the hardware budget.
     """
     from config.config import ORCHESTRATOR_MODEL, ANTHROPIC_API_KEY, orchestrator_client_kwargs
     from agent.llm_text import (
@@ -82,8 +83,18 @@ def _llm_choose_model(
 
     if not candidates:
         raise ValueError("No candidates to choose from")
-    if direction not in ("up", "down"):
+    if direction not in ("up", "down", "initial"):
         raise ValueError(f"Unknown selection direction: {direction!r}")
+    _DIRECTION_LABEL = {
+        "up": "upward escalation",
+        "down": "downward resource probe",
+        "initial": (
+            "INITIAL selection inside the smallest feasible tier — nothing has been trained yet, "
+            "so there is no prior score to improve on. Escalation to a larger tier remains "
+            "available if this tier cannot reach the goal, so pick the best fit HERE rather than "
+            "hedging toward size"
+        ),
+    }
 
     candidate_lines = "\n".join(
         f"  - selector: {m.selector}\n"
@@ -103,14 +114,20 @@ def _llm_choose_model(
     from config.model_capabilities import capability_sections
     cap_doc = capability_sections([m.model_id for m in candidates])
 
+    score_line = (
+        "  no model has been trained yet on this task\n"
+        if direction == "initial"
+        else f"  current best F1 (previous model): {current_best_score:.4f}\n"
+    )
     prompt = (
         f"Task to fine-tune for:\n"
         f"  type: {task}\n"
         f"  name: {task_name}\n"
         f"  labels/schema: {task_labels}\n"
-        f"  current best F1 (previous model): {current_best_score:.4f}\n\n"
-        f"Selection direction: {'upward escalation' if direction == 'up' else 'downward resource probe'}\n"
-        f"Target peak-RAM tier: {candidates[0].tier}\n\n"
+        f"{score_line}\n"
+        f"Selection direction: {_DIRECTION_LABEL[direction]}\n"
+        f"Target size tier: {candidates[0].tier} "
+        f"({min(m.size_mb for m in candidates)}-{max(m.size_mb for m in candidates)}MB on disk)\n\n"
         f"For a {task} task, prioritise: {benchmark_hint}\n\n"
         f"CAPABILITY DESCRIPTIONS (judge task fit from these, not raw numbers):\n{cap_doc}\n\n"
         f"METRIC COMPARABILITY CONTRACT: {METRIC_COMPARABILITY_CAVEAT}\n\n"

@@ -73,6 +73,25 @@ def _raise_to(value, reason="cleared the goal quickly with budget to spare"):
     return {"raise_goal": True, "new_threshold": value, "reason": reason}
 
 
+def _intervention_decision():
+    """An orchestrator intervention decision the validator accepts.
+
+    Needed by the routing case where a raise sends the run back below its (new) goal and the turn
+    continues to the intervention call.
+    """
+    return {
+        "intervention": "hyperparameter",
+        "hypothesis": "span recall is the binding limit, so the adapter needs more capacity",
+        "hyperparams": {
+            "lora_rank": 16,
+            "alpha_ratio": 2,
+            "weight_decay": 0.01,
+            "learning_rate": 0.0001,
+            "nr_epochs": 4,
+        },
+    }
+
+
 # --------------------------------------------------------------------------
 # Banking: a cleared goal is recorded before the bar can move
 # --------------------------------------------------------------------------
@@ -248,14 +267,19 @@ def test_non_object_decision_raises():
 # Routing: a raise keeps the run going instead of terminating
 # --------------------------------------------------------------------------
 
-@patch("agent.nodes.iterate._llm_iterate", side_effect=Exception("skip llm"))
-def test_raise_prevents_termination(_llm, raising_enabled):
+@patch("agent.nodes.iterate._llm_iterate", return_value=_intervention_decision())
+def test_raise_prevents_termination(llm, raising_enabled):
+    """A raised goal makes the score below-threshold again, so the turn carries on as an ordinary
+    intervention turn — which means the orchestrator IS consulted and needs a usable answer. Stubbing
+    a failure here would raise `OrchestratorDecisionError` instead (B316) and prove nothing about
+    whether the raise prevented termination."""
     state = _state(iteration=2)
     state["feasible_models"] = [_model()]
     with patch("agent.nodes.iterate._llm_threshold_raise", return_value=_raise_to(0.87)):
         out = iterate_node(state)
     assert out["next_action"] != "terminate"
     assert out["stop_threshold"] == 0.87
+    llm.assert_called_once()
 
 
 @patch("agent.nodes.iterate._llm_iterate", side_effect=Exception("skip llm"))

@@ -31,6 +31,7 @@ SPEC = TaskSpec(
     # intent (`accept_reservations`, `transfer`, `oos`), so naming the label already tells the
     # teacher what the class means; a gloss for 151 classes would be prompt noise.
     label_definitions={},
+    verifier_notes="",
     quality_controls=(
         qc.require_fields("text", "label"),
         qc.label_space(),

@@ -66,6 +66,10 @@ def test_run_eval_uses_infer_batch_gguf_when_gguf_path_set(mock_gguf, monkeypatc
         "/model.gguf",
         max_new_tokens=50,
         base_model="model-id",
+        # The task must reach the GGUF path, or it sizes its scoring concurrency from an unresolvable
+        # spec and silently degrades to one context — the old sequential behaviour, for the one caller
+        # that matters. The bf16 branch always passed it; this branch did not.
+        task="routerbench",
     )
     assert result.f1 == pytest.approx(2 / 3)
 
@@ -103,3 +107,30 @@ def test_run_eval_delegates_to_disposable_worker_when_enabled(monkeypatch):
             "gguf_path": None,
         },
     )
+
+
+def test_a_reference_free_task_shows_the_query_instead_of_a_blank_gold():
+    """ToolEval's pass rate has no reference, so `answer` is legitimately empty on every eval row.
+
+    Printing a bare blank there reproduces B263 for a different reason: the reader cannot tell
+    "no reference exists for this metric" from "the gold went missing". Toolbench's sample block
+    was doubly unreadable because the `input` clip shows only the AutoGPT boilerplate that is
+    identical on every row, so neither the query nor the gold was visible.
+    """
+    from eval.harness import _gold_for_display
+
+    shown = _gold_for_display({
+        "text": "You are AutoGPT, ...",
+        "query": "what is the weather in Paris?",
+        "answer": "",
+    })
+    assert "no reference" in shown
+    assert "what is the weather in Paris?" in shown
+
+
+def test_a_task_with_a_real_gold_is_unaffected_by_the_query_fallback():
+    """The fallback must be last: a row that HAS a gold must still show the gold."""
+    from eval.harness import _gold_for_display
+
+    assert _gold_for_display({"answer": "#### 18", "query": "ignored"}) == "#### 18"
+    assert _gold_for_display({"label": "spam", "query": "ignored"}) == "spam"

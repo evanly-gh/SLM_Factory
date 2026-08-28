@@ -12,6 +12,9 @@ that structure and emits four artifacts into ``logs/graphics/<run_id>/``:
     difficulty.png           easy / medium / hard accuracy across iterations
     dataset_composition.png  stacked gold / synthetic / mined rows per iteration, labelled with
                              row counts, gold subdivided by originating dataset
+    label_performance.png    per-label / per-failure-category score at the final iteration, worst
+                             first, with failure counts — what the model is getting wrong, as
+                             opposed to how hard the things it got wrong were
     hypotheses.md            per-iteration hypothesis + intervention (prose, not a chart)
     summary.png              the three charts as one combined panel
 
@@ -98,6 +101,11 @@ def _iteration_records(progression: list[dict]) -> tuple[list[dict], dict]:
                 # run-level constant.
                 "stop_threshold": node.get("stop_threshold"),
                 "per_class": last_eval.get("per_class") or {},
+                # Per-label / per-category performance. Easy-medium-hard says HOW HARD the failures
+                # were; this says WHAT they were, which is what an intervention can act on.
+                "confusion_pairs": report.get("confusion_pairs") or [],
+                "outcome_breakdown": report.get("outcome_breakdown") or [],
+                "format_valid": node.get("format_valid"),
                 "by_difficulty": by_diff,
                 "n_gold": int(comp.get("n_gold", 0) or 0),
                 # Gold rows per originating dataset, so the gold band can be divided when a run
@@ -439,6 +447,83 @@ def _plot_composition(ax, records) -> None:
     ax.legend(fontsize=7, loc="upper left", ncol=1 if not multi_source else 2)
 
 
+# Bands used to colour a per-label bar. Chosen so the eye lands on the problem: anything under half
+# is red, and only near-ceiling classes are green.
+def _score_colour(value: float) -> str:
+    if value >= 0.9:
+        return "#2ca02c"
+    if value >= 0.7:
+        return "#98c379"
+    if value >= 0.5:
+        return "#ff7f0e"
+    return "#d62728"
+
+
+def _plot_label_performance(ax, records, meta) -> None:
+    """Correct vs failed eval rows at the final iteration, bucketed and worst-first.
+
+    The difficulty chart answers "how hard were the rows it got wrong"; this answers "WHICH rows",
+    which is the question an intervention is actually chosen against. For a task with classes the
+    buckets are the classes; otherwise they are the task's own failure categories, with every correct
+    row in one bucket. `surgical_synthesis` targets exactly these buckets, so this is the chart that
+    says whether targeting worked.
+
+    Counts, not rates, deliberately: a class at 50% on four rows and one at 50% on four hundred are
+    the same rate and completely different problems, and the whole point of choosing a target is to
+    spend the budget on the second one.
+    """
+    final = records[-1] if records else {}
+    breakdown = [
+        entry for entry in (final.get("outcome_breakdown") or [])
+        if isinstance(entry, dict) and entry.get("bucket")
+    ]
+    if not breakdown:
+        # Fall back to the confusion pairs, which older DAGs carry even without a breakdown.
+        breakdown = [
+            {"bucket": str(pair.get("gold")), "correct": 0,
+             "failed": int(pair.get("count", 0) or 0)}
+            for pair in (final.get("confusion_pairs") or [])
+            if isinstance(pair, dict) and pair.get("gold")
+        ]
+    if not breakdown:
+        ax.text(0.5, 0.5, "no per-label outcome breakdown recorded",
+                ha="center", va="center", fontsize=10, color="0.4")
+        ax.axis("off")
+        return
+
+    # A 151-class task cannot be read as 151 bars; show the worst 25 and say so. The list arrives
+    # already sorted failures-first, so truncating keeps the informative end.
+    shown, truncated = breakdown[:25], max(0, len(breakdown) - 25)
+    names = [entry["bucket"] for entry in shown]
+    correct = [int(entry.get("correct", 0) or 0) for entry in shown]
+    failed = [int(entry.get("failed", 0) or 0) for entry in shown]
+    positions = list(range(len(shown)))
+
+    ax.barh(positions, correct, color="#2ca02c", label="correct")
+    ax.barh(positions, failed, left=correct, color="#d62728", label="failed")
+    ax.set_yticks(positions)
+    ax.set_yticklabels(names, fontsize=7)
+    ax.invert_yaxis()
+    ax.set_xlabel("eval rows")
+    ax.grid(True, alpha=0.3, axis="x")
+
+    totals = [c + f for c, f in zip(correct, failed)]
+    peak = max(totals) if totals else 0
+    for index, (c, f, total) in enumerate(zip(correct, failed, totals)):
+        if not total:
+            continue
+        rate = c / total
+        ax.text(total + peak * 0.01, index, f"{c}/{total} ({rate:.0%})",
+                va="center", fontsize=6, color="0.25")
+    if peak:
+        ax.set_xlim(0, peak * 1.22)
+    title = "Eval outcomes by label / failure category (worst first)"
+    if truncated:
+        title += f" — worst 25 of {len(breakdown)}"
+    ax.set_title(title)
+    ax.legend(fontsize=7, loc="lower right")
+
+
 def _write_hypotheses(records, out_path: Path, meta: dict) -> None:
     """Write the per-iteration decision table, forward-looking.
 
@@ -507,11 +592,13 @@ def _write_hypotheses(records, out_path: Path, meta: dict) -> None:
 def _plot_summary(records, meta, stop_threshold, out_path: Path) -> None:
     import matplotlib.pyplot as plt
 
-    fig, axes = plt.subplots(2, 2, figsize=(14, 10))
+    fig, axes = plt.subplots(2, 3, figsize=(20, 10))
     _plot_accuracy(axes[0][0], records, meta, stop_threshold)
     _plot_difficulty(axes[0][1], records, meta)
+    _plot_label_performance(axes[0][2], records, meta)
     _plot_composition(axes[1][0], records)
     axes[1][1].axis("off")
+    axes[1][2].axis("off")
     latest = records[-1] if records else {}
     thresholds = _threshold_series(records, stop_threshold)
     if thresholds and len(set(thresholds)) > 1:
@@ -658,6 +745,10 @@ def _render_set(
     comp = out / "dataset_composition.png"
     _plot_one(_plot_composition, comp, records)
     written.append(comp)
+
+    labels_png = out / "label_performance.png"
+    _plot_one(_plot_label_performance, labels_png, records, meta)
+    written.append(labels_png)
 
     summary = out / "summary.png"
     _plot_summary(records, meta, stop_threshold, summary)

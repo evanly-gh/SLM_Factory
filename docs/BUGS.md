@@ -4883,3 +4883,513 @@ explanation"* and spent thirteen iterations on hyperparameters. Regression tests
   tested, documented formula that no run reads is the state most likely to be mistaken for behaviour
   — this documentation described it as live until 2026-08-19.
 - **Status:** ⚪ design gap.
+
+## B306 — synthesis was authorised by a number measured the wrong way, and never consulted
+
+- **Symptom:** `surgical_synthesis` was offered as an intervention on every task at every score. The
+  only evidence anyone had about whether the teacher could do the task was its ZERO-SHOT score from
+  `measure_endpoint_baseline`, and nothing read that number before spending the teacher's budget.
+- **Why the number was wrong:** measured zero-shot, so on a format-bound task it largely reports
+  whether the teacher guessed our output contract. BC5CDR measures 0.1131 zero-shot and 0.7190 with
+  five demonstrations. Reading 0.1131 as "the teacher cannot do biomedical NER" is a 6.4x error about
+  a model that could do it all along and had simply not been told the conventions (B276).
+- **Why it matters:** a teacher below ~0.80 on a task is not a source of training targets for it, it
+  is a source of labelled noise, and a student trained on that output is capped near the teacher's
+  error rate. The best result this project has measured (BC5CDR, 0.8098) came from a gold-only
+  curriculum.
+- **Fix:** `agent/teacher_fitness.py`. The teacher is scored FIVE-SHOT on the task's own eval set,
+  through the task's own scorer, once at cold start. Below 0.80, `surgical_synthesis` is removed from
+  the intervention menu for the whole run: the plan validator rewrites it to `mine_new_real`, the
+  orchestrator prompt states the refusal and its measured reason, and `iterate` routes to a
+  hyperparameter step when neither sub-strategy can add a row. An UNMEASURED teacher is refused too —
+  defaulting to allowed would mean a run that skipped the gate silently regained synthesis.
+  Demonstrations come from TRAIN only, so measuring cannot leak eval rows.
+- **Status:** ✅ fixed 2026-08-19.
+
+## B307 — the label verifier judged the label WORD, because it never saw the task
+
+- **Symptom:** `verify_generated_labels` sent the class name, the utterance and a label definition,
+  but not the task description. `verify_generated_answers` had been given the brief; the label path
+  was missed.
+- **Consequence:** the teacher judged plausibility against its own reading of the label string rather
+  than against the task. This is the mechanism behind the RouterBench rejections (B267/B269), where a
+  grade-school math problem was refused for the `local` class because "the utterance is a math
+  problem, not a local query" — the label means "route to the local model", which a verifier that has
+  not been told the task cannot know. About 70% of generated rows were discarded for the wrong reason.
+- **Fix:** `task_description` is now a REQUIRED keyword on `verify_generated_labels` and is inserted
+  at the top of the prompt. Required rather than optional-with-default deliberately: a default would
+  let a future call site reintroduce exactly this bug silently.
+- **Status:** ✅ fixed 2026-08-19.
+
+## B308 — nothing watched across iterations, so a run that could not learn ran for 7h42m
+
+- **Symptom:** run 38566712 completed eight data rebuilds. All eight added zero rows. The run
+  continued for 7h42m and $1.34, and terminated on stagnation as though it had explored something.
+- **Root cause:** every symptom was checked in isolation and each one is survivable once — a `0 novel`
+  line, a quality-control drop, a mining round that finds nothing. The failure was the REPEAT, and no
+  component held state across iterations to notice it. The orchestrator, which did see the history,
+  read `0 novel` as evidence that data was not the problem and chose synthesis again.
+- **Fix:** `agent/run_health.py`, called at the end of every `curate_node`. Raises `RunHealthError`
+  on two consecutive rebuilds adding no rows, a QC drop ≥1,000 rows or ≥25% of the curriculum, two
+  consecutive total verification wipeouts, three mining attempts that saw candidates and accepted
+  none, or two data-load failures. Each threshold requires a repeat or a magnitude variance cannot
+  explain, because a guard that fires on noise gets switched off. The message names the mechanism,
+  and `_diagnose_empty` attributes an empty rebuild to a filter, a shortage, or a rejecting verifier
+  from what that rebuild recorded.
+- **Status:** ✅ fixed 2026-08-19.
+
+## B309 — a cancelled run lost its entire report
+
+- **Symptom:** the final report was top-level module code at the end of `tests/pipeline/run.py`. A
+  `scancel`, a wall-clock stop, or an exception inside any report section meant losing every section
+  after it — including the score trajectory and the curriculum ledger, which is the whole
+  informational value of the run.
+- **Fix:** the report is now `_report_body()`, invoked through an idempotent `_emit_final_report()`
+  registered with `atexit`. It prints on a normal finish, an exception, a SIGTERM, or a wall-clock
+  stop, and a failure inside it logs a traceback instead of truncating the report. Only SIGKILL is
+  unrecoverable, and nothing in-process can help there.
+- **Status:** ✅ fixed 2026-08-19.
+
+## B310 — the only per-row diagnostic was difficulty, which says nothing about WHAT is failing
+
+- **Symptom:** `difficulty.png` reported easy/medium/hard accuracy. Difficulty is defined by what the
+  smallest and largest base models score zero-shot, so it answers "how hard were the rows it got
+  wrong" — but `surgical_synthesis` targets CATEGORIES, and nothing plotted the categories.
+- **Fix:** `test_report["outcome_breakdown"]` (`agent/nodes/test_agent.py`) records correct and failed
+  counts per bucket — the gold class for a task with a closed label space, the task's own failure
+  category otherwise — and `label_performance.png` plots them worst-first as stacked bars. Counts
+  rather than rates, because a class at 50% on four rows and one at 50% on four hundred are the same
+  rate and completely different problems, and choosing a target is precisely about telling them apart.
+- **Status:** ✅ fixed 2026-08-19.
+
+## B311 — four call sites and one test fixture still spoke the deleted channel vocabulary
+
+- **Symptom:** verification run 38656655 died 27 minutes in, past the loader, the task brief and the
+  teacher-fitness gate — the most expensive possible moment to discover a `TypeError`.
+- **Faults, all from the 2026-08-18 channel removal:**
+  - six call sites passed `task=` or `task_type=` to `eval.harness.run_eval`, whose signature had
+    dropped it (the task now comes from the `EvalSet`, so the two can no longer disagree);
+  - `interpolation._probe_model` passed `task_type=state["task_type"]` to `slm_train`, which takes
+    `task` — and `state["task_type"]` no longer exists, so it was a `KeyError` *inside* a
+    `try/except` that reported the probe as `f1=0.0`. Every interpolation probe scored zero;
+  - `orchestrator_choice` read `state.get("task_type", "classification")` and passed it to
+    `_benchmark_hint`, which looks the value up in the task registry. `"classification"` is not a
+    task, so the lookup missed on every run and the model-choice prompt always got the generic
+    fallback hint;
+  - `tests/pipeline/run.py` imported `TASK_METRIC_NAMES`, deleted with the channels — 26 lines above
+    the final report, so the crash also took the whole report;
+  - `tests/cold_start/test_model_selection.py`'s state fixture still supplied `task_type` and no
+    `task`, which is precisely why no test caught the probe bug: the fixture provided a key that
+    production state does not have.
+- **Why the suite was green:** every one of these is on a GPU-only path, and the one that was not sat
+  behind a fixture carrying the stale field.
+- **Fix:** all call sites corrected; the fixture now carries a real registry task name. More
+  importantly, `scripts/check_unresolved_names.py` gained CROSS-MODULE checks — it now verifies that
+  `from <project module> import <name>` names something that module defines, and that keyword
+  arguments passed to an IMPORTED project function are ones it accepts. Run against the tree it
+  immediately found two further instances nobody had noticed. `hardware_eval` and
+  `tests/pipeline/run.py` were added to its default roots.
+- **Status:** ✅ fixed 2026-08-19.
+
+## B312 — the plan validator rejected its own output, so `data_rebuild` never once ran
+
+- **Symptom:** verification run 38658213 completed five iterations. The orchestrator chose
+  `data_rebuild` on every one of them. Not a single rebuild happened, the curriculum stayed at 4,954
+  rows, and the score fell 0.789 → 0.690 across five hyperparameter steps nobody asked for.
+- **Root cause:** `normalize_data_rebuild_plan` RETURNS a dict containing `hypothesis` and `task`,
+  but `_PLAN_FIELDS` — the fields it ACCEPTS — did not include them. The function could not accept
+  its own output. Two callers feed that output back: `curate_node` re-normalizes the plan `iterate`
+  stored, and the orchestrator, shown a schema, nested `hypothesis` inside the plan object instead of
+  leaving it at the top level. Every plan raised
+  `unknown field(s) ['hypothesis', 'task']`.
+- **Why it was invisible:** `iterate` catches a failed decision and falls back to the test-agent
+  suggestion, which was `hyperparameter`. So the log read `using test-agent suggestion:
+  hyperparameter` — indistinguishable from an orchestrator that had wanted hyperparameters. The
+  intent was destroyed and the destruction was not reported.
+- **Fix, three parts:**
+  1. `_PLAN_FIELDS` accepts `hypothesis` and `task`; their values are ignored in favour of the
+     authoritative arguments, except that a plan-carried `hypothesis` survives a re-normalize with no
+     argument. A genuinely unknown field still raises. The function is now idempotent, and a
+     round-trip test pins that.
+  2. `iterate` logs `✗ ORCHESTRATOR PLAN REJECTED` whenever it downgrades a data-rebuild decision,
+     naming the validation error.
+  3. `run_health.record_rejected_data_plan` counts them and stops the run at two, because a rejection
+     this systematic is a schema disagreement between the prompt and the validator, not a bad sample,
+     and it will not fix itself.
+- **Also fixed alongside:** `curate_node` re-normalized the plan without passing `synthesis_allowed`,
+  so at the execution gate the flag defaulted to True. Since mining availability is re-derived there
+  and can flip to False, a `mine_new_real` plan could be rewritten to `surgical_synthesis` behind a
+  teacher that had FAILED its fitness gate — spending the teacher budget on exactly the output the
+  gate exists to refuse.
+- **Status:** ✅ fixed 2026-08-19.
+
+## B313 — the teacher baseline measured 0.0000 because the task name was passed as the generator
+
+- **Symptom:** 1,000 consecutive `endpoint baseline generation failed: 'str' object is not callable`
+  lines, then `[baseline] reference ast_arg_match=0.0000`, then
+  `[threshold] Qwen baseline 0.0000 → goal 0.8000 (floor 0.80) — FLOOR WON: the teacher scored below
+  0.80`. The run then spent its life chasing 0.80 on the strength of a measurement that never happened.
+- **Root cause:** `agent/nodes/cold_start/eval_setup.py` called
+  `measure_endpoint_baseline(eval_set, task, log=print)`. The signature is
+  `(eval_set, generate_fn=None, *, ...)` — the task is read from the `EvalSet`, so there is no task
+  parameter — and the string landed in the `generate_fn` slot. Every row's generation raised, and each
+  was swallowed by the deliberate one-bad-row-must-not-abort handler. Sibling of B311: the same refactor
+  dropped `task` from `run_eval`, which is why several call sites made this mistake at once.
+- **What made it expensive:** the teacher's real ability was already known, from a different code path,
+  in the same log — the fitness gate measured 0.8250 five-shot on the same eval set minutes earlier.
+  Had that gate consulted the baseline rather than measuring for itself, it would have refused
+  synthetic data for this task on the strength of pure harness noise.
+- **Fix, three parts, because fixing only the call site leaves the trap:**
+  1. the call site drops the argument;
+  2. `measure_endpoint_baseline` raises `TypeError` on a non-callable `generate_fn` before making a
+     single call — that catches the whole family, since `generate_fn` is the second POSITIONAL
+     parameter and anything a caller passes there believing it is a task lands silently;
+  3. `_generate_all` counts failures and raises `BaselineGenerationError` above a 25% failure rate. A
+     score built from nothing but failures describes the harness, not the model, and 0.0 from a broken
+     harness is indistinguishable in a report from 0.0 from an incapable teacher.
+- **Note on the static scan:** `check_unresolved_names.py` cannot catch this. A string in the
+  `generate_fn` slot is a positional argument of legal arity, so it is only a fault given types the
+  code does not declare. That is precisely why the runtime guards exist.
+- **Status:** ✅ fixed 2026-08-19.
+
+## B314 — the answer verifier was asked to check calls against a tools list it was never shown
+
+- **Symptom:** on run 38661753, `verify_generated_answers` rejected 79 of 330 generated xlam rows (24%)
+  and 21 of 108 on the next round (19%), with reasons like "Tool name 'calculate_distance' is not
+  present in the provided tools list", "Tool names and arguments are invented and not from the provided
+  tools list", and "Invented argument key 'is_id' not present in tool schemas".
+- **Root cause:** the verification prompt contained the task description, five reference (request,
+  answer) pairs, the generated request and the generated answer — and nothing else. The row's own
+  `tools` field, which *defines* what a correct call is for that row, was never rendered. The teacher
+  was asked whether a function call satisfies a request without being shown the functions, and answered
+  anyway by inventing the missing context.
+- **Why every one of those rejections was provably wrong:** each row had already passed the
+  PROGRAMMATIC verifier (`verify_function_call_row`), which checks every call's name and every argument
+  key against that row's own `tools` schema. A row cannot both pass that check and use a tool absent
+  from its tools list. So each rejection discarded a valid row. `is_id` is a real xLAM convention that
+  the teacher second-guessed from its own prior — B267/B269 in a subtler dress.
+- **Fix:** `_row_context_block` renders every non-`_`, non-question, non-answer field of the row into
+  the prompt as explicit context, with the instruction that anything appearing there is valid by
+  definition and must not be rejected as unprovided. Built by EXCLUSION rather than from a per-task
+  list of context fields, so a task that gains a field gets it shown automatically — silent omission is
+  the failure mode being fixed. Applied to `verify_generated_labels` as well.
+- **Consequence for prior conclusions:** the orchestrator concluded from this run that "teacher-generated
+  argument rows carry label/format noise the model overfits to rather than genuine signal", having
+  watched two synthesis rounds make the dominant confusion worse. That was measured through a filter
+  discarding a quarter of its input for invented reasons, so it needs re-testing.
+- **Status:** ✅ fixed 2026-08-19.
+
+## B315 — mining over-delivered fourfold, and web-discovered sources were forgotten immediately
+
+- **Symptom:** on run 38661753 a rebuild asked for 600 rows and added 2,399; the next asked for 800 and
+  added 3,161. The curriculum went 4,954 → 10,701 in three rebuilds, and the orchestrator's `rows`
+  field was effectively inoperative.
+- **Root causes, two:**
+  1. `_reread_known_sources` asked for `consumed + want * 4` — a 4x over-fetch hedging against
+     deduplication losses that do not exist, since everything past `consumed` is novel by construction —
+     and then returned the ENTIRE slice, leaving downstream dedup to discover the overlap.
+  2. `_discover_new_source` returned rows and never registered the dataset anywhere. A web-discovered
+     corpus was drained of whatever it happened to return in one pass and forgotten, so a later rebuild
+     could not read more of it without paying to rediscover it.
+- **What does NOT fix (1), and was tried first:** trimming the surplus after the fact. `consumed`
+  records the slice depth READ, so discarding rows advances the pointer past rows that were never used
+  and silently skips them for the rest of the run. Asking for the right amount is the fix, so the
+  pointer and the rows agree.
+- **Fix:** `MAX_MINED_ROWS_PER_REBUILD = 1000` caps one rebuild's contribution across all sources
+  together; the re-read asks for exactly what it intends to keep and returns only rows past the previous
+  high-water mark; discovered datasets are written into `source_progress` with `consumed` set to what
+  was actually taken, so the next rebuild re-reads them from rung 1 at the right offset.
+- **Why cap at all, when real gold rows are good:** growth has to stay legible. A rebuild that adds a
+  few hundred rows is an experiment whose effect can be read off the next eval; one that adds three
+  thousand changes curriculum size, training time and class balance at once and the score movement
+  cannot be attributed to any of them. It also stops a 60,000-row corpus being drained in twenty
+  iterations, after which the ladder falls through to synthesis with most of the corpus unread.
+- **Status:** ✅ fixed 2026-08-19.
+
+## B316 — a failed orchestrator decision was replaced by a different algorithm and reported as this one
+
+- **Symptom:** run 38658213 logged `LLM call failed (...); using test-agent suggestion: hyperparameter`
+  on five consecutive iterations and carried on. The trajectory looked like five deliberate tuning
+  decisions; in fact the orchestrator had asked for `data_rebuild` every time and been overruled by a
+  validator bug (B312).
+- **Root cause:** `iterate` caught every exception from the orchestrator call and fell back to the
+  test agent's `suggested_intervention`, or failing that to a score-band rule
+  (`apply_iteration_policy`). The intent was resilience. The effect was that a broken decision became
+  an ordinary-looking iteration.
+- **Why the fallback was the wrong idea, not merely wrongly scoped:** a score-band rule is not a
+  degraded version of this loop, it is a DIFFERENT algorithm. The loop is defined as the orchestrator
+  choosing an intervention from evidence; substituting a rule and reporting the result under the same
+  name makes the trajectory uninterpretable, because afterwards nobody can tell which iterations were
+  reasoned and which were guessed. That ambiguity is what allowed B312 to run for a whole run while
+  every surface reported normal operation.
+- **Fix:** the fallback is gone. `iterate` logs a `✗ FATAL: could not obtain a usable orchestrator
+  decision` block — naming the error, the iteration, the score, and (when the failure was a refused
+  data plan) that the prompt and `normalize_data_rebuild_plan` disagree about the schema — and raises
+  `OrchestratorDecisionError`. Billing/auth/quota errors still short-circuit through `raise_if_fatal`
+  first, as before. A run that cannot obtain a decision has nothing worth reporting.
+- **Removed as newly dead:** the `llm_decision is None` branch in `iterate` that called
+  `fallback_data_rebuild_plan` (a second, score-derived source of plans alongside the orchestrator's —
+  exactly the ambiguity above), and `run_health.record_rejected_data_plan` with its
+  `MAX_REJECTED_DATA_PLANS` counter, which tripped on the SECOND refusal and can therefore never fire
+  now that the first one raises. `fallback_data_rebuild_plan` itself remains, reached only from
+  `curate`.
+- **Status:** ✅ fixed 2026-08-20.
+
+## B317 — `surgical_synthesis` on `ner_bc5cdr` was a guaranteed no-op
+
+- **Symptom:** every synthesized BC5CDR row was rejected with `empty answer`, and ZERO verification
+  prompts were sent. 100% of the generation budget for that task produced nothing, on every rebuild.
+- **Root cause:** `verify_generated_answers` read the gold as `row.get("answer") or
+  row.get("response")` and returned `False` before building a prompt when both were blank. A BC5CDR
+  row carries its gold in `entities` and has no `answer` key at all. So the guard meant for a row with
+  no gold fired on every row of a task whose gold simply lives elsewhere.
+- **Why nobody noticed:** it fails as a plausible rejection, not an error — the log reads
+  `teacher validated 0/N generated answer(s)`, which is indistinguishable from a teacher that judged
+  the batch and disliked it. It also contradicted `docs/PIPELINE.md`, which documents the teacher pass
+  as running for spans precisely because the substring verifier cannot catch a MISSED entity.
+- **Fix:** `_gold_field(spec)` reads the gold key off the spec's `required_fields`, which is
+  `(input, gold)` for all eight tasks — `("text", "entities")` for BC5CDR, `("text", "answer")` for
+  the rest. `_render_gold` serializes a structured gold as JSON so the verifier sees the shape the
+  scorer parses rather than a Python repr. The reference examples shown to the verifier render the
+  same way, and the gold field is excluded from the row-context block so the answer is not also
+  presented as context for itself.
+- **Found by:** writing the B314 tests. The new entity-type vocabulary was unreachable in production
+  for the one task it was written for, which is what surfaced the gap.
+- **Status:** ✅ fixed 2026-08-20.
+
+## B318 — 123 calendar gold rows contradicted their own utterance, and half of all gold was 09:00
+
+- **Symptom:** `calendar_json` gold labelled "...on Tuesday at 6" as `09:00`, "...Saturday at 2" as
+  `09:00`, "...tomorrow at 5" as `09:00`. 123 of the 1,608 train rows with an explicit stated time had
+  gold that ignored it, and **51% of all 4,242 gold rows started at exactly 09:00**.
+- **Root cause:** `_TIME_RE` requires a meridiem and `_TIME_24_RE` requires a colon, so a BARE hour
+  ("at 5") matched neither. `_parse_time` returned `None`, which `resolve_datetime` cannot distinguish
+  from "no time was stated at all" — and that case legitimately takes the documented 09:00 bare-date
+  default. One return value was carrying two very different meanings.
+- **Why it matters beyond the 123 rows:** the model was being TAUGHT to ignore explicit bare-hour
+  times, and a curriculum in which half of all targets are 09:00 teaches "default to 9am" as the
+  dominant prior on a task whose entire content is resolving times correctly.
+- **Fix:** `_parse_time` gained a third outcome, `AMBIGUOUS_TIME`, for "a clock time IS stated but
+  cannot be resolved". `resolve_datetime` drops those rows, which is the policy the module already
+  documents for `_UNRESOLVABLE` ("before what?", "this week") and states in its own docstring:
+  *"anything not understood with certainty must be dropped rather than guessed"*. A bare hour that an
+  adjacent daypart disambiguates is now resolved rather than dropped — "at 7 tonight" is 19:00, not
+  the generic 20:00 the daypart alone gave, and not 07:00.
+- **Result:** contradictions 123 → 8, at a cost of 86 rows (4,242 → 4,156, 2%). The 8 remaining are
+  malformed source text ("at 11:00an", "at 6:3 am"). Rows whose gold is 09:00 *and* which state a
+  non-morning clock time: 15 of 4,156, most of them false positives in the checker ("game night" is
+  not a time).
+- **Rejected:** guessing PM for a bare afternoon-ish hour, which is what a calendar app does. This
+  builds GOLD, and a plausible guess is the same class of error as the 09:00 default, just smaller.
+- **Status:** ✅ fixed 2026-08-21.
+
+## B319 — the calendar synth verifier checked JSON shape, never whether the answer was right
+
+- **Symptom:** a generated row whose request said "remind me to call Bob tomorrow at 3pm" and whose
+  answer said `09:00` the next day was ACCEPTED, with the reason
+  `well-formed calendar event with coherent datetimes`.
+- **Root cause:** `verify_calendar_row` checked form exhaustively — valid JSON, exactly one
+  `calendar.events.insert`, `start`/`end` parse, `end > start`, 60-minute default duration, a summary
+  that is not the request's imperative, and a date within ±2 years of the reference. It never asked
+  whether the resolved instant matched the request. The ±2-year bound is far too loose to catch 3pm
+  becoming 9am, or even tomorrow becoming next week.
+- **Why that is the whole task:** `calendar_json` is scored by exact argument match, and its content
+  is resolving a relative expression against a per-row reference instant. A verifier that skips that
+  is checking everything except the thing being learned.
+- **Fix:** `_expected_start` re-derives the instant from the request using `resolve_datetime` — the
+  SAME grammar the loader used to build the gold, so verifier and gold cannot disagree about
+  conventions — and the row is rejected on mismatch. This makes it a genuinely exact verifier: no
+  teacher call, no judgement. When the grammar cannot resolve the request it returns `None` and the
+  check ABSTAINS rather than rejecting, so the verifier's own limits never become row rejections; the
+  teacher pass still sees the row.
+- **Status:** ✅ fixed 2026-08-21.
+
+## B320 — few-shot prompts concatenated N full instruction blocks with no delimiter
+
+- **Symptom:** demonstrations made the teacher WORSE, on every task measured. `xlam_bfcl` scored
+  0.8350 five-shot against 0.8680 zero-shot; `calendar_json` 0.7350 against 0.8368. `format_valid` was
+  ~1.0 in all four measurements, so this was not the output contract. On `calendar_json` the depressed
+  number fell below the 0.80 gate and **synthetic data was refused for a teacher that is actually
+  above the bar**.
+- **Root cause:** `build_training_turn` returns a COMPLETE prompt — task instruction, tool/label
+  vocabulary, the request — because that is what fine-tuning shows the student. `_demo_block`
+  concatenated k of them separated by a blank line, so the teacher received the entire instruction
+  k+1 times with nothing marking where one example ended, which were already answered, or which one
+  was the question. `calendar_json` shows the mechanism plainly: every block carries its own
+  `Current date and time`, so six different reference instants arrived with nothing saying which
+  governed the answer — on a task whose entire content is resolving against that instant.
+- **Fix, two parts:**
+  1. every demonstration is fenced with `### Solved example N of M`, and the real question is
+     introduced by a header that explicitly says the examples are already answered, are shown only for
+     format, and that any date/time/reference they mention must be ignored;
+  2. the gate now measures BOTH k-shot and zero-shot and reads the BETTER, logging both and recording
+     `best_shots`. The gate answers "can this teacher do this task", and the honest input is the best
+     measurement available rather than one arbitrary prompt shape — a prompting defect must never
+     again be able to masquerade as an incapable teacher.
+- **Note:** the 0.1131 → 0.7190 BC5CDR few-shot gain that motivated five-shot prompting (B276) was
+  measured through this same undelimited block. It held anyway because on BC5CDR the format signal
+  dominated; the effect should be larger now, not smaller.
+- **Status:** ✅ fixed 2026-08-21.
+
+## B321 — calendar_json trained on TOPv2 and scored on SGD, so the metric measured the split
+
+- **Symptom:** run 38732020 scored `ast_arg_match=0.0084` with `format_valid=1.0000` — 474 of 478 eval
+  rows wrong, every prediction perfectly formed JSON. The same signature as the earlier 0.0000 on this
+  task, which had been attributed to year resolution.
+- **Root cause:** `load_calendar_json` returned `(TOPv2, SGD)` as `(train, test)`. The two corpora
+  describe the same activity with structurally different requests:
+
+  | | TRAIN (TOPv2, 4,156) | EVAL (SGD, 478) |
+  |---|---|---|
+  | `location` argument in gold | **0.0%** | **100.0%** |
+  | quoted title in the request | 0.2% | 100.0% |
+  | gold start == 09:00 | 50.0% | 1.7% |
+
+  The metric is exact argument match, so being asked for a required `location` the model had never
+  once seen in 4,156 training rows pinned the score near zero however capable the model was. The
+  09:00 skew compounds it: TOPv2 teaches "default to 9am", SGD almost never wants it.
+- **Why it looked like a model failure:** `format_valid` was a clean 1.0000, so every surface said the
+  model had learned the output contract. It had. It had also learned a different task from the one it
+  was being graded on.
+- **Fix:** both splits are drawn from ONE pooled, shuffled, text-deduplicated TOPv2 + SGD population,
+  so they are random samples of the same distribution by construction — 10.7% location-bearing in
+  train against 10.5% in eval, from 0% against 100%. Deterministic under a fixed seed over a stable
+  sort, because a checkpointed run that re-derived a different split would score against rows it had
+  trained on.
+- **Rejected:** interleaving SGD into the training pool while leaving the eval set pure SGD. Tried
+  first, and insufficient — TOPv2 outnumbers SGD nine to one, so train came out 5% location-bearing
+  against a 100% eval. The mismatch shrinks and does not go away.
+- **Not applicable to xlam_bfcl:** BFCL is a published leaderboard and must stay the untouched eval
+  set. Neither calendar corpus is a canonical benchmark, so there was nothing that had to be preserved
+  whole.
+- **Also fixed here:** de-duplication by request text before the split. TOPv2 repeats utterances
+  verbatim, which put 29 identical requests on both sides of the split. The eval firewall in `curate`
+  would have caught them at curation time, but the loader should not produce them.
+- **Status:** ✅ fixed 2026-08-21.
+
+## B322 — the calendar prompt withheld a convention 45% of its own gold labels used
+
+- **Symptom:** on the pooled eval set the teacher scored `0.3850`, and the synthesis gate refused
+  synthetic data on the strength of it.
+- **Root cause:** `CALENDAR_INSTRUCTION` stated the duration convention ("make the event 60 minutes
+  long unless a duration is stated") and said nothing about the default HOUR. 45% of gold rows resolve
+  to 09:00 because the request names a day and no clock time ("remind me to pack my lunch tomorrow"),
+  and a further slice resolves "tonight" to 20:00. Both are OUR conventions, not facts about the
+  request, and nothing in the prompt named them.
+- **Consequence:** nearly half the eval set was unanswerable except by guessing an unstated house rule.
+  A fine-tuned student can infer it from thousands of examples, which is why the student's score
+  looked merely low rather than impossible; a zero-shot or five-shot teacher cannot, so the fitness
+  gate read a task defect as an incapable teacher. Neither can a human reviewer deciding whether a
+  given gold label is correct — which is how the 09:00 skew went unexamined long enough to also hide
+  B318.
+- **Fix:** the instruction now names both conventions. One sentence, and it makes the task well-posed
+  for the teacher, the student and the reader at once.
+- **The general rule this encodes:** if the label generator applies a convention, the prompt has to
+  state it, or the task is scoring telepathy. Worth checking the other seven tasks against.
+- **Status:** ✅ fixed 2026-08-21.
+
+## B323 — concurrent GGUF eval killed runs with an uncatchable SIGABRT, for ~20%
+
+- **Symptom:** with `SLM_GGUF_EVAL_CONCURRENCY=8`, runs 38734202/38734203 scored two evals normally and
+  then died: `CudaWorkerError: CUDA worker 'eval' failed (exit=-6, WorkerProcessError: worker produced
+  no response)`.
+- **Why the OOM handling did not help:** `exit=-6` is SIGABRT. llama.cpp reports a failed device
+  allocation through `GGML_ASSERT`, which calls `abort()` rather than raising, so the worker process is
+  gone before `_looks_like_oom` or the halving retry can run. The failure is invisible to Python by
+  construction, which is the worst possible shape for a 7-day job: it dies mid-run with no diagnosis.
+- **Why the trade was not worth it anyway:** measured on calendar_json over 535 prompts, 125s
+  sequential against 101s at 8-way — about 20%, not the multiple that eight copies of the weights
+  implies. Eight contexts submitting to one device serialise on it, so thread concurrency buys
+  queueing overlap and little else.
+- **Fix:** the default is 1, i.e. sequential and byte-identical to the path it replaced, with the
+  machinery kept behind `SLM_GGUF_EVAL_CONCURRENCY` for deliberate experiments.
+- **What would actually work, for the next attempt:** llama.cpp's multi-sequence decode API (one
+  model, one context, `n_seq_max` sequences, no duplicated weights) or routing eval through the vLLM
+  server already running idle on the other GPU. Both batch properly; neither duplicates the model.
+  Note that llama-cpp-python 0.3.34 wires its multi-sequence `LlamaBatch` only into `embed()`, so the
+  first option means driving the low-level API and hand-rolling sampling and stop conditions — the code
+  that decides every accuracy number this project reports, so it needs its own verification plan.
+- **A related one-line bug found on the way:** `eval/harness.py` never passed `task` to
+  `infer_batch_gguf`, so concurrency sized itself from an unresolvable spec and silently degraded to 1.
+  The bf16 branch beside it always passed the task; only the GGUF branch was missed — the same
+  one-sided update that produced B313. Fixed, and the harness test now requires it.
+- **Status:** ✅ fixed 2026-08-21 (feature disabled by default, cause documented).
+
+## B324 — web discovery discarded any dataset smaller than the curriculum, including a near-perfect one
+
+- **Symptom:** on calendar run 38735780, Exa found 14 candidate datasets and all 14 were rejected, so
+  `mine_new_real` retired and the run had no data intervention left. One rejection read
+  `materialize Xamxl/calendar_event_parser_ds_v1 failed: Instruction "train[5929:6009]" corresponds to
+  no data!`
+- **Root cause, two compounding faults in `data/loaders/web_acquire.py`:**
+  1. the slice for a NEVER-READ dataset was sized as `len(existing_rows) + requested * 4`. With ~5,929
+     rows already in the curriculum it asked a brand-new corpus for `train[:6329]`. An offset makes
+     sense when re-reading a source already partly consumed; it is meaningless for one never opened;
+  2. for a single-split repo the disjoint test window was a SECOND slice at `train[max_train:...]`.
+     `train[offset:offset+n]` raises outright when the dataset holds fewer than `offset` rows, and the
+     surrounding `except` discards the whole candidate.
+  Together: any discovered dataset smaller than the current curriculum was rejected on arithmetic.
+- **What it cost.** `Xamxl/calendar_event_parser_ds_v1` is 100 rows of
+  `{"input": "2026-01-01T15:41:43gym tomorrow 6 am", "output": {"title": "gym", "start":
+  "2026-01-02T06:00:00", "end": "2026-01-02T07:00:00"}}` — a reference instant plus a relative request,
+  resolved to absolute ISO with a 60-minute default duration. That is `calendar_json` almost exactly,
+  and it is the only discovered candidate of the 14 that maps cleanly onto the task.
+- **Fix:** the request is sized from what is wanted (`max(300, requested * 4)`), and the single-split
+  test window is carved out of ONE materialized read in memory rather than a second offset slice —
+  disjoint by construction, cannot raise on a small corpus, and one read instead of two. The reserved
+  test share is also now at most a fifth rather than a flat 80 rows, because the caller states the test
+  half is never used as a rejection criterion; a flat 80 took 80 of those 100 rows and left 20 usable.
+  Verified: the same dataset now yields train=80 / test=20 where it previously returned None.
+- **The other 13 rejections were correct**, checked against the actual data rather than the log:
+  `vidhikatkoria/DA_SGD_Calendar` is dialogue-act response generation (`context` → next utterance) with
+  no structured event, and is derived from the same SGD corpus as our eval set, so accepting it risks
+  contamination; `nvidia/Nemotron-RL-agent-calendar_scheduling` targets a slot-constraint solver STATE
+  (`min_time`/`max_time`/`duration`), not an absolute-timestamped call; `Han0716/meeting-to-json-ko` is
+  Korean multi-turn transcripts mapped to a meeting-summary schema; `asu-kim/conversation-calendar` has
+  one unlabelled `text` column and its first row is a customer-service chat. The rest failed to build a
+  split, were gated, or shipped a deprecated loading script.
+- **Worth noting about the log:** eight of the fourteen were dismissed as
+  `orchestrator judged it unsuitable / unmappable`, which is too terse to audit — all eight turned out
+  to be correct, but confirming that required loading each dataset by hand.
+- **Status:** ✅ fixed 2026-08-21.
+
+## B325 — the empty-rebuild budget fired before the mining ladder finished its own safeguard
+
+- **Symptom:** calendar run 38735780 stopped with `2 consecutive data rebuilds added ZERO rows` after
+  mining had exhausted TOPv2 and spent exactly its two allotted web-discovery rounds.
+- **Root cause:** `MAX_CONSECUTIVE_EMPTY_REBUILDS` was 2, while the mining ladder's own
+  `MAX_FAILED_DISCOVERY_ROUNDS` is also 2. Those two discovery rounds legitimately add no rows —
+  probing the Hub and finding nothing usable is an answer, not a malfunction — so they alone reached
+  the run-health threshold and killed the run at the exact moment the ladder was about to retire
+  mining and let the loop switch to hyperparameters.
+- **Fix:** the budget is 4. That leaves room for both discovery rounds plus a turn either side, while
+  still catching what the counter is actually for: a loop repeatedly choosing a data intervention
+  against a curriculum that never changes. The tests now derive their expectations from the constant so
+  the number and the assertions cannot drift apart again.
+- **Status:** ✅ fixed 2026-08-21.
+
+## B326 — the confusion-pair placeholder made the orchestrator reason about an output that never existed
+
+- **Symptom:** on calendar run 38735780 the orchestrator wrote about "the degenerate single-token
+  'incorrect' output" **65 times**, and built hypotheses on it: "the optimizer settling into a
+  degenerate single-token minimum", "collapsing to a generic 'incorrect' output rather than producing
+  valid structured calls". The model never emitted the string "incorrect" once. Its actual outputs were
+  `[]` and well-formed calls with wrong arguments.
+- **Root cause:** `build_test_report` builds confusion entries as `(gold, predicted)` pairs. A task
+  with a closed label space has two real classes. An open-ended task has only a failure CATEGORY, so
+  the right-hand side was filled with the literal string `"incorrect"` to keep the tuple shape — and
+  then rendered verbatim as `gold='empty_call_list' predicted='incorrect' count=266` in the
+  orchestrator prompt and as `empty_call_list->incorrect (266)` in the run-memory summary. Read as
+  data rather than as padding, that says the model predicted the word "incorrect" 266 times.
+- **Related to B296,** which removed a different symptom of the same design: the taxonomy used to
+  report the single constant pair `gold_verifier -> incorrect` for every open-ended failure. That fix
+  gave the LEFT side real content and left the placeholder on the right.
+- **Fix:** open-ended tasks now carry `predicted=None`, and every renderer prints a category line
+  instead of a pair — `failure_category='empty_call_list' count=266` in the prompt, and
+  `top failures: wrong_arguments (268), empty_call_list (266)` in run memory. The pair form is kept for
+  tasks that genuinely have two classes, where `local->frontier (41)` is real information.
+- **Note on what was NOT wrong:** the taxonomy itself was accurate throughout. `empty_call_list` really
+  was 266 of 535 failures early in the run, correctly identifying that the model was emitting `[]` for
+  half the eval set, and it fell to zero as training progressed. The data was right; only the rendering
+  invited a false reading of it.
+- **Status:** ✅ fixed 2026-08-21.

@@ -37,6 +37,7 @@ SPEC = TaskSpec(
             "whether the topic is calm or uninteresting"
         ),
     },
+    verifier_notes="",
     quality_controls=(
         qc.require_fields("text", "label"),
         qc.label_space(),

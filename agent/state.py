@@ -70,6 +70,18 @@ class AgentState(TypedDict):
     source_progress: dict
     failed_discovery_rounds: int
     task_brief: Optional[dict]
+    #   teacher_fitness — the five-shot score the teacher achieved on THIS task's eval set, and the
+    #                     resulting go/no-go on synthetic data. Measured once at cold start. Absent
+    #                     or unmeasured means synthesis is REFUSED: "we could not check" is not
+    #                     evidence of a fit teacher. See agent/teacher_fitness.py.
+    teacher_fitness: Optional[dict]
+    #   run_health — cross-iteration counters (consecutive empty rebuilds, verification wipeouts,
+    #                mining shutouts, load failures) plus a bounded per-iteration curriculum ledger.
+    #                A single bad iteration is survivable; a pattern is a run that cannot learn, and
+    #                nothing used to be watching across iterations. See agent/run_health.py.
+    run_health: dict
+    _last_synth_attempted: int
+    _last_synth_kept: int
     curation_log_path: str            # run-local durable trajectory path
 
     # Search state

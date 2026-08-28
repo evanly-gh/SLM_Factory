@@ -156,6 +156,16 @@ def model_ladder_enabled(strategy: str | None = None) -> bool:
 # If the endpoint is unreachable, curate logs a warning and proceeds gold-only (never Claude).
 SYNTH_ENDPOINT = os.environ.get("SLM_SYNTH_ENDPOINT", "")            # e.g. http://g3107:8000/v1
 SYNTH_MODEL = os.environ.get("SLM_SYNTH_MODEL", "Qwen/Qwen3.6-35B-A3B")
+# The context the teacher is SERVED at, which is a property of the vLLM launch and NOT of the model:
+# Qwen3.6-35B-A3B declares max_position_embeddings=262144, and `_l40s_task_body.sh` serves it at 8192
+# because KV cache scales linearly with this number and the server has one L40S.
+#
+# It is read here as well as passed to `vllm serve` so that callers which have to fit a prompt into it
+# can ask instead of assuming. The body exports the same variable it launches with, so the two cannot
+# drift — which they did: `agent/teacher_fitness` bounded its demonstration block by the TASK's
+# max_seq_length, i.e. the student's window, and on toolbench that produced 199 HTTP 400s while on
+# routerbench it would have wrongly disabled demonstrations that fit the teacher perfectly well.
+SYNTH_MAX_MODEL_LEN = int(os.environ.get("SLM_SYNTH_MAX_MODEL_LEN", "8192"))
 SYNTH_API_KEY = os.environ.get("SLM_SYNTH_API_KEY", "EMPTY")
 
 # --- Required local LLM-as-judge for open `generation` eval scoring ---

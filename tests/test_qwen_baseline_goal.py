@@ -84,17 +84,72 @@ def test_measure_endpoint_baseline_returns_none_when_endpoint_unreachable(monkey
 
 
 def test_measure_endpoint_baseline_survives_a_failing_row():
+    """ONE bad row scores as an empty output rather than aborting a whole baseline.
+
+    The stub must fail on exactly one row, not all of them: a generate_fn that fails on everything is
+    a different situation with a different correct answer, covered below (B313).
+    """
     from eval.endpoint_eval import measure_endpoint_baseline
 
-    def boom(prompt, temperature=0.0, max_tokens=50):
-        raise RuntimeError("endpoint blip")
-
-    # One bad row must not abort the measurement; it scores as an empty output.
-    result = measure_endpoint_baseline(
-        _classification_eval_set(), generate_fn=boom, log=lambda *a: None
+    # A dedicated multi-row set: on the single-row shared fixture "one bad row" IS every row, which is
+    # the situation the companion test covers.
+    many = EvalSet(
+        all=[{"text": f"utterance {i}", "label": "spam"} for i in range(20)], task="clinc150",
     )
+    calls = {"n": 0}
+
+    def boom_once(prompt, temperature=0.0, max_tokens=50):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise RuntimeError("endpoint blip")
+        return "spam"
+
+    result = measure_endpoint_baseline(many, generate_fn=boom_once, log=lambda *a: None)
     assert result is not None
     assert 0.0 <= result.f1 <= 1.0
+
+
+def test_a_baseline_whose_every_row_failed_is_refused_rather_than_scored_zero():
+    """A score built from nothing but failures describes the harness, not the model.
+
+    On run 38661753 the task NAME was passed into the `generate_fn` positional slot, so all 1,000 eval
+    rows raised `'str' object is not callable`. The baseline reported 0.0000, and
+    `threshold_from_endpoint_baseline` floored the accuracy goal at 0.80 while stating that the teacher
+    had scored zero — a claim about a measurement that never happened. Refusing is the only honest
+    outcome, because 0.0 from a broken harness and 0.0 from an incapable teacher are indistinguishable
+    in the report (B313).
+    """
+    import pytest
+
+    from eval.endpoint_eval import BaselineGenerationError, measure_endpoint_baseline
+
+    def always_broken(prompt, temperature=0.0, max_tokens=50):
+        raise RuntimeError("endpoint died")
+
+    with pytest.raises(BaselineGenerationError) as excinfo:
+        measure_endpoint_baseline(
+            _classification_eval_set(), generate_fn=always_broken, log=lambda *a: None
+        )
+    # The message must name the failure rate and the underlying error, or the next reader is left
+    # guessing at exactly the point the old behaviour left them guessing.
+    assert "endpoint died" in str(excinfo.value)
+    assert "100%" in str(excinfo.value)
+
+
+def test_the_task_name_in_the_generate_fn_slot_is_rejected_immediately():
+    """The specific mistake that caused B313, caught before a single call is made.
+
+    `generate_fn` is the second POSITIONAL parameter, so a caller that believes it is passing a task
+    lands a string there and every row fails identically. `run_eval` dropped its own task argument in
+    the same refactor, which is why four call sites made this mistake at once.
+    """
+    import pytest
+
+    from eval.endpoint_eval import measure_endpoint_baseline
+
+    with pytest.raises(TypeError) as excinfo:
+        measure_endpoint_baseline(_classification_eval_set(), "clinc150", log=lambda *a: None)
+    assert "callable generate_fn" in str(excinfo.value)
 
 
 # --- task_analysis parks the goal PENDING --------------------------------------

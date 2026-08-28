@@ -119,6 +119,13 @@ def _gold_for_display(row: dict):
     on every row) was indistinguishable from a broken harness, because there was nothing to compare
     the prediction to. `diff` rows keep gold in `answer`, which already worked, and `src`/`tgt` are
     shown as a fallback for a row that somehow lacks the precomputed diff.
+
+    A REFERENCE-FREE task has no gold at all, and that is not a defect to paper over. ToolEval's pass
+    rate asks a judge whether the model's answer addresses the QUERY; the ToolBench test queries ship
+    without a reference solution, so `answer` is legitimately empty on every eval row. Printing a bare
+    blank there reproduces the B263 failure for a different reason — the reader cannot tell "no
+    reference exists" from "the gold went missing" — so the query the row is judged against is shown
+    instead, labelled as what it is.
     """
     entities = row.get("entities")
     if entities is not None:
@@ -135,6 +142,9 @@ def _gold_for_display(row: dict):
         return gold
     if row.get("tgt") is not None:
         return f"src={row.get('src')!r} → tgt={row.get('tgt')!r}"
+    query = row.get("query")
+    if query:
+        return f"(no reference; judged against the query) {query}"
     return gold
 
 
@@ -272,6 +282,43 @@ def _infer_overlapping_judge(prompts, eval_set, infer) -> list[str]:
     return raw_outputs
 
 
+def _resolve_served_infer(spec, weights_ref: str, base_model: str, max_new_tokens: int):
+    """An inference function backed by a purpose-started vLLM server, or None to use the usual path.
+
+    Returns None — rather than raising — whenever the served backend is not asked for or is not
+    usable. A run must never die because a speedup was unavailable: the in-process path is slower,
+    not wrong, and it is always there.
+    """
+    from eval.student_server import backend
+
+    if backend() != "vllm":
+        return None
+    from eval.student_server import StudentServerUnavailable, infer_batch_served
+    from training.slm_helpers import task_max_seq_length
+
+    def _served(chunk: list[str]) -> list[str]:
+        return infer_batch_served(
+            chunk,
+            weights_ref,
+            base_model,
+            max_new_tokens=max_new_tokens,
+            max_model_len=task_max_seq_length(spec.name),
+        )
+
+    # Probed on ONE prompt before the real pass, so a broken configuration costs one engine startup
+    # instead of surfacing after the harness has committed to a backend it cannot use.
+    try:
+        _served(["ping"])
+    except StudentServerUnavailable as error:
+        print(f"      [student-server] unavailable, using in-process inference: {error}")
+        return None
+    except Exception as error:  # noqa: BLE001 - any failure here means fall back, never die
+        print(f"      [student-server] probe failed ({type(error).__name__}: {error}), "
+              "using in-process inference")
+        return None
+    return _served
+
+
 def _run_eval_local(
     eval_set: EvalSet,
     weights_ref: str,
@@ -295,14 +342,24 @@ def _run_eval_local(
     spec = get_task(eval_set.task)
     max_new_tokens = eval_output_token_reserve(spec.name)
     prompts = spec.build_prompts(eval_set)
+    _served_infer = _resolve_served_infer(spec, weights_ref, base_model, max_new_tokens)
 
     def _infer(chunk: list[str]) -> list[str]:
+        if _served_infer is not None:
+            return _served_infer(chunk)
         if gguf_path is not None:
             return infer_batch_gguf(
                 chunk,
                 gguf_path,
                 max_new_tokens=max_new_tokens,
                 base_model=base_model,
+                # The task, so the GGUF path can size its scoring concurrency from the spec's
+                # `eval_batch_size`. Omitting it left `task=""`, which that function degrades to a
+                # concurrency of 1 — correct as a safety net for out-of-loop callers, and silently the
+                # old sequential behaviour for the one caller that matters. The bf16 branch below
+                # already passed it; only this branch was missed, which is the same one-sided update
+                # that produced B313.
+                task=spec.name,
             )
         return infer_batch(
             chunk,

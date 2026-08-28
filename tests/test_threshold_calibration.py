@@ -76,7 +76,13 @@ def test_iterate_prompt_states_the_mutually_exclusive_contract_explicitly():
 
 
 def test_stray_hyperparams_on_a_data_rebuild_is_recorded_for_logging():
-    """The strip must be VISIBLE, not silent masking."""
+    """The strip must be VISIBLE, not silent masking.
+
+    The state carries a passing teacher-fitness verdict so the plan reaches this assertion with the
+    strategy the orchestrator asked for. Without one, `synthesis_allowed` is False — absent IS a
+    refusal, deliberately — and the validator rewrites `surgical_synthesis` to `mine_new_real`,
+    which is correct behaviour that has nothing to do with what this test is about.
+    """
     from agent.nodes.iterate import _validate_decision_json
 
     decision = {
@@ -90,7 +96,8 @@ def test_stray_hyperparams_on_a_data_rebuild_is_recorded_for_logging():
     validated = _validate_decision_json(
         decision,
         task="ner_bc5cdr",
-        state={},
+        state={"teacher_fitness": {"status": "measured", "score": 0.91,
+                                   "synthesis_allowed": True}},
     )
     assert "hyperparams" not in validated, "must not reach the trainer"
     assert validated["_dropped_fields"] == ["hyperparams"]

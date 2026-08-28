@@ -158,10 +158,20 @@ def test_training_chat_template_explicitly_disables_thinking(tmp_path):
                 task="clinc150",
             )
 
+    # Three renders, in this order:
+    #   [0] add_generation_prompt=False — `_assert_train_serve_prefix_alignment`'s sentinel render.
+    #       This one is new as of 2026-08-24: the check used to be Qwen-gated and this fixture's
+    #       model is not Qwen, so it was skipped. It now runs for every model, which is the point —
+    #       a newly added family is exactly when an unverified template is most dangerous.
+    #   [1] add_generation_prompt=True  — the prompt half of the training row.
+    #   [2] add_generation_prompt=False — prompt + assistant target.
     assert [call["add_generation_prompt"] for call in mock_tokenizer.template_calls] == [
+        False,
         True,
         False,
     ]
+    # The invariant this test is actually about, and it must hold on the alignment render too:
+    # verifying parity with a prompt rendered in a different thinking mode would verify nothing.
     assert all(
         call["enable_thinking"] is False
         for call in mock_tokenizer.template_calls

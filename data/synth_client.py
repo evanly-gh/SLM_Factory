@@ -194,7 +194,7 @@ def wait_until_available(
 
 
 def get_generate_fn(log=print, request_timeout: float = 120.0):
-    """Return a `generate(prompt, temperature=0.7, max_tokens=200) -> str` backed by the
+    """Return a `generate(prompt, temperature=0.7, max_tokens=None) -> str` backed by the
     local vLLM endpoint, or None if unavailable. The fn raises on per-call failure so the
     caller can count/skip; it never falls back to Claude."""
     endpoint, model, api_key = _endpoint_config()
@@ -205,7 +205,14 @@ def get_generate_fn(log=print, request_timeout: float = 120.0):
     except Exception:
         return None
 
-    def generate(prompt: str, temperature: float = 0.7, max_tokens: int = 200) -> str:
+    def generate(prompt: str, temperature: float = 0.7, max_tokens: int | None = None) -> str:
+        # None, not 200. A caller that omits the argument used to silently receive 200 output
+        # tokens, which is where the habit of guessing this number came from; it now receives as
+        # much as the served context can return for its prompt.
+        if max_tokens is None:
+            from config.token_budget import output_budget
+
+            max_tokens = output_budget(prompt)
         resp = tracked_openai_chat_create(
             client,
             stage="local_synthesis",

@@ -31,6 +31,14 @@ described as behavior.
 > `sms_spam`, `fpb`, `arc`, `multilingual`, `structured_extraction`, `NAMED_BENCHMARK_TASK_TYPES`,
 > `TASK_REQUIRED_FIELDS`, `TASK_METRIC_NAMES` (now `eval.harness.task_metric_name(task)`), and the
 > paid-acquisition ledger.
+>
+> **Amended 2026-08-23 — `sms_spam` is back, and the registry is now NINE tasks.** It is a rewrite
+> rather than a revert: the deleted loader split the corpus unshuffled (B44), never deduplicated
+> (415 repeated messages, so copies straddled the eval firewall), and fetched an unchecksummed zip
+> over plain HTTP. The new one deduplicates before splitting, stratifies the holdout on a pinned
+> seed, and reads a checksummed `data/local/sms_spam` bundle. It scores `minority_f1` because the
+> corpus is ~87% ham and both accuracy and macro-F1 reward answering `ham` for everything. Nothing
+> else in that deletion list has returned. See `Evan's Notes/08-23-calendar-variance-sms-spam-small-models.md`.
 
 ---
 

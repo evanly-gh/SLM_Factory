@@ -39,6 +39,7 @@ SPEC = TaskSpec(
             "— judge difficulty, NOT whether the topic involves routing or networking"
         ),
     },
+    verifier_notes="",
     quality_controls=(
         qc.require_fields("text", "label"),
         qc.label_space(),

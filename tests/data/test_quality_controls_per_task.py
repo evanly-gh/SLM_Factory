@@ -51,6 +51,33 @@ def _calendar_row(text, answer=None):
                               "arguments": {"summary": "Dentist"}}])}
 
 
+TOOLBENCH_TOOLS = [{
+    "name": "get_weather_for_weather_api",
+    "parameters": {"properties": {"city": "string"}, "required": ["city"], "optional": []},
+}]
+
+
+def _toolbench_path(city="Paris", answer="It is 18 degrees and clear."):
+    """A complete ToolBench solution path: one API call, then Finish->give_answer."""
+    return (
+        "Thought: I should look up the weather for that city.\n"
+        "Action: get_weather_for_weather_api\n"
+        'Action Input: {"city": "%s"}\n'
+        "Thought: I have the weather and can answer now.\n"
+        "Action: Finish\n"
+        'Action Input: {"return_type": "give_answer", "final_answer": "%s"}' % (city, answer)
+    )
+
+
+def _toolbench_row(text, answer=None):
+    return {
+        "text": text,
+        "query": text,
+        "tools": TOOLBENCH_TOOLS,
+        "answer": _toolbench_path() if answer is None else answer,
+    }
+
+
 def _ner_row(text, entities=None):
     return {"text": text,
             "entities": entities if entities is not None
@@ -67,10 +94,17 @@ ROW_BUILDERS = {
                             "answer": f"Two people discuss topic {i}."},
     "xlam_bfcl": lambda i: _xlam_row(f"what is the weather in city number {i}?"),
     "calendar_json": lambda i: _calendar_row(f"add a dentist visit on the {i}th of March"),
+    "toolbench": lambda i: _toolbench_row(
+        f"I am travelling to city number {i} and want the forecast before I pack."
+    ),
     "ner_bc5cdr": lambda i: _ner_row(f"Compound{i} induced condition{i} in the cohort.",
                                      [{"text": f"Compound{i}", "type": "Chemical"}]),
     "routerbench": lambda i: {"text": f"question number {i} about arithmetic",
                               "label": "local" if i % 2 else "route"},
+    # Alternating rather than 87/13, because `balance_labels(max_ratio=8)` is exercised by the
+    # imbalance tests below rather than by the healthy fixture.
+    "sms_spam": lambda i: {"text": f"message number {i} about the weekend plan",
+                           "label": "ham" if i % 2 else "spam"},
     "proactive_listening": lambda i: {"text": f"speaker A pauses after clause {i} here",
                                       "label": "wait" if i % 2 else "interrupt"},
     "clinc150": lambda i: {"text": f"utterance number {i} about money",
@@ -83,8 +117,10 @@ ALLOWED_LABELS = {
     "dialogsum": None,
     "xlam_bfcl": None,
     "calendar_json": None,
+    "toolbench": None,
     "ner_bc5cdr": None,
     "routerbench": {"local", "route"},
+    "sms_spam": {"ham", "spam"},
     "proactive_listening": {"interrupt", "wait"},
     "clinc150": {"transfer", "balance"},
 }
@@ -272,6 +308,38 @@ def test_a_gold_answer_that_is_already_a_list_is_accepted(task):
     assert step(rows, QCContext(task_name=task)) == rows
 
 
+@pytest.mark.parametrize("gold,reason", [
+    ("Thought: I will just tell them.\nAction: get_weather_for_weather_api\n"
+     'Action Input: {"city": "Paris"}', "path never calls Finish"),
+    ("Thought: this is impossible.\nAction: Finish\n"
+     'Action Input: {"return_type": "give_up_and_restart"}', "path gave up"),
+    ("Thought: here you go.\nAction: Finish\n"
+     'Action Input: {"return_type": "give_answer", "final_answer": ""}', "empty final answer"),
+    ("I looked up the weather and it is 18 degrees.", "prose with no Action at all"),
+])
+def test_a_toolbench_row_whose_gold_is_not_a_complete_path_is_dropped(gold, reason):
+    """`complete_toolbench_path` is this task's analogue of `valid_json_answer`.
+
+    A target that stops before `Finish` teaches the model to stop before `Finish`, which the scorer
+    then counts as `no_finish_call` — so the curriculum would be training the exact failure the
+    metric punishes. One that ends in `give_up_and_restart` teaches giving up. Both are decidable by
+    computation, which is why this runs before any teacher call.
+    """
+    rows = _healthy("toolbench")
+    kept, logs = _run("toolbench", [*rows, _toolbench_row("a normal length request", answer=gold)])
+
+    assert len(kept) == len(rows), f"kept a row whose gold {reason}"
+    assert any("toolbench-path" in line for line in logs)
+
+
+def test_a_complete_toolbench_path_survives_the_path_check():
+    """The control for the four rejections above: the shape the loader produces must pass."""
+    from data.quality_controls import complete_toolbench_path
+
+    rows = [_toolbench_row("what is the weather in Paris?")]
+    assert complete_toolbench_path()(rows, QCContext(task_name="toolbench")) == rows
+
+
 @pytest.mark.parametrize("task", ["routerbench", "proactive_listening", "clinc150"])
 def test_a_row_labelled_outside_the_frozen_vocabulary_is_dropped(task):
     """A row whose label cannot appear in the eval set can never be scored against it, so it is pure
@@ -341,14 +409,19 @@ def test_near_duplicate_rows_are_removed_where_the_task_asked_for_it(task):
     assert any("surface-dedup" in line for line in logs)
 
 
-@pytest.mark.parametrize("task", ["dialogsum", "calendar_json"])
-def test_two_tasks_deliberately_keep_near_duplicates(task):
-    """Both for stated reasons about their own corpora, not about a channel.
+@pytest.mark.parametrize("task", ["dialogsum", "calendar_json", "toolbench"])
+def test_three_tasks_deliberately_keep_near_duplicates(task):
+    """Each for a stated reason about its own corpus, not about a channel.
 
     Chat transcripts share a great deal of surface form (greetings, scheduling small talk) and
     calendar utterances are short and highly templated ("remind me to X at Y") — so a Jaccard filter
     removes legitimately distinct rows that differ only in the entity, which is the part the model
     has to learn to extract.
+
+    ToolBench is the strongest case of the three. Its rows are ~8,000 characters of shared API
+    schema, and two rows for the same tool differ by one action inside that — so any threshold low
+    enough to catch a genuine near-duplicate also catches distinct trajectories. The loader removes
+    the duplicates structurally instead, by keeping only complete paths.
     """
     rows = _healthy(task)
     twin = dict(rows[0])

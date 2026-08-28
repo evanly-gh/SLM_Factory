@@ -8,11 +8,36 @@ from agent.nodes.iterate import (
     iterate_node,
 )
 
-# Every "does NOT escalate" case below runs with `_llm_iterate` failing, so it carries on into the
-# deterministic `data_rebuild` fallback. That makes each of them a live check that the rescue path
-# out of an unusable orchestrator reply still works, on top of the window boundary it is written
-# for: a call-site/signature disagreement there once turned the non-escalating branch into a
-# TypeError, i.e. the rescue killed the run it existed to save.
+# Two shapes of stub below, and which one a case uses is the point of that case.
+#
+# "does NOT escalate" runs with `_llm_iterate` returning a VALID decision, because the window
+# boundary is only observable through what happens AFTER it: the turn proceeds to the orchestrator
+# and routes on its answer. These used to stub a failure and rely on the score-band fallback to
+# produce a route, which stopped being a route at all when the fallback was removed — an unusable
+# decision now raises `OrchestratorDecisionError` rather than substituting a rule (B316).
+#
+# "DOES escalate" keeps a raising stub, used as a sentinel: escalation is a rule-based decision taken
+# WITHOUT spending an orchestrator call, so if one of these ever consults the LLM the stub makes that
+# loud instead of letting the saved API call quietly come back.
+
+
+def _valid_hyperparameter_decision(_state=None):
+    """A decision the validator accepts, so a non-escalating turn has something to route on.
+
+    Hyperparameter rather than data_rebuild because it needs nothing from the state: a data plan is
+    re-validated against mining/synthesis availability, which these fixtures do not populate.
+    """
+    return {
+        "intervention": "hyperparameter",
+        "hypothesis": "the hard bucket is under-fit, so the adapter needs more capacity",
+        "hyperparams": {
+            "lora_rank": 16,
+            "alpha_ratio": 2,
+            "weight_decay": 0.01,
+            "learning_rate": 0.0001,
+            "nr_epochs": 4,
+        },
+    }
 
 
 def _model(tier=0):
@@ -45,25 +70,31 @@ def _state(cni, score=0.30, threshold=0.90, phase=None, scores=None, eval_histor
 
 
 @patch("agent.nodes.iterate._llm_iterate", side_effect=Exception("no network"))
-def test_flat_eval_history_escalates_even_though_rollback_emptied_scores(_mock):
+def test_flat_eval_history_escalates_even_though_rollback_emptied_scores(mock_llm):
     # The realistic shape: rollback popped every regression so "scores" is tiny, but the
     # append-only eval history shows a full flat window → must ESCALATE.
     out = iterate_node(
         _state(cni=0, scores=[0.30], eval_history=[0.30] * STAGNATION_WINDOW)
     )
     assert out["next_action"] == "escalate"
+    # Escalation is rule-based and the LLM cannot override it, so the call is skipped to save the
+    # API spend — and a plateau is exactly when the run makes the most iterate calls.
+    mock_llm.assert_not_called()
 
 
-@patch("agent.nodes.iterate._llm_iterate", side_effect=Exception("no network"))
-def test_one_eval_short_of_the_window_does_not_escalate(_mock):
+@patch("agent.nodes.iterate._llm_iterate", side_effect=_valid_hyperparameter_decision)
+def test_one_eval_short_of_the_window_does_not_escalate(mock_llm):
     out = iterate_node(
         _state(cni=0, scores=[0.30], eval_history=[0.30] * (STAGNATION_WINDOW - 1))
     )
     assert out["next_action"] != "escalate"
+    # The turn reached the orchestrator, which is what "did not escalate" MEANS here: the
+    # escalation branch returns before the call.
+    mock_llm.assert_called_once()
 
 
 @patch("agent.nodes.iterate._llm_iterate", side_effect=Exception("no network"))
-def test_improvements_inside_the_window_do_not_reset_it(_mock):
+def test_improvements_inside_the_window_do_not_reset_it(mock_llm):
     """An improvement, 9 regressions, another improvement, 4 regressions = 15 evals.
 
     Total gain across the window is under 2%, so it must still escalate — improvements do not
@@ -73,13 +104,15 @@ def test_improvements_inside_the_window_do_not_reset_it(_mock):
     assert len(history) == 15
     out = iterate_node(_state(cni=0, scores=[0.310], eval_history=history))
     assert out["next_action"] == "escalate"
+    mock_llm.assert_not_called()
 
 
-@patch("agent.nodes.iterate._llm_iterate", side_effect=Exception("no network"))
-def test_real_cumulative_gain_across_the_window_does_not_escalate(_mock):
+@patch("agent.nodes.iterate._llm_iterate", side_effect=_valid_hyperparameter_decision)
+def test_real_cumulative_gain_across_the_window_does_not_escalate(mock_llm):
     history = [0.300] + [0.28] * 9 + [0.350] + [0.29] * 4   # +0.05 over the window
     out = iterate_node(_state(cni=0, scores=[0.350], eval_history=history))
     assert out["next_action"] != "escalate"
+    mock_llm.assert_called_once()
 
 
 @patch(
@@ -94,19 +127,21 @@ def test_fatal_auth_still_fails_fast_before_convergence(_mock):
 
 
 @patch("agent.nodes.iterate._llm_iterate", side_effect=Exception("no network"))
-def test_largest_first_probe_stall_terminates(_mock):
+def test_largest_first_probe_stall_terminates(mock_llm):
     # In the largest_first probe phase a stall means the task is infeasible → TERMINATE,
     # never escalate (there is nothing larger than the largest).
     out = iterate_node(_state(cni=0, phase="probe", eval_history=[0.30] * STAGNATION_WINDOW))
     assert out["next_action"] == "terminate"
+    mock_llm.assert_not_called()
 
 
 @patch("agent.nodes.iterate._llm_iterate", side_effect=Exception("no network"))
-def test_stagnation_window_also_escalates(_mock):
+def test_stagnation_window_also_escalates(mock_llm):
     # A full flat window (delta < 0.02 over STAGNATION_WINDOW evals) → stagnation escalates
     # even with low cni. Uses the configured window length (15 as of 2026-08-04).
     out = iterate_node(_state(cni=0, scores=[0.30] * STAGNATION_WINDOW))
     assert out["next_action"] == "escalate"
+    mock_llm.assert_not_called()
 
 
 def test_stagnation_requires_a_full_score_window():
@@ -169,10 +204,13 @@ def test_eval_cap_escalates_even_when_rollback_hides_the_score_history():
     state = _state(cni=0, scores=[0.30, 0.42])  # only 2 surviving scores, gain 0.12 = "healthy"
     state["iteration"] = MAX_EVALS_BEFORE_ESCALATION
 
-    with patch("agent.nodes.iterate._llm_iterate", side_effect=Exception("no network")):
+    with patch(
+        "agent.nodes.iterate._llm_iterate", side_effect=Exception("no network")
+    ) as mock_llm:
         out = iterate_node(state)
 
     assert out["next_action"] == "escalate"
+    mock_llm.assert_not_called()
 
 
 def test_eval_cap_does_not_fire_one_eval_early():
@@ -181,10 +219,14 @@ def test_eval_cap_does_not_fire_one_eval_early():
     state = _state(cni=0, scores=[0.30, 0.42])
     state["iteration"] = MAX_EVALS_BEFORE_ESCALATION - 1
 
-    with patch("agent.nodes.iterate._llm_iterate", side_effect=Exception("no network")):
+    with patch(
+        "agent.nodes.iterate._llm_iterate",
+        side_effect=_valid_hyperparameter_decision,
+    ) as mock_llm:
         out = iterate_node(state)
 
     assert out["next_action"] != "escalate"
+    mock_llm.assert_called_once()
 
 
 @patch.dict("os.environ", {"SLM_MODEL_SELECTION_STRATEGY": "smallest_first"})

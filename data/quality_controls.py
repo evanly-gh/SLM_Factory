@@ -253,6 +253,40 @@ def valid_json_answer() -> QCStep:
     return step
 
 
+def complete_toolbench_path() -> QCStep:
+    """Drop rows whose `answer` is not a complete, terminated ToolBench solution path.
+
+    The analogue of `valid_json_answer` for a task whose gold is not JSON: a ToolBench target is a
+    sequence of `Thought` / `Action` / `Action Input` turns and its correctness of FORM is entirely
+    decidable — every turn must carry a parseable call, and the last must be `Finish` with
+    `return_type == "give_answer"`.
+
+    `data/loaders/toolbench.py` already applies exactly this rule, so on a clean load this step
+    removes nothing. It is declared anyway because the curriculum is not only loaded: mined and
+    synthesized rows arrive through `data_rebuild` without passing the loader, and a target that
+    stops mid-path teaches the model to stop mid-path — which the eval scores as `no_finish_call`,
+    a failure the model would then have been trained to produce.
+    """
+    from eval.scorers.toolbench import FINISH, GIVE_ANSWER, parse_solution_path
+
+    def step(rows: list[dict], ctx: QCContext) -> list[dict]:
+        kept: list[dict] = []
+        for row in rows:
+            path = parse_solution_path(row.get("answer"))
+            if path is None or path["actions"][-1] != FINISH:
+                continue
+            if path["return_type"] != GIVE_ANSWER or not str(path["final_answer"]).strip():
+                continue
+            kept.append(row)
+        ctx.report(
+            "toolbench-path", len(rows), len(kept),
+            "gold is not a complete path ending in Finish->give_answer",
+        )
+        return kept
+
+    return step
+
+
 def apply_quality_controls(
     rows: list[dict],
     steps: Iterable[QCStep],

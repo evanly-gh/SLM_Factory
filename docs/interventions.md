@@ -64,7 +64,37 @@ The curriculum is not touched, so the comparison is clean.
 rows leave only via quality control or the eval firewall. There is no target size and nothing
 re-draws from a pool it has already drawn from.
 
-Exactly **two** sub-strategies exist. A plan names one.
+Exactly **two** sub-strategies exist. A plan names one, and a plan naming one that cannot add rows
+is **rewritten** rather than run:
+
+| sub-strategy | unavailable when | rewritten to |
+|---|---|---|
+| `mine_new_real` | every source exhausted AND web research spent its allowance | `surgical_synthesis` |
+| `surgical_synthesis` | the teacher did not clear its fitness gate (§4.0) | `mine_new_real` |
+| *both* | — | `data_rebuild` is refused; `iterate` takes a hyperparameter step |
+
+### 4.0 The synthetic-data gate
+
+Before any generation happens, the teacher is measured **five-shot on this task's own eval set**,
+through the task's own scorer, and if it scores below `MIN_ACCURACY` (0.80) synthetic data is refused
+for the whole run (`agent/teacher_fitness.py`).
+
+Five-shot, not zero-shot, because that is how synthesis actually prompts it: a zero-shot number on a
+format-bound task mostly reports whether the teacher guessed our output contract. BC5CDR measures
+0.1131 zero-shot and 0.7190 with five demonstrations — a 6.4x difference that says nothing about
+competence and everything about what the model had been told (B276).
+
+The reasoning for refusing below the gate: a teacher that gets a task right less than four times in
+five is not a source of training targets for it, it is a source of labelled noise, and training a
+student on its output caps the student near the teacher's error rate. 0.80 is the same number the
+accuracy goal itself is floored at, so a teacher below it is worse than the student is expected to
+become.
+
+An **unmeasured** teacher is also refused. "We could not check" is not evidence of a fit teacher, and
+defaulting to allowed would mean a run that skipped the gate silently regained synthesis.
+
+Demonstrations are drawn from TRAIN only, so measuring cannot leak held-out rows into a prompt that
+later scores them.
 
 ### 4.1 `mine_new_real` — add real rows
 
@@ -132,7 +162,7 @@ Two row shapes, derived from the task rather than chosen:
 | `ner_bc5cdr` | `verify_ner_row` | every span appears verbatim in the row's own text, no duplicates |
 | the other five | none | only the teacher's judgement is available; logged as such |
 
-### 4.3 Every teacher prompt is built from the task brief
+### 4.3 Every teacher prompt is five-shot and built from the task brief
 
 At cold start, after real data is loaded, the orchestrator is shown real rows and writes a
 **task brief** (`agent/task_brief.py`): what the benchmark is, the exact output contract, and the
@@ -144,7 +174,10 @@ This replaced a one-line description keyed by task *type*, under which `xlam_bfc
 correct, so a verifier judging against it was judging its own guess.
 
 Worked examples shown to the teacher are always **real rows** sampled from the task's own training
-split, never orchestrator-invented: a wrong example is worse than none.
+split, never orchestrator-invented: a wrong example is worse than none. There are `SYNTH_SHOTS` (5)
+of them in every generation AND every verification prompt, and any path that cannot assemble five
+says so in the log rather than quietly sending fewer — a rare class legitimately has fewer examples
+than a common one, and that is exactly the case worth seeing.
 
 ### 4.4 After either sub-strategy
 
@@ -159,6 +192,26 @@ split, never orchestrator-invented: a wrong example is worse than none.
 was built, and the mechanism it named could not do the thing it exists to do — so training this
 iteration would repeat the previous one exactly.
 
+## 4.5 Run health — stopping a run that cannot learn
+
+`agent/run_health.py` watches ACROSS iterations and raises `RunHealthError` when a pattern appears
+that means the run cannot make progress. It exists because run 38566712 spent 7h42m and $1.34 while
+every one of its eight rebuilds added zero rows: each individual symptom looked survivable, and no
+component was watching for the repeat.
+
+| trip condition | threshold | why that number |
+|---|---|---|
+| consecutive rebuilds adding 0 rows | 2 | one fruitless mining round is normal; the loop is allowed to try the other sub-strategy next turn |
+| the curriculum SHRANK in one iteration | ≥1,000 rows or ≥25% | those rows already trained a model, and the curriculum is cumulative, so a step now rejecting them is rejecting the task's own data. Deliberately not "QC removed a lot": a mining round returning 400 near-duplicates loses all 400 to dedup and nothing is wrong |
+| orchestrator data-rebuild plans refused by the validator | 2 | a refusal this systematic is a schema disagreement, not a bad sample — and the fallback substitutes a hyperparameter step so quietly the log reads as deliberate tuning |
+| consecutive total verification wipeouts | 2 | once is a bad batch; twice means generator and verifier disagree systematically |
+| mining attempts that saw candidates and accepted none | 3 | a filter rejecting everything, as distinct from an honest empty search |
+| data-load failures | 2 | a loader reads a cached corpus deterministically, so a repeat will not resolve by retrying |
+
+Every threshold needs a repeat or a magnitude that ordinary variance cannot explain, because a guard
+that fires on noise gets switched off, and a switched-off guard is worse than none. The raised message
+names the mechanism, not just the symptom.
+
 ## 5. Threshold movement
 
 The orchestrator may **lower** the goal down to `initial_stop_threshold` when the failures look like
@@ -172,5 +225,24 @@ On the DAG node: content score, format score, metric name, the threshold in forc
 (mutable hyperparameters only), the intervention with its sub-strategy and row counts, the
 orchestrator's full hypothesis, and the curriculum composition (`pi.D.composition`).
 
-In the final report: per-tier baseline → first fine-tune → best, and a per-iteration table with
-content and format side by side.
+In the final report: per-tier baseline → first fine-tune → best, a per-iteration table with content
+and format side by side, the **curriculum growth ledger** (rows added per iteration, QC and firewall
+removals, verification keep rate, and a count of rebuilds that added nothing), and the teacher-fitness
+verdict — because a curriculum with no synthetic rows reads very differently depending on whether
+synthesis was refused up front or attempted and failed.
+
+The report is wrapped in a function registered with `atexit`, so it prints whatever is known on a
+normal finish, an exception, a `scancel` SIGTERM, or a wall-clock stop. A cancelled run still answers
+the questions the report exists for. Only SIGKILL is unrecoverable.
+
+Graphics written at the end of every run (`agent/run_graphics.py`, also runnable standalone as
+`python -m agent.run_graphics [run_dir]`):
+
+| artifact | what it shows |
+|---|---|
+| `accuracy.png` | metric per iteration, baseline line, stop threshold as a STEP line |
+| `difficulty.png` | easy / medium / hard accuracy per iteration |
+| `label_performance.png` | correct vs failed eval rows per label or per failure category, worst first — WHAT it is getting wrong, as opposed to how hard those rows were |
+| `dataset_composition.png` | rows by origin per iteration, gold subdivided by source dataset |
+| `summary.png` | the above as one panel |
+| `hypotheses.md` | per-iteration decision and full reasoning |

@@ -6,6 +6,8 @@ import random
 import re
 from collections import Counter
 
+from config.token_budget import output_budget, prompt_char_budget
+
 logger = logging.getLogger(__name__)
 
 
@@ -69,9 +71,11 @@ def annotate_cot(
         cot_prompt = _build_prompt(prompt_text, gold_answer)
         if generate_fn is not None:
             try:
-                # LOCAL synth model (Qwen3.6-35B via vLLM) authors the CoT. Low temperature
-                # for focused reasoning; 512 tokens covers verbose math/code chains.
-                cot = (generate_fn(cot_prompt, 0.3, 512) or "").strip()
+                # LOCAL synth model (Qwen3.6-35B via vLLM) authors the CoT. Low temperature for
+                # focused reasoning; the length is whatever the context allows, not a guess. At 512
+                # a verbose math or code chain was cut mid-sentence and the PARTIAL reasoning was
+                # attached to the row as training data, with nothing checking that it terminated.
+                cot = (generate_fn(cot_prompt, 0.3, output_budget(cot_prompt)) or "").strip()
                 if cot:
                     return {**ex, "cot_reasoning": cot}, "Qwen3.6"
             except Exception:
@@ -212,7 +216,173 @@ def _progress_map(fn, items: list, *, label: str, log, workers: int) -> list:
 # label space, (2) the distribution of the input text, and (3) the overall format of the sequence".
 # A generator asked for output in a precise contract it has only been described, not shown, is being
 # tested on guessing the contract. B276.
+# Worked examples shown to the teacher, for BOTH generation and verification. Five, and not
+# negotiable by accident: measured 2026-08-17, the teacher scores 0.1131 span-F1 zero-shot on BC5CDR
+# and 0.7190 with five demonstrations — a 6.4x difference, with raw outputs showing exactly why
+# (wrong casing, a class the task does not have, a markdown fence). Min et al. (arXiv:2202.12837)
+# attribute that to demonstrations supplying "(1) the label space, (2) the distribution of the input
+# text, and (3) the overall format of the sequence". A generator asked for output in a contract it
+# has only been described, not shown, is being tested on guessing the contract (B276).
+#
+# Every generation and verification prompt in this module carries them, and any path that cannot
+# assemble five says so in the log rather than quietly sending fewer.
 SYNTH_SHOTS = int(os.environ.get("SLM_SYNTH_SHOTS", "5"))
+
+
+# Verifier rejection reasons from the previous synthesis round, fed back into the next generation
+# prompt. Module-level because generation and verification are separate calls in separate passes.
+#
+# WHY: on run 38708719 the rejections clustered hard on ONE systematic error — "includes unrequested
+# optional parameter", "includes optional parameters with default values not implied by query" — which
+# accounted for roughly half of them. The brief already says not to leave schema defaults in place, and
+# the generator kept doing it anyway. A static instruction it demonstrably ignores is worth less than
+# its own recent mistakes quoted back at it, which is the same reason the demonstrations are shown
+# rather than described (B276).
+_RECENT_REJECTIONS: list[str] = []
+MAX_FEDBACK_REJECTIONS = 6
+
+# A bounded sample of the ROWS the exact verifier refused, each carrying the reason it was refused
+# for. Module-level for the same reason `_RECENT_REJECTIONS` is: generation happens deep inside a
+# thread pool, and `agent.nodes.curate` — which owns the run's artifact directory — is the only place
+# that can write them down.
+#
+# WHY THE REASON COUNTS ARE NOT ENOUGH
+#     Run 38985393 generated 519 rows on toolbench and the exact verifier rejected all 519. Two
+#     separate blind spots meant nothing survived to explain it: the task's verifier wrapper discarded
+#     the reason string with a `[0]` subscript, and `_archive_synthetic_rows` returns early on an empty
+#     list, so the audit file that exists to answer "why did these rows fail" is silent in exactly the
+#     case where the question matters most. A count tells you WHICH check fired; the row tells you what
+#     the teacher actually wrote, which is what you need to fix the prompt.
+_RECENT_REJECTED_ROWS: list[dict] = []
+# Enough to see a pattern, few enough that a 500-row wipeout does not write a 500-row artifact every
+# iteration. The cap is checked from worker threads, so a race can let a couple extra rows through;
+# that is harmless for a sample and not worth a lock on the hot path.
+MAX_ARCHIVED_REJECTS = int(os.environ.get("SLM_MAX_ARCHIVED_REJECTS", "25"))
+
+
+# Approximate characters per token for dense JSON. Deliberately conservative (real dense JSON runs
+# nearer 3) so the budget errs large: over-asking costs nothing because generation stops at the EOS
+# token, while under-asking truncates the row and loses it entirely.
+_JSON_CHARS_PER_TOKEN = 4.0
+
+
+def _row_output_budget(anchor: dict, prompt: str = "") -> int:
+    """How many output tokens ONE generated row needs, measured from the anchor it must resemble.
+
+    WHY THIS IS NOT A CONSTANT — this cost three runs and about 40 hours of GPU time
+        This call site read `max_tokens=512`, hardcoded, for every task in the registry. That is
+        ample for calendar (a row is a few hundred characters) and impossible for toolbench, whose
+        row carries the full ReAct system prompt with its callable API list:
+
+            toolbench row-as-JSON   min 3,913 chars (~978 tok)   median 9,997 (~2,499)   p90 14,678
+            budget                  512 tokens
+            rows that could fit     0 of 4,995
+
+        So every toolbench generation was cut off mid-object, `json.loads` raised, and the row was
+        dropped by a bare `except Exception: return None`. Runs 38832586, 38985393 and 39041380 each
+        reported "0 kept" from 1,019, 133 and 425 attempts and were read as the VERIFIER rejecting
+        everything — the log line even says "verification rejected EVERY generated row". Nothing was
+        ever verified. Nothing was ever finished being generated.
+
+        Shot count was never the variable. Zero-shot, one-shot and five-shot all produced exactly
+        zero, because the limit that mattered was on the OUTPUT and none of them changed it.
+
+    Sized from the anchor because the prompt asks the teacher to reproduce the anchor's schema with
+    new values, so the anchor's own serialized length is a direct measurement of what the reply must
+    contain rather than a guess. 1.5x plus a fixed margin, since a "genuinely new and diverse"
+    instance is allowed to be somewhat longer than the row it was modelled on.
+
+    Clamped to what the served context can actually return after the prompt is spent, so a large task
+    asks for the most it can get instead of exceeding `max_model_len` and taking an HTTP 400.
+    """
+    schema = {k: v for k, v in anchor.items() if not str(k).startswith("_")}
+    try:
+        needed_chars = len(json.dumps(schema, ensure_ascii=False))
+    except (TypeError, ValueError):
+        needed_chars = 0
+    return output_budget(prompt, needed_chars=needed_chars)
+
+
+# Generation failures that happen BEFORE verification, counted by kind. Module-level for the same
+# reason the rejection lists are: the failure occurs inside a thread pool and the report is assembled
+# by the caller. See `_note_generation_failure`.
+_GENERATION_FAILURES: list[tuple[str, str]] = []
+MAX_GENERATION_FAILURE_SAMPLES = 400
+
+
+def _note_generation_failure(kind: str, error: BaseException | None, raw: str = "") -> None:
+    """Record a generation that never reached the verifier, and why.
+
+    The bare `except Exception: return None` this replaces is why three separate runs were
+    misdiagnosed. A row lost here is NOT a rejected row — it is a row that was never finished — and
+    the two call for opposite fixes: raise the output budget versus change the generator prompt. The
+    tail of the truncated reply is kept because an object that simply stops mid-string is the
+    signature of hitting the token limit, and it is unmistakable once you can see it.
+    """
+    if len(_GENERATION_FAILURES) >= MAX_GENERATION_FAILURE_SAMPLES:
+        return
+    detail = f"{type(error).__name__}: {error}" if error is not None else ""
+    if raw:
+        detail += f" | reply was {len(raw)} chars ending: ...{raw[-90:]!r}"
+    _GENERATION_FAILURES.append((kind, detail))
+
+
+def take_generation_failures() -> list[tuple[str, str]]:
+    """Hand over the generation-failure sample and clear it."""
+    failures = list(_GENERATION_FAILURES)
+    _GENERATION_FAILURES.clear()
+    return failures
+
+
+def note_rejected_row(row: dict, reason: str) -> None:
+    """Keep a rejected row, with its reason, for the audit trail. Bounded; never raises."""
+    if len(_RECENT_REJECTED_ROWS) >= MAX_ARCHIVED_REJECTS:
+        return
+    _RECENT_REJECTED_ROWS.append({"_reject_reason": " ".join(str(reason or "").split()), **row})
+
+
+def take_rejected_rows() -> list[dict]:
+    """Hand the rejected-row sample to the caller and clear it.
+
+    Clear-on-read rather than clear-on-write: one rebuild calls synthesis once per targeted failure
+    category, and clearing per call would keep only the last category's rejections — which on run
+    38985393 would have thrown away the 386-row batch and kept the 28-row one.
+    """
+    rows = list(_RECENT_REJECTED_ROWS)
+    _RECENT_REJECTED_ROWS.clear()
+    return rows
+
+
+def record_rejection_reasons(reasons: list[str]) -> None:
+    """Remember why the verifier refused rows, so the next generation prompt can quote it."""
+    seen: list[str] = []
+    for reason in reasons:
+        text = " ".join(str(reason or "").split())
+        if text and text not in seen and "unavailable" not in text and "unparseable" not in text:
+            seen.append(text)
+    _RECENT_REJECTIONS[:] = seen[:MAX_FEDBACK_REJECTIONS]
+
+
+def _rejection_feedback_block() -> str:
+    """The previous round's rejection reasons, as concrete mistakes not to repeat."""
+    if not _RECENT_REJECTIONS:
+        return ""
+    joined = "\n".join(f"  - {reason}" for reason in _RECENT_REJECTIONS)
+    return (
+        "The verifier REJECTED rows from your last batch for these specific reasons. They are your "
+        "own recent mistakes on this exact task — do not repeat them:\n"
+        f"{joined}\n\n"
+    )
+
+
+def _warn_short_shots(kind: str, got: int, log=None) -> None:
+    """Say when a prompt went out with fewer demonstrations than the contract asks for."""
+    if log and got < SYNTH_SHOTS:
+        log(
+            f"      [synth] {kind}: only {got} of {SYNTH_SHOTS} demonstration(s) available — the "
+            "prompt is weaker than the measured five-shot configuration, so expect a lower keep "
+            "rate on this batch"
+        )
 
 
 def _demo_block(demos: list[dict], task_description: str) -> str:
@@ -230,9 +400,15 @@ def _new_example_prompt(anchor: dict, task_description: str, demos: list[dict] |
                         target_category: str = "") -> str:
     """Prompt to generate ONE new, correct example in the anchor's exact schema.
 
-    Generation-family only. The classification/NER path (`_synthesize_new_gold`) never asks the
-    teacher for a label — it copies the anchor's — so an out-of-vocabulary label is impossible
-    there by construction, and no label list needs to be stated.
+    Generation-family only, which is every task with `closed_label_space=False`: calendar_json,
+    xlam_bfcl, toolbench, gsm8k, dialogsum AND ner_bc5cdr. The other path (`_synthesize_new_gold`)
+    never asks the teacher for a label — it copies the anchor's — so an out-of-vocabulary label is
+    impossible there by construction and no label list needs stating.
+
+    That other path used to be described here as "the classification/NER path", which was wrong and
+    actively misleading: `ner_bc5cdr` declares `closed_label_space=False` and is dispatched to THIS
+    function. Anyone tracing why BC5CDR synthesis behaved a certain way was sent to the wrong half of
+    the module by a comment.
 
     `demos` are SHOWN, not described. See SYNTH_SHOTS for why that matters (B276).
     """
@@ -252,14 +428,18 @@ def _new_example_prompt(anchor: dict, task_description: str, demos: list[dict] |
     )
     return (
         f"{task_description}\n\n"
+        f"{_rejection_feedback_block()}"
         f"{shown}"
         f"Generate ONE new, correct example in EXACTLY this JSON schema "
         f"(same keys, same value types): {json.dumps(schema, ensure_ascii=False)}."
         f"{aimed}"
         "\nIt must be a genuinely new, diverse, and CORRECT instance — not a copy or a "
-        "paraphrase of the reference, and never a wrong answer. Obey the output contract above "
-        "exactly; a well-formed answer that breaks a stated convention is graded wrong. Return "
-        "only the JSON object, no preamble or code fences."
+        "paraphrase of the reference, and never a wrong answer. Vary the SUBSTANCE, not just the "
+        "wording: a different scenario, different argument values, and a different number of calls "
+        "where the task allows it. Reusing the reference's shape with new nouns adds a row the "
+        "curriculum already effectively has. Obey the output contract above exactly; a well-formed "
+        "answer that breaks a stated convention is graded wrong. Return only the JSON object, no "
+        "preamble or code fences."
     )
 
 
@@ -271,6 +451,165 @@ def _new_example_prompt(anchor: dict, task_description: str, demos: list[dict] |
 # the reference instant), so a verifier asked to judge against it was judging its own guess (B269).
 
 
+# Fields that are the QUESTION rather than context for judging it.
+_INPUT_FIELDS = frozenset({"text", "prompt"})
+# Fields that may carry the ANSWER. `_gold_field` narrows this per task; the set exists so that a row
+# from a task whose gold lives elsewhere still has its answer kept out of the context block.
+_ANSWER_FIELDS = frozenset({"answer", "response", "label", "entities"})
+
+
+def _gold_field(spec) -> str:
+    """The row key holding the gold answer for this task.
+
+    Read off the spec's `required_fields`, which is `(input, gold)` for every task in the registry:
+    `("text", "answer")` for xlam/gsm8k/calendar/dialogsum, `("text", "entities")` for BC5CDR,
+    `("text", "label")` for the classification tasks.
+
+    WHY THIS IS NOT JUST `row["answer"]`
+        `verify_generated_answers` used to read `row.get("answer") or row.get("response")` and reject
+        the row outright when both were blank. A synthesized BC5CDR row carries its gold in
+        `entities` and has no `answer` at all, so EVERY span row was rejected with "empty answer"
+        before a prompt was built — zero teacher calls, zero rows kept, 100% of the generation budget
+        wasted. `surgical_synthesis` on `ner_bc5cdr` could not add a single row, while
+        `docs/PIPELINE.md` documented the teacher pass as running for spans precisely because the
+        substring verifier cannot catch a MISSED entity (B317).
+    """
+    required = tuple(getattr(spec, "required_fields", ()) or ())
+    for field in required:
+        if field not in _INPUT_FIELDS:
+            return field
+    return "answer"
+
+
+def _render_gold(row: dict, gold_field: str) -> str:
+    """The gold answer as text the verifier can read.
+
+    Structured golds (a span list, a tool-call array) are rendered as JSON rather than `str()`, so the
+    verifier sees the same shape the scorer parses instead of a Python repr with single quotes.
+    """
+    value = row.get(gold_field)
+    if value is None and gold_field != "answer":
+        value = row.get("answer") or row.get("response")
+    if value is None:
+        return ""
+    if isinstance(value, str):
+        return value
+    return json.dumps(value, ensure_ascii=False)
+
+
+def _task_context_block(spec, rows: list[dict] | None = None) -> str:
+    """The TASK-level facts a verifier needs, for whichever of the eight tasks this is.
+
+    Distinct from `_row_context_block`, which carries what varies per row (a function-calling row's
+    own `tools`, and so on). This carries what is true of the whole task and therefore appears on no
+    single row: the closed label space, what each class means, the entity-type vocabulary.
+
+    WHY BOTH ARE REQUIRED
+        A verifier judging without the row's context invents it (B314: it rejected calls for using
+        tools "not present in the provided tools list" when no tools list was in the prompt). A
+        verifier judging without the TASK's context does the same thing one level up — it decides
+        what the label space must be from the label's wording, which is how a grade-school math
+        problem was rejected from RouterBench's `local` class for being "a math problem, not a local
+        query", when `local` means "route this to the local model" (B267/B269).
+
+        So: always show the tools, always show the class list. Neither is optional and neither is
+        inferable from the other.
+
+    `rows` supplies the observed label space when the spec does not enumerate one itself, which is the
+    case for every task here — the vocabulary is a property of the loaded data, not of the spec.
+    """
+    parts: list[str] = []
+    # Task-level CONVENTIONS, before the label space. A closed vocabulary is not the only fact that
+    # is true of the whole task and visible on no single row: calendar_json's datetime rules are
+    # decidable and documented, and without them the teacher rejected 22.6% of generated rows on run
+    # 38832587 — including "7pm start plus 60 mins is 8pm, not 20:00", which is the same time written
+    # two ways. Those rows had already passed the EXACT programmatic verifier, so the teacher was
+    # overruling a computation with a guess. See `TaskSpec.verifier_notes`.
+    notes = str(getattr(spec, "verifier_notes", "") or "").strip()
+    if notes:
+        parts.append(notes)
+    if spec is not None and getattr(spec, "closed_label_space", False):
+        definitions = dict(getattr(spec, "label_definitions", None) or {})
+        observed = sorted({
+            str(row.get("label")) for row in (rows or [])
+            if isinstance(row, dict) and row.get("label") is not None
+        })
+        labels = observed or sorted(definitions)
+        if labels:
+            parts.append(
+                "This task has a CLOSED label space. These are the only valid classes, and a class "
+                "listed here is valid by definition — never reject a row because you would not have "
+                "chosen that class name:"
+            )
+            for label in labels:
+                meaning = str(definitions.get(label, "")).strip()
+                parts.append(f"  - {label}" + (f" — {meaning}" if meaning else ""))
+            if not definitions:
+                # Worth stating. 151 CLINC150 intents arrive with no definitions, and a verifier told
+                # only the names will fall back to reading them as English words.
+                parts.append(
+                    "  (no written definitions are available for these classes: judge each row "
+                    "against how the class is USED in the confirmed examples above, not against what "
+                    "its name sounds like)"
+                )
+    entity_types = sorted({
+        str(entity.get("type"))
+        for row in (rows or []) if isinstance(row, dict)
+        for entity in (row.get("entities") or [])
+        if isinstance(entity, dict) and entity.get("type")
+    })
+    if entity_types:
+        parts.append(
+            "Valid entity types for this task, and the only ones that may appear: "
+            + ", ".join(entity_types)
+        )
+    return ("\n".join(parts) + "\n\n") if parts else ""
+
+
+def _row_context_block(row: dict) -> str:
+    """The row's own task-specific fields, rendered for a verification prompt.
+
+    WHY THIS EXISTS
+        `verify_generated_answers` used to show the verifier only the request and the proposed answer.
+        For a task whose correctness is defined by per-row context, that makes the question
+        unanswerable, and the teacher answers it anyway by inventing the missing context.
+
+        On xlam run 38661753 it rejected 79 of 330 rows (24%) with reasons like "Tool name
+        'calculate_distance' is not present in the provided tools list" and "Tool names and arguments
+        are invented and not from the provided tools list" — about a tools list that was never in the
+        prompt. Every one of those rows had ALREADY passed the programmatic verifier, which checks the
+        call's name and arguments against that row's own `tools` schema, so each rejection was
+        provably false and each discarded a valid row. Others second-guessed real xLAM conventions
+        ("argument key 'is_id' is likely incorrect; schema likely uses 'id'"), which is the same
+        mistake in a subtler form: judging its own prior instead of the row (B267/B269/B314).
+
+    Built by exclusion rather than from a per-task list of context fields, so a task that gains a
+    field gets it shown automatically instead of silently omitting it — omission is the failure mode
+    this function exists to prevent. Internal `_`-prefixed bookkeeping is excluded because it is
+    provenance, not task content.
+    """
+    context = {
+        key: value for key, value in row.items()
+        if not key.startswith("_")
+        and key not in _INPUT_FIELDS
+        and key not in _ANSWER_FIELDS
+        and value not in (None, "", [], {})
+    }
+    if not context:
+        return ""
+    rendered = json.dumps(context, ensure_ascii=False, sort_keys=True)
+    # Bounded: a tools array can be several KB, and the verdict does not improve past the point where
+    # the schema is legible. Truncation is announced so a clipped schema is never read as a short one.
+    limit = 6000
+    if len(rendered) > limit:
+        rendered = rendered[:limit] + f"  … [truncated, {len(rendered)} chars total]"
+    return (
+        "Context provided WITH this example (the answer must be consistent with exactly this, and "
+        "anything named here is valid by definition):\n"
+        f"{rendered}\n\n"
+    )
+
+
 def verify_generated_answers(
     rows: list[dict],
     *,
@@ -278,6 +617,8 @@ def verify_generated_answers(
     generate_fn,
     log=None,
     reference_rows: list[dict] | None = None,
+    task_context: str = "",
+    gold_field: str = "answer",
 ) -> list[dict]:
     """Ask the teacher whether each generated (input, answer) pair is actually correct.
 
@@ -300,10 +641,24 @@ def verify_generated_answers(
     # to guess them is judging its own guess.
     shown = ""
     if reference_rows:
+        from agent.teacher_fitness import fit_demonstrations
+        from config.config import SYNTH_MAX_MODEL_LEN
+
         pairs = []
-        for ref in reference_rows[:SYNTH_SHOTS]:
-            q = " ".join(str(ref.get("text") or "").split())[:400]
-            a = " ".join(str(ref.get("answer") or "").split())[:400]
+        # Same fitting rule as generation: show real examples, but only as many as the context has
+        # room for. Each is additionally clipped to 400 characters below, so this bounds the count
+        # while the clip bounds the size.
+        _refs = fit_demonstrations(
+            list(reference_rows), SYNTH_SHOTS, int(SYNTH_MAX_MODEL_LEN * 2.5 * 0.5)
+        )
+        _warn_short_shots("answer verification", len(_refs), log=log)
+        for ref in _refs:
+            # A share of the real context rather than a flat 400 characters. These pairs are what
+            # tell the verifier the task's conventions, and on a long-row task the convention being
+            # demonstrated fell off the end — leaving the verifier judging its own guess (B269).
+            _clip = prompt_char_budget(0.10)
+            q = " ".join(str(ref.get("text") or "").split())[:_clip]
+            a = " ".join(_render_gold(ref, gold_field).split())[:_clip]
             if q and a:
                 pairs.append(f"Request: {q}\nCorrect answer: {a}")
         if pairs:
@@ -312,22 +667,32 @@ def verify_generated_answers(
 
     def _check(row: dict):
         request = str(row.get("text") or "")
-        answer = str(row.get("answer") or row.get("response") or "")
+        answer = _render_gold(row, gold_field)
         if not answer.strip():
-            return row, False, "empty answer"
+            # A row with no gold at all cannot be verified OR trained on, so dropping it is right —
+            # but it must be the row that is empty, not the field name that is wrong. See `_gold_field`.
+            return row, False, f"empty answer (no {gold_field!r} on the row)"
+        context = _row_context_block(row)
         prompt = (
             f"You are checking one training example for the task of {task_desc}.\n\n"
+            f"{task_context}"
             f"{shown}"
             f"User input / question:\n{request}\n\n"
+            f"{context}"
             f"Proposed answer:\n{answer}\n\n"
             f"Does the proposed answer correctly and directly satisfy the user's request, in the "
             f"context of {task_desc}? Answer strictly as JSON: "
             f'{{"valid": true|false, "reason": "<max 15 words>"}}. '
             f"Answer false if the answer is wrong, incomplete, in the wrong format for this task, "
-            f"or does not address what was actually asked."
+            f"or does not address what was actually asked. Judge ONLY against the request and the "
+            f"context above — if a name or field appears in the context, it is valid by definition, "
+            f"and you must not reject the answer for using it or claim it was not provided."
         )
         try:
-            raw = generate_fn(prompt, 0.0, 160)
+            # Was 160. The verdict is {valid, reason} with a free-text reason, and verification is
+            # FAIL-OPEN: an unparseable reply keeps the row. So a verdict truncated mid-reason did
+            # not make the verifier strict, it made it structurally unable to reject anything.
+            raw = generate_fn(prompt, 0.0, output_budget(prompt))
         except Exception:  # noqa: BLE001 — verification must never be fatal
             return row, True, "verifier unavailable (kept)"
         match = re.search(r"\{.*\}", str(raw or ""), re.DOTALL)
@@ -346,6 +711,7 @@ def verify_generated_answers(
     kept, rejected = [], []
     for row, valid, reason in results:
         (kept if valid else rejected).append((row, reason))
+    record_rejection_reasons([reason for _row, reason in rejected])
     if log:
         log(f"      [verify] teacher validated {len(kept)}/{len(rows)} generated answer(s); "
             f"rejected {len(rejected)}")
@@ -383,16 +749,42 @@ def _synthesize_new_correct(
 
     rejections: list[str] = []
     checker = getattr(verify_fn, "checker", None)
+    # Warned once per batch, not once per row: this prompt is issued thousands of times.
+    _shot_warned = {"new_correct": False}
+
+    # Demonstrations are chosen to FIT the teacher's context rather than sampled at random. On a
+    # task whose rows are large, five random full-prompt demonstrations exceed the served context and
+    # every generation call 400s; dropping to zero-shot instead produced 0 kept rows out of 636, 326
+    # and 57 attempts on toolbench. Shortest-first keeps five real demonstrations AND fits. See
+    # `agent.teacher_fitness.fit_demonstrations`.
+    from agent.teacher_fitness import fit_demonstrations
+    from config.config import SYNTH_MAX_MODEL_LEN
+
+    _demo_budget = int(SYNTH_MAX_MODEL_LEN * 2.5 * 0.5)
 
     def _one(anchor: dict) -> dict | None:
-        demos = rng.sample(anchors, min(SYNTH_SHOTS, len(anchors))) if SYNTH_SHOTS else []
+        demos = fit_demonstrations(anchors, SYNTH_SHOTS, _demo_budget, rng=rng)
+        if not _shot_warned["new_correct"]:
+            _shot_warned["new_correct"] = True
+            _warn_short_shots("new-correct generation", len(demos), log=log)
         prompt = _new_example_prompt(anchor, task_description, demos=demos,
                                      target_category=target_category)
         try:
-            row = json.loads(generate_fn(prompt, temperature=0.7, max_tokens=512))
-        except Exception:  # noqa: BLE001 — a failed generation is skipped, never fatal
+            raw = generate_fn(prompt, temperature=0.7,
+                              max_tokens=_row_output_budget(anchor, prompt))
+        except Exception as error:  # noqa: BLE001 — a failed generation is skipped, never fatal
+            _note_generation_failure("endpoint error", error)
+            return None
+        try:
+            row = json.loads(raw)
+        except Exception as error:  # noqa: BLE001
+            # Counted BY KIND rather than swallowed. An unterminated object here means the reply hit
+            # the output limit mid-JSON, which is a budget problem and reads nothing like a verifier
+            # disagreement — see `_row_output_budget` and `_note_generation_failure`.
+            _note_generation_failure("unparseable JSON from the generator", error, raw=raw)
             return None
         if not isinstance(row, dict) or not row.get("text"):
+            _note_generation_failure("generator returned no 'text' field", None, raw=raw)
             return None
         # PIN the constraint from the anchor rather than trusting the teacher to reproduce it. The
         # tool signature is what the call must satisfy, not something being invented — the same
@@ -408,6 +800,7 @@ def _synthesize_new_correct(
             if checker is not None:
                 _ok, reason = checker(row)
                 rejections.append(reason)
+                note_rejected_row(row, reason)
             return None
         row["_source"] = "synth:generated"
         row["_provenance"] = "synthetic_positive"
@@ -437,6 +830,24 @@ def _synthesize_new_correct(
         shots = f"{SYNTH_SHOTS}-shot" if SYNTH_SHOTS else "zero-shot"
         log(f"      [synth] new-correct ({shots}): {len(out)}/{n} kept "
             f"({len(planned)} attempts)")
+        # Reported BEFORE the verifier breakdown and separately from it, because they answer a
+        # different question. A row counted here never reached the verifier at all, so reading these
+        # as rejections points the fix at the generator prompt when the cause may be the output
+        # budget. Three runs were misread that way; see `_row_output_budget`.
+        failures = take_generation_failures()
+        if failures:
+            by_kind = Counter(kind for kind, _detail in failures)
+            log(f"      [generate:failed] {len(failures)} generation(s) never produced a usable row "
+                f"and were NEVER VERIFIED — this is not a verifier rejection:")
+            for kind, count in by_kind.most_common(_VERIFY_LOG_LIMIT):
+                example = next(d for k, d in failures if k == kind)
+                log(f"        x{count}  {kind}")
+                if example:
+                    log(f"                {example[:260]}")
+            if by_kind.get("unparseable JSON from the generator"):
+                log("        ^ an object that stops mid-string means the reply hit the output token "
+                    "limit. Check the max_tokens `_row_output_budget` computed against the size of "
+                    "this task's rows.")
         if rejections:
             counts = Counter(rejections)
             log(f"      [verify:exact] programmatic verifier rejected {len(rejections)} row(s) "
@@ -486,11 +897,13 @@ def _label_context_block(
 def verify_generated_labels(
     rows: list[dict],
     *,
+    task_description: str,
     generate_fn,
     log=None,
     label_definitions: dict | None = None,
     all_labels: list[str] | None = None,
     reference_rows: list[dict] | None = None,
+    task_context: str = "",
 ) -> list[dict]:
     """Ask the teacher model to confirm each generated row really belongs to its assigned label.
 
@@ -499,9 +912,12 @@ def verify_generated_labels(
     classification task the reference model is already good at. So a self-check is cheap and
     meaningfully better than nothing, even though it uses the same model.
 
-    `label_definitions` says what each class MEANS. Supply it whenever the label name is not itself
-    a plain description of the class, or the teacher will judge the word instead of the task — see
-    `_label_context_block`.
+    `task_description` is the orchestrator-authored brief (what the benchmark is, the exact output
+    contract, the likely failure modes) and `label_definitions` says what each class MEANS. Both are
+    REQUIRED context, not decoration: without them the teacher judges the label WORD instead of the
+    task, which is how a grade-school math problem was rejected for the `local` class because "the
+    utterance is a math problem, not a local query" — 70% of generated rows discarded for the wrong
+    reason (B267/B269).
 
     Rows the teacher rejects are dropped, and its stated reason is logged so a bad *generator*
     prompt is visible rather than silently absorbed. Any verification failure (unparseable reply,
@@ -520,20 +936,28 @@ def verify_generated_labels(
             if text:
                 by_label.setdefault(str(row["label"]), []).append(text)
 
+    _verify_shot_warned: set[str] = set()
+
     def _check(row: dict):
         label = str(row.get("label"))
         text = str(row.get("text") or "")
         context = _label_context_block(label, label_definitions, all_labels)
         examples = by_label.get(label, [])[:SYNTH_SHOTS]
+        if label not in _verify_shot_warned:
+            _verify_shot_warned.add(label)
+            _warn_short_shots(f"label verification for {label!r}", len(examples), log=log)
         shown = ""
         if examples:
             joined = "\n".join(f"- {e}" for e in examples)
             shown = f"Real, confirmed examples of the '{label}' class:\n{joined}\n\n"
         prompt = (
+            f"{task_description}\n\n"
+            f"{task_context}"
             f"You are checking one training example for a text classifier.\n"
             f"{context}\n"
             f"{shown}"
             f"Utterance: {text}\n"
+            f"{_row_context_block(row)}"
             f"Proposed label: {label}\n\n"
             f"Does this utterance genuinely belong to the '{label}' class? Answer strictly as "
             f'JSON: {{"valid": true|false, "reason": "<max 15 words>"}}. '
@@ -543,7 +967,8 @@ def verify_generated_labels(
             f"class, as defined above, applies."
         )
         try:
-            raw = generate_fn(prompt, 0.0, 120)
+            # Was 120 — the same fail-open truncation as the answer verifier above, 40 tokens tighter.
+            raw = generate_fn(prompt, 0.0, output_budget(prompt))
         except Exception:  # noqa: BLE001 — verification must never be fatal
             return row, True, "verifier unavailable (kept)"
         match = re.search(r"\{.*\}", str(raw or ""), re.DOTALL)
@@ -562,6 +987,7 @@ def verify_generated_labels(
     kept, rejected = [], []
     for row, valid, reason in results:
         (kept if valid else rejected).append((row, reason))
+    record_rejection_reasons([reason for _row, reason in rejected])
 
     if log:
         log(
@@ -621,6 +1047,9 @@ def _synthesize_new_gold(
 
     rng = random.Random(20260804)
     labels = sorted(by_label)
+    # Warned once per LABEL: a rare class legitimately has fewer examples than a common one, and that
+    # is exactly the case worth seeing in the log.
+    _gold_shot_warned: set[str] = set()
     for bucket in by_label.values():
         rng.shuffle(bucket)
     anchors: list[dict] = []
@@ -647,6 +1076,9 @@ def _synthesize_new_gold(
         # SAME class, so they convey that class's phrasing and length distribution as well as format.
         same_class = by_label.get(label) or []
         demos = [row for row in same_class[:SYNTH_SHOTS + 1] if row is not anchor][:SYNTH_SHOTS]
+        if label not in _gold_shot_warned:
+            _gold_shot_warned.add(label)
+            _warn_short_shots(f"in-class generation for {label!r}", len(demos), log=log)
         shown = ""
         if demos:
             joined = "\n".join(f"- {str(d.get('text', '')).strip()}" for d in demos)
@@ -674,7 +1106,10 @@ def _synthesize_new_gold(
             f"no label prefix."
         )
         try:
-            text = generate_fn(prompt, 1.0, 200)
+            # Was 200 (~800 characters). Ample for the classification utterances and BC5CDR
+            # sentences measured today, and silently lossy for any future task with longer inputs —
+            # which is the whole argument against picking the number by hand.
+            text = generate_fn(prompt, 1.0, output_budget(prompt))
         except Exception:  # noqa: BLE001 — a failed generation is skipped, never fatal
             return None
         text = str(text or "").strip()
@@ -753,6 +1188,7 @@ def synthesize_examples(
         if rows and _verify_synth_enabled():
             rows = verify_generated_labels(
                 rows,
+                task_description=_describe(brief, spec),
                 generate_fn=generate_fn,
                 log=log,
                 label_definitions=label_definitions,
@@ -761,6 +1197,7 @@ def synthesize_examples(
                     if isinstance(row, dict) and row.get("label") is not None
                 }) or None,
                 reference_rows=examples,
+                task_context=_task_context_block(spec, examples),
             )
         if log:
             log(f"      [synth] requested {n} in-class row(s) -> kept {len(rows)}")
@@ -782,6 +1219,8 @@ def synthesize_examples(
         rows = verify_generated_answers(
             rows,
             task_description=_describe(brief, spec),
+            task_context=_task_context_block(spec, examples),
+            gold_field=_gold_field(spec),
             generate_fn=generate_fn,
             log=log,
             reference_rows=examples,

@@ -47,8 +47,8 @@ Category: {category}
 Scoring metric: {metric}
 How a prediction is graded: {grading}
 
-Here are {n_shown} REAL rows from this benchmark's own training split, exactly as the pipeline \
-stores them:
+Here are {n_shown} REAL examples from this benchmark, each shown as the exact prompt the model \
+receives and the exact text it must produce in reply:
 
 {samples}
 
@@ -64,10 +64,16 @@ be derived from the input rather than invented. 2-5 sentences.",
 3-6 of them."]
 }}
 
-Write the output_contract from the ROWS, not from the benchmark's reputation. If the rows show a \
-convention the name would not tell you — a default duration, a date resolved against a reference \
-instant, an answer marker, a fixed tool name — state it, because a teacher that does not know it \
-will produce plausible rows that are graded wrong."""
+Write the output_contract from the OUTPUT half of the examples above — the text after "WHAT IT \
+MUST OUTPUT" — and never from the benchmark's reputation or from how the data appears to be filed. \
+Describe the literal shape of that text: if it is a JSON list, say a list; if it is a bare label, say \
+a bare label. Do NOT describe the fields of a stored record. A brief that described the storage \
+schema instead of the answer once made the verifier reject 25 of 25 correct rows for "missing" a \
+field the model was never asked to emit, and stopped the run.
+
+If the examples show a convention the benchmark's name would not tell you — a default duration, a \
+date resolved against a reference instant, an answer marker, a fixed tool name — state it, because a \
+teacher that does not know it will produce plausible rows that are graded wrong."""
 
 
 def _clip(value: object, limit: int) -> str:
@@ -82,15 +88,66 @@ def _extract_json(raw: str) -> dict:
     return json.loads(match.group())
 
 
-def _sample_block(rows: list[dict], n: int) -> str:
-    """Real rows, rendered as the JSON the pipeline actually stores, minus private fields."""
+def _sample_block(rows: list[dict], n: int, spec=None) -> str:
+    """What the model is actually SHOWN and what it must actually EMIT, per example.
+
+    WHY NOT THE STORED ROW — this killed the ner_bc5cdr run (38832588)
+        This used to render each row as the JSON the pipeline stores, and the instruction below told
+        the author to write the output contract FROM THE ROWS. It did exactly that, and was wrong,
+        because a stored row is not an answer. BC5CDR stores `{"text": ..., "entities": [...]}`, so
+        the brief declared:
+
+            "Output must be a single JSON object with exactly two top-level fields: text ... and
+             entities ..."
+
+        while `eval/scorers/ner.py:NER_PROMPT` asks the model for a bare `[{"text":..,"type":..}]`
+        list. Two different objects, and the brief described the wrong one.
+
+        That brief reaches every synthesis and verification prompt. The teacher then judged generated
+        answers — correctly-formed entity LISTS — against a contract demanding an OBJECT, and rejected
+        25 of 25 with "Output format is incorrect; must be a JSON object with 'text' and 'entities'
+        fields." The exact programmatic verifier had passed the same 25 rows moments earlier. Two
+        consecutive wipeouts stopped the run 0.07 short of goal.
+
+    So the sample is built from `build_training_turn`, the same call the trainer makes, which returns
+    the literal prompt string and the literal target string. "What a correct answer looks like" is
+    then grounded in the bytes the model must produce, not inferred from how the row is filed.
+    """
+    from config.token_budget import prompt_char_budget
+
+    # A share of the real context, not a flat 1,200 characters. A toolbench row is ~10,000
+    # characters, so the author previously saw roughly an eighth of one example.
+    clip = prompt_char_budget(0.20)
+    if spec is None:  # pragma: no cover - retained for callers without a spec
+        return "\n\n".join(
+            json.dumps({k: v for k, v in row.items() if not str(k).startswith("_")},
+                       ensure_ascii=False, default=str)[:clip]
+            for row in rows[:n]
+        )
+
+    from tasks._builders import TrainingContext
+
+    labels = tuple(sorted({str(r["label"]) for r in rows if "label" in r}))
+    instruction = ""
+    if spec.build_prompts.__module__ == "eval.scorers.generation":
+        from eval.scorers.generation import resolve_generation_instruction
+
+        instruction = resolve_generation_instruction(rows)
+
     shown = []
     for row in rows[:n]:
-        public = {
-            key: value for key, value in row.items()
-            if not str(key).startswith("_")
-        }
-        shown.append(json.dumps(public, ensure_ascii=False, default=str)[:1200])
+        try:
+            prompt, target, _marker = spec.build_training_turn(
+                dict(row), TrainingContext(labels=labels, instruction=instruction)
+            )
+        except Exception:  # noqa: BLE001 — a brief must never be the thing that breaks cold start
+            public = {k: v for k, v in row.items() if not str(k).startswith("_")}
+            shown.append(json.dumps(public, ensure_ascii=False, default=str)[:clip])
+            continue
+        shown.append(
+            f"--- WHAT THE MODEL IS SHOWN ---\n{str(prompt)[:clip]}\n"
+            f"--- WHAT IT MUST OUTPUT (this, exactly, and nothing else) ---\n{str(target)[:clip]}"
+        )
     return "\n\n".join(shown)
 
 
@@ -133,7 +190,7 @@ def build_task_brief(spec, train_rows: list[dict], *, n_shown: int = 5, log=prin
         metric=spec.metric_name,
         grading=grading,
         n_shown=min(n_shown, len(train_rows)),
-        samples=_sample_block(train_rows, n_shown),
+        samples=_sample_block(train_rows, n_shown, spec),
     )
     try:
         import anthropic

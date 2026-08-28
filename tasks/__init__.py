@@ -1,12 +1,13 @@
 """The benchmark task registry — the single place a task is defined.
 
-Eight tasks in three categories:
+Ten tasks in three categories:
 
-    in_distribution      gsm8k                 DialogSum + SAMSum
+    in_distribution      gsm8k                 DialogSum + SAMSum       sms_spam
     format_bound         xlam_bfcl             calendar_json            ner_bc5cdr
+                         toolbench
     out_of_distribution  routerbench           proactive_listening      clinc150
 
-Adding a ninth means writing one module here and registering it below. Nothing else in the
+Adding an eleventh means writing one module here and registering it below. Nothing else in the
 pipeline dispatches on task identity, so there is no second place to remember — which is the
 whole point: the previous design needed five separate side registries kept in sync by hand, and
 every one of them was added after a bug caused by their being out of sync.
@@ -23,14 +24,18 @@ from tasks import (
     ner_bc5cdr,
     proactive_listening,
     routerbench,
+    sms_spam,
+    toolbench,
     xlam_bfcl,
 )
 
 _MODULES = (
     gsm8k,
     dialogsum,
+    sms_spam,
     xlam_bfcl,
     calendar_json,
+    toolbench,
     ner_bc5cdr,
     routerbench,
     proactive_listening,

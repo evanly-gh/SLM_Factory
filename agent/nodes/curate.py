@@ -547,6 +547,9 @@ def _surgical_synthesize(
     total_count = sum(entry["count"] for entry in eligible) or len(eligible)
     history = dict(state.get("surgical_category_history") or {})
     out: list[dict] = []
+    # Boxed so the per-category loop can accumulate into it; the caller needs the attempted count to
+    # tell "the generator produced nothing" from "verification rejected everything".
+    attempted_total = [0]
 
     for entry in eligible:
         category, count = entry["category"], entry["count"]
@@ -583,6 +586,7 @@ def _surgical_synthesize(
             if isinstance(row, dict)
         ]
         _log(model_id, f"    [{category}] kept {len(kept)} of {len(anchors)} attempted")
+        attempted_total[0] += len(anchors)
         out.extend(kept)
         history[category] = {
             "count_when_targeted": count,
@@ -591,7 +595,57 @@ def _surgical_synthesize(
         }
 
     state["surgical_category_history"] = history
+    state["_last_synth_attempted"] = attempted_total[0]
+    state["_last_synth_kept"] = len(out)
+    _archive_synthetic_rows(state, out, model_id=model_id)
     return out
+
+
+def _archive_synthetic_rows(state: AgentState, rows: list[dict], *, model_id: str) -> None:
+    """Append what synthesis produced — rows it KEPT and a sample of rows it REJECTED — to an audit file.
+
+    The versioned `dataset_vN.jsonl` artifacts are the curriculum, and rollback overwrites them: on
+    run 38708719 both synthesis rounds regressed, were rolled back, and the next mining round wrote a
+    new `dataset_v2`, so afterwards not one synthesized row survived anywhere on disk. The rows could
+    not be inspected to ask WHY they hurt — which is the single most useful question about them, and
+    the orchestrator had already concluded twice that they carry noise.
+
+    REJECTED rows are archived for the same reason, and the omission was worse. This function used to
+    return early on an empty list, so a rebuild that kept nothing wrote nothing — meaning the audit
+    trail went silent in precisely the case with the most to explain. Run 38985393 generated 519
+    toolbench rows, the verifier rejected all 519, and afterwards there was no way to see what the
+    teacher had actually written. Each rejected row carries `_reject_reason`, so the file answers both
+    "which check refused it" and "what did the text look like".
+
+    Append-only and never read back by the pipeline. It is evidence, not state.
+    """
+    from data.curriculum import take_rejected_rows
+
+    rejected = take_rejected_rows()
+    if not rows and not rejected:
+        return
+    try:
+        import json as _json
+
+        iteration = int(state.get("iteration", 0) or 0) + 1
+        path = os.path.join(ARTIFACTS_DIR, "synthetic_rows_audit.jsonl")
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "a", encoding="utf-8") as handle:
+            for verdict, batch in (("kept", rows), ("rejected", rejected)):
+                for row in batch:
+                    handle.write(_json.dumps({
+                        "_iteration": iteration,
+                        "_verdict": verdict,
+                        **{k: v for k, v in row.items()},
+                    }, ensure_ascii=False) + "\n")
+        note = f"  [synth] archived {len(rows)} kept"
+        if rejected:
+            note += f" and {len(rejected)} rejected (sampled)"
+        _log(model_id, f"{note} row(s) to {os.path.basename(path)} "
+                       f"(survives rollback, for auditing what synthesis produced)")
+    except Exception as error:  # noqa: BLE001 — an audit trail must never break a rebuild
+        _log(model_id, f"  [synth] could not archive generated rows "
+                       f"({type(error).__name__}: {error})")
 
 
 def _cot_applies(task: str) -> bool:
@@ -693,6 +747,22 @@ def _dedupe_into(
     return out, added
 
 
+# The most rows ONE mine_new_real rebuild may add, whatever the plan asked for and whatever the source
+# holds. Two reasons, and the second is the load-bearing one:
+#
+#   * growth stays legible. A rebuild that adds a few hundred rows is an experiment whose effect can be
+#     read off the next eval; one that adds three thousand changes the curriculum, the training time
+#     and the class balance at once, and the score movement cannot be attributed to any of them. Run
+#     38661753 asked for 600 rows and added 2,399, then asked for 800 and added 3,161.
+#   * a finite source lasts. xLAM holds ~60,000 rows. At 3,000 a rebuild it is exhausted in twenty
+#     iterations and the mining ladder falls through to synthesis with most of the corpus unread.
+#
+# Rows beyond the ceiling are NOT discarded: `source_progress` advances only by what was consumed, so
+# the next rebuild continues from where this one stopped. That is what makes a newly discovered dataset
+# worth keeping rather than draining in one pass.
+MAX_MINED_ROWS_PER_REBUILD = int(os.environ.get("SLM_MAX_MINED_ROWS_PER_REBUILD", "1000"))
+
+
 def _reread_known_sources(
     state: AgentState,
     *,
@@ -716,12 +786,27 @@ def _reread_known_sources(
     progress = dict(state.get("source_progress") or {})
     rows: list[dict] = []
     newly_exhausted: list[str] = []
+    # Boxed so the per-source loop can spend it: the ceiling is per REBUILD, not per source, or three
+    # sources would together deliver three times the cap.
+    remaining_budget = [MAX_MINED_ROWS_PER_REBUILD]
     for source in spec.mining_sources:
         record = dict(progress.get(source.hf_id) or {})
         if record.get("exhausted"):
             continue
         consumed = int(record.get("consumed", 0) or 0)
-        ask = consumed + max(want, 1) * 4
+        # Ask for the slice we intend to KEEP, not a multiple of it. Everything past `consumed` is
+        # novel by construction (see the docstring), so the only losses downstream are the eval
+        # firewall and quality control — about 1% in practice.
+        #
+        # This was `want * 4`, which over-delivered fourfold because nothing trimmed the surplus.
+        # Trimming afterwards is NOT the fix and was tried: `consumed` records the slice depth READ, so
+        # discarding the surplus advances the pointer past rows that were never used and silently skips
+        # them for the rest of the run. Asking for the right amount is the fix — the pointer and the
+        # rows then agree.
+        take = min(max(want, 1), remaining_budget[0])
+        if take <= 0:
+            break
+        ask = consumed + take
         try:
             more_train, _more_eval = spec.load(max_train=ask, max_test=60)
         except Exception as error:  # noqa: BLE001 — one bad source must not stop the rebuild
@@ -729,19 +814,71 @@ def _reread_known_sources(
                            f"({type(error).__name__}: {error})")
             continue
         returned = len(more_train)
+        novel = more_train[consumed:] if returned > consumed else []
         record.update({"consumed": max(consumed, returned), "asked_for": ask,
                        "url": source.url})
+        remaining_budget[0] -= len(novel)
         # Fewer rows than we asked for is the only reliable evidence a head slice has hit the end
         # of the split. Equal-to-asked means there is probably more.
         if returned < ask:
             record["exhausted"] = True
             newly_exhausted.append(source.hf_id)
         progress[source.hf_id] = record
-        rows.extend(more_train)
-        _log(model_id, f"  [mine] re-read {source.hf_id}: asked {ask}, got {returned} row(s)"
-                       + (" — source EXHAUSTED" if record.get("exhausted") else ""))
+        # Only the rows past the previous high-water mark. Returning the whole slice made every
+        # re-read hand back rows the curriculum already had and rely on downstream dedup to notice.
+        rows.extend(novel)
+        _log(model_id,
+             f"  [mine] re-read {source.hf_id}: slice {consumed}→{returned}, "
+             f"{len(novel)} new row(s) (per-rebuild ceiling {MAX_MINED_ROWS_PER_REBUILD}, "
+             f"{max(0, remaining_budget[0])} left)"
+             + (" — source EXHAUSTED" if record.get("exhausted") else ""))
     state["source_progress"] = progress
     return rows, newly_exhausted
+
+
+def _register_discovered_source(
+    state: AgentState,
+    discovery_report: dict,
+    *,
+    taken: int,
+    model_id: str,
+) -> None:
+    """Record a web-discovered dataset so later rebuilds can read more of it.
+
+    `source_progress` is keyed by dataset id and consulted by `_reread_known_sources`, which is rung 1
+    of the mining ladder — the free rung. Writing the discovery there converts a one-off paid lookup
+    into a source the run can return to, which is the difference between discovery being worth doing
+    once and worth doing at all.
+
+    `consumed` is set to the number of rows this rebuild actually TOOK, not the number the provider
+    returned, so the next re-read resumes at the first unused row rather than skipping the remainder.
+    """
+    dataset_id = str(
+        discovery_report.get("dataset")
+        or discovery_report.get("hf_id")
+        or discovery_report.get("source")
+        or ""
+    ).strip()
+    if not dataset_id:
+        _log(model_id, "  [mine] discovery did not name a dataset id, so it cannot be recorded for "
+                       "re-reading; the next rebuild will have to discover a source again")
+        return
+    progress = dict(state.get("source_progress") or {})
+    record = dict(progress.get(dataset_id) or {})
+    record.update({
+        "consumed": int(record.get("consumed", 0) or 0) + taken,
+        "url": discovery_report.get("url") or record.get("url") or "",
+        "discovered": True,
+    })
+    progress[dataset_id] = record
+    state["source_progress"] = progress
+    # Also add it to the run's live source list so rung 1 actually visits it next time.
+    discovered_sources = list(state.get("discovered_sources") or [])
+    if dataset_id not in discovered_sources:
+        discovered_sources.append(dataset_id)
+        state["discovered_sources"] = discovered_sources
+    _log(model_id, f"  [mine] recorded {dataset_id} at {record['consumed']} row(s) consumed — the "
+                   f"next mine_new_real rebuild re-reads it from there for free")
 
 
 def _discover_new_source(
@@ -814,6 +951,7 @@ def _mine_new_real(
 
     rows, newly_exhausted = _reread_known_sources(state, want=want, model_id=model_id)
     report["sources_exhausted"] = newly_exhausted
+    report["candidates_seen"] = len(rows)
     if rows:
         report["stage"] = "known_sources"
         return rows, report
@@ -844,9 +982,22 @@ def _mine_new_real(
     )
     report["stage"] = "discovery"
     report["discovery"] = discovery_report
+    report["candidates_seen"] = int(discovery_report.get("candidate_rows", 0) or 0)
     if discovered:
         state["failed_discovery_rounds"] = 0
-        return discovered, report
+        # A discovered dataset is an ASSET, not a one-off delivery. Registering it in
+        # `source_progress` — with `consumed` set to what this rebuild actually takes — means the next
+        # mine_new_real rebuild re-reads it deeper from rung 1, for free, instead of paying Exa to
+        # rediscover it or concluding there is nothing left to mine. Without this, discovery found a
+        # corpus, drained whatever it happened to return in one pass, and forgot it existed.
+        kept = discovered[:MAX_MINED_ROWS_PER_REBUILD]
+        if len(discovered) > len(kept):
+            _log(model_id,
+                 f"  [mine] discovery returned {len(discovered)} row(s); taking "
+                 f"{len(kept)} this rebuild (ceiling {MAX_MINED_ROWS_PER_REBUILD}) and recording the "
+                 f"source so the remainder is available to the next one")
+        _register_discovered_source(state, discovery_report, taken=len(kept), model_id=model_id)
+        return kept, report
 
     state["failed_discovery_rounds"] = failed + 1
     _log(
@@ -877,6 +1028,7 @@ def curate_node(state: AgentState) -> AgentState:
                             the most points
     """
     from agent.data_rebuild import (
+    DataInterventionUnavailable,
         MINE_NEW_REAL,
         SURGICAL_SYNTHESIS,
         fallback_data_rebuild_plan,
@@ -908,7 +1060,10 @@ def curate_node(state: AgentState) -> AgentState:
     plan: dict | None = None
     mining_report: dict = {}
 
-    if not previous_rows:
+    # The first curriculum, as opposed to a rebuild. Named because three later blocks need it and
+    # `not previous_rows` re-derived at each of them is a correctness question at every site.
+    initial = not previous_rows
+    if initial:
         # FIRST BUILD. The curriculum is the gold rows the loader returned, decontaminated against
         # the held-out eval set. No plan, no strategy — there is nothing to add to yet.
         curriculum, dropped = _exclude_eval_rows(
@@ -929,16 +1084,42 @@ def curate_node(state: AgentState) -> AgentState:
         )
     else:
         raw_plan = state.get("data_rebuild_plan")
+        # Both gates, not just mining. `iterate` validated this plan a turn ago, but mining
+        # availability is re-derived HERE against the decontaminated pool and can flip to False in
+        # between — and when it does, the validator rewrites `mine_new_real` to `surgical_synthesis`.
+        # Omitting `synthesis_allowed` let that rewrite land behind a teacher that had FAILED its
+        # fitness gate, spending the teacher budget on exactly the output the gate exists to refuse.
+        from agent.teacher_fitness import synthesis_allowed
+
         mining_available = mining_available_for_state(state)
-        if isinstance(raw_plan, dict):
-            plan = normalize_data_rebuild_plan(
-                raw_plan, task=task, hypothesis=hypothesis,
-                mining_available=mining_available,
-            )
-        else:
-            plan = fallback_data_rebuild_plan(state, hypothesis=hypothesis)
+        can_synth = synthesis_allowed(state)
+        try:
+            if isinstance(raw_plan, dict):
+                plan = normalize_data_rebuild_plan(
+                    raw_plan, task=task, hypothesis=hypothesis,
+                    mining_available=mining_available,
+                    synthesis_allowed=can_synth,
+                )
+            else:
+                plan = fallback_data_rebuild_plan(state, hypothesis=hypothesis)
+        except DataInterventionUnavailable as unavailable:
+            # Neither route can add a row, and unlike `iterate` this node cannot switch the
+            # intervention — training has already been scheduled against this decision. So the
+            # curriculum passes through unchanged and the iteration is reported as adding nothing,
+            # which is the truth. Raising here would kill a run over one bad turn; `run_health`
+            # stops it on the SECOND consecutive empty rebuild, which is the pattern that matters.
+            _log(model_id, f"  ✗ ERROR: data_rebuild cannot add rows ({unavailable}). The "
+                           f"curriculum is unchanged, so this iteration re-trains on identical "
+                           f"data — a wasted train+eval cycle.")
+            plan = None
         state["data_rebuild_plan"] = plan
 
+    if not initial and plan is None:
+        # No usable plan: keep the curriculum, and let the health observer at the end of this node
+        # count the empty rebuild.
+        dataset = list(previous_rows)
+        mining_report = {"stage": "unavailable"}
+    elif not initial:
         categories = ", ".join(
             f"{entry['category']}({entry['count']})" for entry in plan["target_categories"]
         ) or "none reported"
@@ -948,6 +1129,8 @@ def curate_node(state: AgentState) -> AgentState:
             f"Targeting: {categories}",
         )
 
+        state["_last_synth_attempted"] = 0
+        state["_last_synth_kept"] = 0
         if plan["strategy"] == MINE_NEW_REAL:
             added, mining_report = _mine_new_real(
                 state, plan, model_id=model_id, eval_set=eval_set,
@@ -956,6 +1139,7 @@ def curate_node(state: AgentState) -> AgentState:
                 _tag_mined_rows(added), eval_set, tally=firewall_tally, layer="mined",
                 log=lambda m: _log(model_id, m),
             )
+
             if removed:
                 _log(model_id, f"  Eval firewall removed {removed} mined row(s)")
             # Mined rows join the persistent pool as well as the curriculum, so a later re-read
@@ -1002,9 +1186,10 @@ def curate_node(state: AgentState) -> AgentState:
         allowed_labels=spec.qc_context_labels(eval_set),
         log=lambda message: _log(model_id, message),
     )
-    if len(dataset) < _pre_qc:
-        _log(model_id, f"  Quality control removed {_pre_qc - len(dataset)} row(s) total "
-                       f"({_pre_qc} → {len(dataset)})")
+    _post_qc = len(dataset)
+    if _post_qc < _pre_qc:
+        _log(model_id, f"  Quality control removed {_pre_qc - _post_qc} row(s) total "
+                       f"({_pre_qc} → {_post_qc})")
     dataset, removed_final = _exclude_eval_rows(
         dataset, eval_set, tally=firewall_tally, layer="final",
         log=lambda m: _log(model_id, m),
@@ -1083,4 +1268,38 @@ def curate_node(state: AgentState) -> AgentState:
         f"(+{n_added} added this rebuild, {novel_rows} novel overall)",
     )
     _log(model_id, f"  Saved: {path}")
+
+    # Cross-iteration health. A single fruitless rebuild is survivable; a pattern of them is a run
+    # that cannot learn anything, and nothing used to be watching across iterations — which is how
+    # run 38566712 spent 7h42m on eight consecutive empty rebuilds. Raises RunHealthError to stop
+    # the run with the diagnosis attached.
+    from agent.run_health import IterationRecord, observe_iteration
+
+    observe_iteration(
+        state,
+        IterationRecord(
+            # The iteration this curriculum will be TRAINED on, which is the next one — curate
+            # runs before the counter advances. Recording the current value made every row of the
+            # attribution table join to the previous iteration's score, so a synthesis round's rows
+            # were reported against a hyperparameter step's result.
+            iteration=int(state.get("iteration", 0) or 0) + 1,
+            # `initial_gold` only when this really is the first curriculum. A rebuild whose plan
+            # was unusable must be reported as a REBUILD that added nothing, or the health observer
+            # reads it as an initial load and never counts the wasted cycle.
+            strategy=(
+                "initial_gold" if initial
+                else str(plan["strategy"]) if plan else "unavailable"
+            ),
+            rows_added=n_added,
+            curriculum_before=len(previous_rows),
+            curriculum_after=len(dataset),
+            qc_removed=max(0, _pre_qc - _post_qc),
+            qc_examined=_pre_qc,
+            firewall_removed=firewall_total,
+            candidates_seen=int(mining_report.get("candidates_seen", 0) or 0),
+            verify_attempted=int(state.get("_last_synth_attempted", 0) or 0),
+            verify_kept=int(state.get("_last_synth_kept", 0) or 0),
+        ),
+        log=lambda message: _log(model_id, message),
+    )
     return state

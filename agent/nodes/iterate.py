@@ -16,6 +16,8 @@ from agent.cost import tracked_chat_anthropic_invoke
 from agent.data_rebuild import (
     fallback_data_rebuild_plan,
     normalize_data_rebuild_plan,
+    DataInterventionUnavailable,
+    data_rebuild_available,
     mining_available_for_state,
     unexhausted_sources,
 )
@@ -366,14 +368,26 @@ def _validate_decision_json(
         ]
         if dropped:
             validated["_dropped_fields"] = dropped
-        # A `mine_new_real` plan is rewritten to `surgical_synthesis` once every source is
-        # exhausted and web research has spent its allowance, because it provably cannot add a row.
-        plan = normalize_data_rebuild_plan(
-            validated.get("data_rebuild"),
-            task=task,
-            hypothesis=hypothesis,
-            mining_available=mining_available_for_state(state),
-        )
+        # A plan asking for an unavailable sub-strategy is rewritten rather than run: mining is
+        # unavailable once every source is exhausted and web research has spent its allowance, and
+        # synthesis is unavailable when the teacher did not clear the fitness gate. If NEITHER can
+        # add a row, `data_rebuild` is not a usable intervention at all and this becomes a
+        # hyperparameter step — curating a no-op would burn a full train+eval cycle.
+        from agent.teacher_fitness import synthesis_allowed
+
+        try:
+            plan = normalize_data_rebuild_plan(
+                validated.get("data_rebuild"),
+                task=task,
+                hypothesis=hypothesis,
+                mining_available=mining_available_for_state(state),
+                synthesis_allowed=synthesis_allowed(state),
+            )
+        except DataInterventionUnavailable as unavailable:
+            raise ValueError(
+                f"data_rebuild is not available this turn ({unavailable}); "
+                "choose intervention=hyperparameter"
+            ) from None
         validated["data_rebuild"] = plan
 
     if intervention == "hyperparameter":
@@ -1016,13 +1030,19 @@ def _llm_iterate(state: AgentState) -> dict:
         + f"- Per-difficulty accuracy: {_bdfmt('easy')}  {_bdfmt('medium')}  {_bdfmt('hard')}\n"
         f"- Test-agent diagnosis: {report.get('diagnosis', '(none)')}\n"
         f"- Test-agent suggested intervention: {report.get('suggested_intervention', '(none)')}\n"
-        "- Aggregate confusion counts:\n"
+        "- Failure breakdown:\n"
         + (
             "\n".join(
-                "    - "
-                f"gold={pair.get('gold')!r} "
-                f"predicted={pair.get('predicted')!r} "
-                f"count={pair.get('count', 0)}"
+                # A pair only when there really are two classes. For an open-ended task the entry is
+                # a failure CATEGORY, and printing `predicted='incorrect'` beside it invited the
+                # orchestrator to reason about a model output that does not exist (B326).
+                (
+                    f"    - gold={pair.get('gold')!r} predicted={pair.get('predicted')!r} "
+                    f"count={pair.get('count', 0)}"
+                    if pair.get("predicted") is not None else
+                    f"    - failure_category={pair.get('gold')!r} "
+                    f"count={pair.get('count', 0)}"
+                )
                 for pair in (report.get("confusion_pairs") or [])
                 if isinstance(pair, dict)
             )
@@ -1034,30 +1054,53 @@ def _llm_iterate(state: AgentState) -> dict:
     # Non-deterministic redesign: data-rebuild plans are no longer deduped or tracked as
     # "tried". The orchestrator freely re-picks a strategy each turn; the prior plan's yield
     # (below) plus the trajectory are the signal, not a tried-plan ledger.
-    rebuild_trials_block = (
-        "Data-rebuild plans are not deduplicated — you may repeat or vary any strategy "
-        "freely; judge from the trajectory and prior-plan yield below."
-    )
+    # What each sub-strategy can actually do this turn. Stated positively AND negatively, because
+    # the orchestrator repeatedly reasoned itself into an intervention that provably could not add a
+    # row: on xlam run 38566712 it chose synthesis six times against a dispatch gap that returned
+    # nothing, and read the resulting `0 novel` as evidence that data was not the problem.
+    from agent.teacher_fitness import synthesis_allowed as _synthesis_allowed
+
+    _notes = [
+        "Data-rebuild plans are not deduplicated — you may repeat or vary any strategy freely; "
+        "judge from the trajectory and the prior rebuild's yield below."
+    ]
     if not mining_available_for_state(state):
-        rebuild_trials_block += (
-            "\nRESAMPLE IS UNAVAILABLE THIS TURN: the entire training pool is already in the "
-            "mine_new_real is UNAVAILABLE: every dataset this run has sourced is exhausted and "
-            "web research has already spent its allowance without finding another. "
-            "surgical_synthesis is the only data intervention that can still add rows."
+        from agent.run_health import MINING_RETIRED_KEY
+
+        _retired = str(state.get(MINING_RETIRED_KEY) or "")
+        _notes.append(
+            f"mine_new_real is UNAVAILABLE: {_retired}." if _retired else
+            "mine_new_real is UNAVAILABLE: every dataset this run has sourced is exhausted and web "
+            "research has already spent its allowance without finding another."
         )
+    if not _synthesis_allowed(state):
+        _fitness = state.get("teacher_fitness") or {}
+        _score = _fitness.get("score")
+        _shown = f"{_score:.4f}" if isinstance(_score, (int, float)) else "unmeasured"
+        _notes.append(
+            f"surgical_synthesis is UNAVAILABLE: the teacher scored {_shown} against a "
+            f"{_fitness.get('threshold', 0.8):.2f} gate on this task's own eval set, five-shot, so "
+            "its output would be labelled noise rather than training targets."
+        )
+    if not data_rebuild_available(state):
+        _notes.append(
+            "data_rebuild CANNOT ADD ROWS this turn — neither sub-strategy is available. Choose "
+            "intervention=hyperparameter; a data_rebuild plan will be REJECTED."
+        )
+    rebuild_trials_block = "\n".join(_notes)
 
     last_curation = state.get("last_curation") or {}
-    source_novelty = last_curation.get("source_novelty") or {}
-    plan_yield = last_curation.get("plan_yield") or {}
+    mining_report = last_curation.get("mining_report") or {}
     source_yield_block = (
-        "- Source novelty: "
-        f"requested={source_novelty.get('requested', 0)} "
-        f"novel_rows={source_novelty.get('novel_rows', 0)} "
-        f"novel_fraction={source_novelty.get('novel_fraction', 0)}\n"
-        "- Prior plan yield: "
-        f"status={plan_yield.get('status', 'unknown')} "
-        f"novel_rows={plan_yield.get('novel_rows', 0)} "
-        f"final_rows={plan_yield.get('final_rows', 0)}"
+        "- Previous rebuild: "
+        f"strategy={last_curation.get('strategy', 'none')} "
+        f"rows_added={last_curation.get('rows_added', 0)} "
+        f"curriculum={last_curation.get('previous_rows', 0)}"
+        f"->{last_curation.get('total_examples', 0)}\n"
+        "- Mining position: "
+        f"stage={mining_report.get('stage', 'not attempted')} "
+        f"sources_exhausted={mining_report.get('sources_exhausted') or 'none'} "
+        f"failed_discovery_rounds={last_curation.get('failed_discovery_rounds', 0)}"
     )
     turn_budget = int(state.get("turn_budget", 0) or 0)
     turns_used = (int(state.get("iteration", 0) or 0) + 1) * 2
@@ -1066,7 +1109,14 @@ def _llm_iterate(state: AgentState) -> dict:
     # the orchestrator about an API allowance; what it actually needs to know is whether any dataset
     # still has rows it has not seen.
     _unexhausted = unexhausted_sources(state)
-    if _unexhausted:
+    from agent.run_health import MINING_RETIRED_KEY
+
+    if state.get(MINING_RETIRED_KEY):
+        # Stated first and unconditionally: a retired route is retired even if `source_progress`
+        # still lists a source of unknown length as having rows left, and reporting those rows here
+        # would invite the orchestrator to ask for a strategy the validator will reject.
+        mining_status = f"RETIRED for this run — {state.get(MINING_RETIRED_KEY)}."
+    elif _unexhausted:
         mining_status = ", ".join(
             f"{s['source']} (taken {s.get('consumed', 0)} so far)" for s in _unexhausted
         )
@@ -1259,6 +1309,27 @@ escalate to a larger model. Never inspect raw eval rows. Return only the decisio
         return corrected
 
 
+class OrchestratorDecisionError(RuntimeError):
+    """The orchestrator's decision could not be parsed or validated, so the run stops.
+
+    Deliberately fatal, and deliberately not recoverable. `iterate` used to fall back to a score-band
+    rule whenever this happened, which turned a broken decision into an ordinary-looking iteration
+    and made the trajectory uninterpretable — the run reported interventions nobody chose, and the
+    only evidence was one `LLM call failed` line per iteration that read like a transient blip
+    (B312/B316).
+    """
+
+
+def _wanted_data_rebuild(error: BaseException) -> bool:
+    """Whether a rejected decision was asking for a data rebuild.
+
+    Read from the error text rather than the parsed decision because the decision did not survive
+    validation — that is what "rejected" means. Crude on purpose: the only consequence of a false
+    positive is a louder log line and a counter that needs a repeat before it acts.
+    """
+    return "data_rebuild" in str(error)
+
+
 def apply_iteration_policy(score: float) -> dict:
     """
     Fallback score-band rules used when the LLM call is unavailable or fails.
@@ -1358,15 +1429,12 @@ def _llm_threshold_raise(
     the goal itself. Returns the validated decision dict, or None when the call fails or is
     unavailable — a failure always means "do not raise", never a broken run.
     """
-    from langchain_anthropic import ChatAnthropic
-    from langchain_core.messages import SystemMessage, HumanMessage
-    from config.config import (
-        ANTHROPIC_API_KEY,
-        ORCHESTRATOR_MODEL,
-        orchestrator_client_kwargs,
-    )
-    from agent.llm_text import MIN_THINKING_SAFE_MAX_TOKENS
-    from agent.threshold import THRESHOLD_CEILING, describe_threshold_provenance
+    # Only the cheap import up here. `langchain_anthropic` is deferred past the ceiling check below,
+    # because importing it costs 184 SECONDS on this cluster's network filesystem — it pulls the whole
+    # langchain + anthropic + pydantic stack — and the ceiling path makes no call at all. Paying that
+    # only to return None was the single largest cost in the test suite, and it is paid in production
+    # too: the ceiling is reached exactly at convergence, on the last iteration of a successful run.
+    from agent.threshold import THRESHOLD_CEILING
 
     threshold = float(state["stop_threshold"])
     calibration = state.get("threshold_calibration") or {}
@@ -1384,6 +1452,18 @@ def _llm_threshold_raise(
             f"{THRESHOLD_CEILING} ceiling — not asking to raise",
         )
         return None
+
+    # Past the ceiling check, so the expensive stack is imported only when a call will actually be
+    # made. See the note at the top of this function.
+    from langchain_anthropic import ChatAnthropic
+    from langchain_core.messages import SystemMessage, HumanMessage
+    from config.config import (
+        ANTHROPIC_API_KEY,
+        ORCHESTRATOR_MODEL,
+        orchestrator_client_kwargs,
+    )
+    from agent.llm_text import MIN_THINKING_SAFE_MAX_TOKENS
+    from agent.threshold import describe_threshold_provenance
 
     user_content = "\n".join([
         f"Task type            : {state.get('task')}",
@@ -1934,27 +2014,48 @@ def iterate_node(state: AgentState) -> AgentState:
             plan = llm_decision["data_rebuild"]
             _log(
                 model_id,
-                f"  Data rebuild: strategy={plan['strategy']} "
-                f"target_rows={plan['target_rows']}",
+                f"  Data rebuild: strategy={plan['strategy']} rows={plan['rows']} "
+                f"targeting={[c['category'] for c in plan['target_categories']] or 'nothing named'}",
             )
 
     except Exception as exc:
         # Billing/auth/quota errors will recur on every call — fail fast with a clear
         # message instead of silently limping through the rest of the run on fallbacks (B144).
         raise_if_fatal(exc, "iterate")
-        # Fallback: prefer the TEST-DATA AGENT's diagnosis-driven suggestion (difficulty-aware)
-        # over the crude score-band rule (B161). Only use the score band if no report exists.
-        _report = state.get("test_report") or {}
-        _suggested = _report.get("suggested_intervention")
-        if _suggested in ("data_rebuild", "hyperparameter"):
-            intervention = _suggested
-            hypothesis = f"(test-agent) {_report.get('diagnosis', '')}"
-            _log(model_id, f"  LLM call failed ({exc!r}); using test-agent suggestion: {intervention}")
-        else:
-            fallback = apply_iteration_policy(current_score)
-            intervention = fallback["intervention"]
-            hypothesis = f"(fallback) {fallback['description']}"
-            _log(model_id, f"  LLM call failed ({exc!r}), falling back to score-band rules: {intervention}")
+        # No fallback. This is a deliberate reversal of the previous behaviour, which was to take
+        # the test agent's diagnosis-driven suggestion, or failing that a score-band rule.
+        #
+        # The intent of that fallback was resilience. Its effect was that a broken orchestrator
+        # decision became an ordinary-looking iteration. On run 38658213 the orchestrator asked for
+        # `data_rebuild` five times against a validator bug, and the log recorded five
+        # `using test-agent suggestion: hyperparameter` lines — indistinguishable from an
+        # orchestrator that had wanted hyperparameters. The curriculum never moved and the score fell
+        # 0.789 → 0.690 while every surface in the system reported an ordinary run (B312).
+        #
+        # A score-band rule is not a degraded version of this loop; it is a different algorithm. The
+        # loop IS the orchestrator choosing an intervention from evidence, so substituting a rule and
+        # reporting the result under the same name makes the whole trajectory uninterpretable — you
+        # cannot tell afterwards which iterations were reasoned and which were guessed. A run that
+        # cannot obtain a decision has nothing worth reporting, so it stops here (B316).
+        _log(model_id, "")
+        _log(model_id, "  " + "=" * 68)
+        _log(model_id, "  ✗ FATAL: could not obtain a usable orchestrator decision")
+        _log(model_id, "  " + "=" * 68)
+        _log(model_id, f"  error     : {type(exc).__name__}: {exc}")
+        _log(model_id, f"  iteration : {state.get('iteration')}")
+        _log(model_id, f"  score     : {current_score:.4f} "
+                       f"(threshold {state.get('stop_threshold', 0.0):.4f})")
+        if _wanted_data_rebuild(exc):
+            _log(model_id, "  cause     : the decision asked for a data_rebuild and the PLAN was "
+                           "refused, so the orchestrator prompt and normalize_data_rebuild_plan "
+                           "disagree about the schema. That recurs on every call until it is fixed.")
+        _log(model_id, "  There is deliberately NO fallback here: a score-band rule is a different "
+                       "algorithm, and running it under this one's name is how B312 stayed invisible "
+                       "for a whole run.")
+        raise OrchestratorDecisionError(
+            f"iterate could not obtain a usable orchestrator decision at iteration "
+            f"{state.get('iteration')}: {type(exc).__name__}: {exc}"
+        ) from exc
 
     state["last_intervention"] = intervention
     state["last_hypothesis"] = hypothesis
@@ -1964,14 +2065,17 @@ def iterate_node(state: AgentState) -> AgentState:
     # complete-identity fallback and silently reuse old hyperparameters.
     state["llm_iterate_decision"] = llm_decision
     if intervention == "data_rebuild":
-        if llm_decision is not None:
-            rebuild_plan = llm_decision["data_rebuild"]
-        else:
-            rebuild_plan = fallback_data_rebuild_plan(
-                state,
-                hypothesis=hypothesis or "safe aggregate data refresh",
+        # `llm_decision` cannot be None here: the only path that leaves it unset raises
+        # OrchestratorDecisionError above. This used to fall back to `fallback_data_rebuild_plan`,
+        # which is now reachable only from `curate` — keeping the branch would leave a second,
+        # score-derived way to produce a plan alongside the one the orchestrator actually chose, and
+        # that ambiguity is precisely what made B312 unreadable in the log.
+        if llm_decision is None:
+            raise OrchestratorDecisionError(
+                "intervention is data_rebuild but no orchestrator decision was recorded; this "
+                "should be unreachable — a failed decision raises rather than falling through"
             )
-        state["data_rebuild_plan"] = rebuild_plan
+        state["data_rebuild_plan"] = llm_decision["data_rebuild"]
 
     if llm_decision:
         adj = llm_decision.get("threshold_adjustment") or {}

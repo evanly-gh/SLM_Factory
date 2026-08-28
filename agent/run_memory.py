@@ -112,10 +112,17 @@ def _confusion_line(node: dict) -> str:
     if not pairs:
         return ""
     top = sorted(pairs, key=lambda p: -int(p.get("count", 0) or 0))[:5]
+    # `X->Y` only when Y is a real predicted class. An open-ended task has failure categories, and
+    # rendering `empty_call_list->incorrect` made the orchestrator narrate a model output that does not
+    # exist — 65 times on calendar run 38735780 (B326).
     rendered = ", ".join(
-        f"{p.get('gold')}->{p.get('predicted')} ({p.get('count')})" for p in top
+        f"{p.get('gold')}->{p.get('predicted')} ({p.get('count')})"
+        if p.get("predicted") is not None else
+        f"{p.get('gold')} ({p.get('count')})"
+        for p in top
     )
-    return f"  top confusions: {rendered}"
+    label = "top confusions" if any(p.get("predicted") is not None for p in top) else "top failures"
+    return f"  {label}: {rendered}"
 
 
 def _most_recent_section(entry: dict) -> list[str]:

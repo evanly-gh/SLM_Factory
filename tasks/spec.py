@@ -101,6 +101,25 @@ class TaskSpec:
     """True when `label` is a real class to predict and the vocabulary is pinned from the eval set."""
     label_definitions: Mapping[str, str]
     """What each class MEANS, for the teacher's prompts. Empty when the label is self-describing."""
+    verifier_notes: str
+    """CONVENTIONS the teacher must be told before it judges a generated row. `""` is explicit.
+
+    A closed label space is not the only task-level fact a verifier needs. `calendar_json` encodes
+    four conventions that are decidable, documented, and invisible in any single row — a 60-minute
+    default duration, `tonight` meaning 20:00, a bare date meaning 09:00, and a date already past
+    rolling forward a year. `verify_calendar_row` checks all four exactly, by re-resolving the
+    request with the loader's own grammar.
+
+    The teacher pass then ran AFTER that exact check and overruled it. Measured on run 38832587:
+    22.6% of generated rows rejected (1,965 of 8,704), including
+    `"7pm start plus 60 mins is 8pm, not 20:00"` — 8pm IS 20:00 — and six rejections of the
+    year-rollover the gold itself uses. Every one of those rows had already passed the programmatic
+    verifier. A model asked to judge a convention nobody told it about invents one, which is B267/
+    B269/B314 one level up from the tools list.
+
+    So this is the task-level counterpart of `label_definitions`: state the conventions, or the
+    teacher will make some up.
+    """
     quality_controls: tuple[QCStep, ...]
     """Ordered QC steps. `()` is a legal, explicit choice."""
 

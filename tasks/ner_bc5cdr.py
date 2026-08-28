@@ -7,10 +7,29 @@ from tasks._builders import ner_turn
 from tasks.spec import MiningSource, TaskSpec
 
 
-def _verify(row: dict) -> bool:
+def _check(row: dict) -> tuple[bool, str]:
+    """The verdict AND the reason. Exposed as `_verify.checker` below."""
     from data.synth_verifiers import verify_ner_row
 
-    return verify_ner_row(row)[0]
+    return verify_ner_row(row)
+
+
+def _verify(row: dict) -> bool:
+    return _check(row)[0]
+
+
+# WHY THE REASON IS PUBLISHED SEPARATELY
+#     `TaskSpec.synth_verifier` only has to answer yes/no, so this wrapper used to be
+#     `return verify_ner_row(row)[0]` and the reason string was thrown away on the spot. `data.curriculum`
+#     looks for a `.checker` attribute to recover it, finds nothing, and its
+#     "[verify:exact] programmatic verifier rejected N row(s)" block is then unreachable.
+#
+#     Run 38985393 is what that costs. Synthesis generated 519 rows, the exact verifier rejected all
+#     519, and the log recorded only the total — so which of the five checks fired (unparseable path,
+#     undeclared API, bad argument schema, no terminal Finish, over the call budget) had to be
+#     reverse-engineered afterwards from the vLLM access log. The information existed at the moment of
+#     rejection and was discarded one character from where it was needed.
+_verify.checker = _check
 
 
 def _load(max_train: int, max_test: int, log=print):
@@ -33,6 +52,23 @@ SPEC = TaskSpec(
     # `entities` is the target, not `label`; there is no class vocabulary to pin.
     closed_label_space=False,
     label_definitions={},
+    # The teacher rejected 25 of 25 generated rows on run 38832588 — twice running, which is what
+    # stopped the run — with reasons like "Output format is invalid; must be a JSON object with
+    # 'text' and 'entities' fields". Every one of those rows had just passed `verify_ner_row`
+    # 25/25, which checks the substantive property: that each span appears VERBATIM in the row's own
+    # text. The teacher was judging the shape of what it was shown rather than the row, so it is
+    # told here what it is looking at and what has already been checked by computation.
+    verifier_notes=(
+        "You are shown the abstract and, as the proposed answer, ONLY its entity list — a JSON "
+        "array of {\"text\", \"type\"} objects. That is the expected shape; it is not a malformed "
+        "row and it is not missing a wrapper object.\n"
+        "The following are ALREADY verified by computation before you see the row, so never reject "
+        "for them: the answer parses, every span appears verbatim in the abstract, no span is "
+        "empty, and no (text, type) pair repeats.\n"
+        "Judge ONLY the one thing computation cannot: whether the labelled spans are the right "
+        "CHEMICALS and DISEASES for this abstract — in particular whether a real one was MISSED, "
+        "or something labelled that is not a chemical or a disease."
+    ),
     quality_controls=(
         qc.require_fields("text", "entities"),
         # Abstracts repeat the same drug names constantly; without a cap the curriculum teaches

@@ -26,6 +26,7 @@ SPEC = TaskSpec(
     eval_sampling="shuffled",
     closed_label_space=False,
     label_definitions={},
+    verifier_notes="",
     quality_controls=(
         qc.require_fields("text", "answer"),
         qc.length_outliers(key="text"),

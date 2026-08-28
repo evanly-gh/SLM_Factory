@@ -305,6 +305,32 @@ def _training_turn(example: dict, task: str, ctx) -> tuple[str, str, str]:
     return get_task(task).build_training_turn(example, ctx)
 
 
+def _is_pool_model(model_id: str | None) -> bool:
+    """True if `model_id` is a selectable pool entry.
+
+    Used to decide how strict to be about a missing chat template. A pool model is going to be
+    trained, quantized and served by this pipeline, so its serving contract has to be pinned; an
+    arbitrary id handed to the trainer by a probe is not held to that.
+
+    Matched on the repo NAME, not the full id, because the id reaching this function is usually
+    Unsloth's mirror rather than the pool entry: `HuggingFaceTB/SmolLM2-360M-Instruct` is loaded as
+    `unsloth/SmolLM2-360M-Instruct`, and `Qwen/Qwen3-0.6B` as `unsloth/qwen3-0.6b-unsloth-bnb-4bit`.
+    Comparing full ids would return False for every mirror — i.e. would disable the guard on exactly
+    the path it exists to protect.
+    """
+    if not model_id:
+        return False
+    try:
+        from config.android_pool import ANDROID_POOL
+
+        name = str(model_id).lower().rsplit("/", 1)[-1]
+        return any(
+            spec.model_id.lower().rsplit("/", 1)[-1] in name for spec in ANDROID_POOL
+        )
+    except Exception:
+        return False
+
+
 def _build_completion_only_rows(
     raw_rows: list[dict],
     tokenizer,
@@ -315,12 +341,16 @@ def _build_completion_only_rows(
         hasattr(tokenizer, "chat_template")
         and tokenizer.chat_template is not None
     )
-    if not has_chat_template and "qwen" in str(
-        getattr(tokenizer, "name_or_path", "")
-    ).lower():
+    if not has_chat_template and _is_pool_model(getattr(tokenizer, "name_or_path", "")):
+        # Was Qwen-only until 2026-08-24, when the pool stopped being Qwen-only. The rule was never
+        # about Qwen: a POOL model with no chat template silently drops to the plain-text fallback
+        # below, which is a different serving contract from the one `_serving_prompt_prefix` will
+        # use at eval time. That is B290 with the families swapped. Off-pool ids (ad-hoc probes,
+        # base checkpoints being measured deliberately) still take the fallback, because for them
+        # the plain-text path IS the contract on both sides.
         raise RuntimeError(
-            "Qwen tokenizer has no chat template; cannot enforce non-thinking "
-            "train/inference parity."
+            f"Pool model {getattr(tokenizer, 'name_or_path', '?')!r} has no chat template; "
+            "cannot guarantee train/inference parity. Every pool entry must ship one."
         )
     # Both are resolved ONCE over the training rows, the same way the eval harness resolves them
     # over the eval rows — so both sides land on the dataset's own vocabulary and instruction
@@ -512,12 +542,33 @@ def _assert_train_serve_prefix_alignment(tokenizer, base_model_id: str) -> None:
     rather than by any of our own prompt strings, which is why a source-level review would not have
     found it and a rendered comparison does.
 
-    Only Qwen models are checked: they are the pool this project ships, and `infer_batch_gguf` refuses
-    to run anything else through the hand-built ChatML path anyway.
-    """
-    from training.slm_helpers import _is_qwen_model_id, _qwen_no_think_prompt
+    EVERY model is checked, not just Qwen. This was Qwen-gated while the pool was Qwen-only and
+    `infer_batch_gguf` refused everything else; both of those changed on 2026-08-24. Gating the
+    check on family had it backwards — a newly added family is exactly when you most want it
+    running, because it is the one whose template nobody has verified against this trainer yet.
 
-    if not _is_qwen_model_id(base_model_id):
+    The comparison is against `_serving_prompt_prefix`, which is what inference actually sends:
+    Qwen's hand-written ChatML for Qwen, and the model's own rendered template for everything
+    else. So the assertion means the same thing for every family.
+    """
+    from training.slm_helpers import (
+        _is_qwen_model_id,
+        _serving_prompt_prefix,
+        _serving_tokenizer,
+    )
+
+    # `_serving_prompt_prefix` returns the BARE prompt in two very different situations: the served
+    # model genuinely has no chat template, and the served tokenizer could not be loaded at all
+    # (offline, gated repo, or — as in the unit tests — an id that does not exist). Only the first
+    # is a real answer. Treating the second as "serving sends the bare prompt" would report a
+    # spurious skew against any model whose template we simply failed to fetch, so it is reported as
+    # unverifiable instead, matching how `_pin_serving_chat_template` handles the same failure.
+    if not _is_qwen_model_id(base_model_id) and _serving_tokenizer(base_model_id) is None:
+        print(
+            f"[train]   ⚠ could not load the serving tokenizer for {base_model_id}; skipping the "
+            f"train/serve prefix check. This is the one guard against B290-class skew, so a real "
+            f"run should not reach here — check network/HF access."
+        )
         return
 
     sentinel = "__ANSWER_SENTINEL__"
@@ -538,11 +589,16 @@ def _assert_train_serve_prefix_alignment(tokenizer, base_model_id: str) -> None:
         # A mocked tokenizer renders to a Mock; there is no text to compare and no skew to find.
         return
 
-    eval_prompt = _qwen_no_think_prompt("__PROMPT_SENTINEL__", base_model_id)
+    eval_prompt = _serving_prompt_prefix("__PROMPT_SENTINEL__", base_model_id)
+    if not isinstance(eval_prompt, str):
+        # A mocked serving tokenizer renders to a Mock; nothing to compare.
+        return
     if training_text.startswith(eval_prompt) and training_text[len(eval_prompt):].startswith(sentinel):
         return
 
-    inserted = training_text.split("__PROMPT_SENTINEL__<|im_end|>\n", 1)[-1]
+    # Report whatever the template inserted between the user turn and the answer, without assuming
+    # ChatML markers: split on the sentinel itself, which every family's render contains.
+    inserted = training_text.split("__PROMPT_SENTINEL__", 1)[-1]
     inserted = inserted.split(sentinel, 1)[0]
     raise RuntimeError(
         "TRAIN/SERVE PREFIX SKEW (B290): the inference prompt is not a strict prefix of the rendered "
@@ -555,6 +611,97 @@ def _assert_train_serve_prefix_alignment(tokenizer, base_model_id: str) -> None:
         "Refusing to train: this silently destroys fine-tuned accuracy (measured 0.0000-0.6120 against "
         "an untrained baseline of 0.8010 on xlam_bfcl) while looking like a data or capacity problem."
     )
+
+
+# Bytes the cross-entropy logits tensor may occupy. The tensor is
+# `micro_batch x padded_seq_len x vocab_size` in fp32, and it is the single largest allocation in
+# LoRA training — larger than the weights, the optimizer state and the activations together on a
+# small model with a big vocabulary.
+#
+# 12 GiB on a 44 GiB L40S leaves room for weights, gradients, the KV/activation working set and
+# fragmentation. It is a budget rather than a measurement, so it is deliberately well under half the
+# card.
+_MAX_LOGITS_BYTES = 12 * 1024**3
+
+
+def _fit_micro_batch_to_logits(config, tokenizer, length_summary: dict) -> None:
+    """Shrink `micro_batch_size` until the logits tensor fits, and say so.
+
+    WHY THIS EXISTS (measured 2026-08-24, toolbench job 38820306)
+        `google/gemma-3-270m-it` OOM'd on a 44 GiB L40S while training a 270M-parameter model. The
+        allocation it died on was 28.69 GiB, and it is exactly the logits tensor:
+
+            micro_batch 8 x ~3,672 padded tokens x 262,144 vocab x 4 bytes = 30.8 GB
+
+        That model spends 168M of its 270M parameters on a 262,144-token embedding table, so its
+        output projection is 5.33x wider than SmolLM2's 49,152. The same batch on SmolLM2 needs
+        5.8 GB and trains fine, which is why nothing had caught this: every other model in the pool
+        has a small vocabulary, and every other task has sequences a fraction of ToolBench's
+        (xlam_bfcl's mean formatted row is 493 tokens against ToolBench's 2,308).
+
+        So the OOM needed BOTH a wide vocabulary and long sequences, and it is fully predictable from
+        three numbers known before the first step. Predicting it is better than discovering it: the
+        existing recovery path reloads the model and retries with the SAME micro-batch, so it OOM'd
+        twice and lost the run.
+
+    The EFFECTIVE batch size is preserved by scaling gradient accumulation up by the same factor, so
+    this trades step time for memory and leaves the optimization alone. That is not automatic —
+    `TrainingConfig` computes `effective_batch_size = micro_batch x gradient_accumulation_steps` once
+    in `__post_init__`, so shrinking the micro-batch on its own would quietly divide the effective
+    batch by the same factor and change the learning dynamics rather than just the memory profile.
+    When accumulation cannot absorb the whole factor (it caps at
+    VALID_GRADIENT_ACCUMULATION_STEPS[-1]) the shortfall is reported rather than hidden.
+    """
+    from training.hparams import VALID_GRADIENT_ACCUMULATION_STEPS, VALID_MICRO_BATCH_SIZES
+
+    vocab = int(getattr(tokenizer, "vocab_size", None) or 0)
+    seq_len = int((length_summary or {}).get("max") or 0)
+    micro_batch = int(getattr(config, "micro_batch_size", 0) or 0)
+    accumulation = int(getattr(config, "gradient_accumulation_steps", 1) or 1)
+    if vocab <= 0 or seq_len <= 0 or micro_batch <= 1:
+        return
+
+    def logits_bytes(batch: int) -> int:
+        return batch * seq_len * vocab * 4
+
+    if logits_bytes(micro_batch) <= _MAX_LOGITS_BYTES:
+        return
+
+    fitted = micro_batch
+    while fitted > 1 and logits_bytes(fitted) > _MAX_LOGITS_BYTES:
+        fitted //= 2
+    fitted = max(v for v in VALID_MICRO_BATCH_SIZES if v <= fitted)
+
+    factor = micro_batch // fitted
+    max_accumulation = max(VALID_GRADIENT_ACCUMULATION_STEPS)
+    wanted = accumulation * factor
+    new_accumulation = max(
+        (v for v in VALID_GRADIENT_ACCUMULATION_STEPS if v <= min(wanted, max_accumulation)),
+        default=accumulation,
+    )
+    effective_before = micro_batch * accumulation
+    effective_after = fitted * new_accumulation
+
+    note = (
+        "effective batch size unchanged — gradient accumulation absorbs the whole reduction"
+        if effective_after == effective_before
+        else (
+            f"effective batch size {effective_before} → {effective_after}: accumulation caps at "
+            f"{max_accumulation}, so it cannot absorb the full {factor}x reduction"
+        )
+    )
+    print(
+        f"[train] ⚠ micro_batch {micro_batch} → {fitted} (grad_accum {accumulation} → "
+        f"{new_accumulation}): the fp32 logits tensor for {config.base_model} would be "
+        f"{logits_bytes(micro_batch) / 1024**3:.1f} GiB ({micro_batch} x {seq_len} tokens x "
+        f"{vocab:,} vocab x 4B), over the {_MAX_LOGITS_BYTES / 1024**3:.0f} GiB budget; at {fitted} "
+        f"it is {logits_bytes(fitted) / 1024**3:.1f} GiB. This is a WIDE-VOCABULARY model on a "
+        f"LONG-SEQUENCE task, not a large model. {note}."
+    )
+    config.micro_batch_size = fitted
+    config.batch_size = fitted
+    config.gradient_accumulation_steps = new_accumulation
+    config.effective_batch_size = effective_after
 
 
 def _completion_collator_for(tokenizer) -> CompletionOnlyDataCollator:
@@ -853,11 +1000,12 @@ def _run_unsloth_training(
         tokenizer,
         task,
     )
-    _validate_training_sequence_lengths(
+    _length_summary = _validate_training_sequence_lengths(
         _formatted,
         tokenizer,
         max_seq_length,
     )
+    _fit_micro_batch_to_logits(config, tokenizer, _length_summary)
 
     # Early stopping / best-checkpoint (B161 Addition 2): carve a small VALIDATION split from
     # the TRAINING data (never the held-out eval set), evaluate periodically, and keep the

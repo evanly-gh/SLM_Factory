@@ -26,6 +26,8 @@ from agent.data_rebuild import (
     MIN_REBUILD_ROWS,
     MINE_NEW_REAL,
     SURGICAL_SYNTHESIS,
+    DataInterventionUnavailable,
+    data_rebuild_available,
     fallback_data_rebuild_plan,
     normalize_data_rebuild_plan,
 )
@@ -307,8 +309,8 @@ def test_mine_new_real_survives_while_mining_is_available():
     assert plan["strategy"] == MINE_NEW_REAL
 
 
-def test_surgical_synthesis_is_never_rewritten():
-    """It is the terminal strategy: there is nothing to fall back to."""
+def test_surgical_synthesis_is_untouched_by_the_mining_gate():
+    """The two gates are independent. Mining running dry says nothing about the teacher."""
     for available in (True, False):
         plan = normalize_data_rebuild_plan(
             _plan(strategy=SURGICAL_SYNTHESIS), task="xlam_bfcl",
@@ -326,6 +328,152 @@ def test_the_row_count_and_targets_survive_the_rewrite():
     )
     assert plan["rows"] == 800
     assert plan["target_categories"] == [{"category": "wrong_arguments", "count": 9}]
+
+
+# --------------------------------------------------------------------------
+# Synthesis a teacher cannot support is rewritten rather than run
+# --------------------------------------------------------------------------
+#
+# The second gate, added 2026-08-19: the teacher is scored five-shot on the task's own eval set at
+# cold start, and below `teacher_fitness.MIN_ACCURACY` its output is labelled noise rather than
+# training targets (agent/teacher_fitness.py). The two gates are symmetric — either sub-strategy
+# can be shut, and a plan asking for a shut one is rewritten to the open one rather than run.
+
+
+def test_surgical_synthesis_is_rewritten_when_the_teacher_failed_its_gate():
+    """Spending the teacher budget below the gate buys rows the run would be better without: the
+    student is capped at the teacher's error rate, and the best result on this project came from a
+    gold-only curriculum."""
+    plan = normalize_data_rebuild_plan(
+        _plan(strategy=SURGICAL_SYNTHESIS), task="xlam_bfcl", synthesis_allowed=False,
+    )
+    assert plan["strategy"] == MINE_NEW_REAL
+
+
+def test_surgical_synthesis_survives_while_the_teacher_is_fit():
+    plan = normalize_data_rebuild_plan(
+        _plan(strategy=SURGICAL_SYNTHESIS), task="xlam_bfcl", synthesis_allowed=True,
+    )
+    assert plan["strategy"] == SURGICAL_SYNTHESIS
+
+
+def test_mine_new_real_is_untouched_by_the_synthesis_gate():
+    for allowed in (True, False):
+        plan = normalize_data_rebuild_plan(
+            _plan(strategy=MINE_NEW_REAL), task="xlam_bfcl", synthesis_allowed=allowed,
+        )
+        assert plan["strategy"] == MINE_NEW_REAL
+
+
+def test_the_row_count_and_targets_survive_the_synthesis_rewrite():
+    """As with the mining rewrite: the MECHANISM changes, the size and aim do not."""
+    plan = normalize_data_rebuild_plan(
+        _plan(strategy=SURGICAL_SYNTHESIS, rows=800,
+              target_categories=[{"category": "wrong_arguments", "count": 9}]),
+        task="xlam_bfcl", synthesis_allowed=False,
+    )
+    assert plan["rows"] == 800
+    assert plan["target_categories"] == [{"category": "wrong_arguments", "count": 9}]
+
+
+@pytest.mark.parametrize("strategy", [MINE_NEW_REAL, SURGICAL_SYNTHESIS])
+def test_both_gates_shut_leaves_no_data_intervention_at_all(strategy):
+    """Neither rewrite has anywhere to go, so the validator refuses instead of quietly picking one.
+
+    A distinct exception type rather than `ValueError`, because the caller's correct response is
+    different: a malformed plan is re-asked of the orchestrator, whereas this one has to become a
+    hyperparameter turn — re-asking would just produce another unrunnable data plan.
+    """
+    with pytest.raises(DataInterventionUnavailable):
+        normalize_data_rebuild_plan(
+            _plan(strategy=strategy), task="xlam_bfcl",
+            mining_available=False, synthesis_allowed=False,
+        )
+
+
+def test_the_refusal_names_both_reasons():
+    """`iterate` puts this message in front of the orchestrator, so it has to say which two doors
+    are closed rather than only that data_rebuild is unavailable."""
+    with pytest.raises(DataInterventionUnavailable) as excinfo:
+        normalize_data_rebuild_plan(
+            _plan(), task="xlam_bfcl", mining_available=False, synthesis_allowed=False,
+        )
+    message = str(excinfo.value)
+    assert "exhausted" in message
+    assert "fitness gate" in message
+
+
+def test_iterate_turns_the_refusal_into_an_instruction_the_orchestrator_can_follow():
+    """`DataInterventionUnavailable` is the validator's vocabulary, not the orchestrator's.
+
+    `iterate` re-asks with the validation error attached, so the message it produces has to name the
+    intervention to pick instead. Re-asking with only "no data intervention can add rows" invites
+    another data plan, and the turn is spent either way.
+    """
+    from agent.nodes.iterate import _validate_decision_json
+
+    shut = {
+        "source_progress": {"src": {"exhausted": True}},
+        "failed_discovery_rounds": 2,
+        "teacher_fitness": {"status": "unmeasured", "synthesis_allowed": False},
+    }
+    with pytest.raises(ValueError, match="choose intervention=hyperparameter"):
+        _validate_decision_json(
+            {"intervention": "data_rebuild", "hypothesis": "the hard bucket is weak",
+             "data_rebuild": _plan()},
+            task="xlam_bfcl", state=shut,
+        )
+
+
+def test_iterate_reads_both_gates_off_the_state_it_was_given():
+    """The end-to-end path for the synthesis gate: a state whose teacher failed its fitness check
+    produces a mining plan from an orchestrator that asked for synthesis."""
+    from agent.nodes.iterate import _validate_decision_json
+
+    validated = _validate_decision_json(
+        {"intervention": "data_rebuild", "hypothesis": "generate harder rows",
+         "data_rebuild": _plan(strategy=SURGICAL_SYNTHESIS)},
+        task="xlam_bfcl",
+        state={
+            "source_progress": {"src": {"consumed": 100}},
+            "teacher_fitness": {"status": "measured", "score": 0.22,
+                                "synthesis_allowed": False},
+        },
+    )
+    assert validated["data_rebuild"]["strategy"] == MINE_NEW_REAL
+
+
+# --------------------------------------------------------------------------
+# Whether data_rebuild can add rows at all
+# --------------------------------------------------------------------------
+
+
+def test_data_rebuild_is_available_while_either_route_is_open():
+    mining_only = {"source_progress": {"src": {"consumed": 10}}}
+    synthesis_only = {
+        "source_progress": {"src": {"exhausted": True}},
+        "failed_discovery_rounds": 2,
+        "teacher_fitness": {"status": "measured", "score": 0.9, "synthesis_allowed": True},
+    }
+    assert data_rebuild_available(mining_only)
+    assert data_rebuild_available(synthesis_only)
+
+
+def test_data_rebuild_is_unavailable_once_both_routes_are_shut():
+    assert not data_rebuild_available({
+        "source_progress": {"src": {"exhausted": True}},
+        "failed_discovery_rounds": 2,
+        "teacher_fitness": {"status": "measured", "score": 0.31, "synthesis_allowed": False},
+    })
+
+
+def test_an_unmeasured_teacher_does_not_keep_data_rebuild_alive():
+    """`synthesis_allowed` treats a missing verdict as a refusal, so a run that skipped the gate
+    must not be told it still has a synthesis route (agent/teacher_fitness.py)."""
+    assert not data_rebuild_available({
+        "source_progress": {"src": {"exhausted": True}},
+        "failed_discovery_rounds": 2,
+    })
 
 
 # --------------------------------------------------------------------------
@@ -373,12 +521,8 @@ def test_the_fallback_says_in_its_hypothesis_that_it_is_a_fallback():
     assert "fallback" in plan["hypothesis"].lower()
 
 
-def test_iterate_calls_the_fallback_with_arguments_it_accepts():
-    """`iterate` reaches the fallback precisely when the orchestrator call failed or returned
-    unusable JSON, which is the one moment nothing else can rescue the run. A call site that passes
-    keywords the signature does not accept turns that rescue into a TypeError — the documented
-    orchestrator-failure route in docs/interventions.md section 2 then kills the run it exists to
-    save, and only on the rare turn that reaches it.
+def _fallback_call_sites(module):
+    """Every `fallback_data_rebuild_plan(...)` call in `module`, read from its source.
 
     Checked as an AGREEMENT between the call site and the signature rather than by invoking either
     one, because either side can legitimately change: the callee may grow a parameter, or the call
@@ -387,22 +531,83 @@ def test_iterate_calls_the_fallback_with_arguments_it_accepts():
     import ast
     import inspect
 
-    from agent.nodes import iterate
-
-    accepted = set(inspect.signature(fallback_data_rebuild_plan).parameters)
-    tree = ast.parse(inspect.getsource(iterate))
-    calls = [
-        node for node in ast.walk(tree)
+    return [
+        node for node in ast.walk(ast.parse(inspect.getsource(module)))
         if isinstance(node, ast.Call)
         and getattr(node.func, "id", None) == "fallback_data_rebuild_plan"
     ]
-    assert calls, "iterate no longer has a deterministic rebuild-plan fallback at all"
+
+
+def test_curate_calls_the_fallback_with_arguments_it_accepts():
+    """`curate` is now the fallback's only caller, and it reaches it on the turn where the plan
+    `iterate` stored is not a dict — a resumed checkpoint, or a DAG replay. A call site that passes
+    keywords the signature does not accept turns that rescue into a TypeError, killing the run at the
+    one moment nothing else can supply a plan, and only on the rare turn that gets there.
+    """
+    import inspect
+
+    from agent.nodes import curate
+
+    accepted = set(inspect.signature(fallback_data_rebuild_plan).parameters)
+    calls = _fallback_call_sites(curate)
+    assert calls, "curate no longer has a deterministic rebuild-plan fallback at all"
     for call in calls:
         passed = {keyword.arg for keyword in call.keywords if keyword.arg}
         assert passed <= accepted, (
-            f"iterate.py:{call.lineno} passes {sorted(passed - accepted)} to "
+            f"curate.py:{call.lineno} passes {sorted(passed - accepted)} to "
             f"fallback_data_rebuild_plan, which accepts {sorted(accepted)}"
         )
+
+
+def test_iterate_does_not_reach_the_fallback_at_all():
+    """The other half of B316, asserted where the fallback's callers are documented.
+
+    `iterate` used to build a plan from this function whenever the orchestrator's decision could not
+    be validated. That left TWO ways to produce a data plan — one the orchestrator chose and one
+    derived from the score — reported identically in the log, which is exactly what made B312
+    unreadable: five refused `data_rebuild` requests looked like five deliberate tuning decisions.
+    An unusable decision now raises `OrchestratorDecisionError`, so re-introducing a call here would
+    silently restore the ambiguity rather than break anything.
+    """
+    from agent.nodes import iterate
+
+    assert _fallback_call_sites(iterate) == []
+
+
+def test_the_fallback_never_raises_even_with_both_gates_shut():
+    """This is the safety net for a failed orchestrator call — the one moment nothing else can
+    rescue the run — so it must not be able to raise `DataInterventionUnavailable` from inside the
+    validator it delegates to. `iterate` checks `data_rebuild_available` BEFORE choosing
+    data_rebuild at all; if it somehow did not, a plan naming a shut route is still recoverable
+    while an exception here kills the run the fallback exists to save.
+    """
+    plan = fallback_data_rebuild_plan({
+        "task": "xlam_bfcl",
+        "source_progress": {"src": {"exhausted": True}},
+        "failed_discovery_rounds": 2,
+        "teacher_fitness": {"status": "measured", "score": 0.22, "synthesis_allowed": False},
+    })
+    assert plan["strategy"] in DATA_REBUILD_STRATEGIES
+
+
+def test_the_fallback_picks_synthesis_when_only_the_teacher_route_is_open():
+    plan = fallback_data_rebuild_plan({
+        "task": "xlam_bfcl",
+        "source_progress": {"src": {"exhausted": True}},
+        "failed_discovery_rounds": 2,
+        "teacher_fitness": {"status": "measured", "score": 0.93, "synthesis_allowed": True},
+    })
+    assert plan["strategy"] == SURGICAL_SYNTHESIS
+
+
+def test_the_fallback_picks_mining_when_only_the_real_route_is_open():
+    """Real rows whenever mining is open, even against a teacher that cleared its gate."""
+    plan = fallback_data_rebuild_plan({
+        "task": "xlam_bfcl",
+        "source_progress": {"src": {"consumed": 100}},
+        "teacher_fitness": {"status": "measured", "score": 0.93, "synthesis_allowed": True},
+    })
+    assert plan["strategy"] == MINE_NEW_REAL
 
 
 def test_the_fallback_produces_a_plan_the_normalizer_accepts():
@@ -411,3 +616,109 @@ def test_the_fallback_produces_a_plan_the_normalizer_accepts():
     plan = fallback_data_rebuild_plan({"task": "clinc150"})
     fields = {k: v for k, v in plan.items() if k not in ("hypothesis", "task")}
     assert normalize_data_rebuild_plan(fields, task="clinc150")["strategy"] == plan["strategy"]
+
+
+# --------------------------------------------------------------------------
+# The validator must accept its own output (B312)
+# --------------------------------------------------------------------------
+#
+# `normalize_data_rebuild_plan` emits `hypothesis` and `task`, but for a while `_PLAN_FIELDS` — the
+# set it ACCEPTS — did not list them, so it could not read back what it had just written. Two
+# callers feed that output straight back in: `curate_node` re-normalizes the plan `iterate` stored,
+# and the orchestrator, shown the schema, nests `hypothesis` inside the plan object rather than
+# leaving it at the top level.
+#
+# On verification run 38658213 the orchestrator asked for `data_rebuild` on five consecutive
+# iterations and every plan was thrown out on `unknown field(s) ['hypothesis', 'task']`. `iterate`
+# caught the error and quietly substituted a hyperparameter step, so the log read as five deliberate
+# tuning decisions; no data intervention ran at all and the score fell 0.789 → 0.690.
+
+
+@pytest.mark.parametrize("strategy", [MINE_NEW_REAL, SURGICAL_SYNTHESIS])
+def test_normalizing_an_already_normalized_plan_returns_the_same_plan(strategy):
+    """THE test that would have caught B312: the validator has to accept its own output.
+
+    `curate_node` re-normalizes the plan `iterate` already normalized, so a validator whose output
+    is not valid input fails every rebuild at the second gate rather than the first — and the
+    failure surfaces as a fallback, not as an error anyone reads.
+    """
+    once = normalize_data_rebuild_plan(
+        _plan(
+            strategy=strategy,
+            rows=650,
+            pattern_hint="favour rows with two or more calls",
+            target_categories=[{"category": "wrong_arguments", "count": 147}],
+        ),
+        task="xlam_bfcl",
+        hypothesis="the model mis-orders arguments once a row needs more than one call",
+    )
+    twice = normalize_data_rebuild_plan(once, task="xlam_bfcl")
+    assert twice == once
+
+
+def test_the_shape_the_orchestrator_actually_sent_is_accepted():
+    """The exact plan object from run 38658213: `hypothesis` and `task` nested INSIDE the plan.
+
+    The orchestrator is shown a schema that carries both fields, so it writes both. Refusing them
+    rejected a plan that was correct in every way that matters.
+    """
+    plan = normalize_data_rebuild_plan(
+        {
+            "schema_version": DATA_REBUILD_SCHEMA_VERSION,
+            "strategy": SURGICAL_SYNTHESIS,
+            "rows": 400,
+            "target_categories": [{"category": "wrong_arguments", "count": 147}],
+            "pattern_hint": "nested argument objects",
+            "hypothesis": "argument construction fails on nested schemas",
+            "task": "xlam_bfcl",
+        },
+        task="xlam_bfcl",
+        hypothesis="argument construction fails on nested schemas",
+    )
+    assert plan["strategy"] == SURGICAL_SYNTHESIS
+    assert plan["rows"] == 400
+
+
+def test_the_hypothesis_argument_wins_over_one_carried_in_the_plan():
+    """The argument is the orchestrator's decision for THIS turn; a plan-carried value is whatever
+    a previous normalization stored, so re-normalizing must not resurrect the older reasoning."""
+    plan = normalize_data_rebuild_plan(
+        _plan(hypothesis="stale reasoning from the previous turn"),
+        task="xlam_bfcl",
+        hypothesis="this turn's reasoning",
+    )
+    assert plan["hypothesis"] == "this turn's reasoning"
+
+
+def test_a_plan_carried_hypothesis_survives_when_no_argument_is_given():
+    """`curate_node` re-normalizes without always having the hypothesis to hand. Blanking it there
+    would erase the orchestrator's causal reasoning from the artifact that records the rebuild."""
+    plan = normalize_data_rebuild_plan(
+        _plan(hypothesis="the hard bucket is starved of multi-call examples"),
+        task="xlam_bfcl",
+    )
+    assert plan["hypothesis"] == "the hard bucket is starved of multi-call examples"
+
+
+def test_a_task_carried_in_the_plan_is_ignored_in_favour_of_the_argument():
+    """`task` is accepted only so the normalizer can read back its own output. The argument comes
+    from the run state and is authoritative; honouring a plan-carried value would let a stale or
+    hallucinated task name redirect a rebuild at the curriculum of a different task."""
+    plan = normalize_data_rebuild_plan(
+        _plan(task="clinc150"), task="xlam_bfcl",
+    )
+    assert plan["task"] == "xlam_bfcl"
+
+
+def test_a_genuinely_unknown_field_still_raises_after_the_widening():
+    """Widening `_PLAN_FIELDS` for B312 must not have turned the check off.
+
+    `resample_fraction` belonged to the `resample` strategy deleted on 2026-08-19, so a plan that
+    sets it was written against a contract that no longer exists — exactly what the check is for.
+    """
+    with pytest.raises(ValueError, match=r"unknown field\(s\)") as excinfo:
+        normalize_data_rebuild_plan(
+            _plan(hypothesis="a hypothesis", task="xlam_bfcl", resample_fraction=0.5),
+            task="xlam_bfcl",
+        )
+    assert "resample_fraction" in str(excinfo.value)

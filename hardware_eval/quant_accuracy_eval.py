@@ -91,7 +91,7 @@ def main() -> int:
         try:
             gguf = quantize_from_model_spec(checkpoint, os.path.join(args.out, quant), quant)
             size = round(_file_size_mb(gguf), 1)
-            res = run_eval(eval_set, checkpoint, base, task_type=task_type, quant=quant, gguf_path=gguf)
+            res = run_eval(eval_set, checkpoint, base, quant=quant, gguf_path=gguf)
             rows.append((quant, size, res.f1))
             print(f"[quant-eval] {quant}: F1={res.f1:.4f}  ({size} MB)")
         except Exception as e:
@@ -100,7 +100,7 @@ def main() -> int:
 
     if args.include_bf16:
         try:
-            res = run_eval(eval_set, checkpoint, base, task_type=task_type, quant=None, gguf_path=None)
+            res = run_eval(eval_set, checkpoint, base, quant=None, gguf_path=None)
             # bf16 has no GGUF, so measure the weight files in the checkpoint dir itself —
             # otherwise the size chart has a hole exactly where the baseline should be.
             bf16_mb = round(sum(

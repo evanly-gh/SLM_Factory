@@ -1,4 +1,20 @@
-"""Strict local generation judge backed by an OpenAI-compatible vLLM server."""
+"""Strict local judge backed by an OpenAI-compatible vLLM server.
+
+TWO RUBRICS, ONE CLIENT
+    Everything below the prompt — endpoint validation, the Qwen3.6 identity preflight, the
+    process-safe on-disk score cache, the bounded sliding-window concurrency, the fail-fast error
+    surface — is rubric-independent, and it is the part that is hard to get right. So a rubric is a
+    value (`JudgeRubric`) rather than a subclass or a second module:
+
+      * `NUMERIC_RUBRIC` is the original 0-1 semantic-similarity rubric that `dialogsum` scores
+        through. Its constants are unchanged and its cache keys are byte-identical to the ones
+        written before this parameterization existed, so existing caches stay valid.
+      * `eval/scorers/toolbench.py` supplies ToolEval's own Solved/Unsolved rubric.
+
+    A rubric owns four things and nothing else: the system prompt, how a payload becomes the user
+    message, how a reply becomes a float, and the sampling parameters. Adding a third must not
+    require touching any of the machinery.
+"""
 from __future__ import annotations
 
 import fcntl
@@ -10,9 +26,10 @@ import os
 import re
 import threading
 import unicodedata
+from collections.abc import Callable, Iterable, Mapping
 from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable
 from urllib.parse import unquote, urlparse
 
 from agent.cost import tracked_local_call, tracked_openai_chat_create
@@ -101,22 +118,24 @@ def _normalize_text(value: object) -> str:
     return text.replace("\r\n", "\n").replace("\r", "\n").strip()
 
 
+def _wrap_payload(payload: Mapping[str, str], start: str, end: str) -> str:
+    """Render a payload as delimited, sorted, compact JSON between untrusted-input markers."""
+    encoded = json.dumps(
+        dict(payload), ensure_ascii=False, sort_keys=True, separators=(",", ":"),
+    )
+    return f"{start}{encoded}{end}"
+
+
 def _build_judge_prompt(
     question: str,
     gold: str,
     prediction: str,
 ) -> str:
-    payload = json.dumps(
-        {
-            "question": question,
-            "gold": gold,
-            "prediction": prediction,
-        },
-        ensure_ascii=False,
-        sort_keys=True,
-        separators=(",", ":"),
+    return _wrap_payload(
+        {"question": question, "gold": gold, "prediction": prediction},
+        _PROMPT_START,
+        _PROMPT_END,
     )
-    return f"{_PROMPT_START}{payload}{_PROMPT_END}"
 
 
 def parse_judge_score(content: object) -> float:
@@ -141,6 +160,56 @@ def parse_judge_score(content: object) -> float:
     return value
 
 
+@dataclass(frozen=True)
+class JudgeRubric:
+    """One judging contract: what to ask, how to ask it, and how to read the reply.
+
+    `name` participates in the cache key, so two rubrics can never collide and changing a rubric's
+    wording without changing its name is the one mistake that would serve stale scores — which is
+    why `prompt_fingerprint` hashes `system` as well.
+
+    `temperature` is a rubric property because it is a property of the METRIC. A single-shot
+    similarity score wants 0 for reproducibility; ToolEval's pass rate is defined as a majority
+    vote over repeated independent assessments, and at temperature 0 those assessments are
+    identical, so the vote is a no-op and the cache collapses them to one call.
+    """
+
+    name: str
+    system: str
+    max_tokens: int
+    temperature: float
+    parse: Callable[[object], float]
+    prompt_start: str = _PROMPT_START
+    prompt_end: str = _PROMPT_END
+
+    def build_user_message(self, payload: Mapping[str, str]) -> str:
+        return _wrap_payload(payload, self.prompt_start, self.prompt_end)
+
+    def fingerprint(self) -> str:
+        return hashlib.sha256(
+            (
+                self.name
+                + "\0"
+                + self.system
+                + "\0"
+                + self.prompt_start
+                + self.prompt_end
+            ).encode("utf-8")
+        ).hexdigest()
+
+
+# The original rubric, unchanged. `dialogsum` scores through this one, and its `name`, `system` and
+# delimiters are the same constants as before, so the cache keys it produces are byte-identical to
+# the ones already on disk.
+NUMERIC_RUBRIC = JudgeRubric(
+    name=JUDGE_PROMPT_VERSION,
+    system=JUDGE_SYSTEM,
+    max_tokens=8,
+    temperature=0.0,
+    parse=parse_judge_score,
+)
+
+
 class LocalJudgeClient:
     """Preflight, score, and cache generation-judge requests.
 
@@ -161,7 +230,9 @@ class LocalJudgeClient:
         cache_path: str | Path | None = None,
         cost_event_path: str | Path | None = None,
         timing_event_path: str | Path | None = None,
+        rubric: JudgeRubric | None = None,
     ):
+        self.rubric = rubric or NUMERIC_RUBRIC
         self.endpoint = str(endpoint or "").strip().rstrip("/")
         self.model = str(model or "")
         self.api_key = str(api_key or "EMPTY")
@@ -184,7 +255,7 @@ class LocalJudgeClient:
         self._cache: dict[str, float] = {}
 
     @classmethod
-    def from_config(cls) -> "LocalJudgeClient":
+    def from_config(cls, rubric: JudgeRubric | None = None) -> "LocalJudgeClient":
         try:
             from config.config import (
                 JUDGE_API_KEY,
@@ -204,6 +275,7 @@ class LocalJudgeClient:
                 request_timeout=JUDGE_REQUEST_TIMEOUT_S,
                 allow_remote=JUDGE_ALLOW_REMOTE,
                 cache_path=JUDGE_CACHE_PATH or None,
+                rubric=rubric,
             )
         except JudgeInfrastructureError:
             raise
@@ -237,25 +309,13 @@ class LocalJudgeClient:
             )
         return (Path.cwd() / "artifacts" / _CACHE_FILENAME).resolve()
 
-    def _cache_key(self, triple: tuple[str, str, str]) -> str:
-        prompt_fingerprint = hashlib.sha256(
-            (
-                JUDGE_PROMPT_VERSION
-                + "\0"
-                + JUDGE_SYSTEM
-                + "\0"
-                + _PROMPT_START
-                + _PROMPT_END
-            ).encode("utf-8")
-        ).hexdigest()
+    def _cache_key(self, payload: Mapping[str, str]) -> str:
         payload = {
             "schema_version": _CACHE_SCHEMA_VERSION,
-            "prompt_version": JUDGE_PROMPT_VERSION,
-            "prompt_fingerprint": prompt_fingerprint,
+            "prompt_version": self.rubric.name,
+            "prompt_fingerprint": self.rubric.fingerprint(),
             "model": self.model,
-            "question": triple[0],
-            "gold": triple[1],
-            "prediction": triple[2],
+            **dict(payload),
         }
         encoded = json.dumps(
             payload,
@@ -319,7 +379,7 @@ class LocalJudgeClient:
                         "key": key,
                         "score": score,
                         "model": self.model,
-                        "prompt_version": JUDGE_PROMPT_VERSION,
+                        "prompt_version": self.rubric.name,
                     }
                     output.write(
                         json.dumps(
@@ -460,8 +520,15 @@ class LocalJudgeClient:
             _normalize_text(predicted),
         )
 
-    def _score_uncached(self, triple: tuple[str, str, str]) -> float:
-        question, gold, predicted = triple
+    @staticmethod
+    def _normalize_payload(payload: Mapping[str, object]) -> dict[str, str]:
+        if not isinstance(payload, Mapping) or not payload:
+            raise JudgeInfrastructureError(
+                "Local judge payloads must be non-empty mappings of field name to value"
+            )
+        return {str(key): _normalize_text(value) for key, value in payload.items()}
+
+    def _score_uncached(self, payload: dict[str, str]) -> float:
         with timed(
             "judge",
             "generation_judge_request",
@@ -476,18 +543,14 @@ class LocalJudgeClient:
                     event_path=self.cost_event_path,
                     model=self.model,
                     messages=[
-                        {"role": "system", "content": JUDGE_SYSTEM},
+                        {"role": "system", "content": self.rubric.system},
                         {
                             "role": "user",
-                            "content": _build_judge_prompt(
-                                question,
-                                gold,
-                                predicted,
-                            ),
+                            "content": self.rubric.build_user_message(payload),
                         },
                     ],
-                    max_tokens=8,
-                    temperature=0,
+                    max_tokens=self.rubric.max_tokens,
+                    temperature=self.rubric.temperature,
                     extra_body={
                         "chat_template_kwargs": {"enable_thinking": False},
                     },
@@ -508,16 +571,15 @@ class LocalJudgeClient:
             choices = getattr(response, "choices", None)
             if not isinstance(choices, (list, tuple)) or len(choices) != 1:
                 raise JudgeInfrastructureError(
-                    "Local judge must return exactly one completion containing a "
-                    "single number in [0,1]"
+                    "Local judge must return exactly one completion"
                 )
             message = getattr(choices[0], "message", None)
             content = getattr(message, "content", None)
-            return parse_judge_score(content)
+            return self.rubric.parse(content)
 
     def _score_misses(
         self,
-        misses: list[tuple[str, tuple[str, str, str]]],
+        misses: list[tuple[str, dict[str, str]]],
     ) -> dict[str, float]:
         """Run a bounded sliding window and stop submitting on first failure."""
         if not misses:
@@ -538,9 +600,9 @@ class LocalJudgeClient:
                 nonlocal next_index
                 if next_index >= len(misses):
                     return False
-                key, triple = misses[next_index]
+                key, payload = misses[next_index]
                 next_index += 1
-                pending[executor.submit(self._score_uncached, triple)] = key
+                pending[executor.submit(self._score_uncached, payload)] = key
                 return True
 
             for _ in range(workers):
@@ -586,11 +648,8 @@ class LocalJudgeClient:
                 )
         return results
 
-    def _score_many(
-        self,
-        triples: Iterable[tuple[object, object, object]],
-    ) -> list[float]:
-        normalized = [self._normalize_triple(triple) for triple in triples]
+    def _score_payloads(self, payloads: Iterable[Mapping[str, object]]) -> list[float]:
+        normalized = [self._normalize_payload(payload) for payload in payloads]
         self.preflight()
         if not normalized:
             return []
@@ -599,24 +658,27 @@ class LocalJudgeClient:
         # same miss twice. The disk ledger provides the cross-process synchronization.
         with self._batch_lock:
             self._load_disk_cache()
-            keyed = [(self._cache_key(triple), triple) for triple in normalized]
+            keyed = [(self._cache_key(payload), payload) for payload in normalized]
             missing_by_key = dict(
-                (key, triple)
-                for key, triple in keyed
+                (key, payload)
+                for key, payload in keyed
                 if key not in self._cache
             )
             if missing_by_key:
                 scored = self._score_misses(list(missing_by_key.items()))
                 self._persist_scores(scored)
-            return [self._cache[key] for key, _triple in keyed]
+            return [self._cache[key] for key, _payload in keyed]
 
-    def score_many(
+    def score_payloads(
         self,
-        triples: Iterable[tuple[object, object, object]],
+        payloads: Iterable[Mapping[str, object]],
     ) -> list[float]:
-        """Score concurrently in input order; expose only judge infrastructure errors."""
+        """Score arbitrary rubric payloads concurrently, in input order.
+
+        The general entry point. `score_many` is the `NUMERIC_RUBRIC` special case of it.
+        """
         try:
-            return self._score_many(triples)
+            return self._score_payloads(payloads)
         except JudgeInfrastructureError:
             raise
         except Exception as exc:  # noqa: BLE001
@@ -624,4 +686,19 @@ class LocalJudgeClient:
                 "Local judge infrastructure failed: "
                 f"{type(exc).__name__}: {exc}"
             ) from exc
+
+    def score_many(
+        self,
+        triples: Iterable[tuple[object, object, object]],
+    ) -> list[float]:
+        """Score `(question, gold, prediction)` triples concurrently, in input order.
+
+        The field names below are what go into the cache key, so they are the original three and
+        must stay that way: renaming one would invalidate every score already on disk.
+        """
+        normalized = [self._normalize_triple(triple) for triple in triples]
+        return self.score_payloads(
+            {"question": question, "gold": gold, "prediction": prediction}
+            for question, gold, prediction in normalized
+        )
 

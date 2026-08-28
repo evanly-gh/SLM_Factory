@@ -213,7 +213,6 @@ def evaluate_node(state: AgentState) -> AgentState:
                 eval_set,
                 model_id,
                 model_id,
-                task=task,
                 quant=baseline_quant,
                 gguf_path=baseline_gguf_path,
             )
@@ -293,7 +292,7 @@ def evaluate_node(state: AgentState) -> AgentState:
         want_gguf_eval = config.QUANT_ACCURACY_EVAL or config.HW_ONDEVICE_BACKEND != "theoretical"
         if quant is not None and want_gguf_eval:
             gguf_path = _build_gguf_for_eval(weights_ref, model_id, quant, mlabel)
-        result = run_eval(eval_set, weights_ref, model_id, task=task, quant=quant, gguf_path=gguf_path)
+        result = run_eval(eval_set, weights_ref, model_id, quant=quant, gguf_path=gguf_path)
         gguf_by_label[label] = gguf_path
         scored[label] = (weights_ref, result)
         _log(
@@ -452,6 +451,11 @@ def evaluate_node(state: AgentState) -> AgentState:
         "selector": selector,
         "model_id": model_id,
         "quant": state["selected_model"].quant,
+        # The size tier this iteration ran on. Recorded because a run that escalates is really several
+        # experiments, and both the score-attribution table and the accuracy chart group by tier to
+        # avoid averaging deltas across models with different ceilings. Both read it from here, and
+        # both silently fell back to an unlabelled heading because nothing ever wrote it.
+        "tier": state["selected_model"].tier,
         "weights_ref": best_weights_ref,
         "score": current_score,
         "format_valid": best_result.format_valid,
