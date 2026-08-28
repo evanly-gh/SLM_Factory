@@ -20,7 +20,21 @@ VALID_LORA_ALPHA_MULTIPLIERS = (1, 2, 4)
 VALID_ALPHA_RATIOS = VALID_LORA_ALPHA_MULTIPLIERS
 VALID_LORA_DROPOUTS = (0.0, 0.05, 0.1)
 VALID_WEIGHT_DECAYS = (0.0, 0.01, 0.05, 0.1)
-VALID_MICRO_BATCH_SIZES = (1, 2, 4, 8)
+# Extended to 32 on 2026-08-21. 8 was the ceiling and the DEFAULT, so the orchestrator had exactly
+# one useful setting on this axis and no room above it. An L40S at 48GB fits far more than 8 rows of a
+# 1.7B model under LoRA, and larger micro-batches are the only change on this list that makes a
+# training step genuinely faster rather than just differently regularised — accumulation runs the same
+# number of forward passes.
+#
+# 32 and not higher because `MAX_EFFECTIVE_BATCH_SIZE` is 64, so micro_batch=32 already leaves only
+# accumulation ∈ {1, 2}; 64 would pin accumulation to 1 and remove the axis entirely.
+#
+# CAUTION, and the reason this is not simply free: `training/lora_trainer.py` has NO out-of-memory
+# recovery. The eval path halves its batch and retries; training calls `torch.cuda.empty_cache()` and
+# nothing else, so an OOM at micro_batch=32 on a long-sequence task kills the run rather than backing
+# off. Raising the ceiling widens what the orchestrator may choose, so the OOM fallback should land
+# before a large-model task leans on the top of this range.
+VALID_MICRO_BATCH_SIZES = (1, 2, 4, 8, 16, 32)
 VALID_GRADIENT_ACCUMULATION_STEPS = (1, 2, 4, 8)
 MIN_LEARNING_RATE = 1e-5
 MAX_LEARNING_RATE = 5e-4

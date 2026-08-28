@@ -317,11 +317,55 @@ def test_no_verifier_where_none_is_honest(task):
     assert get_task(task).synth_verifier is None
 
 
+TOOLBENCH_TOOLS = [{
+    "name": "get_forecast_for_weather_api",
+    "parameters": {"properties": {"city": "string"}, "required": ["city"], "optional": []},
+}]
+
+
+def _tb_row(answer):
+    return {"text": "forecast for Lisbon?", "query": "forecast for Lisbon?",
+            "answer": answer, "tools": TOOLBENCH_TOOLS}
+
+
+def _tb_path(action="get_forecast_for_weather_api", args='{"city": "Lisbon"}',
+             return_type="give_answer", final="Warm and clear."):
+    return (
+        f"Thought: I will look it up.\nAction: {action}\nAction Input: {args}\n"
+        f"Thought: I can answer.\nAction: Finish\n"
+        f'Action Input: {{"return_type": "{return_type}", "final_answer": "{final}"}}'
+    )
+
+
+def test_the_toolbench_task_names_the_path_verifier():
+    """Behaviourally: the verifier must reject an invented API even though the path is perfectly
+    well-formed text.
+
+    This is the check that earns its keep on this task. The callable surface is per row and drawn
+    from ~16,000 real endpoints, so a teacher asked to invent a solution path will produce a
+    plausible-sounding endpoint that does not exist far more often than it will produce malformed
+    JSON — and the scorer counts that as `undeclared_api`, so the row would be unwinnable.
+    """
+    verifier = get_task("toolbench").synth_verifier
+    assert verifier is not None
+    assert verifier(_tb_row(_tb_path())) is True
+    assert verifier(_tb_row(_tb_path(action="get_forecast_for_made_up_api"))) is False
+    # Complete and declared, but the path gave up rather than answering.
+    assert verifier(_tb_row(_tb_path(return_type="give_up_and_restart"))) is False
+    # An argument the schema does not have.
+    assert verifier(_tb_row(_tb_path(args='{"town": "Lisbon"}'))) is False
+    # Truncated: no terminating Finish at all.
+    assert verifier(_tb_row(
+        "Thought: looking.\nAction: get_forecast_for_weather_api\n"
+        'Action Input: {"city": "Lisbon"}'
+    )) is False
+
+
 def test_exactly_the_format_bound_tasks_have_an_exact_verifier():
-    """The three where correctness of FORM is decidable by computation. Stated as a set so adding a
+    """The four where correctness of FORM is decidable by computation. Stated as a set so adding a
     verifier to a task where computation cannot decide correctness fails here."""
     verified = {name for name, spec in TASKS.items() if spec.synth_verifier is not None}
-    assert verified == {"xlam_bfcl", "calendar_json", "ner_bc5cdr"}
+    assert verified == {"xlam_bfcl", "calendar_json", "ner_bc5cdr", "toolbench"}
 
 
 def test_there_is_no_verifier_dispatch_table_left():

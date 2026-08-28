@@ -21,7 +21,14 @@ def _node(iteration, score, easy, medium, hard, comp, hypothesis, intervention, 
                     "easy": {"n": 10, "accuracy": easy},
                     "medium": {"n": 8, "accuracy": medium},
                     "hard": {"n": 6, "accuracy": hard},
-                }
+                },
+                # What `label_performance.png` is drawn from. Supplied so the chart takes its real
+                # branch rather than the "nothing recorded" placeholder every other fixture here
+                # would give it.
+                "outcome_breakdown": [
+                    {"bucket": "neg", "correct": 4, "failed": 6},
+                    {"bucket": "pos", "correct": 9, "failed": 1},
+                ],
             },
         },
         "pi": {"S": {"task_type": "classification"}, "D": {"composition": comp}},
@@ -103,7 +110,7 @@ def test_generate_from_state_writes_all_artifacts(tmp_path):
     names = {p.name for p in written}
     assert names == {
         "hypotheses.md", "accuracy.png", "difficulty.png",
-        "dataset_composition.png", "summary.png",
+        "dataset_composition.png", "label_performance.png", "summary.png",
     }
     for path in written:
         assert path.is_file() and path.stat().st_size > 0
@@ -111,6 +118,32 @@ def test_generate_from_state_writes_all_artifacts(tmp_path):
     hyp = (tmp_path / "graphics" / "hypotheses.md").read_text(encoding="utf-8")
     assert "add synthetic hard cases" in hyp
     assert "escalated to a bigger model" in hyp
+
+
+def test_label_performance_is_written_even_with_no_breakdown_recorded(tmp_path):
+    """An artifact that appears only on some runs is one a reader cannot trust the absence of.
+
+    Runs from before `outcome_breakdown` existed, and any run whose last iteration never produced a
+    test report, still get the file — with the placeholder text inside it rather than no file at
+    all, so "the chart is missing" always means the grapher failed.
+    """
+    dag = _two_tier_progression()[0]["dag"]
+    for node in dag:
+        node["evaluation_state"]["test_report"].pop("outcome_breakdown")
+
+    written = run_graphics.generate_run_graphics(
+        tmp_path,
+        state={
+            "escalation_history": [],
+            "selected_model": type("M", (), {"selector": "tierA", "model_id": "org/tierA",
+                                             "quant": None, "tier": 1})(),
+            "best_score": 0.55, "iteration": 1, "scores": [0.55], "dag": dag,
+        },
+        baselines=[], out_dir=tmp_path / "g",
+    )
+    labels_png = tmp_path / "g" / "label_performance.png"
+    assert labels_png in written
+    assert labels_png.stat().st_size > 0
 
 
 def test_generate_from_run_dir_reads_disk_json(tmp_path):

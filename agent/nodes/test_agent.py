@@ -18,6 +18,27 @@ is the fallback when zero-shot labeling is disabled or fails, so buckets always 
 import os
 from collections import Counter
 
+# Ceiling on the zero-shot difficulty gradient, in generated tokens PER probe model.
+#
+# WHY THIS EXISTS (measured 2026-08-24, toolbench jobs 38818333/38818334)
+#     `label_difficulty` runs two FULL generative evals over the whole eval set — the smallest and
+#     largest feasible base models, both in BF16 — before the run has selected a model or trained
+#     anything. On every task that existed when it was written that was cheap. On `toolbench` it is
+#     not: 760 rows x 1,536 output tokens is 1.17M tokens per model against prompts averaging ~1,250
+#     tokens, and the largest feasible model is Qwen3.5-4B at BF16. The smallest model alone took
+#     70 minutes; the 4B pass would not have finished inside the 20-hour allocation, so both runs
+#     spent their entire budget on a REPORTING aid and never reached a training step.
+#
+# The bound is generated tokens rather than wall time because it is knowable before any work starts.
+# 1,000,000 leaves every other task in the registry untouched — the next highest is 512,000
+# (dialogsum, gsm8k, ner_bc5cdr) — while catching toolbench's 1,536,000. It under-counts the true
+# cost, since it ignores prefill and toolbench's prompts are several times longer than any other
+# task's, so a task that trips this is comfortably over rather than marginally so.
+#
+# Falling back is cheap in consequence: the difficulty buckets feed the test agent's per-difficulty
+# REPORT. They do not affect the curriculum, the training loop, the score, or any routing decision.
+MAX_DIFFICULTY_PROBE_TOKENS = 1_000_000
+
 
 def _unique_base_endpoints(feasible_models):
     """Return smallest/largest unique base IDs for BF16 zero-shot capacity checks."""
@@ -44,6 +65,33 @@ def _unique_base_endpoints(feasible_models):
     return unique[-1], unique[0]
 
 
+def _probe_is_affordable(rows: int, task, log=print) -> bool:
+    """Whether the zero-shot difficulty gradient is worth what it costs on this task.
+
+    Two full generative passes over the eval set, before model selection, on a REPORTING aid. See
+    `MAX_DIFFICULTY_PROBE_TOKENS` for the measurement that motivated the bound. Any failure to
+    resolve the task's budget answers "affordable", so an unknown task keeps the previous behaviour
+    rather than silently losing its difficulty labels.
+    """
+    try:
+        from tasks import get_task
+
+        budget = int(rows) * int(get_task(task).max_new_tokens)
+    except Exception:  # noqa: BLE001 — an unresolvable budget must not disable the probe
+        return True
+    if budget <= MAX_DIFFICULTY_PROBE_TOKENS:
+        return True
+    log(
+        f"      [test_agent] SKIPPING the zero-shot difficulty gradient for {task}: it would "
+        f"generate {budget:,} tokens per probe model ({rows} rows x "
+        f"{get_task(task).max_new_tokens} output tokens) against a "
+        f"{MAX_DIFFICULTY_PROBE_TOKENS:,} ceiling, twice, in BF16, before this run selects a model "
+        f"or trains anything. Difficulty buckets only feed the per-difficulty REPORT, so the length "
+        f"heuristic is used instead. Set SLM_DIFFICULTY=zeroshot-force to override."
+    )
+    return False
+
+
 def label_difficulty(eval_set, feasible_models, task, log=print, correctness_fn=None):
     """Return {"easy":[texts], "medium":[texts], "hard":[texts]} for eval_set.all.
 
@@ -53,6 +101,13 @@ def label_difficulty(eval_set, feasible_models, task, log=print, correctness_fn=
     """
     texts = [e.get("text", "") for e in eval_set.all]
     mode = os.environ.get("SLM_DIFFICULTY", "zeroshot")
+
+    # `zeroshot-force` runs the gradient whatever it costs, for the case where the per-difficulty
+    # breakdown is the point of the run. Plain `zeroshot` is the default and is cost-bounded.
+    if mode == "zeroshot-force":
+        mode = "zeroshot"
+    elif mode == "zeroshot" and not _probe_is_affordable(len(texts), task, log=log):
+        mode = "heuristic"
 
     if mode == "zeroshot" and feasible_models:
         try:
@@ -93,7 +148,7 @@ def _zeroshot_correctness(eval_set, task, log):
     from eval.harness import run_eval
 
     def cf(model_id):
-        res = run_eval(eval_set, model_id, model_id, task=task)
+        res = run_eval(eval_set, model_id, model_id)
         failed = {f.get("text") for f in res.failures}
         return {e.get("text", ""): (e.get("text", "") not in failed) for e in eval_set.all}
 
@@ -170,6 +225,58 @@ def diagnose(by_difficulty: dict, overall_f1: float, threshold: float, task: str
             "band": "general"}
 
 
+def _outcome_breakdown(eval_set, best_result, spec) -> list[dict]:
+    """Eval rows split into correct / failed, bucketed by whatever is informative for this task.
+
+    Difficulty answers "how hard were the rows it got wrong". This answers "WHICH rows", which is
+    the question an intervention is chosen against — `surgical_synthesis` targets exactly these
+    buckets, so this is the record of whether targeting worked.
+
+    Two bucketings, because the informative unit differs:
+
+      closed label space  → the gold CLASS. A class at 0.50 on four rows and one at 0.50 on four
+                            hundred are the same F1 and completely different problems, so both
+                            halves of the count are kept.
+      open-ended target   → the FAILURE CATEGORY, with every correct row in one `correct` bucket.
+                            There is no class to break down by; what varies is the kind of error.
+    """
+    failures = list(best_result.failures or [])
+    rows = list(getattr(eval_set, "all", []) or [])
+    buckets: dict[str, dict[str, int]] = {}
+
+    def _slot(name: str) -> dict[str, int]:
+        return buckets.setdefault(str(name)[:64], {"correct": 0, "failed": 0})
+
+    if spec.closed_label_space:
+        failed_texts = Counter(str(f.get("text", "")) for f in failures)
+        for row in rows:
+            slot = _slot(row.get("label", "?"))
+            key = str(row.get("text", ""))
+            if failed_texts.get(key):
+                slot["failed"] += 1
+                failed_texts[key] -= 1
+            else:
+                slot["correct"] += 1
+    else:
+        _slot("correct")["correct"] = max(0, len(rows) - len(failures))
+        for failure in failures:
+            category = "uncategorised"
+            if spec.failure_category is not None:
+                try:
+                    category = str(spec.failure_category(failure))
+                except Exception:  # noqa: BLE001 — a diagnostic must never break the report
+                    category = "uncategorised"
+            _slot(category)["failed"] += 1
+
+    return [
+        {"bucket": name, "correct": counts["correct"], "failed": counts["failed"]}
+        for name, counts in sorted(
+            buckets.items(),
+            key=lambda item: (-item[1]["failed"], -item[1]["correct"], item[0]),
+        )
+    ]
+
+
 def build_test_report(eval_set, best_result, difficulty, threshold, task) -> dict:
     """Assemble the report the orchestrator sees: overall + per-difficulty accuracy + diagnosis.
     Correctness per example is reconstructed from best_result.failures (text-matched)."""
@@ -199,18 +306,29 @@ def build_test_report(eval_set, best_result, difficulty, threshold, task) -> dic
         if spec.closed_label_space:
             confusion[(str(failure.get("label", "?"))[:64], str(failure.get("predicted", "?"))[:64])] += 1
         else:
-            confusion[(category, "incorrect")] += 1
+            # No `predicted` side. This used to be the literal string "incorrect", a placeholder to
+            # fill the pair shape — and the orchestrator read it as a real model output. On calendar
+            # run 38735780 it wrote about "the degenerate single-token 'incorrect' output" 65 TIMES,
+            # building hypotheses on a behaviour that never occurred: the model was emitting `[]` and
+            # well-formed calls with wrong arguments, never the word "incorrect" (B326).
+            #
+            # An open-ended task has a failure CATEGORY, not a confusion between two classes. None
+            # says so, and the renderers below print a category line instead of a pair.
+            confusion[(category, None)] += 1
     confusion_pairs = [
         {"gold": gold, "predicted": predicted, "count": count}
         for (gold, predicted), count in sorted(
             confusion.items(),
-            key=lambda item: (-item[1], item[0][0], item[0][1]),
+            # `predicted` may be None for an open-ended task, so sort on its string form rather than
+            # comparing None with str.
+            key=lambda item: (-item[1], item[0][0], str(item[0][1])),
         )[:8]
     ]
     return {
         "overall": best_result.f1,
         "by_difficulty": by_diff,
         "confusion_pairs": confusion_pairs,
+        "outcome_breakdown": _outcome_breakdown(eval_set, best_result, spec),
         "diagnosis": diag["diagnosis"],
         "suggested_intervention": diag["suggested_intervention"],
         "band": diag["band"],

@@ -71,6 +71,22 @@ def _xlam_answer(city="Paris"):
     return json.dumps([{"name": "get_weather", "arguments": {"city": city}}])
 
 
+TOOLBENCH_TOOLS = [{
+    "name": "get_weather_for_weather_api",
+    "parameters": {"properties": {"city": "string"}, "required": ["city"], "optional": []},
+}]
+
+
+def _toolbench_path(city="Paris", final="It is 18 degrees and clear in Paris."):
+    """A complete ToolBench solution path: one declared API call, then Finish->give_answer."""
+    return (
+        "Thought: I should look up the weather for that city.\n"
+        f"Action: get_weather_for_weather_api\nAction Input: {{\"city\": \"{city}\"}}\n"
+        "Thought: I have what I need and can answer now.\n"
+        f'Action: Finish\nAction Input: {{"return_type": "give_answer", "final_answer": "{final}"}}'
+    )
+
+
 # One fixture per task: rows in that task's OWN shape, the raw output a perfect model would emit,
 # a raw output the extractor cannot read at all, and one it can read but which is wrong.
 #
@@ -112,6 +128,41 @@ FIXTURES: dict[str, dict] = {
         "perfect": [_xlam_answer("Paris"), _xlam_answer("Oslo")],
         "unreadable": ["I'm sorry, I can't help with that.", "no function applies here"],
         "wrong_but_readable": [_xlam_answer("Berlin"), _xlam_answer("Berlin")],
+    },
+    # ToolBench's `wrong_but_readable` is a well-formed, in-budget path ending in
+    # Finish->give_answer whose stated answer is about something else, so no exact rule can reject
+    # it — it reaches the judge, which is the point. `unreadable` is prose containing no Action at
+    # all. The stub judge below passes only an answer matching the row's expected one.
+    #
+    # These rows carry an `answer` even though real ToolEval eval rows do not: pass rate is
+    # reference-free and the test queries ship with no gold path. What is written here is a TRAIN
+    # row's shape, which is the union — because this file also drives `build_training_turn`, and a
+    # row with no gold cannot become a training turn by design. The scorer ignores `answer`
+    # entirely, so its presence changes nothing it asserts.
+    "toolbench": {
+        "rows": [
+            {"text": "You are AutoGPT... \nwhat is the weather in Paris?\nBegin!\n",
+             "query": "what is the weather in Paris?",
+             "answer": _toolbench_path("Paris", "It is 18 degrees and clear in Paris."),
+             "tools": TOOLBENCH_TOOLS,
+             "_subset": "G1_instruction",
+             "_expected": "It is 18 degrees and clear in Paris."},
+            {"text": "You are AutoGPT... \nwhat is the weather in Oslo?\nBegin!\n",
+             "query": "what is the weather in Oslo?",
+             "answer": _toolbench_path("Oslo", "It is 2 degrees and snowing in Oslo."),
+             "tools": TOOLBENCH_TOOLS,
+             "_subset": "G2_category",
+             "_expected": "It is 2 degrees and snowing in Oslo."},
+        ],
+        "perfect": [
+            _toolbench_path("Paris", "It is 18 degrees and clear in Paris."),
+            _toolbench_path("Oslo", "It is 2 degrees and snowing in Oslo."),
+        ],
+        "unreadable": ["I'm sorry, I can't help with that.", "no tool applies here"],
+        "wrong_but_readable": [
+            _toolbench_path("Paris", "The capital of France is Paris."),
+            _toolbench_path("Oslo", "The capital of France is Paris."),
+        ],
     },
     "calendar_json": {
         "rows": [
@@ -162,6 +213,19 @@ FIXTURES: dict[str, dict] = {
         "unreadable": [CHATTY] * 4,
         "wrong_but_readable": ["route", "local", "route", "local"],
     },
+    # Two of each class, so `minority_f1` is well defined and the all-majority prediction the
+    # `wrong_but_readable` row exercises can actually score 0 rather than being undefined.
+    "sms_spam": {
+        "rows": [
+            {"text": "running 10 min late, order me a coffee", "label": "ham"},
+            {"text": "WINNER! Claim your free prize now, txt CLAIM to 81010", "label": "spam"},
+            {"text": "can you pick up milk on the way home", "label": "ham"},
+            {"text": "URGENT: your account is suspended, click here to verify", "label": "spam"},
+        ],
+        "perfect": ["ham", "spam", "ham", "spam"],
+        "unreadable": [CHATTY] * 4,
+        "wrong_but_readable": ["spam", "ham", "spam", "ham"],
+    },
     "proactive_listening": {
         "rows": [
             {"text": "A: I need the code... um...", "label": "interrupt"},
@@ -197,7 +261,12 @@ def _no_live_judge(monkeypatch):
     Scoring 1.0 only on an exact gold match is deliberately cruder than the real judge; these
     tests assert the CHAIN composes and that format is reported apart from content, never that
     the judge is calibrated.
+
+    Two rubrics need stubbing because two tasks are judged. `dialogsum` reaches its judge through
+    `eval.scorers.generation`'s module-level name; `toolbench` constructs one inside `score` from
+    `eval.judge_client`, so that is where its stub goes.
     """
+    import eval.judge_client as judge_client
     import eval.scorers.generation as generation
 
     class _Judge:
@@ -211,7 +280,28 @@ def _no_live_judge(monkeypatch):
                 for _text, gold, prediction in triples
             ]
 
+    # ToolEval's rubric is asked "does this answer solve this query"; the stub answers it by
+    # looking up what the fixture declared the right answer to be for that query.
+    expected_by_query = {
+        row["query"]: row["_expected"] for row in FIXTURES["toolbench"]["rows"]
+    }
+
+    class _ToolEvalJudge:
+        @classmethod
+        def from_config(cls, rubric=None):
+            return cls()
+
+        def score_payloads(self, payloads):
+            return [
+                1.0
+                if str(payload["answer"]).strip()
+                == expected_by_query.get(str(payload["query"]), object())
+                else 0.0
+                for payload in payloads
+            ]
+
     monkeypatch.setattr(generation, "LocalJudgeClient", _Judge)
+    monkeypatch.setattr(judge_client, "LocalJudgeClient", _ToolEvalJudge)
 
 
 def _eval_set(task: str) -> EvalSet:
@@ -641,11 +731,16 @@ def test_every_task_states_whether_it_wants_reasoning_recorded():
 
 def test_the_deleted_scorers_are_gone():
     """The diff scorer and the code-execution sandbox went with APPS/MBPP on 2026-08-18. A leftover
-    module is a scorer a task could still name."""
+    module is a scorer a task could still name.
+
+    `data.loaders.sms_spam` was on this list until 2026-08-23 and has been deliberately removed
+    from it: the task is registered again, so its loader importing is the correct state. What the
+    list is guarding is modules with NO owning task — `sms_spam` now has one, and
+    `test_every_task_module_is_registered` is what holds it to that.
+    """
     import importlib
 
-    for module in ("eval.scorers.code_execution", "eval.scorers.diff",
-                   "data.loaders.apps", "data.loaders.sms_spam"):
+    for module in ("eval.scorers.code_execution", "eval.scorers.diff", "data.loaders.apps"):
         with pytest.raises(ModuleNotFoundError):
             importlib.import_module(module)
 

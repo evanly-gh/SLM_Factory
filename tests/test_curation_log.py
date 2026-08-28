@@ -202,3 +202,85 @@ def test_curation_log_iteration_is_retry_idempotent(tmp_path):
     text = path.read_text(encoding="utf-8")
     assert text.count("## Iteration 2") == 1
     assert text.count("slm-curation-entry:") == 1
+
+
+# --- Generation output budget (B: the 512-token truncation, 2026-08-28) -------------------
+#
+# Three runs (38832586, 38985393, 39041380) each reported "0 rows kept" from 1,019 / 133 / 425
+# synthesis attempts on toolbench and were read as the VERIFIER rejecting everything. Nothing was
+# ever verified: `max_tokens` was hardcoded at 512 for every task, a toolbench row serialises to
+# 3,913 characters at the very smallest (~978 tokens), so every reply was cut off mid-object and
+# dropped by a bare `except Exception: return None`.
+
+
+def test_the_output_budget_is_sized_to_the_row_not_a_constant():
+    """A budget that cannot hold the smallest row in the task loses 100% of generations."""
+    import json
+
+    from data.curriculum import _row_output_budget
+
+    # A toolbench-shaped row: the `text` carries a full ReAct system prompt with its API list.
+    big = {"text": "You are AutoGPT. " + ("api_description " * 900),
+           "answer": "Thought: go\nAction: x\nAction Input: {}",
+           "tools": [{"name": f"api_{i}", "parameters": {}} for i in range(12)]}
+    needed = len(json.dumps(big)) / 4.0
+    budget = _row_output_budget(big)
+    assert budget > 512, "the old hardcoded 512 is exactly the bug"
+    assert budget >= needed, (
+        f"budget {budget} cannot hold a row needing ~{needed:.0f} tokens, so every generation "
+        "would be truncated mid-JSON and lost"
+    )
+
+
+def test_a_small_row_still_gets_generous_room(monkeypatch):
+    """A short answer must not be given a SMALL budget just because the row is small.
+
+    This asserted `== 512` while the budget was sized per row. Every teacher call now asks for as
+    much as the served context can return, so a short-answer task gets far more room than its reply
+    needs — which costs nothing, because generation stops at the EOS token.
+    """
+    from data.curriculum import _row_output_budget
+
+    monkeypatch.setenv("SLM_SYNTH_MAX_MODEL_LEN", "8192")
+    assert _row_output_budget({"text": "WINNER claim now", "answer": "spam"}) >= 512
+
+
+def test_the_budget_never_exceeds_what_the_served_context_can_return(monkeypatch):
+    """Asking for more output than `max_model_len` allows is an HTTP 400, i.e. zero rows again."""
+    from data.curriculum import _row_output_budget
+
+    monkeypatch.setenv("SLM_SYNTH_MAX_MODEL_LEN", "8192")
+    enormous = {"text": "x" * 500_000}
+    assert _row_output_budget(enormous) <= 8192
+    # And a long prompt has to come out of the same context.
+    assert _row_output_budget(enormous, prompt="p" * 20_000) <= 8192 - (20_000 / 4.0)
+
+
+def test_the_clamp_does_not_depend_on_unrelated_credentials(monkeypatch):
+    """It read the value via `from config.config import ...`, which raises on ANY unset API key, under
+    a bare `except: pass` — so a missing EXA_API_KEY silently disabled the clamp. Reading the env var
+    directly is what makes the guard actually present."""
+    import data.curriculum as curriculum_module
+
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.delenv("EXA_API_KEY", raising=False)
+    monkeypatch.setenv("SLM_SYNTH_MAX_MODEL_LEN", "4096")
+    assert curriculum_module._row_output_budget({"text": "x" * 500_000}) <= 4096
+
+
+def test_a_truncated_generation_is_reported_as_a_generation_failure_not_a_rejection():
+    """The two have opposite fixes — raise the output budget, versus change the generator prompt — so
+    a log that calls one the other sends the reader in the wrong direction. It did, three times."""
+    from data.curriculum import _note_generation_failure, take_generation_failures
+
+    take_generation_failures()
+    _note_generation_failure("unparseable JSON from the generator",
+                             ValueError("Unterminated string"),
+                             raw='{"text": "You are AutoGPT and the reply stops mid-str')
+    failures = take_generation_failures()
+    assert len(failures) == 1
+    kind, detail = failures[0]
+    assert kind == "unparseable JSON from the generator"
+    # The tail of the reply is the evidence that distinguishes truncation from malformed output.
+    assert "stops mid-str" in detail
+    assert take_generation_failures() == [], "taking the sample must clear it"

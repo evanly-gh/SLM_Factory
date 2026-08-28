@@ -67,6 +67,79 @@ def _qwen_no_think_prompt(prompt: str, base_model: str) -> str:
     return prefix + "<think>\n\n</think>\n\n"
 
 
+_serving_tokenizer_cache: dict[str, object | None] = {}
+
+
+def _serving_tokenizer(base_model: str):
+    """The SERVED model's tokenizer, loaded once per model id. `None` if it cannot be loaded.
+
+    Only used to read a chat template, so a failure here is recoverable — the caller falls back to
+    a plain completion prompt rather than raising.
+    """
+    if base_model in _serving_tokenizer_cache:
+        return _serving_tokenizer_cache[base_model]
+    tokenizer = None
+    if base_model:
+        try:
+            from transformers import AutoTokenizer
+
+            tokenizer = AutoTokenizer.from_pretrained(base_model, trust_remote_code=True)
+        except Exception:
+            tokenizer = None
+    _serving_tokenizer_cache[base_model] = tokenizer
+    return tokenizer
+
+
+def _serving_prompt_prefix(prompt: str, base_model: str) -> str:
+    """Render `prompt` the way the DEPLOYED artifact expects to receive it.
+
+    This is the fallback used when the installed llama-cpp-python cannot pass
+    `chat_template_kwargs` through `create_chat_completion` — which is every version we have run,
+    including 0.3.34, so in practice it is the only path quantized eval takes.
+
+    It used to be `_qwen_no_think_prompt` unconditionally, with a hard refusal for anything that
+    was not a Qwen. That was the correct guard for a Qwen-only pool (serving a Gemma a ChatML
+    prompt is silent train/serve skew, the B290 failure mode) but it is the wrong general rule:
+    the model's own tokenizer already knows the answer. Qwen keeps its hand-written bytes so no
+    previously measured score moves; everything else renders from its own template.
+    """
+    if _is_qwen_model_id(base_model):
+        return _qwen_no_think_prompt(prompt, base_model)
+
+    tokenizer = _serving_tokenizer(base_model)
+    if tokenizer is not None and getattr(tokenizer, "chat_template", None):
+        return tokenizer.apply_chat_template(
+            [{"role": "user", "content": prompt}],
+            tokenize=False,
+            add_generation_prompt=True,
+        )
+    # A BASE checkpoint with no chat template. Training took the same plain-text branch
+    # (`lora_trainer._training_turn`'s fallback), so sending the bare prompt is what keeps the two
+    # aligned. Wrapping it in someone else's turn markers is what would break parity.
+    return prompt
+
+
+def _serving_stop_tokens(base_model: str) -> list[str]:
+    """Turn-end strings for the raw-completion path, derived from the served model.
+
+    `<|im_end|>` is ChatML and is right for Qwen and for SmolLM2; Gemma ends a turn with
+    `<end_of_turn>`. Hardcoding either one truncates nothing on the other family, which shows up
+    as the model running to `max_tokens` on every row and the scorer reading trailing garbage.
+    """
+    if _is_qwen_model_id(base_model):
+        return ["<|im_end|>"]
+
+    stops: list[str] = []
+    tokenizer = _serving_tokenizer(base_model)
+    for candidate in (
+        getattr(tokenizer, "eos_token", None),
+        *(t for t in ("<|im_end|>", "<end_of_turn>", "<|endoftext|>")),
+    ):
+        if isinstance(candidate, str) and candidate and candidate not in stops:
+            stops.append(candidate)
+    return stops or ["<|im_end|>"]
+
+
 def train(
     dataset_path: str,
     base_model: str,
@@ -724,6 +797,150 @@ def infer_batch(
     )
 
 
+# Concurrent GGUF scoring: how many requests are in flight at once, and the floor it degrades to.
+#
+# WHY THIS IS CONCURRENCY AND NOT TENSOR BATCHING — the distinction is load-bearing
+#     The bf16 path (`infer_batch`) pads N sequences into one forward pass, which is true batching.
+#     llama-cpp-python 0.3.34 cannot do that for GENERATION: its multi-sequence `LlamaBatch` plumbing
+#     is wired only into `embed()`, and `create_chat_completion` decodes one sequence per call. The
+#     `n_batch`/`n_ubatch` constructor arguments size the PREFILL batch within a single sequence, not
+#     the number of sequences.
+#
+#     Reaching true multi-sequence decode would mean driving `llama_batch_init`/`llama_decode`
+#     directly and hand-rolling sampling, stop conditions and detokenization. That code decides every
+#     accuracy number this project reports, so a subtle divergence there would silently move results
+#     rather than fail. Not a good trade for a speedup.
+#
+#     So this runs N INDEPENDENT contexts and dispatches prompts across them. Each worker calls
+#     exactly the same `create_chat_completion` the sequential path called, with the same greedy
+#     settings, so per-row output is unchanged by construction — only the scheduling differs. That is
+#     a property tests can pin, which the low-level route's would not be.
+#
+# THE MEMORY COST, AND WHY THE DEFAULT IS NOT 32
+#     Each context carries its own copy of the weights, because `Llama` bundles model and context.
+#     A 1.2GB Q4_K_M model plus a 4096-token KV cache is roughly 1.5-2GB per worker, so the task's
+#     declared `eval_batch_size` of 32 would ask for 50GB+ and OOM on a 48GB L40S. The concurrency is
+#     therefore the task's batch size CLAMPED by `MAX_GGUF_EVAL_CONCURRENCY`, and it halves on OOM the
+#     same way the bf16 path halves its batch.
+# DEFAULT 1 — the concurrency is OFF unless explicitly asked for, and that is a decision made from
+# measurement, not caution.
+#
+# Enabled at 8 on runs 38734202/38734203 it worked twice and then killed the run: the eval CUDA worker
+# died with `exit=-6` and `worker produced no response`. SIGABRT is how llama.cpp reports a failed
+# device allocation — `GGML_ASSERT` calls `abort()` rather than raising — so the process is gone before
+# any Python handler runs. `_looks_like_oom` and the halving retry below cannot see it, and neither can
+# the run: a 7-day job dies on iteration 3 with no diagnosis attached.
+#
+# And the gain did not justify that. Measured on calendar_json, 535 prompts: 125s sequential against
+# 101s at 8-way, about 20%, not the multiple the memory cost implies. Eight contexts submitting to one
+# device serialise on it, so thread concurrency buys queueing overlap and little else.
+#
+# The machinery stays because it is correct and tested, and because the diagnosis above is worth
+# keeping next to it. Real eval throughput needs either llama.cpp's multi-sequence decode API — one
+# model, one context, `n_seq_max` sequences, no duplicated weights — or routing eval through the vLLM
+# server already running idle on the other GPU. Both batch properly; neither duplicates the model.
+MAX_GGUF_EVAL_CONCURRENCY = int(os.environ.get("SLM_GGUF_EVAL_CONCURRENCY", "1"))
+MIN_GGUF_EVAL_CONCURRENCY = 1
+
+
+def _looks_like_oom(error: BaseException) -> bool:
+    """Whether this failure is an out-of-memory condition worth retrying smaller.
+
+    Matched on the message because llama.cpp surfaces allocation failures as generic exceptions from
+    the C library rather than a typed error, so there is nothing else to key on.
+    """
+    text = f"{type(error).__name__}: {error}".lower()
+    return any(
+        needle in text for needle in
+        ("out of memory", "outofmemory", "cuda error", "failed to allocate",
+         "cudamalloc", "not enough memory", "insufficient", "oom")
+    )
+
+
+def _run_gguf_concurrently(
+    prompts: list[str],
+    *,
+    primary,
+    score_one,
+    gguf_path: str,
+    max_seq_length: int,
+    task: str,
+) -> list[str]:
+    """Score every prompt over a pool of GGUF contexts, order-preserving, halving on OOM.
+
+    The already-loaded `primary` context is worker 0, so a concurrency of 1 loads nothing extra and
+    behaves exactly like the sequential path it replaced.
+    """
+    from concurrent.futures import ThreadPoolExecutor
+
+    try:
+        requested = _eval_batch_size(task)
+    except Exception:  # noqa: BLE001 — an unresolvable task must not break scoring
+        # `infer_batch_gguf` accepts an empty task (its signature defaults to ""), and callers outside
+        # the agent loop use it that way. Falling back to one context reproduces the pre-2026-08-21
+        # sequential behaviour exactly, so an unknown task loses the speedup and nothing else.
+        requested = MIN_GGUF_EVAL_CONCURRENCY
+    concurrency = max(MIN_GGUF_EVAL_CONCURRENCY, min(requested, MAX_GGUF_EVAL_CONCURRENCY))
+    if concurrency < requested:
+        print(f"      [gguf-eval] task asks for batch {requested}; running {concurrency} concurrent "
+              f"context(s) — each context holds its own copy of the weights, so the ceiling is "
+              f"memory, not the task (see MAX_GGUF_EVAL_CONCURRENCY)")
+
+    while True:
+        extra: list = []
+        try:
+            workers = [primary]
+            for _ in range(concurrency - 1):
+                extra.append(_load_gguf_context(gguf_path, max_seq_length))
+            workers.extend(extra)
+            if concurrency > 1:
+                print(f"      [gguf-eval] scoring {len(prompts)} prompt(s) across "
+                      f"{len(workers)} concurrent context(s)")
+            results: list[str | None] = [None] * len(prompts)
+
+            def _work(item):
+                index, prompt = item
+                # Worker assignment is by position so a given prompt always lands on one context and
+                # never migrates mid-generation.
+                return index, score_one(workers[index % len(workers)], prompt, index)
+
+            with ThreadPoolExecutor(max_workers=len(workers)) as pool:
+                for index, text in pool.map(_work, list(enumerate(prompts))):
+                    results[index] = text
+            return [("" if text is None else text) for text in results]
+        except Exception as error:  # noqa: BLE001 — an OOM is retried smaller, anything else raises
+            if concurrency > MIN_GGUF_EVAL_CONCURRENCY and _looks_like_oom(error):
+                concurrency = max(MIN_GGUF_EVAL_CONCURRENCY, concurrency // 2)
+                print(f"      [gguf-eval] out of memory; halving concurrency to {concurrency} "
+                      f"and retrying ({type(error).__name__}: {str(error)[:120]})")
+                continue
+            raise
+        finally:
+            # Only the contexts THIS attempt created. `primary` is owned by the module-level cache and
+            # is reused across iterations; freeing it here would reload the model every eval.
+            for context in extra:
+                try:
+                    context.close()
+                except Exception:  # noqa: BLE001 — best-effort teardown
+                    pass
+
+
+def _load_gguf_context(gguf_path: str, max_seq_length: int):
+    """One additional GGUF context, offloaded to GPU on the same terms as the primary."""
+    import llama_cpp
+
+    gpu_layers = int(os.environ.get("SLM_GGUF_GPU_LAYERS", "-1"))
+    try:
+        return llama_cpp.Llama(
+            model_path=gguf_path, n_ctx=max_seq_length,
+            n_gpu_layers=gpu_layers, verbose=False,
+        )
+    except Exception:
+        return llama_cpp.Llama(
+            model_path=gguf_path, n_ctx=max_seq_length, n_gpu_layers=0, verbose=False,
+        )
+
+
 def infer_batch_gguf(
     prompts: list[str],
     gguf_path: str,
@@ -736,8 +953,10 @@ def infer_batch_gguf(
     Used for quantized model evaluation (Q4_K_M, Q8_0) to get honest on-device
     accuracy scores — the same model format that ships on Android.
 
-    Sequential inference only (same reasoning as infer_batch).
-    Caches the Llama instance by gguf_path (max 3 entries).
+    Scored across a pool of independent contexts (see `_run_gguf_concurrently`): llama-cpp-python
+    cannot batch-decode multiple sequences, so this is request concurrency rather than tensor
+    batching, and per-row output is identical to scoring them one at a time.
+    Caches the primary Llama instance by gguf_path (max 3 entries).
 
     Raises:
         ImportError: if llama-cpp-python is not installed.
@@ -797,7 +1016,7 @@ def infer_batch_gguf(
         chat_parameters = {}
     supports_mode_kwargs = "chat_template_kwargs" in chat_parameters
 
-    def _validate_gguf_budget(rendered_prompt: str, prompt_index: int) -> None:
+    def _validate_gguf_budget(rendered_prompt: str, prompt_index: int, llama) -> None:
         tokenize = getattr(llama, "tokenize", None)
         if not callable(tokenize):
             return
@@ -811,33 +1030,34 @@ def infer_batch_gguf(
                 f"length {max_seq_length}."
             )
 
-    for prompt in prompts:
-        # Newer llama-cpp-python versions forward chat_template_kwargs to the
-        # embedded template. Installed 0.3.34 (inspected 2026-07-21) does not,
-        # so Qwen uses the exact no-thinking ChatML generation prefix.
+    stop_tokens = None if supports_mode_kwargs else _serving_stop_tokens(base_model)
+
+    def _score_one(worker_llama, prompt: str, index: int) -> str:
+        """One prompt through one context. Byte-identical to the old sequential body."""
         if supports_mode_kwargs:
-            _validate_gguf_budget(prompt, len(results))
-            resp = llama.create_chat_completion(
+            _validate_gguf_budget(prompt, index, worker_llama)
+            resp = worker_llama.create_chat_completion(
                 messages=[{"role": "user", "content": prompt}],
                 max_tokens=max_new_tokens, temperature=0.0,
                 chat_template_kwargs={"enable_thinking": False},
             )
-            results.append(resp["choices"][0]["message"]["content"])
-        elif _is_qwen_model_id(base_model):
-            rendered_prompt = _qwen_no_think_prompt(prompt, base_model)
-            _validate_gguf_budget(rendered_prompt, len(results))
-            resp = llama(
-                rendered_prompt,
-                max_tokens=max_new_tokens,
-                temperature=0.0,
-                echo=False,
-                stop=["<|im_end|>"],
-            )
-            results.append(resp["choices"][0]["text"])
-        else:
-            raise RuntimeError(
-                "Installed llama-cpp-python cannot enforce non-thinking chat-template "
-                f"kwargs for {base_model or 'an unspecified model'}; refusing to mix "
-                "prompt modes."
-            )
-    return results
+            return resp["choices"][0]["message"]["content"]
+        rendered_prompt = _serving_prompt_prefix(prompt, base_model)
+        _validate_gguf_budget(rendered_prompt, index, worker_llama)
+        resp = worker_llama(
+            rendered_prompt,
+            max_tokens=max_new_tokens,
+            temperature=0.0,
+            echo=False,
+            stop=stop_tokens,
+        )
+        return resp["choices"][0]["text"]
+
+    return _run_gguf_concurrently(
+        prompts,
+        primary=llama,
+        score_one=_score_one,
+        gguf_path=gguf_path,
+        max_seq_length=max_seq_length,
+        task=task,
+    )

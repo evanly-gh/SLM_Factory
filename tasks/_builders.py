@@ -66,3 +66,20 @@ def function_call_turn(row: dict, _ctx: TrainingContext) -> tuple[str, str, str]
     if not str(answer).strip():
         raise ValueError("function-call training row has an empty 'answer'; nothing to learn")
     return str(build_function_call_prompt(row)), str(answer), "Answer"
+
+
+def toolbench_turn(row: dict, _ctx: TrainingContext) -> tuple[str, str, str]:
+    """One ToolBench row as `(prompt, whole solution path, marker)`.
+
+    The target is the ENTIRE path — every `Thought` / `Action` / `Action Input` turn through the
+    terminating `Finish` — and not the next action alone, because that is the unit the eval asks
+    for: with no API server there are no observations to feed back, so the model is scored on a
+    path it produces in one generation. Training on single next actions and evaluating on whole
+    paths would be B290 with extra steps.
+    """
+    from eval.scorers.toolbench import build_toolbench_prompt
+
+    answer = row.get("answer", "")
+    if not str(answer).strip():
+        raise ValueError("toolbench training row has an empty 'answer'; nothing to learn")
+    return str(build_toolbench_prompt(row)), str(answer), "Answer"

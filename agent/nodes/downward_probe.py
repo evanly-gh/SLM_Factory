@@ -115,7 +115,7 @@ def _train_and_eval(
         )
     result = run_eval(
         state["eval_set"], weights_ref, model_id,
-        task=task, quant=model.quant, gguf_path=gguf_path,
+        quant=model.quant, gguf_path=gguf_path,
     )
     return weights_ref, result
 

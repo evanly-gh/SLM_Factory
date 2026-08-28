@@ -115,14 +115,25 @@ def test_private_row_fields_are_not_shown_to_the_teacher(monkeypatch):
     assert "train_anchor" not in prompt
 
 
-def test_the_prompt_tells_the_orchestrator_to_write_the_contract_from_the_rows(monkeypatch):
-    """The instruction that separates this from the one-line table it replaced: a convention the
-    benchmark's NAME would not tell you has to come from the data."""
+def test_the_prompt_grounds_the_contract_in_the_answer_and_not_in_reputation(monkeypatch):
+    """Two instructions, both load-bearing, and the second was added after the first backfired.
+
+    The original said to write the contract "from the ROWS, not from the benchmark's reputation".
+    The reputation half is still right — a convention the benchmark's NAME would not tell you has to
+    come from the data. The ROWS half was wrong, because a stored row is not an answer: it holds the
+    question and the gold together and does not say which part the model emits. On ner_bc5cdr the
+    author dutifully described the storage schema `{text, entities}` while the model is asked for a
+    bare `[{text, type}]` list, and the resulting brief made the teacher reject 25 of 25 valid rows.
+
+    So the source is now the OUTPUT half of the rendered examples, and the prompt says so explicitly.
+    """
     captured = _stub_anthropic(monkeypatch)
     build_task_brief(get_task("calendar_json"), CALENDAR_ROWS, log=lambda _m: None)
 
     prompt = captured["messages"][0]["content"]
-    assert "from the ROWS, not from the benchmark's reputation" in prompt
+    assert "never from the benchmark's reputation" in prompt
+    assert "WHAT IT MUST OUTPUT" in prompt, "the contract must be grounded in the literal answer"
+    assert "Do NOT describe the fields of a stored record" in prompt
 
 
 def test_the_prompt_states_how_this_task_is_actually_graded(monkeypatch):
@@ -340,3 +351,85 @@ def test_synthesis_without_a_brief_still_names_the_task(monkeypatch):
         task="xlam_bfcl", n=1, generate_fn=generate, log=None, brief=None,
     )
     assert get_task("xlam_bfcl").title in prompts[0]
+
+
+def test_the_brief_shows_the_ANSWER_the_model_emits_not_the_stored_row():
+    """The brief's output contract must describe what the model produces, not how a row is filed.
+
+    This killed run 38832588. The sample block rendered each stored row as JSON and the instruction
+    said to write the contract "from the ROWS". BC5CDR stores `{"text":..., "entities":[...]}`, so the
+    brief declared the output must be "a single JSON object with exactly two top-level fields: text
+    and entities" — while `NER_PROMPT` asks the model for a bare `[{"text":..,"type":..}]` LIST.
+
+    That brief reaches every synthesis and verification prompt. The teacher then judged correctly
+    formed entity lists against a contract demanding an object and rejected 25 of 25 with "Output
+    format is incorrect; must be a JSON object with 'text' and 'entities' fields" — moments after the
+    exact programmatic verifier had passed the same 25 rows. Two wipeouts stopped the run.
+    """
+    import json
+
+    from agent.task_brief import _sample_block
+    from tasks import get_task
+
+    rows = [{
+        "text": "Aspirin induced gastritis.",
+        "entities": [{"text": "Aspirin", "type": "Chemical"},
+                     {"text": "gastritis", "type": "Disease"}],
+    }]
+    block = _sample_block(rows, 1, get_task("ner_bc5cdr"))
+
+    # The output half must be the literal target: a JSON LIST of entity objects.
+    output_half = block.split("WHAT IT MUST OUTPUT")[-1]
+    parsed = json.loads(output_half.split("---")[-1].strip())
+    assert isinstance(parsed, list), (
+        f"the brief shows the model's output as {type(parsed).__name__}; NER_PROMPT asks for a list, "
+        "and a brief describing an object is what rejected 25/25 valid rows"
+    )
+    assert parsed[0] == {"text": "Aspirin", "type": "Chemical"}
+    # And the stored row's key must NOT be presented as an output field.
+    assert '"entities"' not in output_half, (
+        "'entities' is a STORAGE key, not part of the answer the model emits"
+    )
+
+
+def test_the_brief_shows_the_real_prompt_so_conventions_cannot_be_inferred_wrongly():
+    """The input half must be the exact prompt, so the contract is grounded in what the model sees."""
+    from agent.task_brief import _sample_block
+    from tasks import get_task
+
+    spec = get_task("ner_bc5cdr")
+    rows = [{"text": "Aspirin induced gastritis.", "entities": []}]
+    block = _sample_block(rows, 1, spec)
+    shown = block.split("WHAT IT MUST OUTPUT")[0]
+    assert 'JSON list of objects with "text" and "type" keys' in shown, (
+        "the brief author must see the real prompt, not a paraphrase of it"
+    )
+
+
+def test_every_task_can_render_a_brief_sample_without_raising():
+    """Cold start must not be able to die here; a brief is prose, not a scored artifact."""
+    import tasks
+
+    samples = {
+        "ner_bc5cdr": {"text": "Aspirin induced gastritis.", "entities": []},
+        "calendar_json": {"text": "Add Dentist March 3 10am", "answer": "[]",
+                          "tools": [{"name": "calendar.events.insert", "parameters": {}}]},
+        "xlam_bfcl": {"text": "weather in Paris?", "answer": "[]",
+                      "tools": [{"name": "get_weather", "parameters": {}}]},
+        "toolbench": {"text": "q", "query": "q", "answer": "Thought: t\nAction: Finish",
+                      "tools": [{"name": "a", "parameters": {}}]},
+        "gsm8k": {"text": "2+2?", "answer": "#### 4"},
+        "dialogsum": {"text": "#Person1#: hi", "answer": "A greeting."},
+        "clinc150": {"text": "move money", "label": "transfer"},
+        "sms_spam": {"text": "WINNER", "label": "spam"},
+        "routerbench": {"text": "2+2", "label": "local"},
+        "proactive_listening": {"text": "A: um...", "label": "interrupt"},
+    }
+    from agent.task_brief import _sample_block
+
+    for name, spec in sorted(tasks.TASKS.items()):
+        row = samples.get(name)
+        if row is None:
+            continue
+        block = _sample_block([dict(row)], 1, spec)
+        assert "WHAT THE MODEL IS SHOWN" in block, f"{name}: fell back to the stored-row rendering"

@@ -27,4 +27,7 @@ package = false
 
 [tool.pytest.ini_options]
 pythonpath = ["."]
+# Heavyweight modules are skipped at COLLECTION by conftest.pytest_ignore_collect, not by a marker —
+# a marker cannot help, because collection imports the module before deselection applies. See the
+# comment on `_HEAVY_TEST_FILES` in conftest.py. Run them with SLM_TEST_HEAVY=1 or --heavy-ok.
 addopts = "--import-mode=importlib"

@@ -3,7 +3,7 @@
 Base interface for model selection strategies.
 
 All strategies share the same contract:
-  Input:  AgentState with feasible_models, stop_threshold, eval_set, task_type, etc.
+  Input:  AgentState with feasible_models, stop_threshold, eval_set, task, etc.
   Output: AgentState with selected_model set.
 
 Each strategy is a function: (AgentState) -> AgentState

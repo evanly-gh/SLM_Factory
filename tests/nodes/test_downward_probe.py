@@ -44,6 +44,26 @@ def _fixed_probe_h():
     return dict(DOWNWARD_PROBE_H)
 
 
+def _valid_hyperparameter_decision():
+    """An orchestrator decision the validator accepts.
+
+    Used by the one case here whose below-threshold half actually consults the orchestrator. The
+    converged cases keep a raising stub, because for them the LLM must never be called at all: a
+    threshold-clearing score is deterministic routing and spends no API call.
+    """
+    return {
+        "intervention": "hyperparameter",
+        "hypothesis": "the hard bucket is under-fit, so the adapter needs more capacity",
+        "hyperparams": {
+            "lora_rank": 16,
+            "alpha_ratio": 2,
+            "weight_decay": 0.01,
+            "learning_rate": 0.0001,
+            "nr_epochs": 4,
+        },
+    }
+
+
 def test_agent_state_declares_downward_probe_history():
     from agent.state import AgentState
 
@@ -378,6 +398,12 @@ def test_iterate_routes_downward_only_after_threshold_with_untried_lower_tier(
     monkeypatch,
     strategy,
 ):
+    """The threshold is what gates the downward probe, not the availability of a lower tier.
+
+    The below-threshold half of this case DOES consult the orchestrator, so it is stubbed with a
+    valid decision: an unusable one raises rather than routing anywhere at all (B316), which would
+    prove nothing about where a below-threshold turn goes.
+    """
     from agent.nodes.iterate import iterate_node
 
     monkeypatch.setenv("SLM_MODEL_SELECTION_STRATEGY", strategy)
@@ -400,7 +426,7 @@ def test_iterate_routes_downward_only_after_threshold_with_untried_lower_tier(
     }
     with patch(
         "agent.nodes.iterate._llm_iterate",
-        side_effect=Exception("skip llm"),
+        return_value=_valid_hyperparameter_decision(),
     ) as llm:
         at_threshold = iterate_node(dict(state))
         below_threshold = iterate_node(
@@ -413,6 +439,7 @@ def test_iterate_routes_downward_only_after_threshold_with_untried_lower_tier(
 
     assert at_threshold["next_action"] == "downward_probe"
     assert below_threshold["next_action"] != "downward_probe"
+    # Exactly once: the converged turn routes deterministically and spends no API call.
     assert llm.call_count == 1
 
 

@@ -33,6 +33,7 @@ CURATED_LOADER_REPO_ID_CONSTANTS = {
     "data.loaders.routerbench": ("HF_ID",),
     "data.loaders.dialogsum_samsum": ("DIALOGSUM_ID", "SAMSUM_ID"),
     "data.loaders.xlam_bfcl": ("XLAM_ID", "BFCL_ID"),
+    "data.loaders.toolbench": ("TRAIN_REPO", "TOOLENV_REPO"),
 }
 
 
@@ -558,6 +559,242 @@ def test_format_bound_training_refuses_an_empty_answer():
     for task in ("xlam_bfcl", "calendar_json"):
         with pytest.raises(ValueError, match="empty 'answer'"):
             _training_turn({"text": "t", "answer": "  "}, task, _NO_CONTEXT)
+
+
+# --- ToolBench / ToolEval (agentic multi-step tool calling) --------------------
+#
+# The raw corpus is ShareGPT-shaped: `{"id": "Step N: <query>", "conversations": [...]}` with roles
+# system / user / assistant / function, and the assistant turns carrying
+# `Thought: / Action: / Action Input:`. Two things about it drive the converter and are worth
+# stating as executable facts rather than prose: the file is already exploded by STEP, so the same
+# query appears at several depths and only the deepest is a complete path; and ~4% of rows call an
+# API their own prompt never declared, which is unwinnable by construction.
+
+
+def _tb_system(apis=None, tool="weather_api"):
+    from data.loaders.toolbench_prompt import build_system_prompt
+
+    return build_system_prompt(
+        apis if apis is not None else [{
+            "tool_name": "Weather API", "api_name": "get weather",
+            "api_description": "Current weather for a city.",
+            "required_parameters": [
+                {"name": "city", "type": "STRING", "description": "", "default": ""},
+            ],
+            "optional_parameters": [],
+        }],
+        {tool: "Weather data for anywhere."},
+    )
+
+
+def _tb_raw(query="what is the weather in Paris?", assistant=None, step=2, system=None):
+    turns = assistant if assistant is not None else [
+        "\nThought: I should look it up.\nAction: get_weather_for_weather_api\n"
+        'Action Input: {"city": "Paris"}',
+        "\nThought: I can answer now.\nAction: Finish\n"
+        'Action Input: {"return_type": "give_answer", "final_answer": "18 degrees and clear."}',
+    ]
+    conversations = [
+        {"from": "system", "value": system if system is not None else _tb_system()},
+        {"from": "user", "value": f"\n{query}\nBegin!\n"},
+    ]
+    for index, turn in enumerate(assistant if assistant is not None else turns):
+        conversations.append({"from": "assistant", "value": turn})
+        if index < len(turns) - 1:
+            conversations.append({"from": "function", "value": '{"error": "", "response": "{}"}'})
+    return {"id": f"Step {step}: {query}", "conversations": conversations}
+
+
+def test_toolbench_keeps_a_complete_path_and_shapes_the_row():
+    from data.loaders.toolbench import convert_train_rows
+
+    rows, dropped = convert_train_rows([_tb_raw()])
+    assert dropped == {}
+    assert len(rows) == 1
+    row = rows[0]
+    assert row["query"] == "what is the weather in Paris?"
+    # `text` is the prompt ToolLLaMA sees: system message followed by the user turn, unaltered.
+    assert row["text"].startswith("You are AutoGPT")
+    assert row["text"].endswith("\nwhat is the weather in Paris?\nBegin!\n")
+    # The target is the WHOLE path, both assistant turns, because that is what the eval asks for.
+    assert row["answer"].count("Action:") == 2
+    assert row["answer"].rstrip().endswith('"final_answer": "18 degrees and clear."}')
+    assert [tool["name"] for tool in row["tools"]] == [
+        "get_weather_for_weather_api", "Finish",
+    ]
+
+
+def test_toolbench_query_loses_the_Begin_wrapper():
+    """The judge is asked "does this answer solve this query", so a trailing `Begin!` in the query
+    would be an instruction reaching the judge."""
+    from data.loaders.toolbench import convert_train_rows
+
+    rows, _dropped = convert_train_rows([_tb_raw(query="find me a flight to Lisbon")])
+    assert rows[0]["query"] == "find me a flight to Lisbon"
+
+
+@pytest.mark.parametrize(("assistant", "reason"), [
+    # An incomplete step prefix: this trajectory continues in a different row of the same file.
+    ([
+        "\nThought: looking.\nAction: get_weather_for_weather_api\n"
+        'Action Input: {"city": "Paris"}',
+    ], "path does not end in Finish"),
+    # DFSDT explored and abandoned. Training on it teaches giving up.
+    ([
+        "\nThought: hopeless.\nAction: Finish\n"
+        'Action Input: {"return_type": "give_up_and_restart"}',
+    ], "path gave up rather than answering"),
+    ([
+        "\nThought: here.\nAction: Finish\n"
+        'Action Input: {"return_type": "give_answer", "final_answer": ""}',
+    ], "give_answer with an empty final_answer"),
+    ([
+        "\nThought: here.\nAction: Finish\nAction Input: not json at all",
+    ], "Finish input is not valid JSON"),
+    ([
+        "I will just tell you: it is warm.",
+    ], "final turn is not an Action"),
+])
+def test_toolbench_drops_a_row_and_says_why(assistant, reason):
+    """The drops on this corpus are large and structural — roughly two thirds of raw rows are
+    incomplete step prefixes — so a loader reporting only a final total would look like it was
+    silently losing data."""
+    from data.loaders.toolbench import convert_train_rows
+
+    rows, dropped = convert_train_rows([_tb_raw(assistant=assistant)])
+    assert rows == []
+    assert dropped == {reason: 1}
+
+
+def test_toolbench_drops_a_row_whose_gold_calls_an_undeclared_api():
+    """The ToolBench analogue of BFCL's `simple_363`, measured at 33 of 762 eval rows (4.3%).
+
+    The scorer rejects a call outside the declared set, so such a row is unwinnable and would
+    silently cap the achievable score below 1.0 — the same defect `data/loaders/xlam_bfcl.py` drops
+    its equivalents for.
+    """
+    from data.loaders.toolbench import convert_train_rows
+
+    rows, dropped = convert_train_rows([_tb_raw(assistant=[
+        "\nThought: I will use something else.\nAction: get_forecast_for_other_api\n"
+        'Action Input: {"city": "Paris"}',
+        "\nThought: done.\nAction: Finish\n"
+        'Action Input: {"return_type": "give_answer", "final_answer": "warm"}',
+    ])])
+    assert rows == []
+    assert dropped == {"gold calls an undeclared API": 1}
+
+
+def test_toolbench_tools_are_compact_enough_for_the_verifier_prompt():
+    """`_row_context_block` renders the row's non-answer fields into the teacher's verification
+    prompt and truncates at 6,000 characters. A full ToolBench schema list is ~5,000 on its own, so
+    the descriptions are stripped — they are already in `text` — leaving names and parameters, which
+    is all the three programmatic consumers need."""
+    import json as _json
+
+    from data.loaders.toolbench import convert_train_rows
+
+    rows, _dropped = convert_train_rows([_tb_raw()])
+    rendered = _json.dumps(rows[0]["tools"])
+    assert len(rendered) < 2000
+    assert "description" not in rendered
+    assert "get_weather_for_weather_api" in rendered
+
+
+def test_toolbench_eval_rows_carry_a_subset_and_no_gold():
+    """Pass rate is reference-free: ToolEval asks a judge whether the model's own answer addresses
+    the query, and the test queries ship with no gold path. The subset label is what makes the
+    per-subset breakdown and the query-count-weighted overall possible."""
+    from data.loaders.toolbench import convert_eval_rows
+
+    raw = [{
+        "query": "I want the forecast for Lisbon.",
+        "query_id": 4242,
+        "api_list": [{
+            "category_name": "Weather", "tool_name": "Weather API", "api_name": "get weather",
+            "api_description": "Current weather for a city.",
+            "required_parameters": [
+                {"name": "city", "type": "STRING", "description": "", "default": ""},
+            ],
+            "optional_parameters": [],
+        }],
+    }]
+    rows = convert_eval_rows("G2_category", raw, {"weather_api": "Weather data."})
+    assert len(rows) == 1
+    assert rows[0]["_subset"] == "G2_category"
+    assert rows[0]["_query_id"] == "4242"
+    assert rows[0]["answer"] == ""
+    assert rows[0]["query"] == "I want the forecast for Lisbon."
+    assert "Weather data." in rows[0]["text"]
+    assert rows[0]["text"].endswith("\nI want the forecast for Lisbon.\nBegin!\n")
+
+
+def test_toolbench_eval_and_train_prompts_have_the_same_shape():
+    """The property that makes this task trainable at all.
+
+    Train prompts come from the corpus with ToolBench's system message already baked in; eval
+    prompts are rebuilt from a raw `api_list`. If the two diverge, the model is fine-tuned on one
+    input shape and scored on another (B250/B290), and on this task the difference would be buried
+    in 5,000 characters of API schema where nobody would see it.
+    """
+    from data.loaders.toolbench import convert_eval_rows, convert_train_rows
+
+    api = {
+        "category_name": "Weather", "tool_name": "Weather API", "api_name": "get weather",
+        "api_description": "Current weather for a city.",
+        "required_parameters": [
+            {"name": "city", "type": "STRING", "description": "", "default": ""},
+        ],
+        "optional_parameters": [],
+    }
+    descriptions = {"weather_api": "Weather data for anywhere."}
+    train, _dropped = convert_train_rows([_tb_raw(query="weather in Paris?")])
+    evaluated = convert_eval_rows(
+        "G1_instruction", [{"query": "weather in Paris?", "query_id": 1, "api_list": [api]}],
+        descriptions,
+    )
+    assert train[0]["text"] == evaluated[0]["text"]
+
+
+# --- Reading a 2 GB JSON array without reading all of it -----------------------
+
+
+@pytest.mark.parametrize(("suffix", "expected"), [
+    ("]", 2),
+    # Truncated between elements.
+    (", ", 2),
+    # Truncated INSIDE the third element: the two complete ones survive.
+    (', {"id": "c", "conversa', 2),
+])
+def test_a_truncated_json_array_yields_every_complete_object(suffix, expected):
+    """The streaming read is what avoids a 2 GB download for the ~51 MiB a cold start needs.
+
+    `raw_decode` only succeeds on a complete value, so the first failure IS the truncation point and
+    everything before it is intact by construction.
+    """
+    from data.loaders.toolbench import iter_json_array_objects
+
+    text = '[\n  {"id": "a"},\n  {"id": "b"}' + suffix
+    assert [row["id"] for row in iter_json_array_objects(text)] == ["a", "b"][:expected]
+
+
+def test_a_string_containing_a_closing_bracket_does_not_end_the_array_early():
+    """ToolBench prompts are full of `]` inside JSON strings — the API list is rendered into the
+    system message — so a scan for the closing bracket rather than a real parse would truncate
+    almost every row."""
+    from data.loaders.toolbench import iter_json_array_objects
+
+    text = '[{"id": "has ] and } inside"}, {"id": "second"}]'
+    assert [row["id"] for row in iter_json_array_objects(text)] == [
+        "has ] and } inside", "second",
+    ]
+
+
+def test_the_streaming_reader_stops_at_the_row_limit():
+    from data.loaders.toolbench import iter_json_array_objects
+
+    text = "[" + ", ".join(f'{{"id": "{i}"}}' for i in range(50)) + "]"
+    assert len(list(iter_json_array_objects(text, limit=7))) == 7
 
 
 def test_an_unknown_task_cannot_be_trained():

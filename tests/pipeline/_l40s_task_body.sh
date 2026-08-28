@@ -215,12 +215,22 @@ SYNTH_EAGER_FLAG=""
 if [ "${SLM_SYNTH_ENFORCE_EAGER:-0}" = "1" ]; then
     SYNTH_EAGER_FLAG="--enforce-eager"
 fi
+# The context the TEACHER is served at. Exported rather than written inline below so that Python can
+# read the same number the server was launched with (`config.SYNTH_MAX_MODEL_LEN`) and refuse to build
+# a prompt that cannot fit it. The two used to be unable to agree, because nothing published this
+# value: `agent/teacher_fitness` sized its demonstration block from the TASK's max_seq_length — the
+# STUDENT's window — which on toolbench produced 199 HTTP 400s in job 38817759.
+#
+# Raising it costs KV cache on a single L40S and therefore trades against SLM_SYNTH_MAX_NUM_SEQS. It
+# is NOT a model limit: Qwen3.6-35B-A3B declares max_position_embeddings=262144.
+export SLM_SYNTH_MAX_MODEL_LEN="${SLM_SYNTH_MAX_MODEL_LEN:-8192}"
 echo "=== vLLM synth ($SYNTH_MODEL) TP=$SLM_SYNTH_TP on GPUs $SLM_SYNTH_GPU_IDS → localhost:$SYNTH_PORT → $SYNTH_LOG ==="
 echo "=== vLLM synth: max-num-seqs=$SLM_SYNTH_MAX_NUM_SEQS util=$SLM_SYNTH_GPU_UTILIZATION cuda-graphs=$([ -n "$SYNTH_EAGER_FLAG" ] && echo off || echo on) ==="
 CUDA_VISIBLE_DEVICES="$SLM_SYNTH_GPU_IDS" .venv_vllm/bin/vllm serve "$SYNTH_MODEL" \
     --host 127.0.0.1 --port "$SYNTH_PORT" \
     --tensor-parallel-size "$SLM_SYNTH_TP" --quantization fp8 \
-    --gpu-memory-utilization "$SLM_SYNTH_GPU_UTILIZATION" --max-model-len 8192 \
+    --gpu-memory-utilization "$SLM_SYNTH_GPU_UTILIZATION" \
+    --max-model-len "$SLM_SYNTH_MAX_MODEL_LEN" \
     --max-num-seqs "$SLM_SYNTH_MAX_NUM_SEQS" --gdn-prefill-backend triton $SYNTH_EAGER_FLAG \
     --language-model-only --reasoning-parser qwen3 --served-model-name "$SYNTH_MODEL" \
     > "$SYNTH_LOG" 2>&1 &

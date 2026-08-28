@@ -654,7 +654,21 @@ def mine_additional_real_rows(
             task_plan,
             description,
             task,
-            max(300, len(existing_rows) + requested * 4),
+            # Sized from what we WANT, not from how much we already hold. This was
+            # `len(existing_rows) + requested * 4`, which asked a brand-new dataset for a slice
+            # starting past the end of our own curriculum — on the calendar run, `train[:5929+...]`
+            # and then a test window at `train[5929:6009]`. Any discovered dataset SMALLER than the
+            # curriculum was therefore discarded with "corresponds to no data".
+            #
+            # That cost a real dataset. `Xamxl/calendar_event_parser_ds_v1` is 100 rows of
+            # `{"input": "2026-01-01T15:41:43gym tomorrow 6 am", "output": {"title": "gym", "start":
+            # "2026-01-02T06:00:00", "end": "2026-01-02T07:00:00"}}` — a reference instant plus a
+            # relative request, resolved to absolute ISO with a 60-minute default. That is this task,
+            # almost exactly, and it was thrown away for arithmetic (B324).
+            #
+            # An offset makes sense when RE-READING a source we have already consumed. It is
+            # meaningless for one we have never opened, and deduplication downstream handles overlap.
+            max(300, requested * 4),
             # A test slice is still requested because some loaders need one to shape rows, but it is
             # never used as a rejection criterion: the source's own internal train/test structure is
             # irrelevant to us, since mining consumes only the train side.
@@ -1019,17 +1033,31 @@ def _materialize_from_mapping(hf_id, cfg, splits, mapping, task, max_train, max_
         return out
 
     try:
-        train = _convert(_load(tr, max_train))
-        # A single-split repo resolves `test_split` back to the TRAIN split, and slicing both from
-        # the front then made train[:N] ⊇ test[:80] by construction — so `_validate_discovered_splits`
-        # rejected the source for an overlap this function had just manufactured. That is why xlam
-        # run 38566712 rejected every xLAM mirror with "normalized train/test text overlap (80
-        # rows)": 80 is exactly `max_test`, i.e. ALL of it. Most instruction-tuning corpora on the
-        # Hub ship one split, so this was a guaranteed rejection for the common case — including
-        # for `Salesforce/xlam-function-calling-60k` itself. Take a DISJOINT window instead.
         if te == tr:
-            test = _convert(_load(te, max_test, offset=max_train))
+            # A single-split repo resolves `test_split` back to the TRAIN split, and slicing both
+            # from the front made train[:N] ⊇ test[:80] by construction — so
+            # `_validate_discovered_splits` rejected the source for an overlap this function had just
+            # manufactured. That is why xlam run 38566712 rejected every xLAM mirror with "normalized
+            # train/test text overlap (80 rows)": 80 is exactly `max_test`, i.e. ALL of it. Most
+            # instruction-tuning corpora on the Hub ship one split, so it was a guaranteed rejection
+            # for the common case, including `Salesforce/xlam-function-calling-60k` itself.
+            #
+            # The window is now carved out of ONE materialized read rather than a second offset
+            # slice. `train[offset:offset+n]` raises outright when the dataset has fewer than
+            # `offset` rows, which discarded every dataset smaller than the requested slice — a
+            # 100-row corpus could not survive it (B324). Splitting in memory cannot fail that way,
+            # is disjoint by construction, and costs one read instead of two.
+            everything = _convert(_load(tr, max_train + max_test))
+            # The test window is a formality here — the caller states it is never used as a rejection
+            # criterion because mining consumes only the train side — so it gets the SMALLER share.
+            # A flat `max_test` of 80 took 80 of the 100 rows in
+            # `Xamxl/calendar_event_parser_ds_v1`, leaving 20 usable, which turns a small corpus into
+            # almost nothing for no benefit. At most a fifth is set aside, and at least one row so the
+            # two halves stay non-empty and disjoint.
+            reserve = max(1, min(max_test, len(everything) // 5))
+            test, train = everything[-reserve:], everything[:-reserve]
         else:
+            train = _convert(_load(tr, max_train))
             test = _convert(_load(te, max_test))
     except Exception as e:
         log(f"      [acquire] materialize {hf_id} failed: {e}")

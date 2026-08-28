@@ -15,14 +15,34 @@ def test_tier_matches_size_bucket():
 
 
 def test_size_tier_boundaries():
-    assert _size_tier(500) == 0
-    assert _size_tier(749) == 0
-    assert _size_tier(750) == 1
-    assert _size_tier(1499) == 1
-    assert _size_tier(1500) == 2
-    assert _size_tier(2499) == 2
-    assert _size_tier(2500) == 3
-    assert _size_tier(9000) == 3
+    """Tiers are 1-5 as of 2026-08-24, with a boundary at 300 MB.
+
+    The 300 MB cut exists because the sub-billion entries put eleven variants spanning
+    101-690 MB into what had been a single bucket. Escalation promotes a whole tier at a time,
+    so that would have made the first step a 6.8x jump against ~1.6x later — backwards, since
+    the cheap end is where fine steps cost least.
+    """
+    assert _size_tier(101) == 1
+    assert _size_tier(299) == 1
+    assert _size_tier(300) == 2
+    assert _size_tier(500) == 2
+    assert _size_tier(749) == 2
+    assert _size_tier(750) == 3
+    assert _size_tier(1499) == 3
+    assert _size_tier(1500) == 4
+    assert _size_tier(2499) == 4
+    assert _size_tier(2500) == 5
+    assert _size_tier(9000) == 5
+
+
+def test_tiers_are_one_based_and_contiguous():
+    """No tier 0, and no gaps — a report that groups by tier should not show a hole."""
+    from config.android_pool import TIER_COUNT
+
+    occupied = sorted({model.tier for model in ANDROID_POOL})
+    assert min(occupied) >= 1, "tier numbering is 1-based; tier 0 must not reappear"
+    assert max(occupied) <= TIER_COUNT
+    assert occupied == list(range(min(occupied), max(occupied) + 1)), occupied
 
 
 def test_three_variants_per_model():

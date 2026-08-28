@@ -122,6 +122,23 @@ class QwenBaselineUnavailableError(RuntimeError):
     """
 
 
+def _gate_synthetic_data(state: AgentState, eval_set, train_rows: list[dict]) -> None:
+    """Decide, once, whether this run may use synthetic data at all.
+
+    Measured five-shot through the task's own scorer, because that is how synthesis prompts the
+    teacher; a zero-shot number on a format-bound task mostly reports whether it guessed our output
+    contract (B276). Below the gate, `surgical_synthesis` is removed from the intervention menu for
+    the rest of the run — see agent/teacher_fitness.py.
+    """
+    from agent.teacher_fitness import measure_teacher_fitness
+    from tasks import get_task
+
+    spec = get_task(state["task"])
+    state["teacher_fitness"] = measure_teacher_fitness(
+        spec, eval_set, list(train_rows or []), log=print,
+    )
+
+
 def _author_task_brief(state: AgentState, train_rows: list[dict]) -> None:
     """Have the orchestrator describe this benchmark, once, before any teacher call.
 
@@ -195,9 +212,12 @@ def _calibrate_qwen_goal_if_pending(state: AgentState, eval_set) -> None:
     from agent.threshold import threshold_from_endpoint_baseline
 
     floor = float(calibration.get("floor", 0.8))
-    task = state["task"]
     try:
-        baseline = measure_endpoint_baseline(eval_set, task, log=print)
+        # The task comes from the EVAL SET, which is why there is no task argument here. Passing one
+        # put the task NAME in the `generate_fn` slot, so every one of the 1,000 eval rows failed with
+        # `'str' object is not callable`, the baseline measured 0.0000, and the accuracy goal silently
+        # fell back to the 0.80 floor while reporting that the teacher had scored zero (B313).
+        baseline = measure_endpoint_baseline(eval_set, log=print)
     except Exception as error:  # noqa: BLE001 - re-raised as a fatal calibration failure
         raise QwenBaselineUnavailableError(
             f"Qwen-3.6 baseline measurement failed ({str(error)[:160]}); the reference "
@@ -358,6 +378,7 @@ def eval_setup_node(state: AgentState) -> AgentState:
         )
         _pin_label_space(state, eval_set)
         _author_task_brief(state, train_examples)
+        _gate_synthetic_data(state, eval_set, train_examples)
         _calibrate_qwen_goal_if_pending(state, eval_set)
         return state
 
@@ -430,6 +451,7 @@ def eval_setup_node(state: AgentState) -> AgentState:
               f"full-size eval set and are not directly comparable to tasks that reached target.")
     _pin_label_space(state, eval_set)
     _author_task_brief(state, train_examples)
+    _gate_synthetic_data(state, eval_set, train_examples)
 
     # Difficulty-stratify the eval set for the test-data agent (B161): label each held-out
     # example easy/medium/hard by the base-model zero-shot capability gradient (smallest vs

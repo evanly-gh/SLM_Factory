@@ -13,10 +13,29 @@ def _load(max_train: int, max_test: int, log=print):
     return load_xlam_bfcl(max_train=max_train, max_test=max_test, log=log)
 
 
-def _verify(row: dict) -> bool:
+def _check(row: dict) -> tuple[bool, str]:
+    """The verdict AND the reason. Exposed as `_verify.checker` below."""
     from data.synth_verifiers import verify_function_call_row
 
-    return verify_function_call_row(row)[0]
+    return verify_function_call_row(row)
+
+
+def _verify(row: dict) -> bool:
+    return _check(row)[0]
+
+
+# WHY THE REASON IS PUBLISHED SEPARATELY
+#     `TaskSpec.synth_verifier` only has to answer yes/no, so this wrapper used to be
+#     `return verify_function_call_row(row)[0]` and the reason string was thrown away on the spot. `data.curriculum`
+#     looks for a `.checker` attribute to recover it, finds nothing, and its
+#     "[verify:exact] programmatic verifier rejected N row(s)" block is then unreachable.
+#
+#     Run 38985393 is what that costs. Synthesis generated 519 rows, the exact verifier rejected all
+#     519, and the log recorded only the total — so which of the five checks fired (unparseable path,
+#     undeclared API, bad argument schema, no terminal Finish, over the call budget) had to be
+#     reverse-engineered afterwards from the vLLM access log. The information existed at the moment of
+#     rejection and was discarded one character from where it was needed.
+_verify.checker = _check
 
 
 SPEC = TaskSpec(
@@ -32,6 +51,7 @@ SPEC = TaskSpec(
     eval_sampling="shuffled",
     closed_label_space=False,
     label_definitions={},
+    verifier_notes="",
     # These four had never run: `function_call` fell into `apply_quality_controls`' `else` branch
     # and the dataset was returned untouched, so no xlam curriculum was ever filtered (B299).
     # `valid_json_answer` matters most here — a gold answer that does not parse trains the model

@@ -312,29 +312,97 @@ def test_non_thinking_only_qwen_gguf_matches_plain_hf_generation_prefix():
     assert "<think>" not in instance.prompts[0]
 
 
-def test_infer_batch_gguf_fails_clearly_when_mode_cannot_be_controlled():
-    class LegacyNonQwenLlama:
-        def create_chat_completion(self, messages, *, max_tokens, temperature):
-            return {"choices": [{"message": {"content": "unsafe"}}]}
+class _RecordingLlama:
+    """Legacy llama-cpp-python signature: no `chat_template_kwargs`, so the raw path is taken."""
 
+    def __init__(self):
+        self.prompts = []
+        self.stops = []
+
+    def create_chat_completion(self, messages, *, max_tokens, temperature):
+        raise AssertionError("installed legacy signature must use explicit framing")
+
+    def __call__(self, prompt, *, max_tokens, temperature, echo, stop):
+        self.prompts.append(prompt)
+        self.stops.append(stop)
+        return {"choices": [{"text": "answer"}]}
+
+
+def _run_gguf_with_serving_tokenizer(base_model, tokenizer):
+    """Drive `infer_batch_gguf` with a pre-seeded serving tokenizer (no network, no weights)."""
+    instance = _RecordingLlama()
     with (
         patch("training.slm_helpers._gguf_cache", {}),
         patch("training.slm_helpers._gguf_cache_order", []),
+        patch.dict("training.slm_helpers._serving_tokenizer_cache", {base_model: tokenizer},
+                   clear=True),
         patch.dict(
             "sys.modules",
-            {
-                "llama_cpp": MagicMock(
-                    Llama=MagicMock(return_value=LegacyNonQwenLlama())
-                )
-            },
+            {"llama_cpp": MagicMock(Llama=MagicMock(return_value=instance))},
         ),
     ):
-        with pytest.raises(RuntimeError, match="cannot enforce non-thinking"):
-            infer_batch_gguf(
-                ["hello"],
-                "/fake/non-qwen.gguf",
-                base_model="other/model",
-            )
+        result = infer_batch_gguf(["hello"], "/fake/non-qwen.gguf", base_model=base_model)
+    return result, instance
+
+
+def test_non_qwen_gguf_renders_through_the_models_own_chat_template():
+    """A Gemma must be served Gemma turn markers, not Qwen's ChatML.
+
+    This used to raise outright, which was the right guard for a Qwen-only pool: handing a
+    non-Qwen the hardcoded `<|im_start|>` framing is silent train/serve skew, the B290 failure.
+    The guard was the wrong general rule though — the served model's own tokenizer already knows
+    its framing, so rendering from it is both safe and family-agnostic.
+    """
+    tokenizer = MagicMock()
+    tokenizer.chat_template = "gemma-template"
+    tokenizer.eos_token = "<end_of_turn>"
+    tokenizer.apply_chat_template.return_value = (
+        "<start_of_turn>user\nhello<end_of_turn>\n<start_of_turn>model\n"
+    )
+
+    result, instance = _run_gguf_with_serving_tokenizer("google/gemma-3-270m", tokenizer)
+
+    assert result == ["answer"]
+    assert instance.prompts == [
+        "<start_of_turn>user\nhello<end_of_turn>\n<start_of_turn>model\n"
+    ]
+    assert "<|im_start|>" not in instance.prompts[0]
+    # The turn-end string is derived from the model too. Sending Qwen's `<|im_end|>` to a Gemma
+    # stops nothing, so every row would run to max_tokens and trail generated garbage into the
+    # scorer.
+    assert "<end_of_turn>" in instance.stops[0]
+    tokenizer.apply_chat_template.assert_called_once()
+
+
+def test_non_qwen_gguf_without_a_chat_template_sends_the_bare_prompt():
+    """A BASE checkpoint has no template, and training took the same plain-text branch.
+
+    Wrapping the prompt in some other family's turn markers is what would break parity here, so
+    the absence of a template is a real answer rather than an error.
+    """
+    tokenizer = MagicMock()
+    tokenizer.chat_template = None
+    tokenizer.eos_token = "<|endoftext|>"
+
+    result, instance = _run_gguf_with_serving_tokenizer("HuggingFaceTB/SmolLM2-135M", tokenizer)
+
+    assert result == ["answer"]
+    assert instance.prompts == ["hello"]
+
+
+def test_qwen_gguf_framing_is_unchanged_by_the_generalisation():
+    """The regression guard on the change above: no previously measured Qwen score may move.
+
+    Qwen keeps the hand-written bytes rather than rendering through its own template, because
+    those bytes are what every recorded score in the project was produced with.
+    """
+    _, instance = _run_gguf_with_serving_tokenizer("Qwen/Qwen3-0.6B", MagicMock())
+
+    assert instance.prompts == [
+        "<|im_start|>user\nhello<|im_end|>\n"
+        "<|im_start|>assistant\n<think>\n\n</think>\n\n"
+    ]
+    assert instance.stops[0] == ["<|im_end|>"]
 
 
 def test_hf_inference_chat_template_explicitly_disables_thinking():

@@ -39,6 +39,14 @@ from typing import Any
 
 DATA_REBUILD_SCHEMA_VERSION = 3
 
+class DataInterventionUnavailable(RuntimeError):
+    """Neither sub-strategy can add rows, so `data_rebuild` is not a usable intervention.
+
+    Raised by the plan validator rather than handled inside it: the caller (`iterate`) is the only
+    place that can do the right thing, which is to choose a hyperparameter intervention instead.
+    """
+
+
 MINE_NEW_REAL = "mine_new_real"
 SURGICAL_SYNTHESIS = "surgical_synthesis"
 DATA_REBUILD_STRATEGIES = (MINE_NEW_REAL, SURGICAL_SYNTHESIS)
@@ -60,12 +68,30 @@ MIN_REBUILD_ROWS = 50
 MAX_REBUILD_ROWS = 2000
 
 # Fields the ORCHESTRATOR may send.
+# Fields a plan may carry on the way IN. The last two are not things a caller chooses — they are
+# supplied as arguments and written by the normalizer — but they are accepted here because the
+# normalizer's own OUTPUT carries them, and two callers legitimately feed that output back:
+#
+#   * `curate_node` re-normalizes `state["data_rebuild_plan"]`, which `iterate` already normalized;
+#   * the orchestrator, shown a schema, nests `hypothesis` inside the plan object instead of leaving
+#     it at the top level.
+#
+# Rejecting them cost verification run 38658213 five consecutive iterations: the orchestrator asked
+# for `data_rebuild` every time, the plan was thrown out on `unknown field(s) ['hypothesis', 'task']`,
+# and the fallback quietly substituted a hyperparameter step — so the log read as though the
+# orchestrator had wanted hyperparameters, and no data intervention ran at all (B312). A validator
+# that cannot accept what it just produced is a trap regardless of who steps in it.
+#
+# Their values are IGNORED: `task` and `hypothesis` come from this function's arguments, which are
+# authoritative. A genuinely unknown field still raises, which is the point of the check.
 _PLAN_FIELDS = frozenset({
     "schema_version",
     "strategy",
     "rows",
     "target_categories",
     "pattern_hint",
+    "hypothesis",
+    "task",
 })
 
 
@@ -144,6 +170,7 @@ def normalize_data_rebuild_plan(
     task: str,
     hypothesis: str = "",
     mining_available: bool = True,
+    synthesis_allowed: bool = True,
 ) -> dict[str, Any]:
     """Validate and clamp an orchestrator-authored rebuild plan.
 
@@ -151,10 +178,22 @@ def normalize_data_rebuild_plan(
     plan written against the wrong contract, and silently dropping it would let the orchestrator
     believe it had asked for something.
 
-    `mining_available` is False once every known source is exhausted AND web research has failed
-    its allowance. A `mine_new_real` plan is then rewritten to `surgical_synthesis`, because the
-    alternative is spending a full train+eval cycle on an intervention that provably cannot add a
-    row.
+    Two availability flags decide what a plan may ask for, and a plan asking for something
+    unavailable is REWRITTEN rather than run, because the alternative is spending a full train+eval
+    cycle on an intervention that provably cannot add a row:
+
+      `mining_available`   False once every known source is exhausted AND web research has spent its
+                           allowance. `mine_new_real` is then rewritten to `surgical_synthesis`.
+      `synthesis_allowed`  False when the teacher could not clear the fitness gate on this task
+                           (agent/teacher_fitness.py). `surgical_synthesis` is then rewritten to
+                           `mine_new_real`.
+
+    When NEITHER is available there is no data intervention left, and `DataInterventionUnavailable`
+    is raised so `iterate` can route to a hyperparameter step instead of curating a no-op.
+
+    IDEMPOTENT: normalizing an already-normalized plan returns the same plan. `curate_node` re-checks
+    the plan `iterate` stored, so a validator that rejected its own output would fail every rebuild
+    at the second gate rather than the first — see `_PLAN_FIELDS`.
     """
     if not isinstance(plan, Mapping):
         raise ValueError("data_rebuild plan must be an object")
@@ -175,8 +214,15 @@ def normalize_data_rebuild_plan(
             f"data_rebuild.strategy {strategy!r} must be one of "
             f"{list(DATA_REBUILD_STRATEGIES)}"
         )
+    if not mining_available and not synthesis_allowed:
+        raise DataInterventionUnavailable(
+            "no data intervention can add rows: every source is exhausted with web research spent, "
+            "and the teacher did not clear the synthesis fitness gate"
+        )
     if strategy == MINE_NEW_REAL and not mining_available:
         strategy = SURGICAL_SYNTHESIS
+    elif strategy == SURGICAL_SYNTHESIS and not synthesis_allowed:
+        strategy = MINE_NEW_REAL
 
     hint = plan.get("pattern_hint")
     pattern_hint = (
@@ -196,7 +242,11 @@ def normalize_data_rebuild_plan(
         "target_categories": _target_categories(plan.get("target_categories")),
         "pattern_hint": pattern_hint,
         "hypothesis": _plain_text(
-            hypothesis or "", "data_rebuild.hypothesis", maximum=HYPOTHESIS_MAX_CHARS
+            # The argument wins; the plan's own value is the fallback so that re-normalizing does not
+            # blank a hypothesis the orchestrator already wrote.
+            hypothesis or plan.get("hypothesis") or "",
+            "data_rebuild.hypothesis",
+            maximum=HYPOTHESIS_MAX_CHARS,
         ),
         "task": task,
     }
@@ -205,11 +255,20 @@ def normalize_data_rebuild_plan(
 def mining_available_for_state(state: Mapping[str, Any]) -> bool:
     """Whether `mine_new_real` can still add rows.
 
-    False only when BOTH are true: every dataset this run has sourced is exhausted, and web
+    False when run health has RETIRED the route — two rounds that added no rows, or three that saw
+    candidates and accepted none (`run_health._retire_mining`). That check comes first and overrides
+    the source bookkeeping below, because it is evidence from actually running mining, which beats
+    `source_progress`'s optimistic assumption that a source of unknown length still has rows.
+
+    Otherwise false only when BOTH are true: every dataset this run has sourced is exhausted, and web
     research has already failed `MAX_FAILED_DISCOVERY_ROUNDS` times without contributing a row.
     Until then mining is offered, because a source with rows left is free to re-read and a
     discovery round that has not yet been tried might find something.
     """
+    from agent.run_health import MINING_RETIRED_KEY
+
+    if state.get(MINING_RETIRED_KEY):
+        return False
     if unexhausted_sources(state):
         return True
     return int(state.get("failed_discovery_rounds", 0) or 0) < MAX_FAILED_DISCOVERY_ROUNDS
@@ -236,6 +295,13 @@ def unexhausted_sources(state: Mapping[str, Any]) -> list[dict[str, Any]]:
     return out
 
 
+def data_rebuild_available(state: Mapping[str, Any]) -> bool:
+    """Whether `data_rebuild` can still add rows by either route."""
+    from agent.teacher_fitness import synthesis_allowed
+
+    return mining_available_for_state(state) or synthesis_allowed(state)
+
+
 def fallback_data_rebuild_plan(
     state: Mapping[str, Any],
     *,
@@ -246,11 +312,19 @@ def fallback_data_rebuild_plan(
     Prefers real rows while any source has them: real data is free of teacher error, and on this
     project a gold-only curriculum produced the best result anyone has measured (BC5CDR, 0.8098).
     Falls back to surgical synthesis, aimed at whatever the last test report says is failing most.
+
+    Never raises. This is the safety net for a failed orchestrator call, so it must always return a
+    usable plan; the caller checks `data_rebuild_available` BEFORE choosing data_rebuild at all, and
+    if it somehow did not, the plan returned here names the one route that is still open rather than
+    refusing to produce anything.
     """
     task = str(state.get("task") or "")
-    strategy = (
-        MINE_NEW_REAL if mining_available_for_state(state) else SURGICAL_SYNTHESIS
-    )
+    # Mining first: real rows carry no teacher error, and on this project a gold-only curriculum
+    # produced the best result anyone has measured. Synthesis is the residual, not a peer — so
+    # `synthesis_allowed` is deliberately NOT consulted here. The caller checks
+    # `data_rebuild_available` before choosing data_rebuild at all, and this function must always
+    # return a usable plan rather than refuse.
+    strategy = MINE_NEW_REAL if mining_available_for_state(state) else SURGICAL_SYNTHESIS
     report = state.get("test_report") or {}
     categories = [
         {"category": str(pair.get("gold")), "count": int(pair.get("count", 0) or 0)}
@@ -267,5 +341,9 @@ def fallback_data_rebuild_plan(
         },
         task=task,
         hypothesis=hypothesis or "deterministic fallback: no valid orchestrator plan",
-        mining_available=mining_available_for_state(state),
+        # Both flags forced open for the fallback itself: the strategy above was already chosen
+        # against them, and letting the validator rewrite or reject it here would either flip that
+        # choice back or raise from the one code path that is not allowed to fail.
+        mining_available=True,
+        synthesis_allowed=True,
     )

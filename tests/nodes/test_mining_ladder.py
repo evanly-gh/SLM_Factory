@@ -181,9 +181,13 @@ def _mine(state, *, rows=100, loader=None, discovery=None, monkeypatch=None):
     return added, report, logs
 
 
-def test_the_first_rung_re_reads_a_known_source_and_asks_for_more_than_it_consumed(monkeypatch):
-    """Every loader takes a head slice, so asking for a LARGER slice returns a superset and the
-    tail is novel by construction."""
+def test_the_first_rung_re_reads_a_known_source_and_returns_only_the_novel_tail(monkeypatch):
+    """Every loader takes a head slice, so asking for a LARGER slice returns a superset whose tail is
+    novel by construction — and only that tail is returned.
+
+    Returning the whole slice handed back every row the curriculum already had and left downstream
+    deduplication to notice, which is why a request for 600 rows delivered 2,399 on run 38661753.
+    """
     asked: list[int] = []
 
     def loader(max_train, max_test):
@@ -196,8 +200,56 @@ def test_the_first_rung_re_reads_a_known_source_and_asks_for_more_than_it_consum
     added, report, _logs = _mine(state, rows=100, loader=loader, monkeypatch=monkeypatch)
 
     assert report["stage"] == "known_sources"
-    assert len(added) == asked[0]
-    assert asked[0] > 3250, "the re-read must start past what the curriculum already consumed"
+    assert asked[0] == 3350, "the slice must extend past what was consumed by exactly the request"
+    assert len(added) == 100, "only the rows past the previous high-water mark are new"
+    assert {row["text"] for row in added}.isdisjoint(
+        {f"row {i}" for i in range(3250)}
+    ), "no row the curriculum already consumed may come back"
+
+
+def test_a_re_read_never_exceeds_the_per_rebuild_ceiling(monkeypatch):
+    """A single rebuild adds at most MAX_MINED_ROWS_PER_REBUILD rows, whatever the plan asked for.
+
+    Growth has to stay legible: a rebuild that adds a few hundred rows is an experiment whose effect
+    can be read off the next eval, while one that adds three thousand changes the curriculum size, the
+    training time and the class balance at once and the score movement cannot be attributed to any of
+    them. It also keeps a finite corpus from being drained in a handful of iterations.
+    """
+    from agent.nodes.curate import MAX_MINED_ROWS_PER_REBUILD
+
+    def loader(max_train, max_test):
+        return [{"text": f"row {i}", "answer": "[]"} for i in range(max_train)], []
+
+    state = _state(source_progress={
+        "Salesforce/xlam-function-calling-60k": {"consumed": 1000},
+    })
+    added, _report, _logs = _mine(
+        state, rows=MAX_MINED_ROWS_PER_REBUILD * 5, loader=loader, monkeypatch=monkeypatch,
+    )
+    assert len(added) == MAX_MINED_ROWS_PER_REBUILD
+
+
+def test_the_source_position_advances_so_the_next_rebuild_resumes_where_this_one_stopped(monkeypatch):
+    """Rows past the ceiling are deferred, not skipped.
+
+    This is what makes a source worth returning to: `consumed` records where the read stopped, so the
+    next mine_new_real rebuild continues from there. Advancing the pointer past rows that were never
+    used would silently skip them for the rest of the run.
+    """
+    def loader(max_train, max_test):
+        return [{"text": f"row {i}", "answer": "[]"} for i in range(max_train)], []
+
+    state = _state(source_progress={
+        "Salesforce/xlam-function-calling-60k": {"consumed": 500},
+    })
+    first, _r, _l = _mine(state, rows=200, loader=loader, monkeypatch=monkeypatch)
+    second, _r, _l = _mine(state, rows=200, loader=loader, monkeypatch=monkeypatch)
+
+    assert len(first) == len(second) == 200
+    assert {row["text"] for row in first}.isdisjoint({row["text"] for row in second}), (
+        "consecutive rebuilds must not hand back the same rows"
+    )
+    assert state["source_progress"]["Salesforce/xlam-function-calling-60k"]["consumed"] == 900
 
 
 def test_web_research_is_not_reached_while_a_known_source_still_yields(monkeypatch):
@@ -393,3 +445,85 @@ def test_discovery_passes_the_pinned_label_space_so_a_foreign_class_cannot_enter
 
     assert captured["label_space"] == {"local", "route"}
     assert captured["task_plan"]["labels"] == ["local", "route"]
+
+
+# --------------------------------------------------------------------------
+# A discovered dataset is an asset, not a one-off delivery (B315)
+# --------------------------------------------------------------------------
+# Rung 2 costs money. Before 2026-08-19 `_discover_new_source` returned rows and recorded nothing, so a
+# corpus found by paid web research was drained of whatever it happened to return in one pass and then
+# forgotten — a later rebuild could not read more of it without paying to rediscover it. Registering it
+# in `source_progress` converts a one-off lookup into a source rung 1 can return to for free, which is
+# the difference between discovery being worth doing once and worth doing at all.
+
+
+def _discovery(rows, dataset="someone/new-corpus", url="https://hf.co/someone/new-corpus"):
+    """A rung-2 discovery that returns `rows` rows and names the dataset it found."""
+    def _discover(state, *, want, model_id, eval_set):
+        return (
+            [{"text": f"discovered {i}", "answer": "[]"} for i in range(rows)],
+            {"dataset": dataset, "url": url, "candidate_rows": rows},
+        )
+    return _discover
+
+
+def _exhausted_state(**overrides):
+    """A state where rung 1 has nothing left, so the ladder falls through to discovery."""
+    return _state(
+        source_progress={
+            "Salesforce/xlam-function-calling-60k": {"consumed": 60_000, "exhausted": True},
+        },
+        **overrides,
+    )
+
+
+def test_a_discovered_dataset_is_recorded_so_a_later_rebuild_can_read_more_of_it(monkeypatch):
+    """The whole point of registering it: rung 1 can return to it for free next time."""
+    state = _exhausted_state()
+    added, report, _logs = _mine(
+        state, rows=200, discovery=_discovery(200), monkeypatch=monkeypatch,
+    )
+
+    assert report["stage"] == "discovery"
+    assert len(added) == 200
+    progress = state["source_progress"]["someone/new-corpus"]
+    assert progress["consumed"] == 200, "the position must reflect what this rebuild actually took"
+    assert progress["discovered"] is True
+    assert progress["url"] == "https://hf.co/someone/new-corpus"
+    assert "someone/new-corpus" in state["discovered_sources"]
+
+
+def test_a_discovery_larger_than_the_ceiling_defers_the_remainder_rather_than_dropping_it(monkeypatch):
+    """A generous discovery is capped like any other source, and the position records only the part
+    taken — so the rows past the ceiling are deferred to the next rebuild, not skipped.
+
+    Recording the number the PROVIDER returned instead would advance the pointer past rows that were
+    never used, which is the same mistake trimming a re-read after the fact makes.
+    """
+    from agent.nodes.curate import MAX_MINED_ROWS_PER_REBUILD
+
+    surplus = MAX_MINED_ROWS_PER_REBUILD + 500
+    state = _exhausted_state()
+    added, _report, logs = _mine(
+        state, rows=surplus, discovery=_discovery(surplus), monkeypatch=monkeypatch,
+    )
+
+    assert len(added) == MAX_MINED_ROWS_PER_REBUILD
+    assert state["source_progress"]["someone/new-corpus"]["consumed"] == MAX_MINED_ROWS_PER_REBUILD
+    assert any("recording the source" in message for message in logs), (
+        "the log must say the remainder was kept, or the next reader assumes it was thrown away"
+    )
+
+
+def test_a_discovery_that_names_no_dataset_says_so_instead_of_recording_a_blank_key(monkeypatch):
+    """An unnamed source cannot be re-read, and a blank key in `source_progress` would be worse than
+    no key: rung 1 would visit it forever and never find rows."""
+    def _nameless(state, *, want, model_id, eval_set):
+        return [{"text": "row", "answer": "[]"}], {"candidate_rows": 1}
+
+    state = _exhausted_state()
+    added, _report, logs = _mine(state, rows=1, discovery=_nameless, monkeypatch=monkeypatch)
+
+    assert len(added) == 1, "the rows are still usable even though the source cannot be revisited"
+    assert state.get("source_progress", {}) .get("") is None
+    assert any("did not name a dataset id" in message for message in logs)

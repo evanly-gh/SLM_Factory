@@ -48,8 +48,10 @@ def _state(feasible, **overrides):
         "feasible_models": feasible,
         "stop_threshold": 0.80,
         "initial_stop_threshold": 0.80,
-        "task_type": "classification",
-        "task_plan": {"task_type": "classification", "task_name": "test"},
+        # A real registry task name. This fixture used to carry `task_type`, a field deleted with
+        # the task channels, which is precisely why nothing caught `_probe_model` reading
+        # `state["task_type"]` — the fixture supplied a key production state no longer has (B311).
+        "task": "clinc150",
         "hardware_constraints": _hw(),
         "eval_set": eval_set,
         "current_dataset_path": "/fake/dataset.jsonl",
@@ -76,12 +78,44 @@ def _state(feasible, **overrides):
 # ── smallest_first ──────────────────────────────────────────────────────
 
 class TestSmallestFirst:
-    def test_selects_smallest(self):
+    def test_selects_the_lowest_tier_not_the_smallest_model(self):
+        """The strategy picks a TIER by size and a MODEL by task fit (changed 2026-08-24).
+
+        It used to return `min(feasible, key=size_mb)`. That is unsafe now the pool spans
+        families: gemma-3-270m-it@Q4_K_M (241MB) and SmolLM2-360M-Instruct@Q4_K_M (258MB) are
+        17MB apart and score 0.10 vs 0.45 on xlam_bfcl. Size cannot see that, so the model
+        within the tier is the orchestrator's call.
+        """
         from agent.nodes.cold_start.model_selection.smallest_first import smallest_first_node
-        models = [_model("big", 2000), _model("med", 1000), _model("small", 300)]
+        small_a = _model("small-a", 200, tier=1)
+        small_b = _model("small-b", 280, tier=1)
+        models = [_model("big", 2000, tier=3), _model("med", 1000, tier=2), small_a, small_b]
         state = _state(models)
-        result = smallest_first_node(state)
-        assert result["selected_model"].model_id == "small"
+
+        with patch(
+            "agent.nodes.escalate._llm_choose_model", return_value=small_b
+        ) as choose:
+            result = smallest_first_node(state)
+
+        assert result["selected_model"].model_id == "small-b"
+        # Only the lowest tier is offered, and it is offered whole.
+        offered = {m.model_id for m in choose.call_args.kwargs["candidates"]}
+        assert offered == {"small-a", "small-b"}
+        assert choose.call_args.kwargs["direction"] == "initial"
+        # Deliberately NOT the smallest model — that is the whole point of the change.
+        assert result["selected_model"].model_id != "small-a"
+
+    def test_no_llm_call_when_the_lowest_tier_holds_one_model(self):
+        """Nothing to choose between, so do not spend an orchestrator call on it."""
+        from agent.nodes.cold_start.model_selection.smallest_first import smallest_first_node
+        models = [_model("solo", 200, tier=1), _model("big", 2000, tier=3)]
+        state = _state(models)
+
+        with patch("agent.nodes.escalate._llm_choose_model") as choose:
+            result = smallest_first_node(state)
+
+        assert result["selected_model"].model_id == "solo"
+        choose.assert_not_called()
 
     def test_single_model(self):
         from agent.nodes.cold_start.model_selection.smallest_first import smallest_first_node

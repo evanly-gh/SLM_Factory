@@ -436,28 +436,93 @@ def test_default_disk_cache_is_under_stable_run_artifacts(tmp_path):
     ).resolve()
 
 
-def test_prompt_version_change_invalidates_disk_cache(tmp_path, monkeypatch):
-    import eval.judge_client as judge_client
+def test_prompt_version_change_invalidates_disk_cache(tmp_path):
+    """A cached score is only reusable for the prompt that produced it.
+
+    The lever moved when judging became rubric-parameterized (2026-08-24): the version that keys
+    the cache is now `JudgeRubric.name` rather than a module constant, because two rubrics share
+    this client and a single global version could not distinguish them. The invariant is unchanged
+    and is what this asserts.
+    """
+    import dataclasses
+
+    from eval.judge_client import NUMERIC_RUBRIC
 
     cache_path = tmp_path / "cache.jsonl"
+    renamed = dataclasses.replace(NUMERIC_RUBRIC, name="test-prompt-version-change")
     with _judge_server(default_response="0.55") as (endpoint, handler):
         assert _client(
             endpoint,
             tmp_path,
             cache_path=cache_path,
         ).score_many([("q", "g", "p")]) == [0.55]
-        monkeypatch.setattr(
-            judge_client,
-            "JUDGE_PROMPT_VERSION",
-            "test-prompt-version-change",
-        )
         assert _client(
             endpoint,
             tmp_path,
             cache_path=cache_path,
+            rubric=renamed,
         ).score_many([("q", "g", "p")]) == [0.55]
 
     assert len([item for item in handler.requests if item[0] == "POST"]) == 2
+
+
+def test_rewording_a_rubric_invalidates_the_cache_even_at_the_same_version(tmp_path):
+    """The failure a version string alone cannot catch.
+
+    Editing a rubric's wording without remembering to bump its name would otherwise serve scores
+    produced by the OLD prompt indefinitely — silently, and for the rest of the project's life.
+    `JudgeRubric.fingerprint` hashes the system prompt as well as the name, so the mistake is not
+    possible to make.
+    """
+    import dataclasses
+
+    from eval.judge_client import NUMERIC_RUBRIC
+
+    cache_path = tmp_path / "cache.jsonl"
+    reworded = dataclasses.replace(
+        NUMERIC_RUBRIC, system=NUMERIC_RUBRIC.system + "\nBe especially strict."
+    )
+    assert reworded.name == NUMERIC_RUBRIC.name
+    with _judge_server(default_response="0.55") as (endpoint, handler):
+        assert _client(
+            endpoint, tmp_path, cache_path=cache_path,
+        ).score_many([("q", "g", "p")]) == [0.55]
+        assert _client(
+            endpoint, tmp_path, cache_path=cache_path, rubric=reworded,
+        ).score_many([("q", "g", "p")]) == [0.55]
+
+    assert len([item for item in handler.requests if item[0] == "POST"]) == 2
+
+
+def test_a_second_rubric_reuses_the_machinery_without_colliding(tmp_path):
+    """Two rubrics, one client: distinct cache keys, and each parses its own reply shape.
+
+    This is the property `eval/scorers/toolbench.py` depends on — it judges with ToolEval's
+    Solved/Unsolved rubric against the same endpoint, cache file and concurrency window that
+    `dialogsum` uses for numeric similarity.
+    """
+    from eval.judge_client import JudgeRubric, LocalJudgeClient
+
+    verdicts = JudgeRubric(
+        name="test-verdict-rubric",
+        system="Reply with SOLVED or UNSOLVED.",
+        max_tokens=16,
+        temperature=0.7,
+        parse=lambda content: 1.0 if "SOLVED" in str(content).upper() else 0.0,
+    )
+    cache_path = tmp_path / "cache.jsonl"
+    with _judge_server(default_response="SOLVED") as (endpoint, handler):
+        client = _client(endpoint, tmp_path, cache_path=cache_path, rubric=verdicts)
+        assert client.score_payloads([{"query": "q", "answer": "a", "round": 0}]) == [1.0]
+        # A different round is a different cache entry, which is what makes a majority vote over
+        # repeated assessments possible at all.
+        assert client.score_payloads([{"query": "q", "answer": "a", "round": 1}]) == [1.0]
+        assert client.score_payloads([{"query": "q", "answer": "a", "round": 0}]) == [1.0]
+
+    posts = [item for item in handler.requests if item[0] == "POST"]
+    assert len(posts) == 2, "round 0 was not served from cache, or round 1 collided with it"
+    assert posts[0][2]["temperature"] == 0.7
+    assert posts[0][2]["max_tokens"] == 16
 
 
 def test_disk_cache_repairs_a_partial_corrupt_tail_before_append(tmp_path):

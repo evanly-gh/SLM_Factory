@@ -34,6 +34,7 @@ from __future__ import annotations
 import hashlib
 import os
 import json
+import random
 import re
 from collections.abc import Iterable
 from datetime import datetime, timedelta
@@ -84,10 +85,26 @@ CALENDAR_TOOL = {
     },
 }
 
+# Every convention the gold labels use, stated in the prompt.
+#
+# The default HOUR was missing until 2026-08-21, and the omission made most of the task unanswerable.
+# 45% of gold rows resolve to 09:00 because the request names a day and no clock time ("remind me to
+# pack my lunch tomorrow") — but 09:00 is our convention, not a fact about the request, and nothing
+# told the model. The duration convention was stated; this one was not.
+#
+# The cost was measured. On the pooled eval set the teacher scored 0.3850, and the synthesis gate read
+# that as an incapable teacher, when really it was being asked to guess an unstated house rule on
+# nearly half the rows (B322). A fine-tuned student can infer it from thousands of examples; a
+# zero-shot or five-shot teacher cannot, and neither can a reader deciding whether the gold is right.
+#
+# The rule of thumb this encodes: if the label generator applies a convention, the prompt has to name
+# it, or the task is scoring telepathy.
 CALENDAR_INSTRUCTION = (
     "Convert the user's scheduling request into a single calendar.events.insert call. "
     "Resolve every relative date and time against the current date and time given below, "
-    f"and make the event {DEFAULT_DURATION_MINUTES} minutes long unless a duration is stated."
+    f"and make the event {DEFAULT_DURATION_MINUTES} minutes long unless a duration is stated. "
+    "When the request gives a day but no clock time, start the event at 09:00; "
+    "when it says tonight, start it at 20:00."
 )
 
 _WEEKDAYS = {
@@ -123,6 +140,21 @@ _TIME_RE = re.compile(
     re.IGNORECASE,
 )
 _TIME_24_RE = re.compile(r"\b(?P<hour>\d{1,2})\s*:\s*(?P<minute>\d{2})\b")
+
+# A BARE clock hour: "at 5", "at 6 tonight". No meridiem, no colon, so `_TIME_RE` and `_TIME_24_RE`
+# both miss it — and before 2026-08-21 that silently became "no time was stated", which took the
+# 09:00 bare-date default. The result was 123 gold rows whose answer contradicted the utterance
+# ("...on Tuesday at 6" labelled 09:00) and a curriculum where 51% of all gold started at exactly
+# 09:00, teaching the model to ignore stated times (B318).
+#
+# Anchored on "at" specifically so it cannot swallow a DATE number: "on the 15th", "March 3",
+# "3/15" have their own patterns and must not be read as an hour.
+_BARE_HOUR_RE = re.compile(r"\bat\s+(?P<hour>\d{1,2})\b(?!\s*:)(?!\s*(?:a\.?m|p\.?m))", re.I)
+
+# Dayparts that disambiguate a bare hour. "at 7 tonight" is not ambiguous — nobody means 07:00 — so
+# the daypart supplies the meridiem the speaker left out.
+_PM_CONTEXT = re.compile(r"\b(tonight|this evening|evening|afternoon|night|pm)\b", re.I)
+_AM_CONTEXT = re.compile(r"\b(this morning|morning|am)\b", re.I)
 _ORDINAL_RE = re.compile(r"\b(?P<day>\d{1,2})\s*(?:st|nd|rd|th)\b", re.IGNORECASE)
 _MONTH_DAY_RE = re.compile(
     r"\b(?P<month>" + "|".join(_MONTHS) + r")\.?\s+(?P<day>\d{1,2})(?:st|nd|rd|th)?\b",
@@ -151,8 +183,22 @@ def _next_weekday(reference: datetime, weekday: int, *, allow_today: bool) -> da
         hour=0, minute=0, second=0, microsecond=0)
 
 
-def _parse_time(text: str) -> tuple[int, int] | None:
-    """Return ``(hour, minute)`` or None. 12-hour with meridiem, bare `H:MM`, or a daypart."""
+# Returned when the text clearly states a clock time that this grammar cannot pin down. Distinct from
+# None, which means "no clock time was stated at all" and legitimately takes the bare-date default.
+# Collapsing the two is what produced B318.
+AMBIGUOUS_TIME = "ambiguous"
+
+
+def _parse_time(text: str) -> tuple[int, int] | str | None:
+    """Return ``(hour, minute)``, ``AMBIGUOUS_TIME``, or None.
+
+    Three outcomes, not two:
+      * ``(hour, minute)`` — understood: 12-hour with meridiem, bare ``H:MM``, a daypart, or a bare
+        hour that an adjacent daypart disambiguates ("at 7 tonight" is 19:00, not 07:00);
+      * ``AMBIGUOUS_TIME`` — a clock time IS stated but cannot be resolved ("at 5" with nothing to
+        say whether that is morning or afternoon). The caller drops the row;
+      * ``None`` — no clock time at all ("remind me tomorrow"), which takes the 09:00 default.
+    """
     match = _TIME_RE.search(text)
     if match:
         hour = int(match.group("hour"))
@@ -171,6 +217,22 @@ def _parse_time(text: str) -> tuple[int, int] | None:
         if hour > 23 or minute > 59:
             return None
         return hour, minute
+    # A bare hour, disambiguated by an adjacent daypart if one is present. Checked BEFORE the
+    # daypart-only branch, or "at 7 tonight" would return the generic 20:00 for "night" and throw
+    # away the stated 7.
+    bare = _BARE_HOUR_RE.search(text)
+    if bare:
+        hour = int(bare.group("hour"))
+        if 0 <= hour <= 23:
+            if _PM_CONTEXT.search(text):
+                return (hour + 12 if hour < 12 else hour), 0
+            if _AM_CONTEXT.search(text):
+                return (0 if hour == 12 else hour), 0
+            if hour > 12:
+                return hour, 0            # 24-hour reading is the only one available
+            # "at 5" with no morning/evening cue. A calendar app guesses; a GOLD LABEL must not —
+            # this module's contract is that anything not understood with certainty is dropped.
+            return AMBIGUOUS_TIME
     for word, hour in _DAYPARTS.items():
         if re.search(rf"\b{word}\b", text):
             return hour, 0
@@ -232,11 +294,20 @@ def resolve_datetime(surface: str, reference: datetime) -> datetime | None:
     must be dropped rather than guessed. A row is only accepted when at least one of date or time
     is explicit; a bare date defaults to 09:00 and a bare time to the reference day (rolling to
     tomorrow if that instant has already passed, which is how a calendar app behaves).
+
+    A time that is STATED but ambiguous ("at 5", with nothing to say which 5) is refused rather than
+    defaulted. Treating it as "no time given" is what made 123 rows contradict their own utterance and
+    pushed 51% of all gold to exactly 09:00 (B318).
     """
     text = _normalize_surface(surface)
     if not text or _UNRESOLVABLE.search(text):
         return None
     time_part = _parse_time(text)
+    if time_part is AMBIGUOUS_TIME:
+        # A stated-but-unresolvable time. Dropping is the same policy `_UNRESOLVABLE` applies to
+        # "before what?" and "this week": the row cannot be labelled with certainty, so it is not
+        # labelled at all.
+        return None
     date_part = _parse_date(text, reference)
     if time_part is None and date_part is None:
         return None
@@ -310,9 +381,18 @@ def build_calendar_row(
     reference = when  # placeholder; overwritten by callers that own the reference
     return {
         "text": utterance,
+            # `name` FIRST, matching the prompt. `sort_keys=True` put it LAST (alphabetically
+            # after "arguments"), which contradicted the instruction the model is given —
+            # `{"name": ..., "arguments": {...}}` — and cost calendar_json most of its score:
+            # `eval/scorers/function_call._parse_calls` REQUIRES `name`, so a prediction that got
+            # the whole nested datetime block right and then fumbled the trailing field parsed as
+            # None and counted as a FORMAT failure rather than a wrong answer. Measured on run
+            # 38832587: content tracked format_valid at ~0.8 and both swung 1.0000 -> 0.0019 -> 1.0000
+            # across iterations, with correct-looking output that would not parse. Emitting the
+            # discriminative field first makes the long argument block unable to cost the row.
         "answer": json.dumps(
             [{"name": FUNCTION_NAME, "arguments": arguments}],
-            ensure_ascii=False, sort_keys=True),
+            ensure_ascii=False),
         "tools": [CALENDAR_TOOL],
         "label": "function_call",
         "_calendar_key": key,
@@ -556,15 +636,94 @@ def load_sgd_calendar(max_test: int = 800, log=print) -> list[dict]:
     return rows[:max_test]
 
 
+# Share of the combined pool held out for evaluation.
+#
+# WHY BOTH SPLITS ARE DRAWN FROM ONE POOL, AND NOT "TRAIN=TOPv2, EVAL=SGD"
+#     That is what this function used to return, and it made the task unscoreable. The two corpora
+#     describe the same activity with structurally different requests:
+#
+#       TOPv2   "Remind me to pack my lunch for tomorrow."
+#               no quoted title, a relative date, no clock time, and NO location — 0.0% of 4,156 rows
+#               carry a `location` argument, and 50% resolve to the 09:00 bare-date default.
+#       SGD     'Add "Chris Webby concert" to my calendar on March 13th at 12:30 pm, at 2367
+#               Shattuck Avenue' — quoted title, explicit date, explicit time, and a location in
+#               100% of 478 rows.
+#
+#     Training on the first and scoring on the second asks the model for a required argument it has
+#     never once seen. The metric is exact argument match, so every prediction misses `location` and
+#     the score is pinned near zero however capable the model is: run 38732020 measured 0.0084 with
+#     format_valid 1.0000 — flawless JSON, 474 of 478 wrong (B321).
+#
+#     Interleaving SGD into the training pool while leaving the eval set pure SGD is NOT enough, and
+#     was tried first: TOPv2 outnumbers SGD nine to one, so train came out 5% location-bearing against
+#     an eval that is 100%. The mismatch shrinks but does not go away.
+#
+#     So the two corpora are pooled and then split. Both halves are random samples of the same
+#     distribution, which is the only arrangement under which the metric measures the model rather
+#     than the gap between two datasets. Unlike xlam_bfcl — where BFCL is a published leaderboard and
+#     must stay the untouched eval — neither corpus here is a canonical benchmark, so there is nothing
+#     that has to be preserved whole.
+EVAL_FRACTION = 0.12
+
+
 def load_calendar_json(max_train: int = 2000, max_test: int = 800,
                        log=print) -> tuple[list[dict], list[dict]]:
-    """Return ``(train, test)`` = (TOPv2 reminder, SGD Calendar_1) as ``function_call`` rows."""
-    train = load_topv2_calendar(max_train)
-    log(f"      [topv2] {len(train)} usable calendar rows")
-    test = load_sgd_calendar(max_test, log=log)
-    if not test:
+    """Return ``(train, test)``, both random samples of the same pooled TOPv2 + SGD distribution.
+
+    Disjoint by construction, and the eval firewall in `curate` independently blocks any train row
+    whose text matches a held-out one, so a leak would have to survive both.
+    """
+    # Both loaders treat their argument as a hard slice, and 0 means "none" rather than "all", so
+    # ask for more than either corpus holds instead of passing a sentinel.
+    _ALL = 1_000_000
+    topv2 = load_topv2_calendar(_ALL)
+    log(f"      [topv2] {len(topv2)} usable calendar rows")
+    sgd = load_sgd_calendar(_ALL, log=log)
+    if not sgd:
         raise RuntimeError(
-            "SGD Calendar_1 produced zero eval rows — refusing to proceed with an empty "
-            "held-out set."
+            "SGD Calendar_1 produced zero rows — refusing to proceed without the fully-specified "
+            "request form, which is the half of this task that carries a location."
         )
+
+    # Deterministic: a fixed seed over a stable sort, so the same rows land in the same half on every
+    # machine and across resumes. A checkpointed run that re-derived a different split would score
+    # against rows it had already trained on.
+    # Deduplicate by request text BEFORE splitting. TOPv2 repeats utterances verbatim across rows, so
+    # splitting the raw pool put 29 identical requests on both sides — a leak the eval firewall would
+    # later catch at curation time, but which should never be produced here in the first place. The
+    # first occurrence of each text wins, under the stable sort below, so which row survives is
+    # deterministic rather than dependent on corpus order.
+    seen: set[str] = set()
+    deduped = []
+    for row in sorted(topv2 + sgd,
+                      key=lambda r: str(r.get("_calendar_key") or r.get("text") or "")):
+        key = " ".join(str(row.get("text") or "").split()).lower()
+        if key and key not in seen:
+            seen.add(key)
+            deduped.append(row)
+    pool = deduped
+    random.Random(20260821).shuffle(pool)
+
+    # The BOUNDARY is fixed by EVAL_FRACTION alone and never by the caller's arguments. `max_test`
+    # truncates what is RETURNED, and must not move the split.
+    #
+    # Letting it move the boundary is an eval leak: `_reread_known_sources` re-reads this loader with
+    # `max_test=60`, which would put the eval boundary at 60 and hand rows 60..535 — real held-out rows
+    # of the run's frozen eval set — back as training candidates. The eval firewall in `curate` blocks
+    # them, so nothing contaminated the curriculum, but mining would spend its whole yield on rows
+    # destined for rejection while reporting them as novel.
+    n_eval = max(1, int(len(pool) * EVAL_FRACTION))
+    test, train = pool[:n_eval], pool[n_eval:]
+    if max_test:
+        test = test[:max_test]
+    if max_train:
+        train = train[:max_train]
+
+    def _share(rows, predicate) -> str:
+        return f"{sum(1 for r in rows if predicate(r)) / max(len(rows), 1):.0%}"
+
+    has_location = lambda r: '"location"' in str(r.get("answer") or "")
+    log(f"      [calendar] pooled {len(pool)} rows -> train {len(train)} / eval {len(test)}; "
+        f"location-bearing {_share(train, has_location)} train vs {_share(test, has_location)} eval "
+        f"— the two halves must match, or the metric measures the split rather than the model")
     return train, test

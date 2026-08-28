@@ -629,6 +629,8 @@ fresh_initial_state = {
     "source_progress": {},
     "failed_discovery_rounds": 0,
     "task_brief": None,
+    "teacher_fitness": None,
+    "run_health": {},
     "eval_set": None,
     "data_source": None,
     "current_dataset_path": None,
@@ -927,6 +929,85 @@ finally:
     for _sig, _handler in _old_signal_handlers.items():
         signal.signal(_sig, _handler)
 
+# --------------------------------------------------------------------------
+# The final report must survive everything below this line
+# --------------------------------------------------------------------------
+# Registered HERE rather than next to the report itself, because everything between this point and
+# the report — hardware verification, five artifact writes, provenance aggregation, the DAG summary —
+# can raise, and on 2026-08-19 one of them did: an `ImportError` for a deleted constant, 26 lines
+# above the report, took the entire report with it. The run had already produced its most valuable
+# information by then.
+#
+# `_report_body` is looked up lazily through `globals()` so this can be registered before it is
+# defined. If the process dies before that definition exists, `_emit_minimal_report` prints what can
+# be recovered from the checkpoint instead of nothing. Idempotent, so the normal path can call it
+# directly and the atexit hook becomes a no-op.
+_REPORT_EMITTED = False
+
+
+def _emit_minimal_report() -> None:
+    """The least the log should contain: where the run got to, and did the curriculum grow.
+
+    Used when the full report is unavailable or itself failed. Every line is individually guarded —
+    this is the last thing standing between a dead run and a log nobody can learn from.
+    """
+    try:
+        log("")
+        log(f"{'=' * 70}")
+        log("  PARTIAL REPORT — the run ended before its full report could be written")
+        log(f"{'=' * 70}")
+    except Exception:
+        return
+    for _describe in (
+        lambda: f"  task      : {last_state.get('task')}",
+        lambda: f"  iteration : {last_state.get('iteration')}",
+        lambda: f"  best score: {last_state.get('best_score')}",
+        lambda: f"  scores    : {[round(float(s), 4) for s in (last_state.get('scores') or [])]}",
+        lambda: f"  threshold : {last_state.get('stop_threshold')}",
+        lambda: f"  error     : {type(pipeline_error).__name__ if pipeline_error else 'none'}",
+        lambda: f"  run dir   : {RUN_DIR}",
+    ):
+        try:
+            log(_describe())
+        except Exception:  # noqa: BLE001 — a missing field must not stop the remaining lines
+            continue
+    try:
+        from agent.run_health import format_health_summary
+
+        for _line in format_health_summary(last_state):
+            log(_line)
+    except Exception as _error:  # noqa: BLE001
+        log(f"  curriculum ledger unavailable: {type(_error).__name__}: {_error}")
+
+
+def _emit_final_report() -> None:
+    global _REPORT_EMITTED
+    if _REPORT_EMITTED:
+        return
+    _REPORT_EMITTED = True
+    _body = globals().get("_report_body")
+    if _body is None:
+        log("  !! the run ended before the full report was defined")
+        _emit_minimal_report()
+        return
+    try:
+        _body()
+    except SystemExit:
+        # A clean exit code raised from inside the report is the normal end of the run, not a
+        # failure. Catching it alongside real errors printed "!! final report failed: SystemExit: 0"
+        # as the last line of a run that had succeeded.
+        raise
+    except BaseException as _report_error:  # noqa: BLE001 — a broken report must not hide the run
+        try:
+            log(f"  !! final report failed: {type(_report_error).__name__}: {_report_error}")
+            log(traceback.format_exc())
+            _emit_minimal_report()
+        except Exception:
+            pass
+
+
+atexit.register(_emit_final_report)
+
 _segment_elapsed = max(0.0, time.time() - _SEGMENT_START_TS)
 elapsed = _BASE_CUMULATIVE_WALL_S + _segment_elapsed
 record_timing_event(TimingEvent(
@@ -1155,13 +1236,13 @@ converged = best >= threshold or bool(_banked)
 # only classification and NER compute an F1 — math is exact match, code is an execution
 # pass-rate, and open generation is a judge mean. Printing the real name keeps a run summary
 # from being quoted as an F1 result for a task that never measured one.
-from eval.harness import TASK_METRIC_NAMES
+from tasks import get_task
 
 _metric_name = getattr(
     last_state.get("last_eval"),
     "metric",
     None,
-) or TASK_METRIC_NAMES.get(last_state.get("task", ""), "f1")
+) or get_task(last_state.get("task", "")).metric_name
 log(f"score metric: {_metric_name} (carried in the EvalResult.f1 field)")
 from agent.pipeline_status import (
     build_run_progression,
@@ -1183,200 +1264,240 @@ _final_progression = [
 _final_entry = _final_progression[-1] if _final_progression else {}
 _final_scores = _final_entry.get("scores", [])
 
-log("")
-log(f"{'='*70}")
-log(f"  {run_heading(pipeline_error)} — {elapsed:.1f}s")
-log(f"{'='*70}")
-log(f"  task : {last_state.get('task')}")
-log(f"  model     : {m.selector if m else None}")
-log(f"  iterations: {_final_entry.get('iterations', 0)}")
-log(f"  best F1   : {best:.4f}  (threshold {threshold:.4f})  "
-    f"{'✗ failed' if pipeline_error else ('✓ converged' if converged else '✗ budget exhausted')}")
-# Where the accuracy goal came from, ALWAYS — including when the 0.80 floor overrode a teacher that
-# scored below it. Without this, a converged run against a floored goal looks identical to one that
-# matched a strong teacher, and BC5CDR's "threshold 0.8000" hid a teacher score of 0.0999.
-from agent.threshold import describe_threshold_provenance
-
-_calibration = last_state.get("threshold_calibration") or {}
-log(f"  goal source: {describe_threshold_provenance(_calibration)}")
-if _calibration.get("measured_qwen") is not None:
-    log(f"  teacher    : Qwen-3.6 zero-shot "
-        f"{float(_calibration['measured_qwen']):.4f} "
-        f"{_calibration.get('measured_metric') or ''}".rstrip()
-        + "  (no fine-tuning; this is the score the goal is calibrated against)")
-if _raises:
-    log(f"  stretch goals: raised {len(_raises)}x — "
-        + " → ".join(
-            [f"{_raises[0]['from']:.4f}"]
-            + [f"{r['to']:.4f}@iter{r['iteration']}" for r in _raises]
-        ))
-    for _r in _raises:
-        log(f"    raise at iteration {_r['iteration']}: {_r['from']:.4f} → {_r['to']:.4f} "
-            f"(score was {_r['score_at_raise']:.4f}) — {_r['reason']}")
-    if _banked and best < threshold:
-        log(f"  ⚠ CONVERGED AT THE ORIGINAL GOAL, stretch goal missed: cleared "
-            f"{_banked['threshold']:.4f} with {_banked['score']:.4f} at iteration "
-            f"{_banked['iteration']}; the raised goal {threshold:.4f} was not reached "
-            f"(best {best:.4f}). The run is a SUCCESS against its calibrated goal.")
-lifetime_best = last_state.get("lifetime_best_score", 0.0) or 0.0
-log(f"  lifetime best F1 across all tiers: {max(lifetime_best, best):.4f}")
-log(f"  final-model trajectory: {[f'{x:.3f}' for x in _final_scores]}")
-
 # --------------------------------------------------------------------------
-# Convergence-speed metrics (for comparing model-selection strategies): how many steps
-# the whole process took to settle on the final model. "Steps" = graph node executions;
-# also report total train→eval iterations across ALL tiers and how many models were tried.
+# Final report
 # --------------------------------------------------------------------------
-_total_iters = sum(int(entry.get("iterations", 0)) for entry in progression)
-_models_tried = len(progression)
-log("")
-log(f"  ── Convergence-speed metrics (strategy={config.MODEL_SELECTION_STRATEGY}) ──")
-log(f"  total pipeline steps (graph node executions): {GRAPH_STEPS}")
-log(f"  total train→eval iterations (all tiers)     : {_total_iters}")
-log(f"  models tried                                : {_models_tried}")
-log(f"  outcome                                     : "
-    f"{outcome_text(converged, pipeline_error, model_label)}")
-
-# --------------------------------------------------------------------------
-# Full run progression across EVERY model/tier (not just the final one).
-# build_run_progression also separates post-convergence downward attempts from the
-# original model trajectory, preventing adopted-model relabeling.
-# --------------------------------------------------------------------------
-if len(progression) > 1:
+# Invoked through `_emit_final_report`, which was registered with atexit far above so that the report
+# prints on a normal finish, an exception, a `scancel` SIGTERM, or a wall-clock stop. Only SIGKILL is
+# unrecoverable, and nothing in a Python process can help there.
+def _report_body() -> None:
     log("")
-    log(f"  Full run progression ({len(progression)} ordered model attempts):")
-    log(f"  {'Tier':>4}  {'Model':<32} {'Quant':<8} {'Iters':>5} {'Best':>7}  Trajectory")
-    log(f"  {'-'*92}")
-    for p in progression:
-        traj = " → ".join(f"{x:.3f}" for x in p.get("scores", [])) or "(reset)"
-        best_value = p.get("best_score")
-        best_text = (
-            f"{best_value:.4f}" if best_value is not None else "n/a"
-        )
-        log(f"  {str(p.get('tier','?')):>4}  {p.get('model_id','?'):<32} "
-            f"{str(p.get('quant') or 'bf16'):<8} {p.get('iterations',0):>5} "
-            f"{best_text:>7}  {traj}")
+    log(f"{'='*70}")
+    log(f"  {run_heading(pipeline_error)} — {elapsed:.1f}s")
+    log(f"{'='*70}")
+    log(f"  task : {last_state.get('task')}")
+    log(f"  model     : {m.selector if m else None}")
+    log(f"  iterations: {_final_entry.get('iterations', 0)}")
+    log(f"  best F1   : {best:.4f}  (threshold {threshold:.4f})  "
+        f"{'✗ failed' if pipeline_error else ('✓ converged' if converged else '✗ budget exhausted')}")
+    # Where the accuracy goal came from, ALWAYS — including when the 0.80 floor overrode a teacher that
+    # scored below it. Without this, a converged run against a floored goal looks identical to one that
+    # matched a strong teacher, and BC5CDR's "threshold 0.8000" hid a teacher score of 0.0999.
+    from agent.threshold import describe_threshold_provenance
 
-_downward_lines = format_downward_probe_history(
-    last_state.get("downward_probe_history")
-)
-if _downward_lines:
-    log("")
-    for _line in _downward_lines:
-        log(_line)
+    _calibration = last_state.get("threshold_calibration") or {}
+    log(f"  goal source: {describe_threshold_provenance(_calibration)}")
+    if _calibration.get("measured_qwen") is not None:
+        log(f"  teacher    : Qwen-3.6 zero-shot "
+            f"{float(_calibration['measured_qwen']):.4f} "
+            f"{_calibration.get('measured_metric') or ''}".rstrip()
+            + "  (no fine-tuning; this is the score the goal is calibrated against)")
+    if _raises:
+        log(f"  stretch goals: raised {len(_raises)}x — "
+            + " → ".join(
+                [f"{_raises[0]['from']:.4f}"]
+                + [f"{r['to']:.4f}@iter{r['iteration']}" for r in _raises]
+            ))
+        for _r in _raises:
+            log(f"    raise at iteration {_r['iteration']}: {_r['from']:.4f} → {_r['to']:.4f} "
+                f"(score was {_r['score_at_raise']:.4f}) — {_r['reason']}")
+        if _banked and best < threshold:
+            log(f"  ⚠ CONVERGED AT THE ORIGINAL GOAL, stretch goal missed: cleared "
+                f"{_banked['threshold']:.4f} with {_banked['score']:.4f} at iteration "
+                f"{_banked['iteration']}; the raised goal {threshold:.4f} was not reached "
+                f"(best {best:.4f}). The run is a SUCCESS against its calibrated goal.")
+    lifetime_best = last_state.get("lifetime_best_score", 0.0) or 0.0
+    log(f"  lifetime best F1 across all tiers: {max(lifetime_best, best):.4f}")
+    log(f"  final-model trajectory: {[f'{x:.3f}' for x in _final_scores]}")
 
-# Model Improvement Report — one row per VARIANT actually run (model_id + quant), so the
-# on-device deployment format is explicit and a model that appears at multiple tiers as
-# different quants is not collapsed into one row (B161 reporting request).
-if progression:
+    # --------------------------------------------------------------------------
+    # Convergence-speed metrics (for comparing model-selection strategies): how many steps
+    # the whole process took to settle on the final model. "Steps" = graph node executions;
+    # also report total train→eval iterations across ALL tiers and how many models were tried.
+    # --------------------------------------------------------------------------
+    _total_iters = sum(int(entry.get("iterations", 0)) for entry in progression)
+    _models_tried = len(progression)
     log("")
-    log(f"  Model Improvement Report (per quantized variant):")
-    # `First FT` sits between baseline and best so the two halves of the gain are separable: how
-    # much ONE round of fine-tuning bought (baseline → first FT), and how much the whole
-    # orchestrated search added on top of it (first FT → best). Reporting only the endpoints made
-    # those indistinguishable — BC5CDR's +0.8098 was almost entirely the first iteration
-    # (0.0000 → 0.7701), with 4 further iterations adding 0.0397.
-    log(f"  {'Tier':>4}  {'Model':<32} {'Quant':<8} {'Baseline':>9} {'First FT':>9} "
-        f"{'Best FT':>9} {'Δ base':>9} {'Δ search':>9} {'Format':>8}")
-    log(f"  {'-'*110}")
-    for p in progression:
-        bl = p.get("baseline_f1")
-        ft = p.get("best_score")
-        first = p.get("first_finetuned_f1")
-        bl_text = f"{bl:.4f}" if bl is not None else "n/a"
-        ft_text = f"{ft:.4f}" if ft is not None else "n/a"
-        first_text = f"{first:.4f}" if first is not None else "n/a"
-        delta_text = (
-            f"{ft - bl:+.4f}"
-            if bl is not None and ft is not None
-            else "n/a"
-        )
-        # Gain attributable to the iteration loop rather than to fine-tuning at all.
-        search_text = (
-            f"{ft - first:+.4f}"
-            if first is not None and ft is not None
-            else "n/a"
-        )
-        # Format rate of the BEST iteration on this variant: a strong content score reached with a
-        # format rate well below 1.0 means the ceiling is a parsing problem, not a capability one.
-        _best_fmt = next(
-            (node.get("format_valid") for node in reversed(p.get("dag") or [])
-             if node.get("format_valid") is not None),
-            None,
-        )
-        fmt_text = f"{_best_fmt:.4f}" if isinstance(_best_fmt, (int, float)) else "n/a"
-        log(f"  {str(p.get('tier','?')):>4}  {p.get('model_id','?'):<32} "
-            f"{str(p.get('quant') or 'bf16'):<8} {bl_text:>9} {first_text:>9} "
-            f"{ft_text:>9} {delta_text:>9} {search_text:>9} {fmt_text:>8}")
+    log(f"  ── Convergence-speed metrics (strategy={config.MODEL_SELECTION_STRATEGY}) ──")
+    log(f"  total pipeline steps (graph node executions): {GRAPH_STEPS}")
+    log(f"  total train→eval iterations (all tiers)     : {_total_iters}")
+    log(f"  models tried                                : {_models_tried}")
+    log(f"  outcome                                     : "
+        f"{outcome_text(converged, pipeline_error, model_label)}")
 
-# DAG Traversal for EVERY model tested (not just the final one). Each escalation reset the
-# DAG, so escalate_node stashed each model's per-iteration DAG in escalation_history; here
-# we print all of them in order (B161 reporting request).
-if progression:
-    log("")
-    log(f"  DAG Traversal (all {len(progression)} models):")
-    for p in progression:
-        pdag = p.get("dag") or []
+    # --------------------------------------------------------------------------
+    # Full run progression across EVERY model/tier (not just the final one).
+    # build_run_progression also separates post-convergence downward attempts from the
+    # original model trajectory, preventing adopted-model relabeling.
+    # --------------------------------------------------------------------------
+    if len(progression) > 1:
         log("")
-        log(f"  ── Tier {p.get('tier','?')}: {p.get('model_id','?')} "
-            f"[{p.get('quant') or 'bf16'}]  ({len(pdag)} iterations) ──")
-        if not pdag:
-            log(f"     (no completed iterations recorded)")
-            continue
-        # Content and FORMAT side by side per iteration. They answer different questions — a low
-        # content score with high format is a data problem, a low format score is a prompt or
-        # chat-template problem — and reporting only the first is what let B290 look like
-        # "fine-tuning does not help this task" for two whole runs.
-        log(f"     {'Iter':>4}  {'Content':>8}  {'Format':>7}  {'Pruned':>6}  "
-            f"{'Config':<34}  {'Intervention'}")
-        for node in pdag:
-            pruned_str = "✗" if node.get("pruned") else ""
-            fmt = node.get("format_valid")
-            fmt_text = f"{fmt:.4f}" if isinstance(fmt, (int, float)) else "n/a"
-            log(f"     {node.get('iteration','?'):>4}  {node.get('score',0):8.4f}  "
-                f"{fmt_text:>7}  {pruned_str:>6}  {str(node.get('best_config','?')):<34}  "
-                f"{format_intervention_detail(node)}")
+        log(f"  Full run progression ({len(progression)} ordered model attempts):")
+        log(f"  {'Tier':>4}  {'Model':<32} {'Quant':<8} {'Iters':>5} {'Best':>7}  Trajectory")
+        log(f"  {'-'*92}")
+        for p in progression:
+            traj = " → ".join(f"{x:.3f}" for x in p.get("scores", [])) or "(reset)"
+            best_value = p.get("best_score")
+            best_text = (
+                f"{best_value:.4f}" if best_value is not None else "n/a"
+            )
+            log(f"  {str(p.get('tier','?')):>4}  {p.get('model_id','?'):<32} "
+                f"{str(p.get('quant') or 'bf16'):<8} {p.get('iterations',0):>5} "
+                f"{best_text:>7}  {traj}")
 
-log("")
-_anthropic_cost = cost["by_provider"].get("anthropic", {})
-_exa_cost = cost["by_provider"].get("exa", {})
-log(
-    f"  cost: Claude {_anthropic_cost.get('calls', 0)} calls "
-    f"({_anthropic_cost.get('input_tokens', 0)}→{_anthropic_cost.get('output_tokens', 0)} tok) "
-    f"${_anthropic_cost.get('estimated_usd', 0.0):.4f}  |  "
-    f"Exa {_exa_cost.get('calls', 0)} searches ${_exa_cost.get('estimated_usd', 0.0):.4f}  |  "
-    f"total ${cost['total_cost_usd']:.4f}"
-)
-for _provider, _summary in cost["by_provider"].items():
+    _downward_lines = format_downward_probe_history(
+        last_state.get("downward_probe_history")
+    )
+    if _downward_lines:
+        log("")
+        for _line in _downward_lines:
+            log(_line)
+
+    # Model Improvement Report — one row per VARIANT actually run (model_id + quant), so the
+    # on-device deployment format is explicit and a model that appears at multiple tiers as
+    # different quants is not collapsed into one row (B161 reporting request).
+    if progression:
+        log("")
+        log(f"  Model Improvement Report (per quantized variant):")
+        # `First FT` sits between baseline and best so the two halves of the gain are separable: how
+        # much ONE round of fine-tuning bought (baseline → first FT), and how much the whole
+        # orchestrated search added on top of it (first FT → best). Reporting only the endpoints made
+        # those indistinguishable — BC5CDR's +0.8098 was almost entirely the first iteration
+        # (0.0000 → 0.7701), with 4 further iterations adding 0.0397.
+        log(f"  {'Tier':>4}  {'Model':<32} {'Quant':<8} {'Baseline':>9} {'First FT':>9} "
+            f"{'Best FT':>9} {'Δ base':>9} {'Δ search':>9} {'Format':>8}")
+        log(f"  {'-'*110}")
+        for p in progression:
+            bl = p.get("baseline_f1")
+            ft = p.get("best_score")
+            first = p.get("first_finetuned_f1")
+            bl_text = f"{bl:.4f}" if bl is not None else "n/a"
+            ft_text = f"{ft:.4f}" if ft is not None else "n/a"
+            first_text = f"{first:.4f}" if first is not None else "n/a"
+            delta_text = (
+                f"{ft - bl:+.4f}"
+                if bl is not None and ft is not None
+                else "n/a"
+            )
+            # Gain attributable to the iteration loop rather than to fine-tuning at all.
+            search_text = (
+                f"{ft - first:+.4f}"
+                if first is not None and ft is not None
+                else "n/a"
+            )
+            # Format rate of the BEST iteration on this variant: a strong content score reached with a
+            # format rate well below 1.0 means the ceiling is a parsing problem, not a capability one.
+            _best_fmt = next(
+                (node.get("format_valid") for node in reversed(p.get("dag") or [])
+                 if node.get("format_valid") is not None),
+                None,
+            )
+            fmt_text = f"{_best_fmt:.4f}" if isinstance(_best_fmt, (int, float)) else "n/a"
+            log(f"  {str(p.get('tier','?')):>4}  {p.get('model_id','?'):<32} "
+                f"{str(p.get('quant') or 'bf16'):<8} {bl_text:>9} {first_text:>9} "
+                f"{ft_text:>9} {delta_text:>9} {search_text:>9} {fmt_text:>8}")
+
+    # DAG Traversal for EVERY model tested (not just the final one). Each escalation reset the
+    # DAG, so escalate_node stashed each model's per-iteration DAG in escalation_history; here
+    # we print all of them in order (B161 reporting request).
+    if progression:
+        log("")
+        log(f"  DAG Traversal (all {len(progression)} models):")
+        for p in progression:
+            pdag = p.get("dag") or []
+            log("")
+            log(f"  ── Tier {p.get('tier','?')}: {p.get('model_id','?')} "
+                f"[{p.get('quant') or 'bf16'}]  ({len(pdag)} iterations) ──")
+            if not pdag:
+                log(f"     (no completed iterations recorded)")
+                continue
+            # Content and FORMAT side by side per iteration. They answer different questions — a low
+            # content score with high format is a data problem, a low format score is a prompt or
+            # chat-template problem — and reporting only the first is what let B290 look like
+            # "fine-tuning does not help this task" for two whole runs.
+            log(f"     {'Iter':>4}  {'Content':>8}  {'Format':>7}  {'Pruned':>6}  "
+                f"{'Config':<34}  {'Intervention'}")
+            for node in pdag:
+                pruned_str = "✗" if node.get("pruned") else ""
+                fmt = node.get("format_valid")
+                fmt_text = f"{fmt:.4f}" if isinstance(fmt, (int, float)) else "n/a"
+                log(f"     {node.get('iteration','?'):>4}  {node.get('score',0):8.4f}  "
+                    f"{fmt_text:>7}  {pruned_str:>6}  {str(node.get('best_config','?')):<34}  "
+                    f"{format_intervention_detail(node)}")
+
+    log("")
+    _anthropic_cost = cost["by_provider"].get("anthropic", {})
+    _exa_cost = cost["by_provider"].get("exa", {})
     log(
-        f"    cost provider={_provider} calls={_summary['calls']} "
-        f"failures={_summary['failures']} latency={_summary['latency_ms'] / 1000:.1f}s "
-        f"usd=${_summary['estimated_usd']:.6f}"
+        f"  cost: Claude {_anthropic_cost.get('calls', 0)} calls "
+        f"({_anthropic_cost.get('input_tokens', 0)}→{_anthropic_cost.get('output_tokens', 0)} tok) "
+        f"${_anthropic_cost.get('estimated_usd', 0.0):.4f}  |  "
+        f"Exa {_exa_cost.get('calls', 0)} searches ${_exa_cost.get('estimated_usd', 0.0):.4f}  |  "
+        f"total ${cost['total_cost_usd']:.4f}"
     )
-log("")
-log(format_run_data_sources(_data_sources_agg))
-log(f"  (full provenance: {os.path.join(RUN_DIR, 'data_sources.json')})")
+    for _provider, _summary in cost["by_provider"].items():
+        log(
+            f"    cost provider={_provider} calls={_summary['calls']} "
+            f"failures={_summary['failures']} latency={_summary['latency_ms'] / 1000:.1f}s "
+            f"usd=${_summary['estimated_usd']:.6f}"
+        )
+    log("")
+    log(format_run_data_sources(_data_sources_agg))
+    log(f"  (full provenance: {os.path.join(RUN_DIR, 'data_sources.json')})")
 
-# Post-run summary graphics. Fail-safe: the run has already succeeded by this point, so a
-# plotting error (or a missing matplotlib) must never change the outcome — log and move on.
-try:
-    from agent.run_graphics import generate_run_graphics
+    # Did the interventions add data? This is the ledger that question is answered from, and it is
+    # printed whether or not the run finished — a cancelled run still answers it. Run 38566712 looked
+    # healthy in every other section of this report while all eight of its rebuilds added zero rows.
+    log("")
+    try:
+        from agent.run_health import format_health_summary
 
-    _graphics = generate_run_graphics(
-        RUN_DIR,
-        state=last_state,
-        baselines=baselines,
-        stop_threshold=threshold,
-    )
-    if _graphics:
-        log(f"  graphics: {os.path.dirname(str(_graphics[0]))} ({len(_graphics)} files)")
-except Exception as _graphics_error:  # noqa: BLE001 — never let reporting break a finished run
-    log(f"  graphics: skipped ({type(_graphics_error).__name__}: {_graphics_error})")
+        _health_lines = format_health_summary(last_state)
+        if _health_lines:
+            for _line in _health_lines:
+                log(_line)
+        else:
+            log("  Curriculum growth per iteration: (no rebuilds recorded)")
+    except Exception as _health_error:  # noqa: BLE001
+        log(f"  !! curriculum ledger unavailable: {type(_health_error).__name__}: {_health_error}")
 
-log(f"  logs: {RUN_DIR}")
+    # The teacher-fitness verdict, and therefore whether synthetic data was permitted at all. A run
+    # whose curriculum contains no synthetic rows reads very differently depending on whether
+    # synthesis was refused up front or attempted and failed.
+    _fitness = last_state.get("teacher_fitness") or {}
+    if _fitness:
+        _score = _fitness.get("score")
+        _shown = f"{_score:.4f}" if isinstance(_score, (int, float)) else "unmeasured"
+        log("")
+        log(f"  teacher fitness: {_fitness.get('metric', '?')}={_shown} "
+            f"{_fitness.get('shots', '?')}-shot on {_fitness.get('n', 0)} eval row(s) "
+            f"vs a {_fitness.get('threshold', 0.8):.2f} gate → synthetic data "
+            f"{'ALLOWED' if _fitness.get('synthesis_allowed') else 'REFUSED'}"
+            + (f" ({_fitness.get('reason')})" if _fitness.get("reason") else ""))
 
-_RUN_EXIT_CODE = process_exit_code(pipeline_error)
-_RUN_STATUS = "pipeline_error" if pipeline_error else "completed"
-atexit.unregister(_shutdown_observability)
-_shutdown_observability()
-raise SystemExit(_RUN_EXIT_CODE)
+    # Post-run summary graphics. Fail-safe: the run has already succeeded by this point, so a
+    # plotting error (or a missing matplotlib) must never change the outcome — log and move on.
+    try:
+        from agent.run_graphics import generate_run_graphics
+
+        _graphics = generate_run_graphics(
+            RUN_DIR,
+            state=last_state,
+            baselines=baselines,
+            stop_threshold=threshold,
+        )
+        if _graphics:
+            log(f"  graphics: {os.path.dirname(str(_graphics[0]))} ({len(_graphics)} files)")
+    except Exception as _graphics_error:  # noqa: BLE001 — never let reporting break a finished run
+        log(f"  graphics: skipped ({type(_graphics_error).__name__}: {_graphics_error})")
+
+    log(f"  logs: {RUN_DIR}")
+
+    _RUN_EXIT_CODE = process_exit_code(pipeline_error)
+    _RUN_STATUS = "pipeline_error" if pipeline_error else "completed"
+    atexit.unregister(_shutdown_observability)
+    _shutdown_observability()
+    raise SystemExit(_RUN_EXIT_CODE)
+
+
+_emit_final_report()

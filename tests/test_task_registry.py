@@ -30,8 +30,11 @@ from tasks.spec import CATEGORIES, EVAL_SAMPLING, FAMILIES, TaskSpec
 EXPECTED_TASKS = {
     "gsm8k",
     "dialogsum",
+    "sms_spam",
     "xlam_bfcl",
     "calendar_json",
+    # Added 2026-08-24: ToolBench / ToolEval pass rate, reimplementing arXiv:2512.15943.
+    "toolbench",
     "ner_bc5cdr",
     "routerbench",
     "proactive_listening",
@@ -47,7 +50,7 @@ PRODUCTION_PACKAGES = ("agent", "data", "eval", "training", "tasks", "config")
 # --------------------------------------------------------------------------
 
 
-def test_all_eight_tasks_are_registered():
+def test_all_ten_tasks_are_registered():
     assert set(TASKS) == EXPECTED_TASKS
     assert task_names() == sorted(EXPECTED_TASKS)
 
@@ -118,16 +121,45 @@ def test_an_unknown_task_names_every_task_that_does_exist():
 # --------------------------------------------------------------------------
 
 
+# Tasks whose `initial_train_cap` is deliberately below the suite default, and why. A task belongs
+# here only with a reason recorded in its own spec — the point of the assertion below is that a cap
+# cannot drift quietly, not that it can never differ.
+CAP_EXCEPTIONS = {
+    # ~4,460 usable rows in total, so the default 5,000 consumed the entire pool at cold start and
+    # `mine_new_real` had nothing to find on its first attempt. Synthesis is also refused on this task
+    # by the fitness gate, so `data_rebuild` could not add a row by either route and every rebuild came
+    # back empty. 3,000 leaves roughly 900 rows of mining headroom (B321/B323 follow-up).
+    "calendar_json": 3000,
+    # 5,159 rows survive deduplication and 20% is held out, so the train half is ~4,128. The
+    # default 5,000 would take all of it at cold start and leave `mine_new_real` nothing to find —
+    # the same trap calendar_json fell into. 3,000 keeps roughly 1,100 rows in reserve.
+    "sms_spam": 3000,
+}
+
+
 def test_the_data_caps_are_uniform_across_the_suite():
     """`initial_train_cap` is a CAP, not a target and not a fraction of anything.
 
     It used to be `curriculum_size_target x 0.65`, which is where the mystery 3,250 came from:
     a 5,000-row "target" the curriculum was then never allowed to reach. Every task now asks its
-    loader for the same 5,000 and takes as many as the loader has.
+    loader for the same 5,000 and takes as many as the loader has — except where a smaller cap is
+    recorded in `CAP_EXCEPTIONS` with its reason, which keeps the uniformity meaningful instead of
+    letting one task's number drift unremarked.
     """
     for name, spec in TASKS.items():
-        assert spec.initial_train_cap == 5000, name
+        assert spec.initial_train_cap == CAP_EXCEPTIONS.get(name, 5000), name
         assert spec.eval_cap == 1000, name
+
+
+def test_a_cap_exception_is_only_worth_having_if_it_leaves_mining_room():
+    """An exception exists to give the mining ladder headroom, so it must be BELOW the default.
+
+    A cap at or above 5,000 in that table would be a no-op wearing an explanation, which is worse than
+    no exception at all — the next reader would trust the comment.
+    """
+    for name, cap in CAP_EXCEPTIONS.items():
+        assert name in TASKS, f"{name} is not a task"
+        assert cap < 5000, f"{name} exception {cap} is not below the default"
 
 
 def test_no_task_declares_a_train_fraction():
@@ -275,6 +307,11 @@ def test_required_fields_are_the_fields_the_scorer_reads():
         "routerbench": "label",
         "proactive_listening": "label",
         "clinc150": "label",
+        # `query`, not `answer`. ToolEval's pass rate is reference-free — it asks a judge whether
+        # the model's own final answer addresses the query — and the ToolBench test queries ship
+        # with no gold path at all. `query` is the field the scorer grades against, and requiring
+        # `answer` instead would reject every eval row this task has.
+        "toolbench": "query",
     }
     for name, target in targets.items():
         spec = get_task(name)
@@ -284,11 +321,19 @@ def test_required_fields_are_the_fields_the_scorer_reads():
         )
 
 
-def test_a_judged_task_says_so_and_is_the_only_one():
+def test_the_judged_tasks_say_so_and_are_the_only_ones():
     """`needs_judge` exists so a judge outage fails loudly instead of scoring zero and sending the
-    loop chasing a phantom regression. Exactly one task scores through the judge."""
+    loop chasing a phantom regression.
+
+    Two tasks score through the judge, for different reasons, and both are deliberate:
+      * `dialogsum` — a summary has no exact gold, so similarity is judged.
+      * `toolbench` — ToolEval pass rate is DEFINED as a majority vote of judged assessments, and
+        its test queries ship with no reference solution at all.
+    Every other task is scored by computation, and adding a third judged task should have to
+    argue for itself here.
+    """
     judged = {name for name, spec in TASKS.items() if spec.needs_judge}
-    assert judged == {"dialogsum"}
+    assert judged == {"dialogsum", "toolbench"}
     for name, spec in TASKS.items():
         # Overlapping the judge with the next generation batch is only meaningful when there is
         # a judge to overlap.
@@ -326,3 +371,52 @@ def test_mining_sources_are_declared_where_a_corpus_exists():
         assert spec.mining_sources, f"{name} declares no mining source"
         for source in spec.mining_sources:
             assert source.hf_id and source.split and source.url, name
+
+
+def test_an_exact_synth_verifier_publishes_its_REASON_not_just_its_verdict():
+    """`TaskSpec.synth_verifier` returns yes/no, but the reason must stay reachable.
+
+    `data.curriculum` recovers it through a `.checker` attribute and prints the
+    "[verify:exact] programmatic verifier rejected N row(s)" breakdown from it. Without the attribute
+    that block is unreachable, and a total rejection reports only its own size.
+
+    Run 38985393 paid for this: synthesis generated 519 rows, the exact verifier rejected all 519, and
+    the log said nothing about WHICH of the five checks fired — the reason string had been discarded by
+    a `[0]` subscript one character from where it was needed, so it had to be reverse-engineered from
+    the vLLM access log afterwards.
+    """
+    import tasks
+
+    offenders = []
+    for name, spec in sorted(tasks.TASKS.items()):
+        verifier = spec.synth_verifier
+        if verifier is None:
+            continue
+        checker = getattr(verifier, "checker", None)
+        if checker is None:
+            offenders.append(f"{name}: synth_verifier has no .checker attribute")
+            continue
+        if not callable(checker):
+            offenders.append(f"{name}: .checker is {type(checker).__name__}, not callable")
+    assert not offenders, (
+        "every exact synth verifier must publish its reason via .checker:\n  "
+        + "\n  ".join(offenders)
+    )
+
+
+def test_the_checker_reason_agrees_with_the_verdict_and_explains_a_rejection():
+    """A `.checker` that disagreed with the verifier would print a reason for the wrong decision."""
+    import tasks
+
+    # A row that is wrong for every task: no answer, no fields, nothing to verify against.
+    broken = {"text": "", "answer": "", "entities": [], "tools": []}
+    for name, spec in sorted(tasks.TASKS.items()):
+        verifier = spec.synth_verifier
+        if verifier is None:
+            continue
+        verdict = verifier(dict(broken))
+        checked, reason = verifier.checker(dict(broken))
+        assert verdict == checked, f"{name}: verdict {verdict} != checker verdict {checked}"
+        assert not verdict, f"{name}: an empty row must not verify"
+        # The reason is what a human reads at 3am; an empty string is the failure this test exists for.
+        assert reason.strip(), f"{name}: rejected a row with no reason given"

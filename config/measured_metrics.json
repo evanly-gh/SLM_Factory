@@ -2,7 +2,7 @@
   "_README": [
     "REAL MEASUREMENTS ONLY. Nothing in this file may be estimated, interpolated,",
     "extrapolated from another model, or derived from a parameter count. If a number was",
-    "not produced by running or building the actual artifact, it does not belong here \u2014",
+    "not produced by running or building the actual artifact, it does not belong here —",
     "leave it absent so consumers correctly report 'unmeasured'.",
     "",
     "Written by hardware_eval/measure_model.py; read by config/android_pool.py.",
@@ -33,14 +33,23 @@
     "Qwen/Qwen3.5-2B|bf16": 4337.5,
     "Qwen/Qwen3-4B-Instruct-2507|Q4_K_M": 2381.6,
     "Qwen/Qwen3-4B-Instruct-2507|Q8_0": 4082.1,
-    "Qwen/Qwen3-4B-Instruct-2507|bf16": 7672.3
+    "Qwen/Qwen3-4B-Instruct-2507|bf16": 7672.3,
+    "google/gemma-3-270m-it|Q4_K_M": 241.4,
+    "google/gemma-3-270m-it|Q8_0": 292.0,
+    "google/gemma-3-270m-it|bf16": 511.4,
+    "HuggingFaceTB/SmolLM2-360M-Instruct|Q4_K_M": 258.1,
+    "HuggingFaceTB/SmolLM2-360M-Instruct|Q8_0": 386.0,
+    "HuggingFaceTB/SmolLM2-360M-Instruct|bf16": 690.2,
+    "HuggingFaceTB/SmolLM2-135M-Instruct|Q4_K_M": 100.6,
+    "HuggingFaceTB/SmolLM2-135M-Instruct|Q8_0": 145.0,
+    "HuggingFaceTB/SmolLM2-135M-Instruct|bf16": 256.6
   },
   "_size_provenance": {
     "Qwen/Qwen3.5-4B|Q4_K_M": {
       "source": "slurm job 37810980",
       "method": "llama.cpp convert_hf_to_gguf + llama-quantize; os.path.getsize of model-q4_k_m.gguf",
       "measured_at": "2026-07-27",
-      "note": "Pool arithmetic predicted 2200 MB \u2014 20% low. K-quants are not a uniform 0.55 bytes/param."
+      "note": "Pool arithmetic predicted 2200 MB — 20% low. K-quants are not a uniform 0.55 bytes/param."
     },
     "Qwen/Qwen3.5-4B|Q8_0": {
       "source": "slurm job 37810980",
@@ -128,6 +137,60 @@
       "source": "slurm job 37905779",
       "method": "sum of 3 *.safetensors in the immutable HF snapshot",
       "measured_at": "2026-07-29"
+    },
+    "google/gemma-3-270m-it|Q4_K_M": {
+      "source": "slurm job 38765655",
+      "method": "llama.cpp convert_hf_to_gguf + llama-quantize on the LoRA-merged checkpoint; os.path.getsize of model-q4_k_m.gguf",
+      "measured_at": "2026-08-23",
+      "note": "Identical 241.4 MB from two independent builds (ner_bc5cdr, xlam_bfcl)."
+    },
+    "google/gemma-3-270m-it|Q8_0": {
+      "source": "unsloth/gemma-3-270m-it-GGUF",
+      "method": "os.path.getsize reported by the upstream unsloth/*-GGUF repo; NOT built here — recorded so tier/ordering is not left to arithmetic this model breaks",
+      "measured_at": "2026-08-22",
+      "note": "Only 1.15x the Q4_K_M, where pool arithmetic assumes 1.82x. The 262k-token embedding table dominates the file and does not compress like transformer weights, so the synthetic sizing is badly wrong for this model."
+    },
+    "google/gemma-3-270m-it|bf16": {
+      "source": "local HF snapshot",
+      "method": "sum of *.safetensors in the HuggingFace snapshot",
+      "measured_at": "2026-08-23",
+      "note": "268M params at 2 bytes/param."
+    },
+    "HuggingFaceTB/SmolLM2-360M-Instruct|Q4_K_M": {
+      "source": "slurm job 38765655",
+      "method": "llama.cpp convert_hf_to_gguf + llama-quantize on the LoRA-merged checkpoint; os.path.getsize of model-q4_k_m.gguf",
+      "measured_at": "2026-08-23",
+      "note": "Identical 258.1 MB from two independent builds."
+    },
+    "HuggingFaceTB/SmolLM2-360M-Instruct|Q8_0": {
+      "source": "unsloth/SmolLM2-360M-Instruct-GGUF",
+      "method": "os.path.getsize reported by the upstream unsloth/*-GGUF repo; NOT built here — recorded so tier/ordering is not left to arithmetic this model breaks",
+      "measured_at": "2026-08-22",
+      "note": "1.50x the Q4_K_M; closer to arithmetic than Gemma but still below the 1.82x assumption."
+    },
+    "HuggingFaceTB/SmolLM2-360M-Instruct|bf16": {
+      "source": "local HF snapshot",
+      "method": "sum of *.safetensors in the HuggingFace snapshot",
+      "measured_at": "2026-08-23",
+      "note": "362M params at 2 bytes/param."
+    },
+    "HuggingFaceTB/SmolLM2-135M-Instruct|Q4_K_M": {
+      "source": "slurm job 38765655",
+      "method": "llama.cpp convert_hf_to_gguf + llama-quantize on the LoRA-merged checkpoint; os.path.getsize of model-q4_k_m.gguf",
+      "measured_at": "2026-08-23",
+      "note": "Identical 100.6 MB from two independent builds. Smallest artifact the project has produced."
+    },
+    "HuggingFaceTB/SmolLM2-135M-Instruct|Q8_0": {
+      "source": "unsloth/SmolLM2-135M-Instruct-GGUF",
+      "method": "os.path.getsize reported by the upstream unsloth/*-GGUF repo; NOT built here — recorded so tier/ordering is not left to arithmetic this model breaks",
+      "measured_at": "2026-08-22",
+      "note": "1.38x the Q4_K_M."
+    },
+    "HuggingFaceTB/SmolLM2-135M-Instruct|bf16": {
+      "source": "local HF snapshot",
+      "method": "sum of *.safetensors in the HuggingFace snapshot",
+      "measured_at": "2026-08-23",
+      "note": "135M params at 2 bytes/param."
     }
   },
   "measurements": {},
@@ -138,7 +201,7 @@
       "tier_changes": 0,
       "interpretation": "A negative result worth keeping. The earlier '20% low' on Qwen3.5-4B Q4_K_M was real AT THE TIME and was fixed by raising the Q4_K_M constant to 0.55 bytes/param; this sweep confirms that correction generalizes to every other family rather than being specific to the 4B. No variant changes tier, so the pool's ordering and every hardware gate were already correct.",
       "residual_bias": "Q4_K_M and bf16 run ~4.8% light, Q8_0 ~1.1% heavy. Both are well inside the 250-750 MB tier bands, which is why nothing moved.",
-      "not_measured": "Runtime metrics (peak RSS, tok/s, TTFT) \u2014 llama-cli is not on the venv PATH (only llama-quantize is). These stay absent, so consumers correctly report 'unmeasured' rather than trusting a guess."
+      "not_measured": "Runtime metrics (peak RSS, tok/s, TTFT) — llama-cli is not on the venv PATH (only llama-quantize is). These stay absent, so consumers correctly report 'unmeasured' rather than trusting a guess."
     }
   }
 }

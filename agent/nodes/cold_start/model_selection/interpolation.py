@@ -150,7 +150,7 @@ def _probe_model(
             ),
             effective_batch_size=_PROBE_EFFECTIVE_BATCH,
             output_dir=model_dir,
-            task_type=state["task_type"],
+            task=state["task"],
         ).weights_ref
         gguf_path = None
         if model.quant is not None:
@@ -166,7 +166,6 @@ def _probe_model(
             state["eval_set"],
             weights_ref,
             model.model_id,
-            state["task_type"],
             quant=model.quant,
             gguf_path=gguf_path,
         )
