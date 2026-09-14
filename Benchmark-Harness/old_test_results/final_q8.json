@@ -1,0 +1,217 @@
+{
+  "run_info": {
+    "model": "qwen2.5-0.5b-instruct-q8_0.gguf",
+    "model_device_path": "/sdcard/Download/qwen2.5-0.5b-instruct-q8_0.gguf",
+    "device": "phone",
+    "quant": "Q4_K_M",
+    "start_time": "2026-07-07T23:01:48.485251+00:00",
+    "end_time": "2026-07-07T23:03:06.576344+00:00",
+    "total": 10,
+    "completed": 10,
+    "failed": 0,
+    "context_resets": 0
+  },
+  "results": [
+    {
+      "question_number": 1,
+      "question": "What is the capital of France?",
+      "run_id": "run_1_1783465308487",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 434,
+        "ttft_ms": 308,
+        "tps": 15.626081,
+        "memory_kb": 853976,
+        "power_ma": 612.0,
+        "thermal": "Normal"
+      },
+      "response": "The capital of France is Paris.",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 2,
+      "question": "Who wrote Romeo and Juliet?",
+      "run_id": "run_2_1783465312293",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 451,
+        "ttft_ms": 318,
+        "tps": 34.68838,
+        "memory_kb": 865648,
+        "power_ma": 566.8,
+        "thermal": "Normal"
+      },
+      "response": "\"Romeo and Juliet\" was written by William Shakespeare, an English playwright and poet who lived from 1564 to 1590. The play is part of Shakespeare's\u521b\u4f5c\uff0cand it is a tragicomedy.",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 3,
+      "question": "What is the chemical symbol for gold?",
+      "run_id": "run_3_1783465319625",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 444,
+        "ttft_ms": 283,
+        "tps": 13.66685,
+        "memory_kb": 880492,
+        "power_ma": 611.0,
+        "thermal": "Normal"
+      },
+      "response": "The chemical symbol for gold is Au.",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 4,
+      "question": "What is the largest planet in our solar system?",
+      "run_id": "run_4_1783465323210",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 445,
+        "ttft_ms": 337,
+        "tps": 27.660488,
+        "memory_kb": 882320,
+        "power_ma": 611.9,
+        "thermal": "Normal"
+      },
+      "response": "The largest planet in our solar system is Jupiter, which has a diameter of approximately 142,984 kilometers (88,896 miles). It is larger than the planet Venus, which has a diameter of approximately 121,498 kilometers (76,255 miles). Jupiter is the fifth planet from the sun and is known for its Great Red Spot, a giant storm that has been raging for over 400 years.",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 5,
+      "question": "What year did the first human land on the moon?",
+      "run_id": "run_5_1783465330547",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 451,
+        "ttft_ms": 326,
+        "tps": 22.324026,
+        "memory_kb": 891028,
+        "power_ma": 609.0,
+        "thermal": "Normal"
+      },
+      "response": "The first human landed on the Moon in 1969.",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 6,
+      "question": "What are the three states of matter?",
+      "run_id": "run_6_1783465334134",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 464,
+        "ttft_ms": 290,
+        "tps": 22.929712,
+        "memory_kb": 883664,
+        "power_ma": 608.7,
+        "thermal": "Normal"
+      },
+      "response": "The three states of matter are liquid, gas, and solid.",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 7,
+      "question": "How does a refrigerator keep food cold?",
+      "run_id": "run_7_1783465337735",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 449,
+        "ttft_ms": 305,
+        "tps": 31.9941,
+        "memory_kb": 923964,
+        "power_ma": 606.8,
+        "thermal": "Normal"
+      },
+      "response": "A refrigerator works by reducing the temperature of the surrounding environment by utilizing a process known as heat transfer. Here are the key steps and mechanisms that a refrigerator achieves this:",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 8,
+      "question": "Explain the process of photosynthesis in plants.",
+      "run_id": "run_8_1783465352373",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 455,
+        "ttft_ms": 301,
+        "tps": 33.189316,
+        "memory_kb": 923988,
+        "power_ma": 604.3,
+        "thermal": "Normal"
+      },
+      "response": "Photosynthesis is the process by which plants use sunlight energy to make food from carbon dioxide and water, and also releases oxygen as a byproduct.",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 9,
+      "question": "Summarize the theory of relativity in simple terms.",
+      "run_id": "run_9_1783465363333",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 489,
+        "ttft_ms": 357,
+        "tps": 34.06899,
+        "memory_kb": 923320,
+        "power_ma": 593.9,
+        "thermal": "Normal"
+      },
+      "response": "The theory of relativity is a set of theories developed by Albert Einstein that describe the fundamental physical laws of the universe. The main ideas of relativity are:",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 10,
+      "question": "Describe the causes and consequences of World War I in a few sentences.",
+      "run_id": "run_10_1783465374432",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 450,
+        "ttft_ms": 372,
+        "tps": 33.388752,
+        "memory_kb": 935288,
+        "power_ma": 601.7,
+        "thermal": "Normal"
+      },
+      "response": "World War I, also known as the First World War, was a devastating conflict that began in 1914 and lasted until 1918. It was characterized by a combination of factors that led to the slaughter of millions of lives and the destruction of cities and countries. The main causes of World War I were:",
+      "error": null,
+      "context_reset": false
+    }
+  ],
+  "summary": {
+    "ttft_ms": {
+      "mean": 319.7,
+      "std": 27.203,
+      "min": 283,
+      "max": 372
+    },
+    "tps": {
+      "mean": 26.954,
+      "std": 7.478,
+      "min": 13.66685,
+      "max": 34.68838
+    },
+    "memory_kb": {
+      "mean": 896368.8,
+      "std": 26731.407,
+      "min": 853976,
+      "max": 935288
+    },
+    "power_ma": {
+      "mean": 602.61,
+      "std": 13.047,
+      "min": 566.8,
+      "max": 612.0
+    },
+    "thermal_states_observed": [
+      "Normal"
+    ],
+    "note": "TPS/TTFT drift across the run reflects real device thermal state as it heats up under sustained inference, not measurement error.",
+    "rss_note": "peak_RSS_KB is only directly comparable across different models if each was benchmarked in a freshly restarted app process - this script now guarantees that automatically as of this version."
+  }
+}

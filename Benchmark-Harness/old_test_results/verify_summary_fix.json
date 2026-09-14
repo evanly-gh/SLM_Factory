@@ -1,0 +1,104 @@
+{
+  "run_info": {
+    "model": "qwen2.5-0.5b-instruct-q4_k_m.gguf",
+    "model_device_path": "/sdcard/Download/qwen2.5-0.5b-instruct-q4_k_m.gguf",
+    "device": "phone",
+    "quant": "Q4_K_M",
+    "start_time": "2026-07-09T03:12:11.020572+00:00",
+    "end_time": "2026-07-09T03:12:27.712220+00:00",
+    "total": 3,
+    "completed": 3,
+    "failed": 0,
+    "context_resets": 0,
+    "battery_warning": true,
+    "battery_level_pct": 79,
+    "battery_status": "Charging",
+    "rebooted_before_run": false,
+    "cold_load_note": "cold_load_ms reflects a genuinely cold read only if --reboot-before was used for this run. Without a reboot, the OS file cache may make cold_load_ms appear faster than a true cold read from storage, especially for larger model files."
+  },
+  "results": [
+    {
+      "question_number": 1,
+      "question": "What is the capital of France?",
+      "run_id": "run_1_1783566731020",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 434,
+        "ttft_ms": 417,
+        "tps": 10.202891,
+        "memory_kb": 725300,
+        "power_ma": 1708.8,
+        "thermal": "Normal"
+      },
+      "response": "The capital of France is Paris.",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 2,
+      "question": "What is the capital of Germany?",
+      "run_id": "run_2_1783566735628",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 434,
+        "ttft_ms": 426,
+        "tps": 12.423794,
+        "memory_kb": 737636,
+        "power_ma": 1967.0,
+        "thermal": "Normal"
+      },
+      "response": "The capital of Germany is Berlin.",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 3,
+      "question": "What is the capital of Italy?",
+      "run_id": "run_3_1783566740032",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 449,
+        "ttft_ms": 406,
+        "tps": 30.537197,
+        "memory_kb": 748528,
+        "power_ma": 1059.0,
+        "thermal": "Normal"
+      },
+      "response": "As of my last update in 2023, Italy is a federal state of Italy, not a country in its own right. Italy is generally considered a country in its own right, with Rome as its capital and a complex state structure that includes 28 autonomous communities. The capital of Italy can vary depending on the year or the location, but as of 2023, it is Rome. For the most accurate and up-to-date information, it is recommended to check the official website of the Italian government, or travel site like Viator or Lonely Planet.",
+      "error": null,
+      "context_reset": false
+    }
+  ],
+  "summary": {
+    "ttft_ms": {
+      "mean": 416.333,
+      "std": 8.179,
+      "min": 406,
+      "max": 426
+    },
+    "tps": {
+      "mean": 17.721,
+      "std": 9.107,
+      "min": 10.202891,
+      "max": 30.537197
+    },
+    "memory_kb": {
+      "mean": 737154.667,
+      "std": 9488.897,
+      "min": 725300,
+      "max": 748528
+    },
+    "power_ma": {
+      "mean": 1578.267,
+      "std": 382.008,
+      "min": 1059.0,
+      "max": 1967.0
+    },
+    "first_question_cold_load_ms": 434,
+    "thermal_states_observed": [
+      "Normal"
+    ],
+    "note": "TPS/TTFT drift across the run reflects real device thermal state as it heats up under sustained inference, not measurement error.",
+    "rss_note": "peak_RSS_KB is only directly comparable across different models if each was benchmarked in a freshly restarted app process - this script now guarantees that automatically as of this version."
+  }
+}

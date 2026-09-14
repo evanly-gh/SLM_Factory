@@ -1,0 +1,84 @@
+{
+  "run_info": {
+    "model": "qwen2.5-0.5b-instruct-q8_0.gguf",
+    "model_device_path": "/sdcard/Android/data/io.shubham0204.smollmandroid/files/qwen2.5-0.5b-instruct-q8_0.gguf",
+    "device": "phone",
+    "quant": "Q4_K_M",
+    "start_time": "2026-07-18T19:44:31.363965+00:00",
+    "end_time": "2026-07-18T19:44:36.544649+00:00",
+    "total": 1,
+    "completed": 1,
+    "failed": 0,
+    "context_resets": 0,
+    "battery_warning": true,
+    "battery_level_pct": 86,
+    "battery_status": "Charging",
+    "rebooted_before_run": false,
+    "cold_load_note": "cold_load_ms reflects a genuinely cold read only if --reboot-before was used for this run. Without a reboot, the OS file cache may make cold_load_ms appear faster than a true cold read from storage, especially for larger model files."
+  },
+  "results": [
+    {
+      "question_number": 1,
+      "question": "What is the capital of France?",
+      "run_id": "run_1_1784403871364",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 520,
+        "ttft_ms": 522,
+        "tps": 7.4964204,
+        "memory_kb": 827888,
+        "power_ma": 1131.0,
+        "thermal": "Normal",
+        "thermal_temp_cpu_c": 38.2,
+        "thermal_temp_skin_c": 33.3
+      },
+      "response": "The capital of France is Paris.",
+      "error": null,
+      "context_reset": false
+    }
+  ],
+  "summary": {
+    "ttft_ms": {
+      "mean": 522,
+      "std": 0.0,
+      "min": 522,
+      "max": 522
+    },
+    "tps": {
+      "mean": 7.496,
+      "std": 0.0,
+      "min": 7.4964204,
+      "max": 7.4964204
+    },
+    "memory_kb": {
+      "mean": 827888,
+      "std": 0.0,
+      "min": 827888,
+      "max": 827888
+    },
+    "power_ma": {
+      "mean": 1131.0,
+      "std": 0.0,
+      "min": 1131.0,
+      "max": 1131.0
+    },
+    "thermal_temp_cpu_c": {
+      "mean": 38.2,
+      "std": 0.0,
+      "min": 38.2,
+      "max": 38.2
+    },
+    "thermal_temp_skin_c": {
+      "mean": 33.3,
+      "std": 0.0,
+      "min": 33.3,
+      "max": 33.3
+    },
+    "first_question_cold_load_ms": 520,
+    "thermal_states_observed": [
+      "Normal"
+    ],
+    "note": "TPS/TTFT drift across the run reflects real device thermal state as it heats up under sustained inference, not measurement error.",
+    "rss_note": "peak_RSS_KB is only directly comparable across different models if each was benchmarked in a freshly restarted app process - this script now guarantees that automatically as of this version."
+  }
+}

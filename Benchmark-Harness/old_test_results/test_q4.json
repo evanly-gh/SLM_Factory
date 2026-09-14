@@ -1,0 +1,223 @@
+{
+  "run_info": {
+    "model": "qwen2.5-0.5b-instruct-q4_k_m.gguf",
+    "model_device_path": "/sdcard/Download/qwen2.5-0.5b-instruct-q4_k_m.gguf",
+    "device": "phone",
+    "quant": "Q4_K_M",
+    "start_time": "2026-07-10T21:05:03.563204+00:00",
+    "end_time": "2026-07-10T21:06:29.910169+00:00",
+    "total": 10,
+    "completed": 10,
+    "failed": 0,
+    "context_resets": 0,
+    "battery_warning": true,
+    "battery_level_pct": 91,
+    "battery_status": "Charging",
+    "rebooted_before_run": false,
+    "cold_load_note": "cold_load_ms reflects a genuinely cold read only if --reboot-before was used for this run. Without a reboot, the OS file cache may make cold_load_ms appear faster than a true cold read from storage, especially for larger model files."
+  },
+  "results": [
+    {
+      "question_number": 1,
+      "question": "What is the capital of France?",
+      "run_id": "run_1_1783717503563",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 381,
+        "ttft_ms": 426,
+        "tps": 29.740793,
+        "memory_kb": 695948,
+        "power_ma": 566.0,
+        "thermal": "Normal"
+      },
+      "response": "The capital and largest city of France is Paris. The city has a population of approximately 2.1 million people, accounting for about 11.6% of the country's total population.",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 2,
+      "question": "Who wrote Romeo and Juliet?",
+      "run_id": "run_2_1783717508148",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 406,
+        "ttft_ms": 435,
+        "tps": 34.26463,
+        "memory_kb": 710004,
+        "power_ma": 566.5,
+        "thermal": "Normal"
+      },
+      "response": "\"Romeo and Juliet\" was written by William Shakespeare in the late 16th century. It was first performed in 1599, on the 6th of April, in the playhouse at the Globe Theatre in London. It is a tragic love story set in the early 16th century in the city of London. The play is about a young couple, Romeo and Juliet, who are tasked with the task of finding love and respect from their families and societal expectations. The play explores themes of love, sacrifice, and the harsh realities of life in 16th-century France.",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 3,
+      "question": "What is the chemical symbol for gold?",
+      "run_id": "run_3_1783717515099",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 527,
+        "ttft_ms": 464,
+        "tps": 26.205437,
+        "memory_kb": 722928,
+        "power_ma": 569.9,
+        "thermal": "Normal"
+      },
+      "response": "The chemical symbol for gold is Au.",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 4,
+      "question": "What is the largest planet in our solar system?",
+      "run_id": "run_4_1783717524635",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 451,
+        "ttft_ms": 496,
+        "tps": 29.271383,
+        "memory_kb": 736852,
+        "power_ma": 567.4,
+        "thermal": "Normal"
+      },
+      "response": "The largest planet in our solar system is Jupiter. It is a gas giant with a diameter of about 142, 984 kilometers and a mass of about 1.898 x 10^27 kilograms. It is the largest object in our solar system that has not yet been directly observed.",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 5,
+      "question": "What year did the first human land on the moon?",
+      "run_id": "run_5_1783717530587",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 462,
+        "ttft_ms": 469,
+        "tps": 27.657986,
+        "memory_kb": 748348,
+        "power_ma": 567.3,
+        "thermal": "Normal"
+      },
+      "response": "The first human landed on the Moon on July 20, 1969. This date is known as the Apollo 11 landing or the Apollo 20 mass launch.",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 6,
+      "question": "What are the three states of matter?",
+      "run_id": "run_6_1783717535177",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 449,
+        "ttft_ms": 404,
+        "tps": 19.59138,
+        "memory_kb": 726116,
+        "power_ma": 567.0,
+        "thermal": "Normal"
+      },
+      "response": "The three states of matter are: solid, liquid, and gas.",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 7,
+      "question": "How does a refrigerator keep food cold?",
+      "run_id": "run_7_1783717539848",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 450,
+        "ttft_ms": 448,
+        "tps": 30.315126,
+        "memory_kb": 715508,
+        "power_ma": 570.3,
+        "thermal": "Normal"
+      },
+      "response": "A refrigerator works by removing heat from the air passing through it until it reaches a specific temperature level. This is achieved through a process called convection, where heat is transferred from a heating source to the air in the refrigerator. The heat is drawn from the air passing through the refrigerator by passing through a non-conductive solid material that is surrounded by a conductive material.",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 8,
+      "question": "Explain the process of photosynthesis in plants.",
+      "run_id": "run_8_1783717552611",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 454,
+        "ttft_ms": 421,
+        "tps": 29.884544,
+        "memory_kb": 743680,
+        "power_ma": 573.1,
+        "thermal": "Normal"
+      },
+      "response": "Photosynthesis is a process that occurs in plants, algae, and some bacteria. It is the process by which plants use sunlight, water, and carbon dioxide to produce glucose and oxygen.",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 9,
+      "question": "Summarize the theory of relativity in simple terms.",
+      "run_id": "run_9_1783717567765",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 451,
+        "ttft_ms": 467,
+        "tps": 33.736687,
+        "memory_kb": 775192,
+        "power_ma": 575.0,
+        "thermal": "Normal"
+      },
+      "response": "The theory of relativity states that everything is in motion, not stationary. This means that the laws of physics are the same in all inertial frames of reference, which is why space and time are not absolute. Inertial frames are frames of reference in which there is no acceleration, meaning that the motion of an object is not affected by forces such as gravity or electromagnetism. The speed of light in a vacuum is the same for all observers, regardless of their motion. This means that the distance between two objects is not the same in different frames of reference. Inertial frames are frames of reference in which the speed of an object is constant, meaning that it is not accelerating or decelerating. Therefore, the speed of an object in an inertial frame of reference is constant, which means that the object is not changing its velocity. This is one of the most important ideas in the theory of relativity, as it allows us to compare the speed of different objects and to make predictions about their motion in different frames of reference.",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 10,
+      "question": "Describe the causes and consequences of World War I in a few sentences.",
+      "run_id": "run_10_1783717577160",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 454,
+        "ttft_ms": 531,
+        "tps": 31.66947,
+        "memory_kb": 790892,
+        "power_ma": 577.9,
+        "thermal": "Normal"
+      },
+      "response": "World War I, also known as the First World War, was primarily caused by a combination of factors.",
+      "error": null,
+      "context_reset": false
+    }
+  ],
+  "summary": {
+    "ttft_ms": {
+      "mean": 456.1,
+      "std": 35.935,
+      "min": 404,
+      "max": 531
+    },
+    "tps": {
+      "mean": 29.234,
+      "std": 3.975,
+      "min": 19.59138,
+      "max": 34.26463
+    },
+    "memory_kb": {
+      "mean": 736546.8,
+      "std": 27797.092,
+      "min": 695948,
+      "max": 790892
+    },
+    "power_ma": {
+      "mean": 570.04,
+      "std": 3.852,
+      "min": 566.0,
+      "max": 577.9
+    },
+    "first_question_cold_load_ms": 381,
+    "thermal_states_observed": [
+      "Normal"
+    ],
+    "note": "TPS/TTFT drift across the run reflects real device thermal state as it heats up under sustained inference, not measurement error.",
+    "rss_note": "peak_RSS_KB is only directly comparable across different models if each was benchmarked in a freshly restarted app process - this script now guarantees that automatically as of this version."
+  }
+}

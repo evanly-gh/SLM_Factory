@@ -1,0 +1,255 @@
+{
+  "run_info": {
+    "model": "qwen2.5-0.5b-instruct-q5_k_m.gguf",
+    "model_device_path": "/sdcard/Android/data/io.shubham0204.smollmandroid/files/qwen2.5-0.5b-instruct-q5_k_m.gguf",
+    "device": "phone",
+    "quant": "Q4_K_M",
+    "start_time": "2026-07-17T16:52:54.744452+00:00",
+    "end_time": "2026-07-17T16:55:13.528245+00:00",
+    "total": 10,
+    "completed": 10,
+    "failed": 0,
+    "context_resets": 0,
+    "battery_warning": true,
+    "battery_level_pct": 89,
+    "battery_status": "Charging",
+    "rebooted_before_run": false,
+    "cold_load_note": "cold_load_ms reflects a genuinely cold read only if --reboot-before was used for this run. Without a reboot, the OS file cache may make cold_load_ms appear faster than a true cold read from storage, especially for larger model files."
+  },
+  "results": [
+    {
+      "question_number": 1,
+      "question": "What is the capital of France?",
+      "run_id": "run_1_1784307174744",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 708,
+        "ttft_ms": 630,
+        "tps": 7.1670938,
+        "memory_kb": 694724,
+        "power_ma": 824.6,
+        "thermal": "Normal",
+        "thermal_temp_cpu_c": 38.6,
+        "thermal_temp_skin_c": 33.0
+      },
+      "response": "The capital of France is Paris.",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 2,
+      "question": "Who wrote Romeo and Juliet?",
+      "run_id": "run_2_1784307179615",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 484,
+        "ttft_ms": 674,
+        "tps": 13.115374,
+        "memory_kb": 713540,
+        "power_ma": 826.4,
+        "thermal": "Normal",
+        "thermal_temp_cpu_c": 45.5,
+        "thermal_temp_skin_c": 33.4
+      },
+      "response": "Romeo and Juliet was written by William Shakespeare. The play is a tragic love story set in early modern England, and it was first performed in 1597. The play is known for its powerful themes of love, revenge, and the dangers of young love. It has been adapted and staged many times over the centuries, and continues to be widely studied and appreciated by scholars and audiences alike. The play is a notable example of Shakespeare's witty and witty style, and has been praised for its exploration of complex human emotions and motivations.",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 3,
+      "question": "What is the chemical symbol for gold?",
+      "run_id": "run_3_1784307191576",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 507,
+        "ttft_ms": 637,
+        "tps": 7.332601,
+        "memory_kb": 715444,
+        "power_ma": 825.0,
+        "thermal": "Normal",
+        "thermal_temp_cpu_c": 41.3,
+        "thermal_temp_skin_c": 33.4
+      },
+      "response": "The chemical symbol for gold is Au.",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 4,
+      "question": "What is the largest planet in our solar system?",
+      "run_id": "run_4_1784307196488",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 501,
+        "ttft_ms": 743,
+        "tps": 10.13484,
+        "memory_kb": 725516,
+        "power_ma": 824.7,
+        "thermal": "Normal",
+        "thermal_temp_cpu_c": 42.0,
+        "thermal_temp_skin_c": 33.2
+      },
+      "response": "The largest planet in our solar system by volume is Io, which is geologically active and is slightly larger than Mercury.",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 5,
+      "question": "What year did the first human land on the moon?",
+      "run_id": "run_5_1784307202591",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 515,
+        "ttft_ms": 704,
+        "tps": 9.8559475,
+        "memory_kb": 742292,
+        "power_ma": 824.1,
+        "thermal": "Normal",
+        "thermal_temp_cpu_c": 40.5,
+        "thermal_temp_skin_c": 33.2
+      },
+      "response": "The first human landed on the moon on July 10, 1969.",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 6,
+      "question": "What are the three states of matter?",
+      "run_id": "run_6_1784307208691",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 528,
+        "ttft_ms": 621,
+        "tps": 9.259365,
+        "memory_kb": 746808,
+        "power_ma": 822.1,
+        "thermal": "Normal",
+        "thermal_temp_cpu_c": 40.1,
+        "thermal_temp_skin_c": 33.2
+      },
+      "response": "The three states of matter are liquid, solid, and gas.",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 7,
+      "question": "How does a refrigerator keep food cold?",
+      "run_id": "run_7_1784307213656",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 527,
+        "ttft_ms": 669,
+        "tps": 13.307687,
+        "memory_kb": 757048,
+        "power_ma": 825.8,
+        "thermal": "Normal",
+        "thermal_temp_cpu_c": 47.8,
+        "thermal_temp_skin_c": 34.7
+      },
+      "response": "A refrigerator keeps food cold by lowering the temperature of the air around the foods, effectively lowering the temperature of the food to the temperature inside the freezer. Here are the key steps of how a refrigerator keeps food cold:",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 8,
+      "question": "Explain the process of photosynthesis in plants.",
+      "run_id": "run_8_1784307243588",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 522,
+        "ttft_ms": 665,
+        "tps": 13.305351,
+        "memory_kb": 748428,
+        "power_ma": 826.7,
+        "thermal": "Normal",
+        "thermal_temp_cpu_c": 49.0,
+        "thermal_temp_skin_c": 35.4
+      },
+      "response": "Photosynthesis is the process by which plants capture light energy and convert it into chemical energy in the form of glucose. The overall process is called the Calvin cycle and includes several key steps:",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 9,
+      "question": "Summarize the theory of relativity in simple terms.",
+      "run_id": "run_9_1784307271312",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 522,
+        "ttft_ms": 736,
+        "tps": 13.615289,
+        "memory_kb": 731972,
+        "power_ma": 827.9,
+        "thermal": "Normal",
+        "thermal_temp_cpu_c": 49.8,
+        "thermal_temp_skin_c": 35.8
+      },
+      "response": "The theory of relativity is a fundamental concept that describes the relationship between space and time as measured by an observer in motion. It can be seen as the idea that time and space are not absolute, but rather are affected by an observer's motion in the universe.",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 10,
+      "question": "Describe the causes and consequences of World War I in a few sentences.",
+      "run_id": "run_10_1784307290492",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 522,
+        "ttft_ms": 828,
+        "tps": 12.816445,
+        "memory_kb": 759960,
+        "power_ma": 829.8,
+        "thermal": "Normal",
+        "thermal_temp_cpu_c": 51.7,
+        "thermal_temp_skin_c": 36.7
+      },
+      "response": "World War I, which lasted from 1914 to 1918, was a significant event in history. It was caused by the assassination of Archduke Franz Ferdinand of Austria-Hungary, a 30-year-old Bosnian Serene Prince. This assassination sparked a series of events that led to World War I, including the assassination of Archduke Franz Ferdinand's wife, rectification of the Schlieffen Plan, and the escalation of tensions between countries.",
+      "error": null,
+      "context_reset": false
+    }
+  ],
+  "summary": {
+    "ttft_ms": {
+      "mean": 690.7,
+      "std": 60.541,
+      "min": 621,
+      "max": 828
+    },
+    "tps": {
+      "mean": 10.991,
+      "std": 2.418,
+      "min": 7.1670938,
+      "max": 13.615289
+    },
+    "memory_kb": {
+      "mean": 733573.2,
+      "std": 20064.674,
+      "min": 694724,
+      "max": 759960
+    },
+    "power_ma": {
+      "mean": 825.71,
+      "std": 2.034,
+      "min": 822.1,
+      "max": 829.8
+    },
+    "thermal_temp_cpu_c": {
+      "mean": 44.63,
+      "std": 4.456,
+      "min": 38.6,
+      "max": 51.7
+    },
+    "thermal_temp_skin_c": {
+      "mean": 34.2,
+      "std": 1.274,
+      "min": 33.0,
+      "max": 36.7
+    },
+    "first_question_cold_load_ms": 708,
+    "thermal_states_observed": [
+      "Normal"
+    ],
+    "note": "TPS/TTFT drift across the run reflects real device thermal state as it heats up under sustained inference, not measurement error.",
+    "rss_note": "peak_RSS_KB is only directly comparable across different models if each was benchmarked in a freshly restarted app process - this script now guarantees that automatically as of this version."
+  }
+}

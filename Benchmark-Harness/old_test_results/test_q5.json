@@ -1,0 +1,216 @@
+{
+  "run_info": {
+    "model": "qwen2.5-0.5b-instruct-q5_k_m.gguf",
+    "model_device_path": "/sdcard/Download/qwen2.5-0.5b-instruct-q5_k_m.gguf",
+    "device": "phone",
+    "quant": "Q4_K_M",
+    "start_time": "2026-07-07T22:29:15.342414+00:00",
+    "end_time": "2026-07-07T22:30:31.757870+00:00",
+    "total": 10,
+    "completed": 10,
+    "failed": 0,
+    "context_resets": 0
+  },
+  "results": [
+    {
+      "question_number": 1,
+      "question": "What is the capital of France?",
+      "run_id": "run_1_1783463355342",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 718,
+        "ttft_ms": 454,
+        "tps": 12.602732,
+        "memory_kb": 835340,
+        "power_ma": 939.0,
+        "thermal": "Normal"
+      },
+      "response": "The capital city of France is Paris.",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 2,
+      "question": "Who wrote Romeo and Juliet?",
+      "run_id": "run_2_1783463360123",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 461,
+        "ttft_ms": 483,
+        "tps": 28.825264,
+        "memory_kb": 870572,
+        "power_ma": 778.5,
+        "thermal": "Normal"
+      },
+      "response": "Romeo and Juliet was written by William Shakespeare.",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 3,
+      "question": "What is the chemical symbol for gold?",
+      "run_id": "run_3_1783463367462",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 450,
+        "ttft_ms": 452,
+        "tps": 11.714455,
+        "memory_kb": 880572,
+        "power_ma": 925.3,
+        "thermal": "Normal"
+      },
+      "response": "The chemical symbol for gold is Au.",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 4,
+      "question": "What is the largest planet in our solar system?",
+      "run_id": "run_4_1783463371164",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 462,
+        "ttft_ms": 550,
+        "tps": 29.180859,
+        "memory_kb": 896732,
+        "power_ma": 792.1,
+        "thermal": "Normal"
+      },
+      "response": "The largest planet in our solar system is Jupiter. It has a diameter of about 142, 922 miles (227, 044 kilometers). It is slightly larger than the largest moon in our solar system, Saturn's moon Titan, with a diameter of about 25, 174 miles (4, 035 kilometers). Jupiter is also the fifth planet from the Sun, and the largest in the solar system. It has an average temperature of about 660 degrees Fahrenheit (380 degrees Celsius) and produces the most frequent and intense storms in the solar system.",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 5,
+      "question": "What year did the first human land on the moon?",
+      "run_id": "run_5_1783463379757",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 455,
+        "ttft_ms": 514,
+        "tps": 26.123701,
+        "memory_kb": 896460,
+        "power_ma": 864.6,
+        "thermal": "Normal"
+      },
+      "response": "The first human land on the Moon was Neil Armstrong, who made the first lunar landing on July 20, 1969. He stepped down to the lunar surface for the first time on the moon's surface after the Apollo 11 mission.",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 6,
+      "question": "What are the three states of matter?",
+      "run_id": "run_6_1783463385776",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 453,
+        "ttft_ms": 478,
+        "tps": 30.120369,
+        "memory_kb": 907080,
+        "power_ma": 763.7,
+        "thermal": "Normal"
+      },
+      "response": "The three states of matter are:",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 7,
+      "question": "How does a refrigerator keep food cold?",
+      "run_id": "run_7_1783463394191",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 448,
+        "ttft_ms": 494,
+        "tps": 28.69535,
+        "memory_kb": 916248,
+        "power_ma": 818.7,
+        "thermal": "Normal"
+      },
+      "response": "A refrigerator keeps food cold by containing a combination of cold air and a low temperature in a sealed environment. The cold air circulates within the refrigerator to keep the food cold, while the refrigerant inside the refrigeration system warms the air to create a low temperature. The temperature of the air inside the refrigerator can be controlled, allowing for optimal preservation of food quality.",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 8,
+      "question": "Explain the process of photosynthesis in plants.",
+      "run_id": "run_8_1783463400335",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 455,
+        "ttft_ms": 488,
+        "tps": 30.769785,
+        "memory_kb": 927900,
+        "power_ma": 735.6,
+        "thermal": "Normal"
+      },
+      "response": "Photosynthesis is a process that plants use to produce energy from sunlight. The process is a series of chemical reactions that occur in the leaves of plants, primarily in the chloroplasts of plant cells.",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 9,
+      "question": "Summarize the theory of relativity in simple terms.",
+      "run_id": "run_9_1783463413502",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 451,
+        "ttft_ms": 530,
+        "tps": 27.281145,
+        "memory_kb": 928192,
+        "power_ma": 779.7,
+        "thermal": "Normal"
+      },
+      "response": "The theory of relativity is a branch of physics that describes the relationship between space and time, and the laws of physics as observed in different reference frames. In simple terms, it states that the laws of physics appear to be the same in all reference frames, no matter how they are moving relative to each other. This means that the laws of physics are consistent in all directions, whether you're standing still or moving at the same velocity.",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 10,
+      "question": "Describe the causes and consequences of World War I in a few sentences.",
+      "run_id": "run_10_1783463419613",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 443,
+        "ttft_ms": 606,
+        "tps": 27.605194,
+        "memory_kb": 938372,
+        "power_ma": 739.2,
+        "thermal": "Normal"
+      },
+      "response": "World War I, also known as the First World War, was a global conflict that began in 1914 and lasted for 2 years. It caused widespread suffering and loss of life, and resulted in economic and social repercussions for many countries.",
+      "error": null,
+      "context_reset": false
+    }
+  ],
+  "summary": {
+    "ttft_ms": {
+      "mean": 504.9,
+      "std": 44.682,
+      "min": 452,
+      "max": 606
+    },
+    "tps": {
+      "mean": 25.292,
+      "std": 6.692,
+      "min": 11.714455,
+      "max": 30.769785
+    },
+    "memory_kb": {
+      "mean": 899746.8,
+      "std": 29676.04,
+      "min": 835340,
+      "max": 938372
+    },
+    "power_ma": {
+      "mean": 813.64,
+      "std": 69.124,
+      "min": 735.6,
+      "max": 939.0
+    },
+    "thermal_states_observed": [
+      "Normal"
+    ],
+    "note": "TPS/TTFT drift across the run reflects real device thermal state as it heats up under sustained inference, not measurement error."
+  }
+}

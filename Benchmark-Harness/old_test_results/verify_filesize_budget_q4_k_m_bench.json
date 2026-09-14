@@ -1,0 +1,255 @@
+{
+  "run_info": {
+    "model": "qwen2.5-0.5b-instruct-q4_k_m.gguf",
+    "model_device_path": "/sdcard/Android/data/io.shubham0204.smollmandroid/files/qwen2.5-0.5b-instruct-q4_k_m.gguf",
+    "device": "phone",
+    "quant": "Q4_K_M",
+    "start_time": "2026-07-17T16:50:33.671966+00:00",
+    "end_time": "2026-07-17T16:52:43.827413+00:00",
+    "total": 10,
+    "completed": 10,
+    "failed": 0,
+    "context_resets": 0,
+    "battery_warning": true,
+    "battery_level_pct": 88,
+    "battery_status": "Charging",
+    "rebooted_before_run": false,
+    "cold_load_note": "cold_load_ms reflects a genuinely cold read only if --reboot-before was used for this run. Without a reboot, the OS file cache may make cold_load_ms appear faster than a true cold read from storage, especially for larger model files."
+  },
+  "results": [
+    {
+      "question_number": 1,
+      "question": "What is the capital of France?",
+      "run_id": "run_1_1784307033672",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 453,
+        "ttft_ms": 554,
+        "tps": 7.7973666,
+        "memory_kb": 677464,
+        "power_ma": 831.8,
+        "thermal": "Normal",
+        "thermal_temp_cpu_c": 31.2,
+        "thermal_temp_skin_c": 27.7
+      },
+      "response": "The capital of France is Paris.",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 2,
+      "question": "Who wrote Romeo and Juliet?",
+      "run_id": "run_2_1784307038509",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 494,
+        "ttft_ms": 585,
+        "tps": 13.239287,
+        "memory_kb": 694880,
+        "power_ma": 829.0,
+        "thermal": "Normal",
+        "thermal_temp_cpu_c": 37.4,
+        "thermal_temp_skin_c": 28.3
+      },
+      "response": "Romeo and Juliet was written by William Shakespeare. It is a tragic love story set in the English Renaissance and early 17th century. The play was first performed in 1599 and became a popular and enduring work of literature.",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 3,
+      "question": "What is the chemical symbol for gold?",
+      "run_id": "run_3_1784307045558",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 525,
+        "ttft_ms": 553,
+        "tps": 7.920855,
+        "memory_kb": 704088,
+        "power_ma": 826.7,
+        "thermal": "Normal",
+        "thermal_temp_cpu_c": 35.9,
+        "thermal_temp_skin_c": 28.5
+      },
+      "response": "The chemical symbol for gold is Au.",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 4,
+      "question": "What is the largest planet in our solar system?",
+      "run_id": "run_4_1784307050358",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 528,
+        "ttft_ms": 649,
+        "tps": 13.876076,
+        "memory_kb": 712456,
+        "power_ma": 827.5,
+        "thermal": "Normal",
+        "thermal_temp_cpu_c": 39.7,
+        "thermal_temp_skin_c": 28.8
+      },
+      "response": "The largest planet in our solar system is Jupiter. It is about 2.25 times the diameter of Earth and has several rings, which are thought to be made of gas and ice. Other planets in our solar system with larger diameters include Saturn, Uranus, and Neptune. However, Jupiter is often referred to as the \"big kid\" because it is so massive that it dominates the other planets in the solar system.",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 5,
+      "question": "What year did the first human land on the moon?",
+      "run_id": "run_5_1784307059941",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 546,
+        "ttft_ms": 646,
+        "tps": 14.048152,
+        "memory_kb": 698440,
+        "power_ma": 825.3,
+        "thermal": "Normal",
+        "thermal_temp_cpu_c": 41.7,
+        "thermal_temp_skin_c": 29.6
+      },
+      "response": "The first human walked on the Moon on July 20, 1969.",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 6,
+      "question": "What are the three states of matter?",
+      "run_id": "run_6_1784307073226",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 544,
+        "ttft_ms": 551,
+        "tps": 12.834204,
+        "memory_kb": 721924,
+        "power_ma": 821.1,
+        "thermal": "Normal",
+        "thermal_temp_cpu_c": 37.4,
+        "thermal_temp_skin_c": 29.7
+      },
+      "response": "Three states of matter are solid, liquid, and gas. They differ in their internal energy, shape, and volume.",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 7,
+      "question": "How does a refrigerator keep food cold?",
+      "run_id": "run_7_1784307079198",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 541,
+        "ttft_ms": 589,
+        "tps": 14.207952,
+        "memory_kb": 709784,
+        "power_ma": 822.8,
+        "thermal": "Normal",
+        "thermal_temp_cpu_c": 43.6,
+        "thermal_temp_skin_c": 30.7
+      },
+      "response": "A refrigerator works by using the principle of thermodynamics \u2013 the energy from heat to cool. It uses its cold storage space, which is designed to keep food cold, to absorb and release heat to cool the air around the food. The temperature of the air around the food is maintained at a lower level than the temperature of the food itself.",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 8,
+      "question": "Explain the process of photosynthesis in plants.",
+      "run_id": "run_8_1784307100599",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 543,
+        "ttft_ms": 581,
+        "tps": 13.588413,
+        "memory_kb": 709856,
+        "power_ma": 822.6,
+        "thermal": "Normal",
+        "thermal_temp_cpu_c": 45.9,
+        "thermal_temp_skin_c": 32.7
+      },
+      "response": "Photosynthesis is the process by which plants, algae and some bacteria convert sunlight, water and carbon dioxide into glucose and oxygen. The process can be divided into two main stages: the light-dependent reactions and the light-independent reactions (also known as the Calvin cycle).",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 9,
+      "question": "Summarize the theory of relativity in simple terms.",
+      "run_id": "run_9_1784307136672",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 542,
+        "ttft_ms": 650,
+        "tps": 13.804975,
+        "memory_kb": 694620,
+        "power_ma": 823.6,
+        "thermal": "Normal",
+        "thermal_temp_cpu_c": 45.5,
+        "thermal_temp_skin_c": 32.7
+      },
+      "response": "The theory of relativity is a scientific theory proposed by Albert Einstein in the 20th century. It posits that time, space, and mass are all related, and are not independent of each other. It states that time and space are related to each other and change as you move from one place to another, and that they are influenced by mass and energy. This theory has had a significant impact on our understanding of the universe and has enabled us to develop faster, safer, and more efficient means of transportation.",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 10,
+      "question": "Describe the causes and consequences of World War I in a few sentences.",
+      "run_id": "run_10_1784307148501",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 531,
+        "ttft_ms": 752,
+        "tps": 13.817407,
+        "memory_kb": 709028,
+        "power_ma": 825.7,
+        "thermal": "Normal",
+        "thermal_temp_cpu_c": 45.9,
+        "thermal_temp_skin_c": 32.9
+      },
+      "response": "World War I, also known as the Great War, was a worldwide conflict that broke out in 1914 and lasted until 1918. The causes and consequences of World War I were complex, involving a range of factors that all contributed to the conflict. The major causes of the war included territorial expansion, nationalism, and militarism, as well as political instability and economic crises. The consequences of World War I were severe, resulting in the deaths of an estimated 17 million people, the loss of an estimated 100 million acres of land, and the destruction of millions of buildings and infrastructure. The war also had far-reaching impacts on global politics, society, and economies, with many countries affected by the devastation of the conflict.",
+      "error": null,
+      "context_reset": false
+    }
+  ],
+  "summary": {
+    "ttft_ms": {
+      "mean": 611,
+      "std": 60.286,
+      "min": 551,
+      "max": 752
+    },
+    "tps": {
+      "mean": 12.513,
+      "std": 2.357,
+      "min": 7.7973666,
+      "max": 14.207952
+    },
+    "memory_kb": {
+      "mean": 703254,
+      "std": 11774.872,
+      "min": 677464,
+      "max": 721924
+    },
+    "power_ma": {
+      "mean": 825.61,
+      "std": 3.099,
+      "min": 821.1,
+      "max": 831.8
+    },
+    "thermal_temp_cpu_c": {
+      "mean": 40.42,
+      "std": 4.71,
+      "min": 31.2,
+      "max": 45.9
+    },
+    "thermal_temp_skin_c": {
+      "mean": 30.16,
+      "std": 1.88,
+      "min": 27.7,
+      "max": 32.9
+    },
+    "first_question_cold_load_ms": 453,
+    "thermal_states_observed": [
+      "Normal"
+    ],
+    "note": "TPS/TTFT drift across the run reflects real device thermal state as it heats up under sustained inference, not measurement error.",
+    "rss_note": "peak_RSS_KB is only directly comparable across different models if each was benchmarked in a freshly restarted app process - this script now guarantees that automatically as of this version."
+  }
+}

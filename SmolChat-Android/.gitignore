@@ -1,0 +1,26 @@
+*.iml
+.gradle
+/local.properties
+/.idea
+.DS_Store
+/build
+/captures
+.externalNativeBuild
+.cxx
+local.properties
+.kotlin
+ktlint
+ktlint.bat
+
+# Model files - too large for GitHub
+*.gguf
+*.bin
+*.safetensors
+
+# Python artifacts
+__pycache__/
+.venv/
+*.pyc
+
+# Output folders
+output*/

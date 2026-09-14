@@ -1,0 +1,216 @@
+{
+  "run_info": {
+    "model": "qwen2.5-0.5b-instruct-q5_k_m.gguf",
+    "model_device_path": "/sdcard/Download/qwen2.5-0.5b-instruct-q5_k_m.gguf",
+    "device": "phone",
+    "quant": "Q4_K_M",
+    "start_time": "2026-07-07T18:39:54.930233+00:00",
+    "end_time": "2026-07-07T18:41:16.700108+00:00",
+    "total": 10,
+    "completed": 10,
+    "failed": 0,
+    "context_resets": 0
+  },
+  "results": [
+    {
+      "question_number": 1,
+      "question": "What is the capital of France?",
+      "run_id": "run_1_1783449594930",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 443,
+        "ttft_ms": 461,
+        "tps": 11.503547,
+        "memory_kb": 758480,
+        "power_ma": null,
+        "thermal": "Normal"
+      },
+      "response": "The capital of France is Paris.",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 2,
+      "question": "Who wrote Romeo and Juliet?",
+      "run_id": "run_2_1783449598637",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 447,
+        "ttft_ms": 497,
+        "tps": 13.525627,
+        "memory_kb": 768888,
+        "power_ma": 3.0,
+        "thermal": "Normal"
+      },
+      "response": "Romeo and Juliet was written by William Shakespeare.",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 3,
+      "question": "What is the chemical symbol for gold?",
+      "run_id": "run_3_1783449603361",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 450,
+        "ttft_ms": 462,
+        "tps": 12.53891,
+        "memory_kb": 775252,
+        "power_ma": 3.0,
+        "thermal": "Normal"
+      },
+      "response": "The chemical symbol for gold is Au.",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 4,
+      "question": "What is the largest planet in our solar system?",
+      "run_id": "run_4_1783449606877",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 451,
+        "ttft_ms": 543,
+        "tps": 12.94547,
+        "memory_kb": 762800,
+        "power_ma": 3.0,
+        "thermal": "Normal"
+      },
+      "response": "The largest planet in our solar system is Jupiter.",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 5,
+      "question": "What year did the first human land on the moon?",
+      "run_id": "run_5_1783449611646",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 480,
+        "ttft_ms": 528,
+        "tps": 26.048971,
+        "memory_kb": 776180,
+        "power_ma": 3.0,
+        "thermal": "Normal"
+      },
+      "response": "The first human landed on the Moon in 1969. This occurred during the Apollo 11 mission when the Lunar Module (Lander) and the Command Module (Crew Module) of the Apollo 11 spacecraft landed on the Moon.",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 6,
+      "question": "What are the three states of matter?",
+      "run_id": "run_6_1783449617603",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 451,
+        "ttft_ms": 464,
+        "tps": 28.104084,
+        "memory_kb": 754592,
+        "power_ma": 64.8,
+        "thermal": "Normal"
+      },
+      "response": "The three states of matter are:",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 7,
+      "question": "How does a refrigerator keep food cold?",
+      "run_id": "run_7_1783449623664",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 452,
+        "ttft_ms": 485,
+        "tps": 26.64145,
+        "memory_kb": 788928,
+        "power_ma": 32.4,
+        "thermal": "Normal"
+      },
+      "response": "A refrigerator keeps food cold by utilizing a process called convection. When food is placed in a refrigerator, it heats up due to the refrigerant inside the machine. This heat is then transferred to the food through the mechanism of convection, causing the food's internal temperature to drop until it reaches a safe temperature.",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 8,
+      "question": "Explain the process of photosynthesis in plants.",
+      "run_id": "run_8_1783449629743",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 447,
+        "ttft_ms": 492,
+        "tps": 29.586548,
+        "memory_kb": 802584,
+        "power_ma": 10.2,
+        "thermal": "Normal"
+      },
+      "response": "Photosynthesis is the process by which green plants capture light energy, convert it into chemical energy, and use it to produce oxygen and glucose. The process takes place in the thylakoid membranes of plant cells, which contain chlorophyll, a pigment that absorbs light energy.",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 9,
+      "question": "Summarize the theory of relativity in simple terms.",
+      "run_id": "run_9_1783449645368",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 446,
+        "ttft_ms": 538,
+        "tps": 28.808565,
+        "memory_kb": 786688,
+        "power_ma": 12.7,
+        "thermal": "Normal"
+      },
+      "response": "The theory of relativity was developed by Albert Einstein in the 1900s. It basically means that nothing can be thought of as its own special case. In other words, the laws of the Earth's gravity would not apply to a spacecraft or satellites orbiting the Earth. In fact, the laws of physics would be the same in both cases. This is called the principle of relativity. This means that the laws of physics are the same for everyone and everywhere. This is also called the equivalence principle. It means that time and space are all relative to an observer's motion. This is also called the special theory of relativity. This theory came into being because he could not figure out why gravity couldn't be measured by a person standing on the Moon. Back then, he was trying to explain the reason for this. His theory was supported by experiments with the satellite, which measured gravitational force. This experiment was carried out by a fellow scientist who was working for his daughter's job. He was so impressed with the results that he said, \"Sir, do repeat what I did.\" So, he repeated the experiment. This experiment was the starting point for the theory of relativity.",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 10,
+      "question": "Describe the causes and consequences of World War I in a few sentences.",
+      "run_id": "run_10_1783449661018",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 447,
+        "ttft_ms": 611,
+        "tps": 27.899595,
+        "memory_kb": 791148,
+        "power_ma": 7.7,
+        "thermal": "Normal"
+      },
+      "response": "World War I, also known as the First World War, was a global conflict that began in 1914 and lasted for 2 years until victory was achieved in 1918. The causes and consequences of World War I were complex and long-lasting, making it one of the most significant conflicts in history.",
+      "error": null,
+      "context_reset": false
+    }
+  ],
+  "summary": {
+    "ttft_ms": {
+      "mean": 508.1,
+      "std": 45.057,
+      "min": 461,
+      "max": 611
+    },
+    "tps": {
+      "mean": 21.76,
+      "std": 7.529,
+      "min": 11.503547,
+      "max": 29.586548
+    },
+    "memory_kb": {
+      "mean": 776554,
+      "std": 14849.692,
+      "min": 754592,
+      "max": 802584
+    },
+    "power_ma": {
+      "mean": 15.533,
+      "std": 19.544,
+      "min": 3.0,
+      "max": 64.8
+    },
+    "thermal_states_observed": [
+      "Normal"
+    ],
+    "note": "TPS/TTFT drift across the run reflects real device thermal state as it heats up under sustained inference, not measurement error."
+  }
+}

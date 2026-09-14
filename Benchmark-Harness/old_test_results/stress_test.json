@@ -1,0 +1,1203 @@
+{
+  "run_info": {
+    "model": "qwen2.5-0.5b-instruct-q8_0.gguf",
+    "model_device_path": "/sdcard/Android/data/io.shubham0204.smollmandroid/files/qwen2.5-0.5b-instruct-q8_0.gguf",
+    "device": "phone",
+    "quant": "Q4_K_M",
+    "start_time": "2026-07-16T04:37:08.826884+00:00",
+    "end_time": "2026-07-16T05:13:52.431628+00:00",
+    "total": 64,
+    "completed": 51,
+    "failed": 13,
+    "context_resets": 0,
+    "battery_warning": true,
+    "battery_level_pct": 100,
+    "battery_status": "Charging",
+    "rebooted_before_run": false,
+    "cold_load_note": "cold_load_ms reflects a genuinely cold read only if --reboot-before was used for this run. Without a reboot, the OS file cache may make cold_load_ms appear faster than a true cold read from storage, especially for larger model files."
+  },
+  "results": [
+    {
+      "question_number": 1,
+      "question": "Explain the process of photosynthesis in plants in detail.",
+      "run_id": "run_1_1784176628827",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 751,
+        "ttft_ms": 454,
+        "tps": 16.056538,
+        "memory_kb": 801720,
+        "power_ma": 238.2,
+        "thermal": "Normal",
+        "thermal_temp_cpu_c": 49.0,
+        "thermal_temp_skin_c": 35.5
+      },
+      "response": "Photosynthesis is the process used by plants to produce energy from light. It involves the following steps:",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 2,
+      "question": "Describe the causes and consequences of World War I comprehensively.",
+      "run_id": "run_2_1784176652817",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 522,
+        "ttft_ms": 503,
+        "tps": 16.100494,
+        "memory_kb": 805996,
+        "power_ma": 237.7,
+        "thermal": "Normal",
+        "thermal_temp_cpu_c": 50.5,
+        "thermal_temp_skin_c": 36.8
+      },
+      "response": "World War I, also known as the Great War or the First World War, was a global conflict that started in 1914 and lasted until 1918. Here are some of the causes and consequences of World War I:",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 3,
+      "question": "Explain how a car engine works, step by step.",
+      "run_id": "run_3_1784176683037",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 549,
+        "ttft_ms": 483,
+        "tps": 16.295725,
+        "memory_kb": 811580,
+        "power_ma": 238.6,
+        "thermal": "Normal",
+        "thermal_temp_cpu_c": 51.3,
+        "thermal_temp_skin_c": 37.7
+      },
+      "response": "A car engine works in a series of steps, starting with the ignition of the spark plug and moving through the combustion process to produce motion and power. Here's a step-by-step breakdown of how a car engine works:",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 4,
+      "question": "Summarize the theory of relativity and its implications.",
+      "run_id": "run_4_1784176708104",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 560,
+        "ttft_ms": 490,
+        "tps": 16.850163,
+        "memory_kb": 806760,
+        "power_ma": 238.7,
+        "thermal": "Normal",
+        "thermal_temp_cpu_c": 52.1,
+        "thermal_temp_skin_c": 38.0
+      },
+      "response": "The theory of relativity is a set of principles that describe the physical laws of the universe, particularly in the context of the motion of objects and the measurement of time and space. The theory of relativity is based on the concept of special relativity, which states that physical laws are the same for all observers in uniform motion relative to each other.",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 5,
+      "question": "Explain how the human immune system fights off infections.",
+      "run_id": "run_5_1784176726991",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 561,
+        "ttft_ms": 475,
+        "tps": 16.24106,
+        "memory_kb": 829500,
+        "power_ma": 239.4,
+        "thermal": "Normal",
+        "thermal_temp_cpu_c": 52.5,
+        "thermal_temp_skin_c": 38.7
+      },
+      "response": "The human immune system is a finely tuned and robust defense mechanism that helps the body fight off infections. It includes the innate immune system and the adaptive immune system. The innate immune system is the first line of defense, recognizing and neutralizing pathogens that invade the body. It is composed of cells and proteins that recognize broad patterns of the pathogen's unique components and trigger an inflammatory response.",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 6,
+      "question": "Describe the water cycle and its role in Earth's climate.",
+      "run_id": "run_6_1784176751069",
+      "status": "failed",
+      "metrics": null,
+      "response": null,
+      "error": {
+        "reason": "timeout",
+        "message": "No RUN_DONE/RUN_ERROR within 60s"
+      },
+      "context_reset": false
+    },
+    {
+      "question_number": 7,
+      "question": "Explain how vaccines train the immune system to fight disease.",
+      "run_id": "run_7_1784176813669",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 549,
+        "ttft_ms": 517,
+        "tps": 16.64313,
+        "memory_kb": 842388,
+        "power_ma": 222.0,
+        "thermal": "Normal",
+        "thermal_temp_cpu_c": 47.5,
+        "thermal_temp_skin_c": 36.0
+      },
+      "response": "Vaccines work by introducing a weakened or inactivated form of a pathogen (such as a virus or bacteria) into the body, which triggers the immune system to recognize and fight off the actual infectious agent, rather than the actual pathogen. Essentially, vaccines train the immune system to recognize and recognize an \"enemy\" that it has never encountered before, and the immune system mounts a defensive response against the pathogen. This response includes the production of antibodies that neutralize the virus or bacteria and the production of memory cells that remember the pathogen and can quickly mount a defense response if the pathogen is encountered again in the future. In this way, vaccines train the immune system to recognize and fight off a wide range of different diseases, rather than just a specific one.",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 8,
+      "question": "Describe the causes and effects of climate change in detail.",
+      "run_id": "run_8_1784176827603",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 550,
+        "ttft_ms": 456,
+        "tps": 16.19314,
+        "memory_kb": 817824,
+        "power_ma": 5.3,
+        "thermal": "Normal",
+        "thermal_temp_cpu_c": 50.9,
+        "thermal_temp_skin_c": 37.7
+      },
+      "response": "Climate change is a gradual transformation of the Earth's climate system caused by the release of greenhouse gases into the atmosphere, primarily composed of carbon dioxide, methane, water vapor, and other greenhouse gases. Here are the causes and effects of climate change:",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 9,
+      "question": "Explain how the human heart pumps blood through the body.",
+      "run_id": "run_9_1784176857546",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 563,
+        "ttft_ms": 500,
+        "tps": 16.409813,
+        "memory_kb": 793716,
+        "power_ma": 3.6,
+        "thermal": "Normal",
+        "thermal_temp_cpu_c": 51.3,
+        "thermal_temp_skin_c": 38.3
+      },
+      "response": "The human heart is a muscular organ that pumps blood through the body to carry oxygen and nutrients to different parts of the body and remove waste products from the cells. The heart is located in the chest cavity and has four chambers: two right atria and two right ventricles. The left side of the heart is divided into four chambers: one left atrium and three left ventricles, while the right side of the heart is divided into four chambers: two right atria and three right ventricles. The blood travels through the heart in a complex sequence of chambers and vessels, known as the cardiovascular system. The right side of the heart pumps oxygenated blood to the lungs to get rid of carbon dioxide, which is a waste product of the body's cells. The oxygenated blood then flows through the pulmonary veins, which carry it to the left side of the heart to be pumped back to the body. The left side of the heart pumps deoxygenated blood towards the heart chambers, which is an important function of the cardiovascular system.",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 10,
+      "question": "summarize the major events and outcomes of World War II.",
+      "run_id": "run_10_1784176880030",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 563,
+        "ttft_ms": 514,
+        "tps": 15.137412,
+        "memory_kb": 861368,
+        "power_ma": 13.7,
+        "thermal": "Normal",
+        "thermal_temp_cpu_c": 52.5,
+        "thermal_temp_skin_c": 39.2
+      },
+      "response": "World War II, also known as the Second World War, was a major conflict that lasted from 1939 to 1945 and involved several major events and outcomes. Here is a summary of the major events and outcomes:",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 11,
+      "question": "Explain the process of photosynthesis in plants in detail.",
+      "run_id": "run_11_1784176922559",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 561,
+        "ttft_ms": 454,
+        "tps": 16.19718,
+        "memory_kb": 853684,
+        "power_ma": 23.1,
+        "thermal": "Normal",
+        "thermal_temp_cpu_c": 52.9,
+        "thermal_temp_skin_c": 39.4
+      },
+      "response": "Photosynthesis is the process by which plants use sunlight to convert carbon dioxide and water into glucose and oxygen. This occurs in the leaves of plants, which contain cells that contain chlorophyll, which is a green pigment that captures light energy.",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 12,
+      "question": "Describe the causes and consequences of World War I comprehensively.",
+      "run_id": "run_12_1784176943808",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 570,
+        "ttft_ms": 523,
+        "tps": 16.00846,
+        "memory_kb": 874720,
+        "power_ma": 5.0,
+        "thermal": "Normal",
+        "thermal_temp_cpu_c": 55.2,
+        "thermal_temp_skin_c": 40.0
+      },
+      "response": "World War I was a devastating conflict that lasted from 1914 to 1918 and was the first world war. Here are the causes and consequences of World War I:",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 13,
+      "question": "Explain how a car engine works, step by step.",
+      "run_id": "run_13_1784176974478",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 546,
+        "ttft_ms": 468,
+        "tps": 15.768985,
+        "memory_kb": 883340,
+        "power_ma": 14.0,
+        "thermal": "Normal",
+        "thermal_temp_cpu_c": 54.4,
+        "thermal_temp_skin_c": 40.5
+      },
+      "response": "A car engine works by using the power of a fuel-air mixture to spin a spinning shaft, which in turn powers the engine and works to move the vehicle forward. Here is a step-by-step explanation of how a car engine works:",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 14,
+      "question": "Summarize the theory of relativity and its implications.",
+      "run_id": "run_14_1784177007111",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 552,
+        "ttft_ms": 506,
+        "tps": 16.951818,
+        "memory_kb": 890964,
+        "power_ma": 10.0,
+        "thermal": "Normal",
+        "thermal_temp_cpu_c": 54.0,
+        "thermal_temp_skin_c": 40.5
+      },
+      "response": "The theory of relativity is a set of fundamental theories in physics that describe the relationship between matter and energy, as well as the behavior of objects in motion. The theory of relativity provides a new understanding of space, time, and the nature of objects' motion and energy.",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 15,
+      "question": "Explain how the human immune system fights off infections.",
+      "run_id": "run_15_1784177023494",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 559,
+        "ttft_ms": 471,
+        "tps": 16.294075,
+        "memory_kb": 906208,
+        "power_ma": 20.9,
+        "thermal": "Normal",
+        "thermal_temp_cpu_c": 54.8,
+        "thermal_temp_skin_c": 41.0
+      },
+      "response": "The human immune system is a complex network of cells, tissues, and organs that work together to defend the body against infections and diseases. The immune system consists of three main components: cells, tissues, and organs. These components have different functions and roles in the immune response but they all work together to protect the body from harmful pathogens.",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 16,
+      "question": "Describe the water cycle and its role in Earth's climate.",
+      "run_id": "run_16_1784177048797",
+      "status": "failed",
+      "metrics": null,
+      "response": null,
+      "error": {
+        "reason": "timeout",
+        "message": "No RUN_DONE/RUN_ERROR within 60s"
+      },
+      "context_reset": false
+    },
+    {
+      "question_number": 17,
+      "question": "Explain how vaccines train the immune system to fight disease.",
+      "run_id": "run_17_1784177111170",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 547,
+        "ttft_ms": 513,
+        "tps": 16.246902,
+        "memory_kb": 894704,
+        "power_ma": 21.6,
+        "thermal": "Normal",
+        "thermal_temp_cpu_c": 47.5,
+        "thermal_temp_skin_c": 37.5
+      },
+      "response": "Vaccines work by introducing the target of the immune system, such as a pathogen (like a virus or bacterium), into the body, encouraging the body's own immune cells to recognize and neutralize the pathogen. This process triggers the immune system to produce antibodies and other immune cells that are able to recognize and neutralize the pathogen, even if the pathogen is not in the body. This helps to protect the body from the disease caused by the pathogen.",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 18,
+      "question": "Describe the causes and effects of climate change in detail.",
+      "run_id": "run_18_1784177121580",
+      "status": "failed",
+      "metrics": null,
+      "response": null,
+      "error": {
+        "reason": "timeout",
+        "message": "No RUN_DONE/RUN_ERROR within 60s"
+      },
+      "context_reset": false
+    },
+    {
+      "question_number": 19,
+      "question": "Explain how the human heart pumps blood through the body.",
+      "run_id": "run_19_1784177185157",
+      "status": "failed",
+      "metrics": null,
+      "response": null,
+      "error": {
+        "reason": "timeout",
+        "message": "No RUN_DONE/RUN_ERROR within 60s"
+      },
+      "context_reset": false
+    },
+    {
+      "question_number": 20,
+      "question": "Explain the process of photosynthesis in plants in detail.",
+      "run_id": "run_20_1784177253064",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 532,
+        "ttft_ms": 475,
+        "tps": 15.753154,
+        "memory_kb": 818588,
+        "power_ma": 16.8,
+        "thermal": "Normal",
+        "thermal_temp_cpu_c": 52.5,
+        "thermal_temp_skin_c": 39.2
+      },
+      "response": "Photosynthesis is a process by which plants use sunlight, carbon dioxide, and water to produce oxygen and energy. It is a vital process for life on Earth and is responsible for providing food and oxygen for most animals and plants.",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 21,
+      "question": "Describe the causes and consequences of World War I comprehensively.",
+      "run_id": "run_21_1784177288487",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 553,
+        "ttft_ms": 511,
+        "tps": 16.042137,
+        "memory_kb": 819980,
+        "power_ma": 8.1,
+        "thermal": "Normal",
+        "thermal_temp_cpu_c": 53.6,
+        "thermal_temp_skin_c": 40.0
+      },
+      "response": "World War I began in 1914 and lasted until 1918. The primary causes of World War I were:",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 22,
+      "question": "Explain how a car engine works, step by step.",
+      "run_id": "run_22_1784177316081",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 608,
+        "ttft_ms": 475,
+        "tps": 16.187798,
+        "memory_kb": 840180,
+        "power_ma": 6.3,
+        "thermal": "Normal",
+        "thermal_temp_cpu_c": 54.4,
+        "thermal_temp_skin_c": 40.6
+      },
+      "response": "A car engine works by compressing the fuel-air mixture and igniting it to generate heat and power.",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 23,
+      "question": "Summarize the theory of relativity and its implications.",
+      "run_id": "run_23_1784177341354",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 566,
+        "ttft_ms": 505,
+        "tps": 16.847809,
+        "memory_kb": 841980,
+        "power_ma": null,
+        "thermal": "Normal",
+        "thermal_temp_cpu_c": 54.8,
+        "thermal_temp_skin_c": 40.6
+      },
+      "response": "Relativity is the theory of two laws of physics that describe the behavior of objects in the universe. The first law states that the laws of physics are the same for all observers in uniform motion relative to one another. The second law states that the speed of light in a vacuum is the maximum speed of all objects in the universe.",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 24,
+      "question": "Explain how the human immune system fights off infections.",
+      "run_id": "run_24_1784177355425",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 555,
+        "ttft_ms": 489,
+        "tps": 15.667682,
+        "memory_kb": 840828,
+        "power_ma": 3.9,
+        "thermal": "Normal",
+        "thermal_temp_cpu_c": 55.2,
+        "thermal_temp_skin_c": 41.5
+      },
+      "response": "The human immune system fights off infections through a series of complex and coordinated responses. These responses involve the activation of a network of cells and organs that work together to identify and destroy harmful pathogens. Here's a breakdown of the key mechanisms involved:",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 25,
+      "question": "Describe the water cycle and its role in Earth's climate.",
+      "run_id": "run_25_1784177393082",
+      "status": "failed",
+      "metrics": null,
+      "response": null,
+      "error": {
+        "reason": "timeout",
+        "message": "No RUN_DONE/RUN_ERROR within 60s"
+      },
+      "context_reset": false
+    },
+    {
+      "question_number": 26,
+      "question": "Explain how vaccines train the immune system to fight disease.",
+      "run_id": "run_26_1784177456297",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 547,
+        "ttft_ms": 538,
+        "tps": 15.685387,
+        "memory_kb": 823036,
+        "power_ma": 17.6,
+        "thermal": "Normal",
+        "thermal_temp_cpu_c": 52.9,
+        "thermal_temp_skin_c": 39.9
+      },
+      "response": "Vaccines work by introducing an antigen (a protein that provides immunity to a disease) to the immune system in a controlled manner. The immune system then recognizes the antigen and mounts an immune response that will protect the body against the disease. Here's how vaccines work:",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 27,
+      "question": "Describe the causes and effects of climate change in detail.",
+      "run_id": "run_27_1784177486951",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 556,
+        "ttft_ms": 450,
+        "tps": 15.152537,
+        "memory_kb": 843728,
+        "power_ma": 13.1,
+        "thermal": "Normal",
+        "thermal_temp_cpu_c": 57.1,
+        "thermal_temp_skin_c": 41.4
+      },
+      "response": "Climate change is a global phenomenon caused by the intentional or unintentional alteration of the Earth's climate system. It involves changes in temperature, precipitation patterns, atmospheric composition, and sea levels. The causes and effects of climate change can be complex and multifaceted, and they can vary depending on the location and the cause of the change. The following are some of the key causes and effects of climate change:",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 28,
+      "question": "Explain how the human heart pumps blood through the body.",
+      "run_id": "run_28_1784177526489",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 562,
+        "ttft_ms": 492,
+        "tps": 15.874199,
+        "memory_kb": 843008,
+        "power_ma": 2.6,
+        "thermal": "Normal",
+        "thermal_temp_cpu_c": 56.0,
+        "thermal_temp_skin_c": 41.9
+      },
+      "response": "The human heart pumps blood through the body through a series of intricate and coordinated contractions called cardiac muscle fibers. These muscle fibers are located in the walls of the heart chambers, specifically in the atria (upper chambers) and ventricles (lower chambers) of the heart.",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 29,
+      "question": "Explain the process of photosynthesis in plants in detail.",
+      "run_id": "run_29_1784177555423",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 545,
+        "ttft_ms": 458,
+        "tps": 15.92816,
+        "memory_kb": 862160,
+        "power_ma": 6.9,
+        "thermal": "Normal",
+        "thermal_temp_cpu_c": 57.9,
+        "thermal_temp_skin_c": 42.6
+      },
+      "response": "Photosynthesis is the process by which plants convert light energy into chemical energy stored in molecules of glucose. It occurs in all plants and is the most common type of photosynthesis in the biosphere. Here's a detailed explanation of the process:",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 30,
+      "question": "Describe the causes and consequences of World War I comprehensively.",
+      "run_id": "run_30_1784177588482",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 562,
+        "ttft_ms": 504,
+        "tps": 15.84966,
+        "memory_kb": 840548,
+        "power_ma": 16.5,
+        "thermal": "Normal",
+        "thermal_temp_cpu_c": 57.1,
+        "thermal_temp_skin_c": 43.0
+      },
+      "response": "World War I, which took place from 1914 to 1918, was a global conflict that had several causes and resulted in numerous consequences.",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 31,
+      "question": "Explain how a car engine works, step by step.",
+      "run_id": "run_31_1784177621501",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 546,
+        "ttft_ms": 475,
+        "tps": 15.316789,
+        "memory_kb": 831936,
+        "power_ma": 15.2,
+        "thermal": "Normal",
+        "thermal_temp_cpu_c": 59.4,
+        "thermal_temp_skin_c": 43.5
+      },
+      "response": "A car engine is a machine that powers a car's wheels, ultimately turning them into motion. Here's a step-by-step explanation of how a car engine works:",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 32,
+      "question": "Summarize the theory of relativity and its implications.",
+      "run_id": "run_32_1784177654889",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 554,
+        "ttft_ms": 506,
+        "tps": 16.35278,
+        "memory_kb": 815084,
+        "power_ma": 19.9,
+        "thermal": "Normal",
+        "thermal_temp_cpu_c": 57.9,
+        "thermal_temp_skin_c": 43.5
+      },
+      "response": "The theory of relativity is a set of two fundamental postulates that describe the laws of motion and the laws of energy and mass transformations. The first postulate states that the laws of physics are the same in all inertial frames of reference and that the speed of light is constant, regardless of the motion of the observer or the observer's frame of reference. The second postulate states that the relationship between mass and energy in the universe is inverse to each other, with mass having the same amount as energy. This postulate is known as the second law of the theory of relativity. The implications of the theory of relativity are profound and have wide-ranging impacts on the physical, technological, and scientific fields. For example, it has led to the development of new technologies such as satellites, energy-efficient vehicles, and advanced robotics. The theory of relativity also has important implications for the study of gravity, which is one of the most important concepts in physics. In addition, it has led to many new insights and discoveries in fields such as cosmology, astrophysics, and particle physics.",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 33,
+      "question": "Explain how the human immune system fights off infections.",
+      "run_id": "run_33_1784177672621",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 563,
+        "ttft_ms": 474,
+        "tps": 16.019419,
+        "memory_kb": 892016,
+        "power_ma": 8.1,
+        "thermal": "Normal",
+        "thermal_temp_cpu_c": 57.9,
+        "thermal_temp_skin_c": 43.7
+      },
+      "response": "The human immune system is a complex network of cells, tissues, and organs that work together to defend the body against pathogens, such as bacteria, viruses, and other microorganisms. When an infection occurs, the immune system responds by producing specific proteins called antibodies. These antibodies attach to the specific pathogen on the surface of the pathogen, preventing it from entering the body. The antibodies also help the immune system neutralize the pathogen, reducing its inflammation and other effects on the body.",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 34,
+      "question": "Describe the water cycle and its role in Earth's climate.",
+      "run_id": "run_34_1784177693067",
+      "status": "failed",
+      "metrics": null,
+      "response": null,
+      "error": {
+        "reason": "timeout",
+        "message": "No RUN_DONE/RUN_ERROR within 60s"
+      },
+      "context_reset": false
+    },
+    {
+      "question_number": 35,
+      "question": "Explain how vaccines train the immune system to fight disease.",
+      "run_id": "run_35_1784177756061",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 574,
+        "ttft_ms": 510,
+        "tps": 16.71692,
+        "memory_kb": 878856,
+        "power_ma": 3.6,
+        "thermal": "Normal",
+        "thermal_temp_cpu_c": 54.4,
+        "thermal_temp_skin_c": 41.3
+      },
+      "response": "Vaccines work by inducing an immune response in the body. When a person is exposed to a virus or bacteria that can cause disease, the immune system is activated to identify and neutralize the pathogen. This process is called cellular immunity.",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 36,
+      "question": "Describe the causes and effects of climate change in detail.",
+      "run_id": "run_36_1784177777365",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 561,
+        "ttft_ms": 452,
+        "tps": 15.703643,
+        "memory_kb": 866268,
+        "power_ma": 9.9,
+        "thermal": "Normal",
+        "thermal_temp_cpu_c": 56.7,
+        "thermal_temp_skin_c": 42.9
+      },
+      "response": "Climate change is a significant global issue that affects every aspect of our environment and human civilization. The causes and effects of climate change are complex and multifaceted, and research is ongoing to better understand and mitigate these effects.",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 37,
+      "question": "Explain how the human heart pumps blood through the body.",
+      "run_id": "run_37_1784177815343",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 566,
+        "ttft_ms": 487,
+        "tps": 16.677782,
+        "memory_kb": 864416,
+        "power_ma": 5.6,
+        "thermal": "Normal",
+        "thermal_temp_cpu_c": 57.9,
+        "thermal_temp_skin_c": 43.4
+      },
+      "response": "The process of blood circulation in the human body involves the heart pumping blood through the arteries and veins, which carry the blood to various parts of the body. The heart pumps blood through the body by contracting and relaxing the walls of the arteries and veins.",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 38,
+      "question": "Explain the process of photosynthesis in plants in detail.",
+      "run_id": "run_38_1784177843087",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 566,
+        "ttft_ms": 464,
+        "tps": 16.74127,
+        "memory_kb": 875816,
+        "power_ma": null,
+        "thermal": "Normal",
+        "thermal_temp_cpu_c": 57.1,
+        "thermal_temp_skin_c": 43.4
+      },
+      "response": "Photosynthesis is a process by which plants convert light energy into chemical energy stored in molecules, such as glucose, using the energy captured from sunlight. The process occurs in the chloroplasts of plant cells where pigments called chlorophyll absorb the light energy. The plant uses this energy to split water molecules into oxygen and electrons. The electrons, which are then used to convert carbon dioxide and water into glucose and oxygen using the energy stored in ATP and NADPH.",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 39,
+      "question": "Describe the causes and consequences of World War I comprehensively.",
+      "run_id": "run_39_1784177860810",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 555,
+        "ttft_ms": 528,
+        "tps": 15.056141,
+        "memory_kb": 864536,
+        "power_ma": 4.1,
+        "thermal": "Normal",
+        "thermal_temp_cpu_c": 58.3,
+        "thermal_temp_skin_c": 44.3
+      },
+      "response": "The World War I, a devastating conflict that took place between 1914 and 1918, saw various causes and consequences. Here\u2019s a comprehensive look at the main factors and impacts:",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 40,
+      "question": "Explain how a car engine works, step by step.",
+      "run_id": "run_40_1784177913731",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 551,
+        "ttft_ms": 466,
+        "tps": 16.746689,
+        "memory_kb": 882292,
+        "power_ma": 16.4,
+        "thermal": "Normal",
+        "thermal_temp_cpu_c": 58.3,
+        "thermal_temp_skin_c": 44.3
+      },
+      "response": "A car engine works by converting the four primary components of fuel and oxygen into energy, which is then used to power the vehicle. The process involves the following steps:",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 41,
+      "question": "Summarize the theory of relativity and its implications.",
+      "run_id": "run_41_1784177933897",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 568,
+        "ttft_ms": 505,
+        "tps": 16.032703,
+        "memory_kb": 937860,
+        "power_ma": 13.5,
+        "thermal": "Normal",
+        "thermal_temp_cpu_c": 59.4,
+        "thermal_temp_skin_c": 45.1
+      },
+      "response": "The theory of relativity is a set of two fundamental principles that describe the relationship between space and time as well as matter in the universe. These principles include the following:",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 42,
+      "question": "Explain how the human immune system fights off infections.",
+      "run_id": "run_42_1784177961935",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 565,
+        "ttft_ms": 476,
+        "tps": 15.623761,
+        "memory_kb": 937024,
+        "power_ma": 14.9,
+        "thermal": "Normal",
+        "thermal_temp_cpu_c": 59.4,
+        "thermal_temp_skin_c": 45.3
+      },
+      "response": "The human immune system is a complex network of tissues, cells, and organs that allow the body to defend itself against infections and foreign substances. When an infection occurs, white blood cells called immune cells recognize the pathogen (the invader) and work together to destroy it. This process is called immune response.",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 43,
+      "question": "Describe the water cycle and its role in Earth's climate.",
+      "run_id": "run_43_1784177997607",
+      "status": "failed",
+      "metrics": null,
+      "response": null,
+      "error": {
+        "reason": "timeout",
+        "message": "No RUN_DONE/RUN_ERROR within 60s"
+      },
+      "context_reset": false
+    },
+    {
+      "question_number": 44,
+      "question": "Explain how vaccines train the immune system to fight disease.",
+      "run_id": "run_44_1784178060414",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 548,
+        "ttft_ms": 528,
+        "tps": 17.472485,
+        "memory_kb": 937392,
+        "power_ma": 13.9,
+        "thermal": "Normal",
+        "thermal_temp_cpu_c": 55.2,
+        "thermal_temp_skin_c": 42.3
+      },
+      "response": "Vaccines work by exposing the immune system to a weakened or dead version of a pathogen (such as a virus or bacteria) and then allowing it to adapt, develop, and mount a strong immune response to the actual pathogen. This helps the immune system to recognize and fight off the real virus or bacteria when it is actually exposed to it.",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 45,
+      "question": "Describe the causes and effects of climate change in detail.",
+      "run_id": "run_45_1784178079333",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 551,
+        "ttft_ms": 468,
+        "tps": 16.044415,
+        "memory_kb": 939112,
+        "power_ma": 2.7,
+        "thermal": "Normal",
+        "thermal_temp_cpu_c": 57.1,
+        "thermal_temp_skin_c": 43.6
+      },
+      "response": "Climate change is an atmospheric phenomenon that has been increasing in frequency and severity since the Industrial Revolution. It is caused by a variety of causes, and each has the potential to trigger or exacerbate the effects of climate change.",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 46,
+      "question": "Explain how the human heart pumps blood through the body.",
+      "run_id": "run_46_1784178107096",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 564,
+        "ttft_ms": 489,
+        "tps": 16.162706,
+        "memory_kb": 960580,
+        "power_ma": 7.0,
+        "thermal": "Normal",
+        "thermal_temp_cpu_c": 57.9,
+        "thermal_temp_skin_c": 44.1
+      },
+      "response": "The human heart pumps blood through the body using a complex system of valves, which ensure that the blood flows in the correct direction and direction. When we breathe, the air moves through our lungs into the bloodstream, which then distributes oxygen throughout the body.",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 47,
+      "question": "Explain the process of photosynthesis in plants in detail.",
+      "run_id": "run_47_1784178129561",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 563,
+        "ttft_ms": 452,
+        "tps": 15.872964,
+        "memory_kb": 989224,
+        "power_ma": 17.6,
+        "thermal": "Normal",
+        "thermal_temp_cpu_c": 58.3,
+        "thermal_temp_skin_c": 44.6
+      },
+      "response": "Plants, particularly green plants, use sunlight to synthesize food from carbon dioxide and water. This process is called photosynthesis. Here is a detailed overview of the process:",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 48,
+      "question": "Describe the causes and consequences of World War I comprehensively.",
+      "run_id": "run_48_1784178159818",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 553,
+        "ttft_ms": 520,
+        "tps": 15.7902775,
+        "memory_kb": 985260,
+        "power_ma": 4.4,
+        "thermal": "Normal",
+        "thermal_temp_cpu_c": 59.4,
+        "thermal_temp_skin_c": 45.1
+      },
+      "response": "World War I, also known as the Great War, was a global conflict that began in 1914 and lasted until its conclusion in 1918. The causes and consequences of World War I were complex and multifaceted, involving numerous factors and events over a wide range of time and locations.",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 49,
+      "question": "Explain how a car engine works, step by step.",
+      "run_id": "run_49_1784178194221",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 562,
+        "ttft_ms": 489,
+        "tps": 16.349756,
+        "memory_kb": 978628,
+        "power_ma": 14.3,
+        "thermal": "Normal",
+        "thermal_temp_cpu_c": 60.2,
+        "thermal_temp_skin_c": 45.5
+      },
+      "response": "A car engine is a device that converts chemical energy from the fuel (fuel) into mechanical energy that powers the vehicle. It consists of several components that work together to achieve this transformation. Here's a step-by-step explanation of how a car engine works:",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 50,
+      "question": "Summarize the theory of relativity and its implications.",
+      "run_id": "run_50_1784178229614",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 549,
+        "ttft_ms": 490,
+        "tps": 16.175676,
+        "memory_kb": 945436,
+        "power_ma": 32.4,
+        "thermal": "Normal",
+        "thermal_temp_cpu_c": 58.7,
+        "thermal_temp_skin_c": 45.4
+      },
+      "response": "The theory of relativity is a fundamental concept in physics dealing with the laws of motion and energy that are consistent in all inertial frames. It describes the relationship between forces, space, time, and the motion of objects and particles. The theory of relativity provides a mathematical framework to describe the behavior of objects moving at different speeds, including light, and it introduces the concept of simultaneity. The theory of relativity has numerous implications, including its applications in fields such as astronomy, geophysics, and cosmology.",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 51,
+      "question": "Explain how the human immune system fights off infections.",
+      "run_id": "run_51_1784178239845",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 584,
+        "ttft_ms": 484,
+        "tps": 16.244352,
+        "memory_kb": 997048,
+        "power_ma": 6.2,
+        "thermal": "Normal",
+        "thermal_temp_cpu_c": 60.2,
+        "thermal_temp_skin_c": 45.8
+      },
+      "response": "The human immune system is designed to fight off infections and diseases caused by pathogens such as bacteria, viruses, fungi, and parasites. The immune system consists of three main components: the innate immune system and the adaptive immune system.",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 52,
+      "question": "Describe the water cycle and its role in Earth's climate.",
+      "run_id": "run_52_1784178265290",
+      "status": "failed",
+      "metrics": null,
+      "response": null,
+      "error": {
+        "reason": "timeout",
+        "message": "No RUN_DONE/RUN_ERROR within 60s"
+      },
+      "context_reset": false
+    },
+    {
+      "question_number": 53,
+      "question": "Explain how vaccines train the immune system to fight disease.",
+      "run_id": "run_53_1784178327924",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 566,
+        "ttft_ms": 548,
+        "tps": 16.173506,
+        "memory_kb": 983480,
+        "power_ma": 31.1,
+        "thermal": "Normal",
+        "thermal_temp_cpu_c": 57.1,
+        "thermal_temp_skin_c": 43.6
+      },
+      "response": "Vaccines train the immune system to fight disease by introducing harmless, weakened, or non-infectious forms of a pathogen (the disease-causing microorganism) into the body. This process triggers the immune system to produce an immune response.",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 54,
+      "question": "Describe the causes and effects of climate change in detail.",
+      "run_id": "run_54_1784178356169",
+      "status": "failed",
+      "metrics": null,
+      "response": null,
+      "error": {
+        "reason": "timeout",
+        "message": "No RUN_DONE/RUN_ERROR within 60s"
+      },
+      "context_reset": false
+    },
+    {
+      "question_number": 55,
+      "question": "Explain how the human heart pumps blood through the body.",
+      "run_id": "run_55_1784178419772",
+      "status": "failed",
+      "metrics": null,
+      "response": null,
+      "error": {
+        "reason": "timeout",
+        "message": "No RUN_DONE/RUN_ERROR within 60s"
+      },
+      "context_reset": false
+    },
+    {
+      "question_number": 56,
+      "question": "Explain the process of photosynthesis in plants in detail.",
+      "run_id": "run_56_1784178487352",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 514,
+        "ttft_ms": 599,
+        "tps": 14.076186,
+        "memory_kb": 825684,
+        "power_ma": 13.0,
+        "thermal": "Normal",
+        "thermal_temp_cpu_c": 51.7,
+        "thermal_temp_skin_c": 41.4
+      },
+      "response": "Plants use the process of photosynthesis to produce their own food and oxygen. Photosynthesis is a complex process that occurs in the chloroplasts of plant cells, where light energy is used to convert carbon dioxide and water into glucose and oxygen. The process can be divided into two main steps: the light-dependent reactions and the Calvin cycle (also known as the light-independent reactions or Calvin cycle).",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 57,
+      "question": "Describe the causes and consequences of World War I comprehensively.",
+      "run_id": "run_57_1784178516465",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 550,
+        "ttft_ms": 678,
+        "tps": 14.119118,
+        "memory_kb": 828804,
+        "power_ma": 15.7,
+        "thermal": "Normal",
+        "thermal_temp_cpu_c": 54.4,
+        "thermal_temp_skin_c": 42.6
+      },
+      "response": "World War I (1914-1918) was a global conflict that lasted over a decade. It began when Germany invaded Russia, leading to a series of alliances and wars, including the assassination of Archduke Franz Ferdinand and the subsequent events that led to World War I.",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 58,
+      "question": "Explain how a car engine works, step by step.",
+      "run_id": "run_58_1784178546029",
+      "status": "failed",
+      "metrics": null,
+      "response": null,
+      "error": {
+        "reason": "timeout",
+        "message": "No RUN_DONE/RUN_ERROR within 60s"
+      },
+      "context_reset": false
+    },
+    {
+      "question_number": 59,
+      "question": "Summarize the theory of relativity and its implications.",
+      "run_id": "run_59_1784178609349",
+      "status": "failed",
+      "metrics": null,
+      "response": null,
+      "error": {
+        "reason": "timeout",
+        "message": "No RUN_DONE/RUN_ERROR within 60s"
+      },
+      "context_reset": false
+    },
+    {
+      "question_number": 60,
+      "question": "Explain how the human immune system fights off infections.",
+      "run_id": "run_60_1784178672670",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 446,
+        "ttft_ms": 475,
+        "tps": 15.714769,
+        "memory_kb": 778012,
+        "power_ma": 11.3,
+        "thermal": "Normal",
+        "thermal_temp_cpu_c": 55.6,
+        "thermal_temp_skin_c": 42.3
+      },
+      "response": "The human immune system is a complex network of cells, tissues, and chemicals that help the body defend itself against infection. When an infection occurs, the immune system responds by producing antibodies that can recognize and neutralize foreign invaders. Here\u2019s how it works:",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 61,
+      "question": "Describe the water cycle and its role in Earth's climate.",
+      "run_id": "run_61_1784178703688",
+      "status": "failed",
+      "metrics": null,
+      "response": null,
+      "error": {
+        "reason": "timeout",
+        "message": "No RUN_DONE/RUN_ERROR within 60s"
+      },
+      "context_reset": false
+    },
+    {
+      "question_number": 62,
+      "question": "Explain how vaccines train the immune system to fight disease.",
+      "run_id": "run_62_1784178766199",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 486,
+        "ttft_ms": 506,
+        "tps": 16.4991,
+        "memory_kb": 796240,
+        "power_ma": 15.0,
+        "thermal": "Normal",
+        "thermal_temp_cpu_c": 53.6,
+        "thermal_temp_skin_c": 40.8
+      },
+      "response": "Vaccines work by teaching the immune system to recognize and recognize specific pathogens, such as bacteria, viruses, and parasites. When the immune system encounters these pathogens again, the vaccination leads to the production of antibodies that can neutralize or eliminate the invader, effectively preventing the disease.",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 63,
+      "question": "Describe the causes and effects of climate change in detail.",
+      "run_id": "run_63_1784178782406",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 501,
+        "ttft_ms": 435,
+        "tps": 15.772641,
+        "memory_kb": 799924,
+        "power_ma": 9.6,
+        "thermal": "Normal",
+        "thermal_temp_cpu_c": 57.1,
+        "thermal_temp_skin_c": 43.0
+      },
+      "response": "Climate change, also known as global warming, is a phenomenon that has been occurring due to the increase in greenhouse gas emissions from human activities. The effects of climate change are complex and can be seen in various aspects of daily life. Here are the main causes and effects of climate change:",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 64,
+      "question": "Explain how the human heart pumps blood through the body.",
+      "run_id": "run_64_1784178821192",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 507,
+        "ttft_ms": 483,
+        "tps": 16.742596,
+        "memory_kb": 780264,
+        "power_ma": null,
+        "thermal": "Normal",
+        "thermal_temp_cpu_c": 56.0,
+        "thermal_temp_skin_c": 42.9
+      },
+      "response": "The human heart pumps blood through the body in a continuous cycle that occurs approximately 24 times per minute. This process is called cardiac pumping. The heart has four chambers, two of which are atria and two are ventricles. The atria receive deoxygenated blood from the body's veins and pump it into the ventricles. The ventricles then pump the blood to the body's arteries and veins, delivering oxygenated blood to the tissues in the body and removing carbon dioxide. The blood also carries nutrients, hormones, and other vital substances throughout the body.",
+      "error": null,
+      "context_reset": false
+    }
+  ],
+  "summary": {
+    "ttft_ms": {
+      "mean": 494.333,
+      "std": 39.048,
+      "min": 435,
+      "max": 678
+    },
+    "tps": {
+      "mean": 16.051,
+      "std": 0.619,
+      "min": 14.076186,
+      "max": 17.472485
+    },
+    "memory_kb": {
+      "mean": 867052.941,
+      "std": 59117.831,
+      "min": 778012,
+      "max": 997048
+    },
+    "power_ma": {
+      "mean": 40.188,
+      "std": 74.252,
+      "min": 2.6,
+      "max": 239.4
+    },
+    "thermal_temp_cpu_c": {
+      "mean": 55.237,
+      "std": 3.178,
+      "min": 47.5,
+      "max": 60.2
+    },
+    "thermal_temp_skin_c": {
+      "mean": 41.592,
+      "std": 2.63,
+      "min": 35.5,
+      "max": 45.8
+    },
+    "first_question_cold_load_ms": 751,
+    "thermal_states_observed": [
+      "Normal"
+    ],
+    "note": "TPS/TTFT drift across the run reflects real device thermal state as it heats up under sustained inference, not measurement error.",
+    "rss_note": "peak_RSS_KB is only directly comparable across different models if each was benchmarked in a freshly restarted app process - this script now guarantees that automatically as of this version."
+  }
+}

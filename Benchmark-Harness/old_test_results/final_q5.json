@@ -1,0 +1,217 @@
+{
+  "run_info": {
+    "model": "qwen2.5-0.5b-instruct-q5_k_m.gguf",
+    "model_device_path": "/sdcard/Download/qwen2.5-0.5b-instruct-q5_k_m.gguf",
+    "device": "phone",
+    "quant": "Q4_K_M",
+    "start_time": "2026-07-07T23:00:00.953723+00:00",
+    "end_time": "2026-07-07T23:01:21.036072+00:00",
+    "total": 10,
+    "completed": 10,
+    "failed": 0,
+    "context_resets": 0
+  },
+  "results": [
+    {
+      "question_number": 1,
+      "question": "What is the capital of France?",
+      "run_id": "run_1_1783465200954",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 441,
+        "ttft_ms": 474,
+        "tps": 11.241856,
+        "memory_kb": 732132,
+        "power_ma": 608.0,
+        "thermal": "Normal"
+      },
+      "response": "The capital of France is Paris.",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 2,
+      "question": "Who wrote Romeo and Juliet?",
+      "run_id": "run_2_1783465204621",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 441,
+        "ttft_ms": 495,
+        "tps": 28.957687,
+        "memory_kb": 745004,
+        "power_ma": 560.3,
+        "thermal": "Normal"
+      },
+      "response": "Romeo and Juliet is by William Shakespeare, the renowned playwright and poet from the 16th century. The play is one of his most famous and enduring works. It was first performed on May 15, 1597, in Folkmershield's House in the city of Verona in Tuscany, Italy. The two playwrights, William Shakespeare and John Higham, collaborated on writing the play that would become the best-known piece of English literature ever produced, and it remains one of the most frequently performed works in the world.",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 3,
+      "question": "What is the chemical symbol for gold?",
+      "run_id": "run_3_1783465211945",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 449,
+        "ttft_ms": 464,
+        "tps": 12.487434,
+        "memory_kb": 758356,
+        "power_ma": 612.0,
+        "thermal": "Normal"
+      },
+      "response": "The chemical symbol for gold is Au.",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 4,
+      "question": "What is the largest planet in our solar system?",
+      "run_id": "run_4_1783465215615",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 445,
+        "ttft_ms": 545,
+        "tps": 27.78823,
+        "memory_kb": 771360,
+        "power_ma": 609.8,
+        "thermal": "Normal"
+      },
+      "response": "The largest planet in our solar system is Jupiter. It is the fifth planet from the sun and is the largest of the inner planets. It has a diameter of about 142, 924 kilometers, making it about 11 times the diameter of Earth. It also has a mass of about 317 times that of Earth, making it the second-largest planet in the solar system after Mars.",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 5,
+      "question": "What year did the first human land on the moon?",
+      "run_id": "run_5_1783465221612",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 460,
+        "ttft_ms": 516,
+        "tps": 23.99194,
+        "memory_kb": 771468,
+        "power_ma": 610.6,
+        "thermal": "Normal"
+      },
+      "response": "The first human landed on the Moon on July 20, 1969. This event marked the beginning of the Apollo program, which soon became a symbol of the United States' space ambitions.",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 6,
+      "question": "What are the three states of matter?",
+      "run_id": "run_6_1783465226603",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 464,
+        "ttft_ms": 458,
+        "tps": 28.697481,
+        "memory_kb": 780932,
+        "power_ma": 610.6,
+        "thermal": "Normal"
+      },
+      "response": "The three states of matter are:",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 7,
+      "question": "How does a refrigerator keep food cold?",
+      "run_id": "run_7_1783465233831",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 454,
+        "ttft_ms": 495,
+        "tps": 27.452953,
+        "memory_kb": 802204,
+        "power_ma": 603.6,
+        "thermal": "Normal"
+      },
+      "response": "A refrigerator keeps food cold by using a process called refrigeration. Refrigeration is the process of changing the temperature of a substance from a higher to a lower temperature by cooling it.",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 8,
+      "question": "Explain the process of photosynthesis in plants.",
+      "run_id": "run_8_1783465249694",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 454,
+        "ttft_ms": 486,
+        "tps": 30.545273,
+        "memory_kb": 802656,
+        "power_ma": 607.6,
+        "thermal": "Normal"
+      },
+      "response": "Plants' photosynthesis is a process by which they convert light energy into chemical energy in the form of glucose. Let's break down the process step by step:",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 9,
+      "question": "Summarize the theory of relativity in simple terms.",
+      "run_id": "run_9_1783465264208",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 449,
+        "ttft_ms": 535,
+        "tps": 29.803825,
+        "memory_kb": 815892,
+        "power_ma": 611.2,
+        "thermal": "Normal"
+      },
+      "response": "Relativity is the theory that states the laws of physics are the same for all observers, no matter how fast they are moving. It was developed by Albert Einstein in the early 20th century and explains why the laws of physics appear to change with the speed of an object. This theory of relativity has been confirmed by countless experiments and observations throughout history.",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 10,
+      "question": "Describe the causes and consequences of World War I in a few sentences.",
+      "run_id": "run_10_1783465270173",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 456,
+        "ttft_ms": 609,
+        "tps": 28.845205,
+        "memory_kb": 812944,
+        "power_ma": 611.8,
+        "thermal": "Normal"
+      },
+      "response": "World War I was a global conflict that ended in 1918 with the Treaty of Versailles\u7b7e\u7f72\u3002\u6218\u4e89\u539f\u56e0\u548c\u540e\u679c\u591a\u65b9\u9762\u590d\u6742\uff0c\u5305\u62ec\u4f46\u4e0d\u9650\u4e8e\uff1a",
+      "error": null,
+      "context_reset": false
+    }
+  ],
+  "summary": {
+    "ttft_ms": {
+      "mean": 507.7,
+      "std": 43.331,
+      "min": 458,
+      "max": 609
+    },
+    "tps": {
+      "mean": 24.981,
+      "std": 6.772,
+      "min": 11.241856,
+      "max": 30.545273
+    },
+    "memory_kb": {
+      "mean": 779294.8,
+      "std": 27400.225,
+      "min": 732132,
+      "max": 815892
+    },
+    "power_ma": {
+      "mean": 604.55,
+      "std": 14.944,
+      "min": 560.3,
+      "max": 612.0
+    },
+    "thermal_states_observed": [
+      "Normal"
+    ],
+    "note": "TPS/TTFT drift across the run reflects real device thermal state as it heats up under sustained inference, not measurement error.",
+    "rss_note": "peak_RSS_KB is only directly comparable across different models if each was benchmarked in a freshly restarted app process - this script now guarantees that automatically as of this version."
+  }
+}

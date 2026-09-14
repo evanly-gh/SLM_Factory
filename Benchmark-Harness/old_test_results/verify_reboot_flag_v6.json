@@ -1,0 +1,76 @@
+{
+  "run_info": {
+    "model": "qwen2.5-0.5b-instruct-q4_k_m.gguf",
+    "model_device_path": "/sdcard/Android/data/io.shubham0204.smollmandroid/files/qwen2.5-0.5b-instruct-q4_k_m.gguf",
+    "device": "phone",
+    "quant": "Q4_K_M",
+    "start_time": "2026-07-18T21:20:52.573185+00:00",
+    "end_time": "2026-07-18T21:22:15.660449+00:00",
+    "total": 1,
+    "completed": 0,
+    "failed": 1,
+    "context_resets": 0,
+    "battery_warning": true,
+    "battery_level_pct": 100,
+    "battery_status": "Charging",
+    "rebooted_before_run": true,
+    "cold_load_note": "cold_load_ms reflects a genuinely cold read only if --reboot-before was used for this run. Without a reboot, the OS file cache may make cold_load_ms appear faster than a true cold read from storage, especially for larger model files."
+  },
+  "results": [
+    {
+      "question_number": 1,
+      "question": "What is the capital of France?",
+      "run_id": "run_1_1784409652574",
+      "status": "failed",
+      "metrics": null,
+      "response": null,
+      "error": {
+        "reason": "timeout",
+        "message": "No RUN_DONE/RUN_ERROR within 60s"
+      },
+      "context_reset": false
+    }
+  ],
+  "summary": {
+    "ttft_ms": {
+      "mean": null,
+      "std": null,
+      "min": null,
+      "max": null
+    },
+    "tps": {
+      "mean": null,
+      "std": null,
+      "min": null,
+      "max": null
+    },
+    "memory_kb": {
+      "mean": null,
+      "std": null,
+      "min": null,
+      "max": null
+    },
+    "power_ma": {
+      "mean": null,
+      "std": null,
+      "min": null,
+      "max": null
+    },
+    "thermal_temp_cpu_c": {
+      "mean": null,
+      "std": null,
+      "min": null,
+      "max": null
+    },
+    "thermal_temp_skin_c": {
+      "mean": null,
+      "std": null,
+      "min": null,
+      "max": null
+    },
+    "first_question_cold_load_ms": null,
+    "thermal_states_observed": [],
+    "note": "TPS/TTFT drift across the run reflects real device thermal state as it heats up under sustained inference, not measurement error.",
+    "rss_note": "peak_RSS_KB is only directly comparable across different models if each was benchmarked in a freshly restarted app process - this script now guarantees that automatically as of this version."
+  }
+}

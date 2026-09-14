@@ -1,0 +1,243 @@
+{
+  "run_info": {
+    "model": "qwen3-4b-instruct-2507-f16.gguf",
+    "model_device_path": "/sdcard/Android/data/io.shubham0204.smollmandroid/files/qwen3-4b-instruct-2507-f16.gguf",
+    "device": "phone",
+    "quant": "Q4_K_M",
+    "start_time": "2026-07-23T21:59:34.635458+00:00",
+    "end_time": "2026-07-23T22:18:41.809224+00:00",
+    "total": 10,
+    "completed": 8,
+    "failed": 2,
+    "context_resets": 0,
+    "battery_warning": true,
+    "battery_level_pct": 100,
+    "battery_status": "Charging",
+    "rebooted_before_run": false,
+    "cold_load_note": "cold_load_ms reflects a genuinely cold read only if --reboot-before was used for this run. Without a reboot, the OS file cache may make cold_load_ms appear faster than a true cold read from storage, especially for larger model files."
+  },
+  "results": [
+    {
+      "question_number": 1,
+      "question": "What is the capital of France?",
+      "run_id": "run_1_1784843974636",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 5480,
+        "ttft_ms": 14569,
+        "tps": 0.26440665,
+        "memory_kb": 7359384,
+        "power_ma": 3.0,
+        "thermal": "Normal",
+        "thermal_temp_cpu_c": 54.0,
+        "thermal_temp_skin_c": 41.8
+      },
+      "response": "The capital of France is Paris.",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 2,
+      "question": "Who wrote Romeo and Juliet?",
+      "run_id": "run_2_1784844037397",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 1197,
+        "ttft_ms": 13621,
+        "tps": 0.6748529,
+        "memory_kb": 8076984,
+        "power_ma": 6.2,
+        "thermal": "Normal",
+        "thermal_temp_cpu_c": 59.0,
+        "thermal_temp_skin_c": 42.7
+      },
+      "response": "*Romeo and Juliet* was written by **William Shakespeare**.",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 3,
+      "question": "What is the chemical symbol for gold?",
+      "run_id": "run_3_1784844063225",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 1043,
+        "ttft_ms": 12098,
+        "tps": 1.0713322,
+        "memory_kb": 7999208,
+        "power_ma": 8.4,
+        "thermal": "Normal",
+        "thermal_temp_cpu_c": 59.4,
+        "thermal_temp_skin_c": 43.5
+      },
+      "response": "The chemical symbol for gold is **Au**.",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 4,
+      "question": "What is the largest planet in our solar system?",
+      "run_id": "run_4_1784844099383",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 1036,
+        "ttft_ms": 14286,
+        "tps": 1.4060469,
+        "memory_kb": 7148364,
+        "power_ma": 13.9,
+        "thermal": "Normal",
+        "thermal_temp_cpu_c": 62.5,
+        "thermal_temp_skin_c": 44.8
+      },
+      "response": "The largest planet in our solar system is **Jupiter**. It is a gas giant with a diameter of about 110,000 miles (176,000 kilometers), making it more than 11 times wider than Earth. Jupiter is also the most massive planet in the solar system, with a mass about 318 times that of Earth.",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 5,
+      "question": "What year did the first human land on the moon?",
+      "run_id": "run_5_1784844160854",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 1029,
+        "ttft_ms": 13808,
+        "tps": 1.2758536,
+        "memory_kb": 7224960,
+        "power_ma": 7.8,
+        "thermal": "Normal",
+        "thermal_temp_cpu_c": 60.2,
+        "thermal_temp_skin_c": 45.3
+      },
+      "response": "The first human landed on the Moon in **1969**. Specifically, NASA's Apollo 11 mission achieved this on **July 20, 1969**, when astronauts Neil Armstrong and Buzz Aldrin walked on the lunar surface.",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 6,
+      "question": "What are the three states of matter?",
+      "run_id": "run_6_1784844207340",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 1007,
+        "ttft_ms": 12100,
+        "tps": 1.6386328,
+        "memory_kb": 8291040,
+        "power_ma": 17.2,
+        "thermal": "Normal",
+        "thermal_temp_cpu_c": 65.6,
+        "thermal_temp_skin_c": 48.0
+      },
+      "response": "The three primary states of matter are:",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 7,
+      "question": "How does a refrigerator keep food cold?",
+      "run_id": "run_7_1784844333095",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 1192,
+        "ttft_ms": 12945,
+        "tps": 1.5118794,
+        "memory_kb": 8062660,
+        "power_ma": 15.1,
+        "thermal": "Normal",
+        "thermal_temp_cpu_c": 65.2,
+        "thermal_temp_skin_c": 49.8
+      },
+      "response": "A refrigerator keeps food cold by using a cooling system that removes heat from the interior and transfers it to the outside environment. Here's a step-by-step explanation of how it works:",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 8,
+      "question": "Explain the process of photosynthesis in plants.",
+      "run_id": "run_8_1784844550110",
+      "status": "failed",
+      "metrics": null,
+      "response": null,
+      "error": {
+        "reason": "timeout",
+        "message": "No RUN_DONE/RUN_ERROR within 240s"
+      },
+      "context_reset": false
+    },
+    {
+      "question_number": 9,
+      "question": "Summarize the theory of relativity in simple terms.",
+      "run_id": "run_9_1784844792838",
+      "status": "failed",
+      "metrics": null,
+      "response": null,
+      "error": {
+        "reason": "timeout",
+        "message": "No RUN_DONE/RUN_ERROR within 240s"
+      },
+      "context_reset": false
+    },
+    {
+      "question_number": 10,
+      "question": "Describe the causes and consequences of World War I in a few sentences.",
+      "run_id": "run_10_1784845035446",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 951,
+        "ttft_ms": 16581,
+        "tps": 1.4670602,
+        "memory_kb": 8340648,
+        "power_ma": 16.0,
+        "thermal": "Normal",
+        "thermal_temp_cpu_c": 63.3,
+        "thermal_temp_skin_c": 47.6
+      },
+      "response": "World War I was caused by a complex web of factors including nationalism, imperialism, militarism, and the system of alliances that divided Europe into two opposing camps. The immediate trigger was the assassination of Archduke Franz Ferdinand of Austria-Hungary in 1914. The consequences included the collapse of four major empires (Austro-Hungarian, Ottoman, Russian, and German), massive loss of life and economic destruction, the rise of political extremism, and the eventual establishment of the League of Nations, setting the stage for future global conflicts.",
+      "error": null,
+      "context_reset": false
+    }
+  ],
+  "summary": {
+    "ttft_ms": {
+      "mean": 13751,
+      "std": 1373.51,
+      "min": 12098,
+      "max": 16581
+    },
+    "tps": {
+      "mean": 1.164,
+      "std": 0.442,
+      "min": 0.26440665,
+      "max": 1.6386328
+    },
+    "memory_kb": {
+      "mean": 7812906,
+      "std": 456470.864,
+      "min": 7148364,
+      "max": 8340648
+    },
+    "power_ma": {
+      "mean": 10.95,
+      "std": 4.908,
+      "min": 3.0,
+      "max": 17.2
+    },
+    "thermal_temp_cpu_c": {
+      "mean": 61.15,
+      "std": 3.577,
+      "min": 54.0,
+      "max": 65.6
+    },
+    "thermal_temp_skin_c": {
+      "mean": 45.438,
+      "std": 2.626,
+      "min": 41.8,
+      "max": 49.8
+    },
+    "first_question_cold_load_ms": 5480,
+    "thermal_states_observed": [
+      "Normal"
+    ],
+    "note": "TPS/TTFT drift across the run reflects real device thermal state as it heats up under sustained inference, not measurement error.",
+    "rss_note": "peak_RSS_KB is only directly comparable across different models if each was benchmarked in a freshly restarted app process - this script now guarantees that automatically as of this version."
+  }
+}

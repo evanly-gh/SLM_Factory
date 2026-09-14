@@ -1,0 +1,53 @@
+{
+  "model": "Qwen/Qwen2.5-0.5B-Instruct",
+  "budget_rss_mb": null,
+  "budget_file_size_mb": 450.0,
+  "timestamp": "2026-07-17T16:57:24.085269+00:00",
+  "sweep_results": [
+    {
+      "quant": "Q4_K_M",
+      "file_size_mb": 379.4,
+      "peak_RSS_mb": 686.8,
+      "TTFT_ms": 611,
+      "TPS": 12.513,
+      "fits_file_size_budget": true,
+      "fits_rss_budget": true,
+      "fits_budget": true,
+      "status": "success",
+      "error": null
+    },
+    {
+      "quant": "Q5_K_M",
+      "file_size_mb": 400.6,
+      "peak_RSS_mb": 716.4,
+      "TTFT_ms": 690.7,
+      "TPS": 10.991,
+      "fits_file_size_budget": true,
+      "fits_rss_budget": true,
+      "fits_budget": true,
+      "status": "success",
+      "error": null
+    },
+    {
+      "quant": "Q8_0",
+      "file_size_mb": 506.5,
+      "peak_RSS_mb": 821.2,
+      "TTFT_ms": 441.9,
+      "TPS": 15.469,
+      "fits_file_size_budget": false,
+      "fits_rss_budget": true,
+      "fits_budget": false,
+      "status": "success",
+      "error": null
+    }
+  ],
+  "candidates_within_budget": [
+    "Q4_K_M",
+    "Q5_K_M"
+  ],
+  "recommendation": {
+    "quant_level": "Q4_K_M",
+    "reasoning": "Deterministic fallback (no LLM reasoning): selected Q4_K_M because it has the highest TPS (12.513) among quant levels that satisfy 450MB file size (candidates: Q4_K_M, Q5_K_M).",
+    "reasoning_source": "deterministic_fallback"
+  }
+}

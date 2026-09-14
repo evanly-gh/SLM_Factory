@@ -1,0 +1,599 @@
+{
+  "run_info": {
+    "model": "qwen2.5-0.5b-instruct-q4_k_m.gguf",
+    "model_device_path": "/sdcard/Download/qwen2.5-0.5b-instruct-q4_k_m.gguf",
+    "device": "phone",
+    "quant": "Q4_K_M",
+    "start_time": "2026-07-13T03:01:33.399267+00:00",
+    "end_time": "2026-07-13T03:08:52.809220+00:00",
+    "total": 30,
+    "completed": 30,
+    "failed": 0,
+    "context_resets": 0,
+    "battery_warning": true,
+    "battery_level_pct": 92,
+    "battery_status": "Charging",
+    "rebooted_before_run": false,
+    "cold_load_note": "cold_load_ms reflects a genuinely cold read only if --reboot-before was used for this run. Without a reboot, the OS file cache may make cold_load_ms appear faster than a true cold read from storage, especially for larger model files."
+  },
+  "results": [
+    {
+      "question_number": 1,
+      "question": "What is the capital of France?",
+      "run_id": "run_1_1783911693399",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 448,
+        "ttft_ms": 528,
+        "tps": 8.147797,
+        "memory_kb": 719852,
+        "power_ma": 792.6,
+        "thermal": "Normal",
+        "thermal_temp_c": 43.2
+      },
+      "response": "The capital of France is Paris.",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 2,
+      "question": "Who wrote Romeo and Juliet?",
+      "run_id": "run_2_1783911697858",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 442,
+        "ttft_ms": 554,
+        "tps": 9.510035,
+        "memory_kb": 727408,
+        "power_ma": 787.8,
+        "thermal": "Normal",
+        "thermal_temp_c": 45.9
+      },
+      "response": "Romeo and Juliet was written by William Shakespeare.",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 3,
+      "question": "What is the chemical symbol for gold?",
+      "run_id": "run_3_1783911702320",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 483,
+        "ttft_ms": 535,
+        "tps": 10.516131,
+        "memory_kb": 739532,
+        "power_ma": 783.9,
+        "thermal": "Normal",
+        "thermal_temp_c": 45.5
+      },
+      "response": "The chemical symbol for gold is Au (alpha - trinitrophenol).",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 4,
+      "question": "What is the largest planet in our solar system?",
+      "run_id": "run_4_1783911707925",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 456,
+        "ttft_ms": 636,
+        "tps": 12.540217,
+        "memory_kb": 727624,
+        "power_ma": 780.4,
+        "thermal": "Normal",
+        "thermal_temp_c": 49.4
+      },
+      "response": "Titanium-Plateau-2 is the largest planet in our solar system. It is a trans-Neptunian object, located beyond Neptune's orbit and about 245 million kilometers (153 million miles) from the Sun.",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 5,
+      "question": "What year did the first human land on the moon?",
+      "run_id": "run_5_1783911715712",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 461,
+        "ttft_ms": 603,
+        "tps": 11.504256,
+        "memory_kb": 733904,
+        "power_ma": 776.8,
+        "thermal": "Normal",
+        "thermal_temp_c": 46.7
+      },
+      "response": "The first human land on the moon was on July 20, 1969.",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 6,
+      "question": "What are the three states of matter?",
+      "run_id": "run_6_1783911721330",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 462,
+        "ttft_ms": 528,
+        "tps": 9.952001,
+        "memory_kb": 742456,
+        "power_ma": 774.6,
+        "thermal": "Normal",
+        "thermal_temp_c": 45.9
+      },
+      "response": "The three states of matter are liquid, solid, and gas.",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 7,
+      "question": "How does a refrigerator keep food cold?",
+      "run_id": "run_7_1783911725799",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 446,
+        "ttft_ms": 570,
+        "tps": 13.741055,
+        "memory_kb": 755980,
+        "power_ma": 769.6,
+        "thermal": "Normal",
+        "thermal_temp_c": 54.4
+      },
+      "response": "A refrigerator is designed to keep food cold by utilizing a process called convection. Here's how it works:",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 8,
+      "question": "Explain the process of photosynthesis in plants.",
+      "run_id": "run_8_1783911753326",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 461,
+        "ttft_ms": 580,
+        "tps": 13.953105,
+        "memory_kb": 759320,
+        "power_ma": 763.7,
+        "thermal": "Normal",
+        "thermal_temp_c": 56.0
+      },
+      "response": "Photosynthesis is the process by which plants use sunlight, water, and carbon dioxide to produce glucose and oxygen. Here's a brief explanation of the process:",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 9,
+      "question": "Summarize the theory of relativity in simple terms.",
+      "run_id": "run_9_1783911776425",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 460,
+        "ttft_ms": 623,
+        "tps": 13.960273,
+        "memory_kb": 768660,
+        "power_ma": 762.5,
+        "thermal": "Normal",
+        "thermal_temp_c": 57.1
+      },
+      "response": "The theory of relativity is a set of ideas that describe the behavior of matter and energy at the smallest scales, such as atoms and particles. The two main theories are the Special Theory of Relativity and the General Theory of Relativity.",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 10,
+      "question": "Describe the causes and consequences of World War I in a few sentences.",
+      "run_id": "run_10_1783911797267",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 493,
+        "ttft_ms": 701,
+        "tps": 13.913357,
+        "memory_kb": 779640,
+        "power_ma": 760.6,
+        "thermal": "Normal",
+        "thermal_temp_c": 57.5
+      },
+      "response": "World War I, also known as the First World War, was a global conflict that lasted from 1914 to 1918. The causes of World War I were complex and multifaceted. One of the primary causes was the assassination of Archduke Franz Ferdinand of Austria-Hungary on June 28, 1914, in Sarajevo. The assassination sparked a chain of events that led to World War I, which erupted into a total war on Europe. The war was fueled by various factors, including territorial disputes, nationalism, militarism, and the desire for world dominance.",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 11,
+      "question": "What is the capital of Japan?",
+      "run_id": "run_11_1783911820278",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 461,
+        "ttft_ms": 540,
+        "tps": 14.158042,
+        "memory_kb": 780804,
+        "power_ma": 759.9,
+        "thermal": "Normal",
+        "thermal_temp_c": 57.5
+      },
+      "response": "I believe there may have been a misunderstanding or a typo. There isn't a specific capital city of Japan, and it is an archipelagic nation consisting of more than 6,500 islands.",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 12,
+      "question": "Who painted the Mona Lisa?",
+      "run_id": "run_12_1783911834555",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 468,
+        "ttft_ms": 535,
+        "tps": 13.508534,
+        "memory_kb": 820884,
+        "power_ma": 758.8,
+        "thermal": "Normal",
+        "thermal_temp_c": 56.3
+      },
+      "response": "I'm sorry, I cannot determine the artist who painted the Mona Lisa. The painting is called \"The Mona Lisa\" and it was created by Leonardo da Vinci. However, it is worth noting that the full name of the artist is Masaccio del Gabbio, who was an Italian painter of the Renaissance period.",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 13,
+      "question": "What is the boiling point of water in Celsius?",
+      "run_id": "run_13_1783911843413",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 462,
+        "ttft_ms": 599,
+        "tps": 12.297413,
+        "memory_kb": 826740,
+        "power_ma": 757.7,
+        "thermal": "Normal",
+        "thermal_temp_c": 54.0
+      },
+      "response": "The boiling point of water, which is the temperature at which it turns into steam, is 100 degrees Celsius or 212 degrees Fahrenheit at standard atmospheric pressure.",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 14,
+      "question": "What is the smallest planet in our solar system?",
+      "run_id": "run_14_1783911850125",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 460,
+        "ttft_ms": 626,
+        "tps": 11.276983,
+        "memory_kb": 838308,
+        "power_ma": 755.8,
+        "thermal": "Normal",
+        "thermal_temp_c": 53.2
+      },
+      "response": "The smallest planet in our solar system is Mercury. It has an average diameter of approximately 4,886 kilometers.",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 15,
+      "question": "When did World War II end?",
+      "run_id": "run_15_1783911855744",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 458,
+        "ttft_ms": 569,
+        "tps": 13.786414,
+        "memory_kb": 853488,
+        "power_ma": 756.5,
+        "thermal": "Normal",
+        "thermal_temp_c": 56.0
+      },
+      "response": "World War II, which lasted from 1939 to 1945, ended on September 2, 1945. It was a global conflict fought by Nazi Germany, the Soviet Union, and other Allies against the Imperial Japanese Navy, Imperial Japanese Army, and the United States. The end of World War II marked the end of the Second World War and the beginning of the Cold War.",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 16,
+      "question": "What are the primary colors?",
+      "run_id": "run_16_1783911865703",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 495,
+        "ttft_ms": 463,
+        "tps": 13.53208,
+        "memory_kb": 855884,
+        "power_ma": 755.1,
+        "thermal": "Normal",
+        "thermal_temp_c": 54.4
+      },
+      "response": "The primary colors in a color wheel are red, blue, and green. The other colors in the color wheel are called secondary colors, which are formed by mixing the primary colors in equal proportions. These primary colors are also sometimes called the \"primary wavelengths.\"",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 17,
+      "question": "How does a car engine work?",
+      "run_id": "run_17_1783911873458",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 498,
+        "ttft_ms": 506,
+        "tps": 13.597774,
+        "memory_kb": 865256,
+        "power_ma": 753.6,
+        "thermal": "Normal",
+        "thermal_temp_c": 59.0
+      },
+      "response": "A car engine, also known as a mechanical engine, is a device that converts the chemical energy from the fuel (usually gasoline or diesel) into mechanical energy to move the vehicle forward. The engine is the heart of a car and is responsible for the overall performance and operation of the vehicle. It converts the chemical energy stored in the fuel into heat energy and then into mechanical energy, which powers the vehicle's wheels to move forward.",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 18,
+      "question": "Explain how vaccines work in the human body.",
+      "run_id": "run_18_1783911904361",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 1710,
+        "ttft_ms": 607,
+        "tps": 13.762962,
+        "memory_kb": 869144,
+        "power_ma": 750.7,
+        "thermal": "Normal",
+        "thermal_temp_c": 59.4
+      },
+      "response": "Vaccines work by exposing the body to weakened or dead versions of the virus that is causing the infection. This triggers the immune system to produce a response, including the production of antibodies, which recognize the virus and help it prevent it from entering the body.",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 19,
+      "question": "Summarize the plot of Romeo and Juliet in a few sentences.",
+      "run_id": "run_19_1783911931889",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 467,
+        "ttft_ms": 704,
+        "tps": 13.827689,
+        "memory_kb": 881096,
+        "power_ma": 747.7,
+        "thermal": "Normal",
+        "thermal_temp_c": 60.2
+      },
+      "response": "In Shakespeare's play \"Romeo and Juliet,\" the plot revolves around the fierce rivalry between two young lovers, Romeo and Juliet. The story begins with Romeo being rejected by his family for his unconventional manner and his infatuation with a girl who is actually Juliet's mother. She is forced to hide her true identity, and Romeo finds himself drawn to her. However, Romeo discovers the truth about Juliet's true identity and the truth about her father.",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 20,
+      "question": "Describe the water cycle in simple terms.",
+      "run_id": "run_20_1783911948862",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 491,
+        "ttft_ms": 522,
+        "tps": 14.350605,
+        "memory_kb": 885632,
+        "power_ma": 746.1,
+        "thermal": "Normal",
+        "thermal_temp_c": 61.0
+      },
+      "response": "The water cycle is a process by which water evaporates from the surface of Earth, condenses in clouds, and then falls back to the Earth's surface. In simple terms, this process can be described as follows:",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 21,
+      "question": "What is the capital of Italy?",
+      "run_id": "run_21_1783911967628",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 459,
+        "ttft_ms": 528,
+        "tps": 11.072203,
+        "memory_kb": 901160,
+        "power_ma": 744.4,
+        "thermal": "Normal",
+        "thermal_temp_c": 56.0
+      },
+      "response": "As of 2021, the capital of Italy is Rome.",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 22,
+      "question": "Who discovered gravity?",
+      "run_id": "run_22_1783911972135",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 471,
+        "ttft_ms": 487,
+        "tps": 14.241548,
+        "memory_kb": 908720,
+        "power_ma": 744.5,
+        "thermal": "Normal",
+        "thermal_temp_c": 60.6
+      },
+      "response": "The concept of gravity was first proposed by Isaac Newton in his 1687 work \"Philosophi\u00e6 Naturalis Principia Mathematica.\" Newton famously stated: \"If anything were to be found which cannot be explained by the motions of the planets and the sun, it is gravitation that would be the cause.\" While other scientists had previously suggested the existence of gravity, Newton's work was the first to establish it as a physical law.",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 23,
+      "question": "What is the chemical formula for water?",
+      "run_id": "run_23_1783911990882",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 458,
+        "ttft_ms": 539,
+        "tps": 9.0161,
+        "memory_kb": 918348,
+        "power_ma": 742.0,
+        "thermal": "Normal",
+        "thermal_temp_c": 55.2
+      },
+      "response": "The chemical formula for water is H2O.",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 24,
+      "question": "What is the tallest mountain in the world?",
+      "run_id": "run_24_1783911995362",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 465,
+        "ttft_ms": 570,
+        "tps": 13.5107,
+        "memory_kb": 925268,
+        "power_ma": 742.6,
+        "thermal": "Normal",
+        "thermal_temp_c": 58.3
+      },
+      "response": "The tallest mountain in the world is Mount Everest, located in the Himalayas. It stands at an elevation of approximately 8,848 meters (29,029 feet) above sea level. However, this number can vary slightly depending on the definition of the tallest mountain, as there are other mountains with higher elevations that are not included in this measurement.",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 25,
+      "question": "When was the internet invented?",
+      "run_id": "run_25_1783912004190",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 463,
+        "ttft_ms": 514,
+        "tps": 13.4527855,
+        "memory_kb": 937016,
+        "power_ma": 740.6,
+        "thermal": "Normal",
+        "thermal_temp_c": 58.3
+      },
+      "response": "The internet was initially invented by a.atari company's computer character \"Paco\", and it was not named \"the internet\" until 1988. The term \"the internet\" was first coined by Paul Yingle when drafting the website's legal description in 1987.",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 26,
+      "question": "What are the seven continents?",
+      "run_id": "run_26_1783912011932",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 467,
+        "ttft_ms": 518,
+        "tps": 11.958903,
+        "memory_kb": 945608,
+        "power_ma": 740.0,
+        "thermal": "Normal",
+        "thermal_temp_c": 56.3
+      },
+      "response": "The seven continents are:",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 27,
+      "question": "How does the human heart work?",
+      "run_id": "run_27_1783912018600",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 462,
+        "ttft_ms": 521,
+        "tps": 13.793161,
+        "memory_kb": 953108,
+        "power_ma": 737.4,
+        "thermal": "Normal",
+        "thermal_temp_c": 61.4
+      },
+      "response": "The human heart is a muscular organ that works to pump blood throughout the body. It consists of four chambers - two atria (lower chambers) and two ventricles (upper chambers) - each containing a heart muscle that pumps blood towards the lungs or the body.",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 28,
+      "question": "Explain how photosynthesis converts sunlight into energy.",
+      "run_id": "run_28_1783912048221",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 501,
+        "ttft_ms": 593,
+        "tps": 13.34442,
+        "memory_kb": 949324,
+        "power_ma": 732.9,
+        "thermal": "Normal",
+        "thermal_temp_c": 62.9
+      },
+      "response": "Photosynthesis is the process by which plants, algae, and some bacteria convert sunlight, carbon dioxide, and water into energy stored in glucose. This process requires energy from the Sun's rays, which is captured by chlorophyll molecules in the plant's leaves. The energy is then used to simplify the molecules of carbon dioxide and water, and convert them into glucose and oxygen. This process is known as the light-dependent reaction of photosynthesis and is also called the Calvin cycle.",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 29,
+      "question": "Summarize the causes of climate change in a few sentences.",
+      "run_id": "run_29_1783912092284",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 493,
+        "ttft_ms": 655,
+        "tps": 13.146838,
+        "memory_kb": 978776,
+        "power_ma": 728.9,
+        "thermal": "Normal",
+        "thermal_temp_c": 64.1
+      },
+      "response": "Climate change is caused by a number of factors, including the increased amount of greenhouse gases in the atmosphere (such as carbon dioxide, methane, and nitrous oxide), the burning of fossil fuels for energy (such as coal, oil, and gas), deforestation, and other changes in land use. These changes in the Earth's climate system alter the heat balance between the Earth and its atmosphere and other systems, causing a range of impacts beyond the immediate environment of a specific location, such as changes in weather patterns and increased frequency of extreme weather events such as droughts, heatwaves and hurricanes. Additionally, the ongoing threat of climate change may pose additional challenges and risks to human populations, such as rising sea levels, more frequent natural disasters, and the potential for extreme temperatures that can harm human health.",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 30,
+      "question": "Describe how the immune system fights infections.",
+      "run_id": "run_30_1783912108518",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 466,
+        "ttft_ms": 602,
+        "tps": 13.891385,
+        "memory_kb": 984700,
+        "power_ma": 726.8,
+        "thermal": "Normal",
+        "thermal_temp_c": 63.3
+      },
+      "response": "The immune system is an intricate network of organs and cells that work together to defend the body against infection. It includes several components, such as the immune cells, receptors, and antibodies, which work together to recognize and destroy foreign pathogens, such as bacteria, viruses, and fungi.",
+      "error": null,
+      "context_reset": false
+    }
+  ],
+  "summary": {
+    "ttft_ms": {
+      "mean": 568.533,
+      "std": 57.842,
+      "min": 463,
+      "max": 704
+    },
+    "tps": {
+      "mean": 12.642,
+      "std": 1.7,
+      "min": 8.147797,
+      "max": 14.350605
+    },
+    "memory_kb": {
+      "mean": 844454.667,
+      "std": 83552.78,
+      "min": 719852,
+      "max": 984700
+    },
+    "power_ma": {
+      "mean": 755.817,
+      "std": 16.97,
+      "min": 726.8,
+      "max": 792.6
+    },
+    "thermal_temp_c": {
+      "mean": 55.633,
+      "std": 5.532,
+      "min": 43.2,
+      "max": 64.1
+    },
+    "first_question_cold_load_ms": 448,
+    "thermal_states_observed": [
+      "Normal"
+    ],
+    "note": "TPS/TTFT drift across the run reflects real device thermal state as it heats up under sustained inference, not measurement error.",
+    "rss_note": "peak_RSS_KB is only directly comparable across different models if each was benchmarked in a freshly restarted app process - this script now guarantees that automatically as of this version."
+  }
+}

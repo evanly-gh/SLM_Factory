@@ -1,0 +1,26 @@
+{
+  "model": "Qwen/Qwen2.5-0.5B-Instruct",
+  "budget_rss_mb": 900.0,
+  "budget_file_size_mb": null,
+  "timestamp": "2026-07-24T22:32:02.139730+00:00",
+  "sweep_results": [
+    {
+      "quant": "Q4_K_M",
+      "file_size_mb": 379.4,
+      "peak_RSS_mb": null,
+      "TTFT_ms": null,
+      "TPS": null,
+      "fits_file_size_budget": false,
+      "fits_rss_budget": false,
+      "fits_budget": false,
+      "status": "failed",
+      "error": "run_autobench.py exited with code 1"
+    }
+  ],
+  "candidates_within_budget": [],
+  "recommendation": {
+    "quant_level": null,
+    "reasoning": "Deterministic fallback (no LLM reasoning): no quant level completed benchmarking successfully; no recommendation possible.",
+    "reasoning_source": "deterministic_fallback"
+  }
+}

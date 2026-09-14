@@ -1,0 +1,216 @@
+{
+  "run_info": {
+    "model": "qwen2.5-0.5b-instruct-q4_k_m.gguf",
+    "model_device_path": "/sdcard/Download/qwen2.5-0.5b-instruct-q4_k_m.gguf",
+    "device": "phone",
+    "quant": "Q4_K_M",
+    "start_time": "2026-07-07T22:26:07.995870+00:00",
+    "end_time": "2026-07-07T22:27:27.993593+00:00",
+    "total": 10,
+    "completed": 10,
+    "failed": 0,
+    "context_resets": 0
+  },
+  "results": [
+    {
+      "question_number": 1,
+      "question": "What is the capital of France?",
+      "run_id": "run_1_1783463167996",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 436,
+        "ttft_ms": 410,
+        "tps": 27.978308,
+        "memory_kb": 726508,
+        "power_ma": 787.5,
+        "thermal": "Normal"
+      },
+      "response": "The capital of France is Paris.",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 2,
+      "question": "Who wrote Romeo and Juliet?",
+      "run_id": "run_2_1783463177918",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 436,
+        "ttft_ms": 423,
+        "tps": 31.978565,
+        "memory_kb": 740704,
+        "power_ma": 807.5,
+        "thermal": "Normal"
+      },
+      "response": "Romeo and Juliet by William Shakespeare is a tragic love story set in Renaissance Florence. The play was written in three acts consisting of 260 lines, and it was first performed in 1600 at the theatre at the Baroque Royal Theatre in Verona, Italy. The play is considered one of the greatest works of English literature and has been translated into more than 100 languages. The story revolves around the love of two young lovers \u2013 Romeo and Juliet \u2013 who are thrown together in a drama that explores themes of love, survival, power, and justice. The play was written in the era of the Renaissance, and it is a depiction of the complex emotions and relationships that exist between people from different social classes and backgrounds, as well as the ideals and values that are found in the play. The play has had a significant impact on literature and is considered one of the greatest works of English literature.",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 3,
+      "question": "What is the chemical symbol for gold?",
+      "run_id": "run_3_1783463187648",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 442,
+        "ttft_ms": 403,
+        "tps": 14.172712,
+        "memory_kb": 753832,
+        "power_ma": 964.7,
+        "thermal": "Normal"
+      },
+      "response": "The chemical symbol for gold is Au.",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 4,
+      "question": "What is the largest planet in our solar system?",
+      "run_id": "run_4_1783463191125",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 450,
+        "ttft_ms": 471,
+        "tps": 14.739871,
+        "memory_kb": 763072,
+        "power_ma": 961.0,
+        "thermal": "Normal"
+      },
+      "response": "The largest planet in our solar system is Jupiter.",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 5,
+      "question": "What year did the first human land on the moon?",
+      "run_id": "run_5_1783463194613",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 454,
+        "ttft_ms": 445,
+        "tps": 26.337992,
+        "memory_kb": 767216,
+        "power_ma": 897.1,
+        "thermal": "Normal"
+      },
+      "response": "The first human landed on the Moon on July 20, 1970. This was early in the Apollo program, and the United States was leading in achieving lunar landing and orbiting. The landing was a critical achievement because it paved the way for future missions to the Moon and beyond.",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 6,
+      "question": "What are the three states of matter?",
+      "run_id": "run_6_1783463200639",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 456,
+        "ttft_ms": 398,
+        "tps": 34.439686,
+        "memory_kb": 775840,
+        "power_ma": 855.9,
+        "thermal": "Normal"
+      },
+      "response": "The three states of matter are:",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 7,
+      "question": "How does a refrigerator keep food cold?",
+      "run_id": "run_7_1783463206780",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 453,
+        "ttft_ms": 424,
+        "tps": 32.32791,
+        "memory_kb": 789416,
+        "power_ma": 784.9,
+        "thermal": "Normal"
+      },
+      "response": "A refrigerator keeps food cold by reducing the temperature of room air. When the outside temperature is low, the air inside the refrigerator is cooled by the refrigeration system. As the temperature drops, the air becomes colder and denser, so it lowers the air density. This causes the air to move faster and more efficiently, and as a result, the temperature inside the refrigerator decreases.",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 8,
+      "question": "Explain the process of photosynthesis in plants.",
+      "run_id": "run_8_1783463218937",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 453,
+        "ttft_ms": 423,
+        "tps": 32.4159,
+        "memory_kb": 801144,
+        "power_ma": 791.1,
+        "thermal": "Normal"
+      },
+      "response": "Plants use the process of photosynthesis to produce food and energy. Photosynthesis occurs in the leaves of plants, and it involves the use of sunlight, water, and carbon dioxide from the air.",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 9,
+      "question": "Summarize the theory of relativity in simple terms.",
+      "run_id": "run_9_1783463227438",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 453,
+        "ttft_ms": 468,
+        "tps": 32.556732,
+        "memory_kb": 799188,
+        "power_ma": 777.3,
+        "thermal": "Normal"
+      },
+      "response": "The theory of relativity is a fundamental concept that describes the effects of gravity at very small distances. It was developed by Albert Einstein in the early 20th century and explains how gravity and electromagnetism can be affected by moving objects.",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 10,
+      "question": "Describe the causes and consequences of World War I in a few sentences.",
+      "run_id": "run_10_1783463240696",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 448,
+        "ttft_ms": 527,
+        "tps": 29.247772,
+        "memory_kb": 787076,
+        "power_ma": 833.9,
+        "thermal": "Normal"
+      },
+      "response": "World War I was caused by a combination of factors including the assassination of Archduke Franz Ferdinand of Austria-Hungary by an unfriendly soldier, the escalating tensions between European powers, and the assassination of Archduke Franz Ferdinand's wife, Sophie, by her own husband, Giuseppe Mazzini. The war resulted in millions of deaths, widespread destruction, and the end of the Austro-Hungarian Empire. As a consequence, it marked the beginning of the end of the Cold War and the end of World War II.",
+      "error": null,
+      "context_reset": false
+    }
+  ],
+  "summary": {
+    "ttft_ms": {
+      "mean": 439.2,
+      "std": 37.682,
+      "min": 398,
+      "max": 527
+    },
+    "tps": {
+      "mean": 27.62,
+      "std": 6.973,
+      "min": 14.172712,
+      "max": 34.439686
+    },
+    "memory_kb": {
+      "mean": 770399.6,
+      "std": 23643.032,
+      "min": 726508,
+      "max": 801144
+    },
+    "power_ma": {
+      "mean": 846.09,
+      "std": 68.221,
+      "min": 777.3,
+      "max": 964.7
+    },
+    "thermal_states_observed": [
+      "Normal"
+    ],
+    "note": "TPS/TTFT drift across the run reflects real device thermal state as it heats up under sustained inference, not measurement error."
+  }
+}

@@ -1,0 +1,97 @@
+{
+  "run_info": {
+    "model": "qwen2.5-0.5b-instruct-q4_k_m.gguf",
+    "model_device_path": "/sdcard/Download/qwen2.5-0.5b-instruct-q4_k_m.gguf",
+    "device": "phone",
+    "quant": "Q4_K_M",
+    "start_time": "2026-07-07T17:30:26.438841+00:00",
+    "end_time": "2026-07-07T17:30:44.445433+00:00",
+    "total": 3,
+    "completed": 3,
+    "failed": 0,
+    "context_resets": 0
+  },
+  "results": [
+    {
+      "question_number": 1,
+      "question": "What is the capital of France?",
+      "run_id": "run_1_1783445426439",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 437,
+        "ttft_ms": 539,
+        "tps": 7.808047,
+        "memory_kb": 650340,
+        "power_ma": 560.2,
+        "thermal": "Normal"
+      },
+      "response": "The capital of France is Paris.",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 2,
+      "question": "What is the capital of Germany?",
+      "run_id": "run_2_1783445435134",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 468,
+        "ttft_ms": 555,
+        "tps": 7.819237,
+        "memory_kb": 672204,
+        "power_ma": 558.1,
+        "thermal": "Normal"
+      },
+      "response": "The capital of Germany is Berlin.",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 3,
+      "question": "What is the capital of Italy?",
+      "run_id": "run_3_1783445439889",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 486,
+        "ttft_ms": 532,
+        "tps": 11.180288,
+        "memory_kb": 680088,
+        "power_ma": 558.0,
+        "thermal": "Normal"
+      },
+      "response": "As of 2021, the capital of Italy is Rome.",
+      "error": null,
+      "context_reset": false
+    }
+  ],
+  "summary": {
+    "ttft_ms": {
+      "mean": 542,
+      "std": 9.626,
+      "min": 532,
+      "max": 555
+    },
+    "tps": {
+      "mean": 8.936,
+      "std": 1.587,
+      "min": 7.808047,
+      "max": 11.180288
+    },
+    "memory_kb": {
+      "mean": 667544,
+      "std": 12583.655,
+      "min": 650340,
+      "max": 680088
+    },
+    "power_ma": {
+      "mean": 558.767,
+      "std": 1.014,
+      "min": 558.0,
+      "max": 560.2
+    },
+    "thermal_states_observed": [
+      "Normal"
+    ],
+    "note": "TPS/TTFT drift across the run reflects real device thermal state as it heats up under sustained inference, not measurement error."
+  }
+}

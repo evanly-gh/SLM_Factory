@@ -1,16 +1,28 @@
+# Model files - too large for git, regenerable via convert_to_gguf.py
 *.gguf
 *.bin
 *.safetensors
+
+# Python
 __pycache__/
 .venv/
 .venv-monsoon/
 *.pyc
+
+# Downloaded HuggingFace model cache/snapshots
 **/Qwen__*/
 **/HuggingFaceTB__*/
 **/*.cache/
+
+# Output folders from model conversion
 Model-Conversion/output-*/
+Model-Conversion/
+*-hf-raw/
+
+# macOS
 .DS_Store
 
+# MNN
 MNN/
 mnn-benchmark-harness/mnn_models/
 mnn-benchmark-harness/__pycache__/
@@ -30,8 +42,8 @@ mnn-benchmark-harness/mnn_results.json
 mnn-benchmark-harness/needs_gguf_fallback.json
 mnn-benchmark-harness/full_pipeline_run.log
 mnn-benchmark-harness/stage1_check_mnn.json
-*-hf-raw/
-Model-Conversion/
+mnn-benchmark-harness/comparison_report.json
+mnn-benchmark-harness/comparison_report_s23.json
 MobileAI/
 SmolChat-Android/
 llama.cpp-test/
@@ -53,8 +65,6 @@ subset_fp16_test.json
 verify_retry_10_math.json
 gemma3-270m-official-mnn/
 subset_retry_confirm.json
-mnn-benchmark-harness/comparison_report.json
-mnn-benchmark-harness/comparison_report_s23.json
 subset_s23_sanity.json
 eos_test_6_questions.txt
 gemma3-270m-fresh-test/
@@ -63,3 +73,8 @@ ner_3_questions.txt
 ner_agent_test_5q.txt
 ner_test_3_questions.txt
 paper_repro_prompt_*.txt
+
+# SmolChat / llama.cpp
+Benchmark-Harness/old_test_results/
+Benchmark-Harness/*.json
+!Benchmark-Harness/test_questions.txt

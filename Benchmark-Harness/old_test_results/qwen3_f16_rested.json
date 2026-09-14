@@ -1,0 +1,255 @@
+{
+  "run_info": {
+    "model": "qwen3-0.6b-f16.gguf",
+    "model_device_path": "/sdcard/Android/data/io.shubham0204.smollmandroid/files/qwen3-0.6b-f16.gguf",
+    "device": "phone",
+    "quant": "Q4_K_M",
+    "start_time": "2026-07-21T02:32:31.021774+00:00",
+    "end_time": "2026-07-21T02:39:01.299103+00:00",
+    "total": 10,
+    "completed": 10,
+    "failed": 0,
+    "context_resets": 0,
+    "battery_warning": false,
+    "battery_level_pct": 93,
+    "battery_status": "Not charging",
+    "rebooted_before_run": false,
+    "cold_load_note": "cold_load_ms reflects a genuinely cold read only if --reboot-before was used for this run. Without a reboot, the OS file cache may make cold_load_ms appear faster than a true cold read from storage, especially for larger model files."
+  },
+  "results": [
+    {
+      "question_number": 1,
+      "question": "What is the capital of France?",
+      "run_id": "run_1_1784601151022",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 619,
+        "ttft_ms": 1562,
+        "tps": 8.8879795,
+        "memory_kb": 2008400,
+        "power_ma": 20.2,
+        "thermal": "Normal",
+        "thermal_temp_cpu_c": 47.8,
+        "thermal_temp_skin_c": 35.9
+      },
+      "response": "<think>",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 2,
+      "question": "Who wrote Romeo and Juliet?",
+      "run_id": "run_2_1784601172551",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 626,
+        "ttft_ms": 1666,
+        "tps": 9.37508,
+        "memory_kb": 2016716,
+        "power_ma": 3.0,
+        "thermal": "Normal",
+        "thermal_temp_cpu_c": 49.4,
+        "thermal_temp_skin_c": 36.3
+      },
+      "response": "<think>",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 3,
+      "question": "What is the chemical symbol for gold?",
+      "run_id": "run_3_1784601193897",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 643,
+        "ttft_ms": 1545,
+        "tps": 9.055287,
+        "memory_kb": 2021308,
+        "power_ma": 3.0,
+        "thermal": "Normal",
+        "thermal_temp_cpu_c": 49.8,
+        "thermal_temp_skin_c": 36.7
+      },
+      "response": "<think>",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 4,
+      "question": "What is the largest planet in our solar system?",
+      "run_id": "run_4_1784601209362",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 651,
+        "ttft_ms": 1818,
+        "tps": 8.97445,
+        "memory_kb": 2021940,
+        "power_ma": 12.1,
+        "thermal": "Normal",
+        "thermal_temp_cpu_c": 51.3,
+        "thermal_temp_skin_c": 38.0
+      },
+      "response": "<think>",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 5,
+      "question": "What year did the first human land on the moon?",
+      "run_id": "run_5_1784601240257",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 632,
+        "ttft_ms": 1763,
+        "tps": 8.510396,
+        "memory_kb": 2021820,
+        "power_ma": 15.7,
+        "thermal": "Normal",
+        "thermal_temp_cpu_c": 52.1,
+        "thermal_temp_skin_c": 39.2
+      },
+      "response": "<think>",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 6,
+      "question": "What are the three states of matter?",
+      "run_id": "run_6_1784601278308",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 668,
+        "ttft_ms": 1550,
+        "tps": 8.394188,
+        "memory_kb": 2046696,
+        "power_ma": 5.5,
+        "thermal": "Normal",
+        "thermal_temp_cpu_c": 53.2,
+        "thermal_temp_skin_c": 40.2
+      },
+      "response": "<think>",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 7,
+      "question": "How does a refrigerator keep food cold?",
+      "run_id": "run_7_1784601318851",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 661,
+        "ttft_ms": 1648,
+        "tps": 8.342717,
+        "memory_kb": 2033992,
+        "power_ma": 7.0,
+        "thermal": "Normal",
+        "thermal_temp_cpu_c": 54.8,
+        "thermal_temp_skin_c": 41.5
+      },
+      "response": "<think>",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 8,
+      "question": "Explain the process of photosynthesis in plants.",
+      "run_id": "run_8_1784601370588",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 656,
+        "ttft_ms": 1644,
+        "tps": 6.7742486,
+        "memory_kb": 2021896,
+        "power_ma": 5.3,
+        "thermal": "Normal",
+        "thermal_temp_cpu_c": 57.1,
+        "thermal_temp_skin_c": 43.8
+      },
+      "response": "<think>",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 9,
+      "question": "Summarize the theory of relativity in simple terms.",
+      "run_id": "run_9_1784601472944",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 655,
+        "ttft_ms": 1828,
+        "tps": 8.154217,
+        "memory_kb": 2045756,
+        "power_ma": 5.0,
+        "thermal": "Normal",
+        "thermal_temp_cpu_c": 57.9,
+        "thermal_temp_skin_c": 44.5
+      },
+      "response": "<think>",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 10,
+      "question": "Describe the causes and consequences of World War I in a few sentences.",
+      "run_id": "run_10_1784601517486",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 660,
+        "ttft_ms": 2075,
+        "tps": 8.970866,
+        "memory_kb": 2057776,
+        "power_ma": 13.8,
+        "thermal": "Normal",
+        "thermal_temp_cpu_c": 58.3,
+        "thermal_temp_skin_c": 44.6
+      },
+      "response": "<think>",
+      "error": null,
+      "context_reset": false
+    }
+  ],
+  "summary": {
+    "ttft_ms": {
+      "mean": 1709.9,
+      "std": 156.999,
+      "min": 1545,
+      "max": 2075
+    },
+    "tps": {
+      "mean": 8.544,
+      "std": 0.692,
+      "min": 6.7742486,
+      "max": 9.37508
+    },
+    "memory_kb": {
+      "mean": 2029630,
+      "std": 14930.531,
+      "min": 2008400,
+      "max": 2057776
+    },
+    "power_ma": {
+      "mean": 9.06,
+      "std": 5.665,
+      "min": 3.0,
+      "max": 20.2
+    },
+    "thermal_temp_cpu_c": {
+      "mean": 53.17,
+      "std": 3.547,
+      "min": 47.8,
+      "max": 58.3
+    },
+    "thermal_temp_skin_c": {
+      "mean": 40.07,
+      "std": 3.227,
+      "min": 35.9,
+      "max": 44.6
+    },
+    "first_question_cold_load_ms": 619,
+    "thermal_states_observed": [
+      "Normal"
+    ],
+    "note": "TPS/TTFT drift across the run reflects real device thermal state as it heats up under sustained inference, not measurement error.",
+    "rss_note": "peak_RSS_KB is only directly comparable across different models if each was benchmarked in a freshly restarted app process - this script now guarantees that automatically as of this version."
+  }
+}

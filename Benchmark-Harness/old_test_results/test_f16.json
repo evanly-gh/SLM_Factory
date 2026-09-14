@@ -1,0 +1,216 @@
+{
+  "run_info": {
+    "model": "qwen2.5-0.5b-instruct-f16.gguf",
+    "model_device_path": "/sdcard/Download/qwen2.5-0.5b-instruct-f16.gguf",
+    "device": "phone",
+    "quant": "Q4_K_M",
+    "start_time": "2026-07-07T22:32:12.224737+00:00",
+    "end_time": "2026-07-07T22:34:33.191971+00:00",
+    "total": 10,
+    "completed": 10,
+    "failed": 0,
+    "context_resets": 0
+  },
+  "results": [
+    {
+      "question_number": 1,
+      "question": "What is the capital of France?",
+      "run_id": "run_1_1783463532226",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 994,
+        "ttft_ms": 1022,
+        "tps": 5.2037334,
+        "memory_kb": 1579268,
+        "power_ma": 882.4,
+        "thermal": "Normal"
+      },
+      "response": "The capital of France is Paris.",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 2,
+      "question": "Who wrote Romeo and Juliet?",
+      "run_id": "run_2_1783463536981",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 474,
+        "ttft_ms": 1090,
+        "tps": 15.225065,
+        "memory_kb": 1588640,
+        "power_ma": 865.2,
+        "thermal": "Normal"
+      },
+      "response": "\"Romeo and Juliet\" is a play written by William Shakespeare. It was first performed in 1595, and it has remained in print and widely performed ever since. The play is set in the early 1590s in the city of London, in a city where the English Wars of the Roses were taking place. The story revolves around the love of two young lovers, one named Romeo and the other Juliet, who are in love with each other but are also in love with their respective families and with one another at the same time. The play explores themes of love, betrayal, and grief, as well as the lengths to which people will go to obtain their desires.",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 3,
+      "question": "What is the chemical symbol for gold?",
+      "run_id": "run_3_1783463550401",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 467,
+        "ttft_ms": 1014,
+        "tps": 5.7268314,
+        "memory_kb": 1606448,
+        "power_ma": 876.2,
+        "thermal": "Normal"
+      },
+      "response": "The chemical symbol for gold is Au.",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 4,
+      "question": "What is the largest planet in our solar system?",
+      "run_id": "run_4_1783463555202",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 478,
+        "ttft_ms": 1197,
+        "tps": 12.131002,
+        "memory_kb": 1613480,
+        "power_ma": 874.8,
+        "thermal": "Normal"
+      },
+      "response": "The largest planet in our solar system is Jupiter. It is the sixth planet from the Sun, the second largest planet in the solar system after Mars. It is known for its large size, color, and mass.",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 5,
+      "question": "What year did the first human land on the moon?",
+      "run_id": "run_5_1783463562397",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 478,
+        "ttft_ms": 1156,
+        "tps": 8.599678,
+        "memory_kb": 1627488,
+        "power_ma": 872.7,
+        "thermal": "Normal"
+      },
+      "response": "The first human landed on the Moon on July 20, 1969.",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 6,
+      "question": "What are the three states of matter?",
+      "run_id": "run_6_1783463568387",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 467,
+        "ttft_ms": 1026,
+        "tps": 14.004659,
+        "memory_kb": 1633560,
+        "power_ma": 870.7,
+        "thermal": "Normal"
+      },
+      "response": "Three states of matter are:",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 7,
+      "question": "How does a refrigerator keep food cold?",
+      "run_id": "run_7_1783463576879",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 466,
+        "ttft_ms": 1087,
+        "tps": 15.7919035,
+        "memory_kb": 1641176,
+        "power_ma": 865.5,
+        "thermal": "Normal"
+      },
+      "response": "A refrigerator keeps food cold by using a process called refrigeration. Here's how it works:",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 8,
+      "question": "Explain the process of photosynthesis in plants.",
+      "run_id": "run_8_1783463600885",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 478,
+        "ttft_ms": 1088,
+        "tps": 15.824132,
+        "memory_kb": 1642152,
+        "power_ma": 860.3,
+        "thermal": "Normal"
+      },
+      "response": "Photosynthesis is the process by which plants convert light energy into chemical energy, which they use for growth and survival. It is the primary source of energy for most life on Earth and has played a crucial role in shaping the development of life as we know it.",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 9,
+      "question": "Summarize the theory of relativity in simple terms.",
+      "run_id": "run_9_1783463621449",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 477,
+        "ttft_ms": 1195,
+        "tps": 16.071362,
+        "memory_kb": 1669332,
+        "power_ma": 855.2,
+        "thermal": "Normal"
+      },
+      "response": "The theory of relativity, also known as the theory of general relativity or the theory of spacetime, is a fundamental theory in physics that describes the relationship between the laws of nature and the properties of space and time. It explains the behavior of objects and events in the universe, including the way they appear to us from different points of view.",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 10,
+      "question": "Describe the causes and consequences of World War I in a few sentences.",
+      "run_id": "run_10_1783463650267",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 466,
+        "ttft_ms": 1376,
+        "tps": 15.158366,
+        "memory_kb": 1672228,
+        "power_ma": 842.8,
+        "thermal": "Normal"
+      },
+      "response": "World War I was caused by a mix of factors including:",
+      "error": null,
+      "context_reset": false
+    }
+  ],
+  "summary": {
+    "ttft_ms": {
+      "mean": 1125.1,
+      "std": 105.269,
+      "min": 1014,
+      "max": 1376
+    },
+    "tps": {
+      "mean": 12.374,
+      "std": 4.071,
+      "min": 5.2037334,
+      "max": 16.071362
+    },
+    "memory_kb": {
+      "mean": 1627377.2,
+      "std": 29436.321,
+      "min": 1579268,
+      "max": 1672228
+    },
+    "power_ma": {
+      "mean": 866.58,
+      "std": 10.965,
+      "min": 842.8,
+      "max": 882.4
+    },
+    "thermal_states_observed": [
+      "Normal"
+    ],
+    "note": "TPS/TTFT drift across the run reflects real device thermal state as it heats up under sustained inference, not measurement error."
+  }
+}

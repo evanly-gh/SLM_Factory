@@ -1,0 +1,116 @@
+{
+  "run_info": {
+    "model": "qwen2.5-0.5b-instruct-q4_k_m.gguf",
+    "model_device_path": "/sdcard/Android/data/io.shubham0204.smollmandroid/files/qwen2.5-0.5b-instruct-q4_k_m.gguf",
+    "device": "phone",
+    "quant": "Q4_K_M",
+    "start_time": "2026-07-18T19:56:51.682818+00:00",
+    "end_time": "2026-07-18T19:58:06.744494+00:00",
+    "total": 3,
+    "completed": 2,
+    "failed": 1,
+    "context_resets": 0,
+    "battery_warning": true,
+    "battery_level_pct": 91,
+    "battery_status": "Charging",
+    "rebooted_before_run": false,
+    "cold_load_note": "cold_load_ms reflects a genuinely cold read only if --reboot-before was used for this run. Without a reboot, the OS file cache may make cold_load_ms appear faster than a true cold read from storage, especially for larger model files."
+  },
+  "results": [
+    {
+      "question_number": 1,
+      "question": "What is the capital of France?",
+      "run_id": "run_1_1784404611683",
+      "status": "failed",
+      "metrics": null,
+      "response": null,
+      "error": {
+        "reason": "timeout",
+        "message": "No RUN_DONE/RUN_ERROR within 60s"
+      },
+      "context_reset": false
+    },
+    {
+      "question_number": 2,
+      "question": "What is the capital of Germany?",
+      "run_id": "run_2_1784404674162",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 543,
+        "ttft_ms": 751,
+        "tps": 6.175677,
+        "memory_kb": 722040,
+        "power_ma": 800.9,
+        "thermal": "Normal",
+        "thermal_temp_cpu_c": 37.4,
+        "thermal_temp_skin_c": 33.5
+      },
+      "response": "The capital of Germany is Berlin.",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 3,
+      "question": "What is the capital of Italy?",
+      "run_id": "run_3_1784404679300",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 523,
+        "ttft_ms": 728,
+        "tps": 11.704716,
+        "memory_kb": 732128,
+        "power_ma": 799.5,
+        "thermal": "Normal",
+        "thermal_temp_cpu_c": 41.3,
+        "thermal_temp_skin_c": 33.7
+      },
+      "response": "The capital city of Italy is Rome. It is the largest city and the largest metropolitan area in the European Union. Rome covers an area of approximately 2,013 square kilometers and is the most populous city in Italy.",
+      "error": null,
+      "context_reset": false
+    }
+  ],
+  "summary": {
+    "ttft_ms": {
+      "mean": 739.5,
+      "std": 11.5,
+      "min": 728,
+      "max": 751
+    },
+    "tps": {
+      "mean": 8.94,
+      "std": 2.765,
+      "min": 6.175677,
+      "max": 11.704716
+    },
+    "memory_kb": {
+      "mean": 727084,
+      "std": 5044.0,
+      "min": 722040,
+      "max": 732128
+    },
+    "power_ma": {
+      "mean": 800.2,
+      "std": 0.7,
+      "min": 799.5,
+      "max": 800.9
+    },
+    "thermal_temp_cpu_c": {
+      "mean": 39.35,
+      "std": 1.95,
+      "min": 37.4,
+      "max": 41.3
+    },
+    "thermal_temp_skin_c": {
+      "mean": 33.6,
+      "std": 0.1,
+      "min": 33.5,
+      "max": 33.7
+    },
+    "first_question_cold_load_ms": null,
+    "thermal_states_observed": [
+      "Normal"
+    ],
+    "note": "TPS/TTFT drift across the run reflects real device thermal state as it heats up under sustained inference, not measurement error.",
+    "rss_note": "peak_RSS_KB is only directly comparable across different models if each was benchmarked in a freshly restarted app process - this script now guarantees that automatically as of this version."
+  }
+}

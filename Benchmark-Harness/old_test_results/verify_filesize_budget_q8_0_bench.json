@@ -1,0 +1,255 @@
+{
+  "run_info": {
+    "model": "qwen2.5-0.5b-instruct-q8_0.gguf",
+    "model_device_path": "/sdcard/Android/data/io.shubham0204.smollmandroid/files/qwen2.5-0.5b-instruct-q8_0.gguf",
+    "device": "phone",
+    "quant": "Q4_K_M",
+    "start_time": "2026-07-17T16:55:26.522055+00:00",
+    "end_time": "2026-07-17T16:57:24.050404+00:00",
+    "total": 10,
+    "completed": 10,
+    "failed": 0,
+    "context_resets": 0,
+    "battery_warning": true,
+    "battery_level_pct": 90,
+    "battery_status": "Charging",
+    "rebooted_before_run": false,
+    "cold_load_note": "cold_load_ms reflects a genuinely cold read only if --reboot-before was used for this run. Without a reboot, the OS file cache may make cold_load_ms appear faster than a true cold read from storage, especially for larger model files."
+  },
+  "results": [
+    {
+      "question_number": 1,
+      "question": "What is the capital of France?",
+      "run_id": "run_1_1784307326522",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 443,
+        "ttft_ms": 408,
+        "tps": 10.220067,
+        "memory_kb": 802580,
+        "power_ma": 831.0,
+        "thermal": "Normal",
+        "thermal_temp_cpu_c": 42.4,
+        "thermal_temp_skin_c": 36.4
+      },
+      "response": "The capital of France is Paris.",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 2,
+      "question": "Who wrote Romeo and Juliet?",
+      "run_id": "run_2_1784307331323",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 477,
+        "ttft_ms": 438,
+        "tps": 16.349844,
+        "memory_kb": 826128,
+        "power_ma": 831.6,
+        "thermal": "Normal",
+        "thermal_temp_cpu_c": 49.4,
+        "thermal_temp_skin_c": 36.5
+      },
+      "response": "Romeo and Juliet was written by William Shakespeare. He was an English playwright who lived from 1564 to 1616. Shakespeare wrote tragedies, comedies, and histories, and he is considered one of the greatest playwrights in the history of the English language. The play was first performed on 23 August 1597, in the Shakespeare Theatre in Stratford-upon-Avon.",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 3,
+      "question": "What is the chemical symbol for gold?",
+      "run_id": "run_3_1784307339867",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 491,
+        "ttft_ms": 405,
+        "tps": 10.9968815,
+        "memory_kb": 833940,
+        "power_ma": 828.4,
+        "thermal": "Normal",
+        "thermal_temp_cpu_c": 42.4,
+        "thermal_temp_skin_c": 36.5
+      },
+      "response": "The chemical symbol for gold is Au.",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 4,
+      "question": "What is the largest planet in our solar system?",
+      "run_id": "run_4_1784307344762",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 510,
+        "ttft_ms": 474,
+        "tps": 16.838673,
+        "memory_kb": 820528,
+        "power_ma": 830.9,
+        "thermal": "Normal",
+        "thermal_temp_cpu_c": 49.8,
+        "thermal_temp_skin_c": 36.4
+      },
+      "response": "The largest planet in our solar system is Jupiter, which is also known as the \"Jupiter family\". It is the seventh planet from the sun, after Mercury, Venus, Earth, Mars, and Saturn. Jupiter is larger than any other planet in our solar system, with a diameter of about 142,884 miles (228,413 kilometers). It is a gas giant, made up mostly of hydrogen and helium, with a minimum density of 1.7 g/cm\u00b3. The size and composition of Jupiter have been the subject of many scientific studies and theories about the birth of the solar system.",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 5,
+      "question": "What year did the first human land on the moon?",
+      "run_id": "run_5_1784307355733",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 516,
+        "ttft_ms": 463,
+        "tps": 16.839788,
+        "memory_kb": 843184,
+        "power_ma": 830.9,
+        "thermal": "Normal",
+        "thermal_temp_cpu_c": 50.9,
+        "thermal_temp_skin_c": 36.7
+      },
+      "response": "The first humans to land on the Moon were Neil Armstrong, Buzz Aldrin, and Michael Collins, on July 20, 1969.",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 6,
+      "question": "What are the three states of matter?",
+      "run_id": "run_6_1784307368007",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 526,
+        "ttft_ms": 399,
+        "tps": 16.37172,
+        "memory_kb": 849236,
+        "power_ma": 830.5,
+        "thermal": "Normal",
+        "thermal_temp_cpu_c": 50.2,
+        "thermal_temp_skin_c": 36.8
+      },
+      "response": "Three states of matter are:",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 7,
+      "question": "How does a refrigerator keep food cold?",
+      "run_id": "run_7_1784307376550",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 521,
+        "ttft_ms": 423,
+        "tps": 16.760023,
+        "memory_kb": 852324,
+        "power_ma": 830.9,
+        "thermal": "Normal",
+        "thermal_temp_cpu_c": 51.3,
+        "thermal_temp_skin_c": 37.3
+      },
+      "response": "A refrigerator is a device used for maintaining the temperature of food from its initial storage to when it may be consumed. Its primary function is to keep food cold, which is achieved through several mechanisms:",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 8,
+      "question": "Explain the process of photosynthesis in plants.",
+      "run_id": "run_8_1784307392290",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 525,
+        "ttft_ms": 420,
+        "tps": 16.491346,
+        "memory_kb": 853428,
+        "power_ma": 831.2,
+        "thermal": "Normal",
+        "thermal_temp_cpu_c": 52.5,
+        "thermal_temp_skin_c": 38.0
+      },
+      "response": "Photosynthesis is the process by which plants produce energy through the process of combining carbon dioxide (CO2) and water (H2O) in the absence of sunlight. The process is also called the light-dependent reactions or Calvin cycle. Here's the step-by-step process of photosynthesis in plants:",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 9,
+      "question": "Summarize the theory of relativity in simple terms.",
+      "run_id": "run_9_1784307412837",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 524,
+        "ttft_ms": 463,
+        "tps": 16.763374,
+        "memory_kb": 861264,
+        "power_ma": 831.0,
+        "thermal": "Normal",
+        "thermal_temp_cpu_c": 53.2,
+        "thermal_temp_skin_c": 38.3
+      },
+      "response": "The theory of relativity is a set of fundamental principles that describe the behavior of objects and systems in the presence of gravity. These principles, which were proposed by Albert Einstein in the 1900s, include:",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 10,
+      "question": "Describe the causes and consequences of World War I in a few sentences.",
+      "run_id": "run_10_1784307429671",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 526,
+        "ttft_ms": 526,
+        "tps": 17.058975,
+        "memory_kb": 866732,
+        "power_ma": 831.2,
+        "thermal": "Normal",
+        "thermal_temp_cpu_c": 53.2,
+        "thermal_temp_skin_c": 38.6
+      },
+      "response": "World War I was caused by the combination of four major factors:",
+      "error": null,
+      "context_reset": false
+    }
+  ],
+  "summary": {
+    "ttft_ms": {
+      "mean": 441.9,
+      "std": 37.679,
+      "min": 399,
+      "max": 526
+    },
+    "tps": {
+      "mean": 15.469,
+      "std": 2.446,
+      "min": 10.220067,
+      "max": 17.058975
+    },
+    "memory_kb": {
+      "mean": 840934.4,
+      "std": 18958.458,
+      "min": 802580,
+      "max": 866732
+    },
+    "power_ma": {
+      "mean": 830.76,
+      "std": 0.831,
+      "min": 828.4,
+      "max": 831.6
+    },
+    "thermal_temp_cpu_c": {
+      "mean": 49.53,
+      "std": 3.781,
+      "min": 42.4,
+      "max": 53.2
+    },
+    "thermal_temp_skin_c": {
+      "mean": 37.15,
+      "std": 0.804,
+      "min": 36.4,
+      "max": 38.6
+    },
+    "first_question_cold_load_ms": 443,
+    "thermal_states_observed": [
+      "Normal"
+    ],
+    "note": "TPS/TTFT drift across the run reflects real device thermal state as it heats up under sustained inference, not measurement error.",
+    "rss_note": "peak_RSS_KB is only directly comparable across different models if each was benchmarked in a freshly restarted app process - this script now guarantees that automatically as of this version."
+  }
+}

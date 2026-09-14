@@ -1,0 +1,216 @@
+{
+  "run_info": {
+    "model": "qwen2.5-0.5b-instruct-q8_0.gguf",
+    "model_device_path": "/sdcard/Download/qwen2.5-0.5b-instruct-q8_0.gguf",
+    "device": "phone",
+    "quant": "Q4_K_M",
+    "start_time": "2026-07-07T22:30:46.996015+00:00",
+    "end_time": "2026-07-07T22:32:01.531793+00:00",
+    "total": 10,
+    "completed": 10,
+    "failed": 0,
+    "context_resets": 0
+  },
+  "results": [
+    {
+      "question_number": 1,
+      "question": "What is the capital of France?",
+      "run_id": "run_1_1783463446997",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 449,
+        "ttft_ms": 296,
+        "tps": 15.007354,
+        "memory_kb": 1068216,
+        "power_ma": 898.4,
+        "thermal": "Normal"
+      },
+      "response": "France's capital is Paris.",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 2,
+      "question": "Who wrote Romeo and Juliet?",
+      "run_id": "run_2_1783463450434",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 460,
+        "ttft_ms": 303,
+        "tps": 32.940628,
+        "memory_kb": 1065716,
+        "power_ma": 776.2,
+        "thermal": "Normal"
+      },
+      "response": "The story of Romeo and Juliet was written by William Shakespeare. He was an English playwright and poet who lived from 1564 to 1616. The play was premiered in 1599, and it is considered one of the greatest tragedies in the English language. It is based on a poetic and tragic love story set in Renaissance Italy.",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 3,
+      "question": "What is the chemical symbol for gold?",
+      "run_id": "run_3_1783463456481",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 454,
+        "ttft_ms": 281,
+        "tps": 18.3342,
+        "memory_kb": 1077124,
+        "power_ma": 899.0,
+        "thermal": "Normal"
+      },
+      "response": "The chemical symbol for gold is Au.",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 4,
+      "question": "What is the largest planet in our solar system?",
+      "run_id": "run_4_1783463460154",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 460,
+        "ttft_ms": 322,
+        "tps": 30.553593,
+        "memory_kb": 1093748,
+        "power_ma": 833.8,
+        "thermal": "Normal"
+      },
+      "response": "The largest planet in our solar system is Jupiter. It has a diameter of 11 times that of Earth and contains a mass comparable to that of the other eight planets combined. Jupiter is known for its vast exoplanet system, including 79 Jupiter mass planets. It is also known for its more prominent rings and moons, which are believed to have been formed by collisions with smaller moons.",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 5,
+      "question": "What year did the first human land on the moon?",
+      "run_id": "run_5_1783463466439",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 454,
+        "ttft_ms": 329,
+        "tps": 32.919132,
+        "memory_kb": 1105672,
+        "power_ma": 841.1,
+        "thermal": "Normal"
+      },
+      "response": "The first human land on the Moon was achieved on July 20, 1969, by the Soviet Union's Luna 3 probe. It is important to note that the Moon was not yet completely explored at the time of its landing, and the first humans to walk on the Moon were Neil Armstrong and Buzz Aldrin.",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 6,
+      "question": "What are the three states of matter?",
+      "run_id": "run_6_1783463472679",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 448,
+        "ttft_ms": 285,
+        "tps": 23.005104,
+        "memory_kb": 1104108,
+        "power_ma": 886.7,
+        "thermal": "Normal"
+      },
+      "response": "The three states of matter are liquid, gas, and solid.",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 7,
+      "question": "How does a refrigerator keep food cold?",
+      "run_id": "run_7_1783463476253",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 458,
+        "ttft_ms": 305,
+        "tps": 32.045284,
+        "memory_kb": 1113552,
+        "power_ma": 800.3,
+        "thermal": "Normal"
+      },
+      "response": "A refrigerator works by causing air to circulate inside the machine, which helps to increase the temperature of the food beyond that of the surrounding air. This temperature increase is known as \"freeze point\" and it is maintained at around 3. 5 degrees Celsius.",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 8,
+      "question": "Explain the process of photosynthesis in plants.",
+      "run_id": "run_8_1783463486198",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 456,
+        "ttft_ms": 293,
+        "tps": 34.77235,
+        "memory_kb": 1123516,
+        "power_ma": 760.9,
+        "thermal": "Normal"
+      },
+      "response": "Photosynthesis is the process by which green plants use sunlight, water, and carbon dioxide to produce energy and oxygen. It takes place in the leaves of plants and consists of two main stages: the light-dependent reactions and the light-independent reactions.",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 9,
+      "question": "Summarize the theory of relativity in simple terms.",
+      "run_id": "run_9_1783463498454",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 460,
+        "ttft_ms": 325,
+        "tps": 33.80099,
+        "memory_kb": 1123484,
+        "power_ma": 771.2,
+        "thermal": "Normal"
+      },
+      "response": "The theory of relativity, also known as the general theory of relativity, is a set of theories proposed by Albert Einstein in the late 19th century. It describes gravity as a form of warping of spacetime caused by mass and energy.",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 10,
+      "question": "Describe the causes and consequences of World War I in a few sentences.",
+      "run_id": "run_10_1783463509452",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 456,
+        "ttft_ms": 372,
+        "tps": 32.39705,
+        "memory_kb": 1139740,
+        "power_ma": 740.0,
+        "thermal": "Normal"
+      },
+      "response": "World War I began as a conflict between the Central Powers, consisting of Germany, the Ottoman Empire, andry the Central Powers, and the Allied Powers. It began on September 1, 1914 and lasted until November 1918.",
+      "error": null,
+      "context_reset": false
+    }
+  ],
+  "summary": {
+    "ttft_ms": {
+      "mean": 311.1,
+      "std": 25.665,
+      "min": 281,
+      "max": 372
+    },
+    "tps": {
+      "mean": 28.578,
+      "std": 6.739,
+      "min": 15.007354,
+      "max": 34.77235
+    },
+    "memory_kb": {
+      "mean": 1101487.6,
+      "std": 23753.645,
+      "min": 1065716,
+      "max": 1139740
+    },
+    "power_ma": {
+      "mean": 820.76,
+      "std": 56.61,
+      "min": 740.0,
+      "max": 899.0
+    },
+    "thermal_states_observed": [
+      "Normal"
+    ],
+    "note": "TPS/TTFT drift across the run reflects real device thermal state as it heats up under sustained inference, not measurement error."
+  }
+}

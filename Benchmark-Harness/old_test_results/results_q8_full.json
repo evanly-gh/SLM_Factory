@@ -1,0 +1,216 @@
+{
+  "run_info": {
+    "model": "qwen2.5-0.5b-instruct-q8_0.gguf",
+    "model_device_path": "/sdcard/Download/qwen2.5-0.5b-instruct-q8_0.gguf",
+    "device": "phone",
+    "quant": "Q4_K_M",
+    "start_time": "2026-07-07T18:45:09.318848+00:00",
+    "end_time": "2026-07-07T18:46:32.244286+00:00",
+    "total": 10,
+    "completed": 10,
+    "failed": 0,
+    "context_resets": 0
+  },
+  "results": [
+    {
+      "question_number": 1,
+      "question": "What is the capital of France?",
+      "run_id": "run_1_1783449909319",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 584,
+        "ttft_ms": 379,
+        "tps": 13.304191,
+        "memory_kb": 1073568,
+        "power_ma": null,
+        "thermal": "Normal"
+      },
+      "response": "The capital of France is Paris.",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 2,
+      "question": "Who wrote Romeo and Juliet?",
+      "run_id": "run_2_1783449913061",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 579,
+        "ttft_ms": 398,
+        "tps": 30.466753,
+        "memory_kb": 1082296,
+        "power_ma": 8.1,
+        "thermal": "Normal"
+      },
+      "response": "\"The Renaissance was a period of great historical and cultural change that spanned the 14th to the 17th centuries of the Christian era. At the time, artists and thinkers were trying to capture the beauty and power of humanism, which emphasized the importance of human achievements and the human condition. At this time, the French painter, writer, and poet Jean-Paul Sartre wrote the play \"Romeo and Juliet\" in 1950.\"",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 3,
+      "question": "What is the chemical symbol for gold?",
+      "run_id": "run_3_1783449925096",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 585,
+        "ttft_ms": 373,
+        "tps": 14.456011,
+        "memory_kb": 1095768,
+        "power_ma": null,
+        "thermal": "Normal"
+      },
+      "response": "The chemical symbol for gold is Au.",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 4,
+      "question": "What is the largest planet in our solar system?",
+      "run_id": "run_4_1783449928553",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 581,
+        "ttft_ms": 448,
+        "tps": 21.04786,
+        "memory_kb": 1103888,
+        "power_ma": 129.6,
+        "thermal": "Normal"
+      },
+      "response": "The largest planet in our solar system is Jupiter. It is the second-largest planet in terms of mass and diameter, after Saturn.",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 5,
+      "question": "What year did the first human land on the moon?",
+      "run_id": "run_5_1783449933306",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 585,
+        "ttft_ms": 438,
+        "tps": 28.252037,
+        "memory_kb": 1114544,
+        "power_ma": null,
+        "thermal": "Normal"
+      },
+      "response": "The first human to land on the Moon was Neil Armstrong, who stepped foot on the surface of the lunar surface on July 20, 1969. The landing was a significant moment in human history and has since become a symbol of the potential for exploration and discovery in space.",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 6,
+      "question": "What are the three states of matter?",
+      "run_id": "run_6_1783449939386",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 579,
+        "ttft_ms": 377,
+        "tps": 29.331863,
+        "memory_kb": 1117312,
+        "power_ma": 64.8,
+        "thermal": "Normal"
+      },
+      "response": "Three states of matter are:",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 7,
+      "question": "How does a refrigerator keep food cold?",
+      "run_id": "run_7_1783449945413",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 594,
+        "ttft_ms": 399,
+        "tps": 31.26055,
+        "memory_kb": 1126400,
+        "power_ma": 8.1,
+        "thermal": "Normal"
+      },
+      "response": "A refrigerator works by controlling the temperature of air circulating within the fridge compartment. This temperature is known as the \"cooling cycle.\" Here's a step-by-step breakdown of how a refrigerator works:",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 8,
+      "question": "Explain the process of photosynthesis in plants.",
+      "run_id": "run_8_1783449957408",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 589,
+        "ttft_ms": 404,
+        "tps": 32.054188,
+        "memory_kb": 1139688,
+        "power_ma": null,
+        "thermal": "Normal"
+      },
+      "response": "Photosynthesis is the process by which plants and some other organisms convert light energy into chemical energy stored in the form of glucose. The process takes place in the chloroplasts of plant cells and involves the following steps:",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 9,
+      "question": "Summarize the theory of relativity in simple terms.",
+      "run_id": "run_9_1783449971709",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 581,
+        "ttft_ms": 440,
+        "tps": 31.897923,
+        "memory_kb": 1141280,
+        "power_ma": 7.2,
+        "thermal": "Normal"
+      },
+      "response": "The theory of relativity is a set of scientific theories developed by Albert Einstein in the early 20th century. They describe the properties and behavior of matter in the universe, and they revolutionized our understanding of the physical world.",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 10,
+      "question": "Describe the causes and consequences of World War I in a few sentences.",
+      "run_id": "run_10_1783449984912",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 589,
+        "ttft_ms": 520,
+        "tps": 28.809484,
+        "memory_kb": 1151156,
+        "power_ma": 21.6,
+        "thermal": "Normal"
+      },
+      "response": "World War I (1914-1918) was caused by a combination of factors, including militarism, nationalism, imperialism, and the desire for global domination. The war resulted in a catastrophic loss of life and destruction, with over 10 million casualties, over 22 million refugees, and economic havoc. The war's consequences extended far beyond its initial borders, affecting political, economic, and social structures around the world.",
+      "error": null,
+      "context_reset": false
+    }
+  ],
+  "summary": {
+    "ttft_ms": {
+      "mean": 417.6,
+      "std": 42.861,
+      "min": 373,
+      "max": 520
+    },
+    "tps": {
+      "mean": 26.088,
+      "std": 6.797,
+      "min": 13.304191,
+      "max": 32.054188
+    },
+    "memory_kb": {
+      "mean": 1114590,
+      "std": 24537.182,
+      "min": 1073568,
+      "max": 1151156
+    },
+    "power_ma": {
+      "mean": 39.9,
+      "std": 44.894,
+      "min": 7.2,
+      "max": 129.6
+    },
+    "thermal_states_observed": [
+      "Normal"
+    ],
+    "note": "TPS/TTFT drift across the run reflects real device thermal state as it heats up under sustained inference, not measurement error."
+  }
+}

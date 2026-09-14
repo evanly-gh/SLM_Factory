@@ -1,0 +1,220 @@
+{
+  "run_info": {
+    "model": "qwen2.5-0.5b-instruct-q4_k_m.gguf",
+    "model_device_path": "/sdcard/Download/qwen2.5-0.5b-instruct-q4_k_m.gguf",
+    "device": "phone",
+    "quant": "Q4_K_M",
+    "start_time": "2026-07-08T03:32:08.683527+00:00",
+    "end_time": "2026-07-08T03:33:43.809647+00:00",
+    "total": 10,
+    "completed": 10,
+    "failed": 0,
+    "context_resets": 0,
+    "battery_warning": true,
+    "battery_level_pct": 94,
+    "battery_status": "Charging"
+  },
+  "results": [
+    {
+      "question_number": 1,
+      "question": "What is the capital of France?",
+      "run_id": "run_1_1783481528683",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 474,
+        "ttft_ms": 502,
+        "tps": 9.414195,
+        "memory_kb": 741932,
+        "power_ma": 633.3,
+        "thermal": "Normal"
+      },
+      "response": "The capital of France is Paris.",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 2,
+      "question": "Who wrote Romeo and Juliet?",
+      "run_id": "run_2_1783481555757",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 443,
+        "ttft_ms": 447,
+        "tps": 16.086588,
+        "memory_kb": 760432,
+        "power_ma": 633.0,
+        "thermal": "Normal"
+      },
+      "response": "Romeo and Juliet is a play by William Shakespeare.",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 3,
+      "question": "What is the chemical symbol for gold?",
+      "run_id": "run_3_1783481560049",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 443,
+        "ttft_ms": 435,
+        "tps": 13.207749,
+        "memory_kb": 774964,
+        "power_ma": 627.7,
+        "thermal": "Normal"
+      },
+      "response": "The chemical symbol for gold is Au.",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 4,
+      "question": "What is the largest planet in our solar system?",
+      "run_id": "run_4_1783481564320",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 441,
+        "ttft_ms": 490,
+        "tps": 30.044865,
+        "memory_kb": 743584,
+        "power_ma": 592.7,
+        "thermal": "Normal"
+      },
+      "response": "It is currently the Uranus, the sixth planet from the sun, which is in the outer regions of our solar system. However, it's important to note that this is not the largest planet in our solar system. The four inner planets are the Earth, Mars, Jupiter, and Saturn, with the largest of these being the Earth at an average distance of about 147 million miles (238 million kilometers) from the sun. The planet Pluto, which was once considered to be part of the inner solar system, is now classified as a dwarf planet and is approximately 39 times further from the sun than the Earth.",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 5,
+      "question": "What year did the first human land on the moon?",
+      "run_id": "run_5_1783481571882",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 448,
+        "ttft_ms": 506,
+        "tps": 26.950909,
+        "memory_kb": 761020,
+        "power_ma": 612.3,
+        "thermal": "Normal"
+      },
+      "response": "The first human landed on the Moon in 1969. Specifically, that event was known as Eagle Touchdown, which occurred about 28 days after the spacecraft's launch.",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 6,
+      "question": "What are the three states of matter?",
+      "run_id": "run_6_1783481576238",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 452,
+        "ttft_ms": 413,
+        "tps": 32.278442,
+        "memory_kb": 779920,
+        "power_ma": 589.6,
+        "thermal": "Normal"
+      },
+      "response": "Three states of matter are:",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 7,
+      "question": "How does a refrigerator keep food cold?",
+      "run_id": "run_7_1783481582729",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 443,
+        "ttft_ms": 426,
+        "tps": 31.001778,
+        "memory_kb": 768140,
+        "power_ma": 541.6,
+        "thermal": "Normal"
+      },
+      "response": "A refrigerator works by removing the heat from the food and keeping it cold. The design of a refrigerator has several features that facilitate its cooling function:",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 8,
+      "question": "Explain the process of photosynthesis in plants.",
+      "run_id": "run_8_1783481596880",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 441,
+        "ttft_ms": 425,
+        "tps": 30.4256,
+        "memory_kb": 765268,
+        "power_ma": 534.7,
+        "thermal": "Normal"
+      },
+      "response": "Photosynthesis is the process by which plants use sunlight, water, and carbon dioxide to produce glucose and oxygen. It occurs in the chloroplasts of plant cells.",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 9,
+      "question": "Summarize the theory of relativity in simple terms.",
+      "run_id": "run_9_1783481606629",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 444,
+        "ttft_ms": 467,
+        "tps": 33.185825,
+        "memory_kb": 786604,
+        "power_ma": 525.1,
+        "thermal": "Normal"
+      },
+      "response": "The theory of relativity is a set of theories proposed by Albert Einstein in the 20th century. It proposes that time and space are inextricably linked to mass and energy, and that the speed of light in a vacuum is constant, known as the speed of light in a vacuum. This theory suggests that the laws of physics are the same for all observers, regardless of their relative motion, and that time and space are not absolute but are measured in terms of relative motion. It also suggests that mass and energy can be converted into each other, and that light has a velocity that is independent of its source. Finally, it suggests that gravity is not the result of the force of gravity but is a consequence of the curvature of spacetime.",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 10,
+      "question": "Describe the causes and consequences of World War I in a few sentences.",
+      "run_id": "run_10_1783481614138",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 443,
+        "ttft_ms": 528,
+        "tps": 32.142742,
+        "memory_kb": 821604,
+        "power_ma": 516.7,
+        "thermal": "Normal"
+      },
+      "response": "World War I was caused by a complex interplay of factors, initially driven by tensions in Europe and Asia, and later by the global expansion of Germany and Austria-Hungary. The initial causes included a combination of economic and political factors, including war debts, territorial disputes, and tensions between European powers. The causes of World War I also included social and economic issues, such as the instability of the Balkan Peninsula, the rise of nationalist movements, and the decline of empires.",
+      "error": null,
+      "context_reset": false
+    }
+  ],
+  "summary": {
+    "ttft_ms": {
+      "mean": 463.9,
+      "std": 38.321,
+      "min": 413,
+      "max": 528
+    },
+    "tps": {
+      "mean": 25.474,
+      "std": 8.514,
+      "min": 9.414195,
+      "max": 33.185825
+    },
+    "memory_kb": {
+      "mean": 770346.8,
+      "std": 21781.108,
+      "min": 741932,
+      "max": 821604
+    },
+    "power_ma": {
+      "mean": 580.67,
+      "std": 44.458,
+      "min": 516.7,
+      "max": 633.3
+    },
+    "thermal_states_observed": [
+      "Normal"
+    ],
+    "note": "TPS/TTFT drift across the run reflects real device thermal state as it heats up under sustained inference, not measurement error.",
+    "rss_note": "peak_RSS_KB is only directly comparable across different models if each was benchmarked in a freshly restarted app process - this script now guarantees that automatically as of this version."
+  }
+}

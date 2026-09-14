@@ -1,0 +1,139 @@
+<?xml version="1.0" encoding="utf-8"?>
+
+<!-- Defining UI for application -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/main"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:padding="16dp">
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Ask the model"
+        android:textSize="20sp"
+        android:paddingBottom="8dp"/>
+
+    <!-- Model selector dropdown -->
+    <Spinner
+        android:id="@+id/modelSpinner"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:paddingBottom="12dp"/>
+
+    <EditText
+        android:id="@+id/inputField"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="Type your prompt here..."
+        android:inputType="text"
+        android:paddingBottom="12dp"/>
+
+    <Button
+        android:id="@+id/sendButton"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Send"/>
+
+    <!-- Metrics box -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="10dp"
+        android:layout_marginTop="12dp"
+        android:background="#F0F0F0">
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Metrics (Mac inference — not phone hardware)"
+            android:textSize="12sp"
+            android:textStyle="bold"
+            android:paddingBottom="4dp"/>
+
+        <TextView
+            android:id="@+id/metricLatency"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Latency (round trip): —"
+            android:textSize="12sp"/>
+
+        <TextView
+            android:id="@+id/metricTTFT"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="TTFT: —"
+            android:textSize="12sp"/>
+
+        <TextView
+            android:id="@+id/metricColdLoad"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Cold load time: —"
+            android:textSize="12sp"/>
+
+        <TextView
+            android:id="@+id/metricTokens"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Tokens: —"
+            android:textSize="12sp"/>
+
+        <TextView
+            android:id="@+id/metricTokensPerSec"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Tokens/sec: —"
+            android:textSize="12sp"/>
+
+        <TextView
+            android:id="@+id/metricTotalDuration"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Total duration: —"
+            android:textSize="12sp"/>
+
+        <TextView
+            android:id="@+id/metricMemory"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="App RAM: —"
+            android:textSize="12sp"/>
+
+        <TextView
+            android:id="@+id/metricPower"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Power: only available on-device"
+            android:textSize="12sp"
+            android:textColor="#999999"/>
+
+        <TextView
+            android:id="@+id/metricThermal"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Thermal: only available on-device"
+            android:textSize="12sp"
+            android:textColor="#999999"/>
+
+    </LinearLayout>
+
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:paddingTop="16dp">
+
+        <TextView
+            android:id="@+id/responseText"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text=""
+            android:textSize="16sp"
+            android:lineSpacingExtra="4dp"/>
+
+    </ScrollView>
+
+</LinearLayout>

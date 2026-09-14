@@ -1,0 +1,217 @@
+{
+  "run_info": {
+    "model": "qwen2.5-0.5b-instruct-q4_k_m.gguf",
+    "model_device_path": "/sdcard/Download/qwen2.5-0.5b-instruct-q4_k_m.gguf",
+    "device": "phone",
+    "quant": "Q4_K_M",
+    "start_time": "2026-07-07T22:58:33.845766+00:00",
+    "end_time": "2026-07-07T22:59:44.379640+00:00",
+    "total": 10,
+    "completed": 10,
+    "failed": 0,
+    "context_resets": 0
+  },
+  "results": [
+    {
+      "question_number": 1,
+      "question": "What is the capital of France?",
+      "run_id": "run_1_1783465113846",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 432,
+        "ttft_ms": 423,
+        "tps": 12.552451,
+        "memory_kb": 707372,
+        "power_ma": 610.3,
+        "thermal": "Normal"
+      },
+      "response": "The capital of France is Paris.",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 2,
+      "question": "Who wrote Romeo and Juliet?",
+      "run_id": "run_2_1783465117568",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 444,
+        "ttft_ms": 427,
+        "tps": 17.093454,
+        "memory_kb": 720648,
+        "power_ma": 606.0,
+        "thermal": "Normal"
+      },
+      "response": "\"Romeo and Juliet\" was written by William Shakespeare.",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 3,
+      "question": "What is the chemical symbol for gold?",
+      "run_id": "run_3_1783465122519",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 446,
+        "ttft_ms": 412,
+        "tps": 11.191989,
+        "memory_kb": 729816,
+        "power_ma": 608.8,
+        "thermal": "Normal"
+      },
+      "response": "The chemical symbol for gold is Au.",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 4,
+      "question": "What is the largest planet in our solar system?",
+      "run_id": "run_4_1783465126194",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 448,
+        "ttft_ms": 477,
+        "tps": 29.035316,
+        "memory_kb": 739632,
+        "power_ma": 608.7,
+        "thermal": "Normal"
+      },
+      "response": "The largest planet in our solar system is Jupiter. It is a gas giant with a diameter of about 11 times that of the planet Mercury and weighs 318 times as much as Earth. It is made up of almost 90% hydrogen and 79% helium, and has a mass of approximately 318.8 million Earth masses. It is also the ninth planet from the Sun and the fifth largest in the solar system.",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 5,
+      "question": "What year did the first human land on the moon?",
+      "run_id": "run_5_1783465133486",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 454,
+        "ttft_ms": 475,
+        "tps": 31.838942,
+        "memory_kb": 747180,
+        "power_ma": 605.3,
+        "thermal": "Normal"
+      },
+      "response": "The first human was picked up by the Apollo 11 spacecraft and landed on the Moon on July 20, 1969. This mission was conducted by NASA and was part of the Apollo program. The launch date of July 20, 1969 was selected as it was a milestone that showed the success of the Apollo program and provided the first concrete evidence that humans could successfully land on the Moon. It was the first time that a human had landed on the Moon and accomplished a mission that was both ambitious and technically challenging.",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 6,
+      "question": "What are the three states of matter?",
+      "run_id": "run_6_1783465140781",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 461,
+        "ttft_ms": 403,
+        "tps": 18.917456,
+        "memory_kb": 755152,
+        "power_ma": 606.5,
+        "thermal": "Normal"
+      },
+      "response": "The three states of matter are liquid, solid, and gas.",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 7,
+      "question": "How does a refrigerator keep food cold?",
+      "run_id": "run_7_1783465144552",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 456,
+        "ttft_ms": 423,
+        "tps": 35.07111,
+        "memory_kb": 767228,
+        "power_ma": 604.0,
+        "thermal": "Normal"
+      },
+      "response": "A refrigerator is a device used to keep food cold to extend its shelf life and quality. It works by drawing in cold air from the outside and expelling warm air from the inside of the refrigerator to maintain the desired temperature inside. The fridge expands and contracts due to the constant movement of the cold air, which keeps the temperature inside at a consistent level.",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 8,
+      "question": "Explain the process of photosynthesis in plants.",
+      "run_id": "run_8_1783465151771",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 458,
+        "ttft_ms": 422,
+        "tps": 31.638979,
+        "memory_kb": 782832,
+        "power_ma": 602.5,
+        "thermal": "Normal"
+      },
+      "response": "Photosynthesis is a process by which plants convert sunlight, water, and carbon dioxide into oxygen and glucose. The process takes place in the chloroplasts of plants, which are located in the cells of the plant's leaves. This process is driven by energy from the sun and is essential for the survival and growth of plants.",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 9,
+      "question": "Summarize the theory of relativity in simple terms.",
+      "run_id": "run_9_1783465164952",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 452,
+        "ttft_ms": 474,
+        "tps": 32.229813,
+        "memory_kb": 786352,
+        "power_ma": 598.3,
+        "thermal": "Normal"
+      },
+      "response": "Special and General Relativity are two pillars of the modern physics that revolutionized our understanding of gravity, space, and time. Basically, they are theories that suggest that gravity isn't the same at different locations, and that it doesn't behave like the force of gravity we experience in our everyday world, but instead behaves differently in different locations with regard to distance, time, and acceleration.",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 10,
+      "question": "Describe the causes and consequences of World War I in a few sentences.",
+      "run_id": "run_10_1783465177014",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 457,
+        "ttft_ms": 529,
+        "tps": 24.153921,
+        "memory_kb": 801472,
+        "power_ma": 600.1,
+        "thermal": "Normal"
+      },
+      "response": "World War I was a result of a complex combination of factors, including economic tensions, military conflicts, and nationalism. The causes included the escalation of violence and expansion of nationalism, the lack of international cooperation, and the failure of the Western powers to effectively manage the conflict. The consequences included the devastation of millions of lives, the loss of property and infrastructure, and the impact on society and the economy of the war.",
+      "error": null,
+      "context_reset": false
+    }
+  ],
+  "summary": {
+    "ttft_ms": {
+      "mean": 446.5,
+      "std": 38.043,
+      "min": 403,
+      "max": 529
+    },
+    "tps": {
+      "mean": 24.372,
+      "std": 8.383,
+      "min": 11.191989,
+      "max": 35.07111
+    },
+    "memory_kb": {
+      "mean": 753768.4,
+      "std": 29037.289,
+      "min": 707372,
+      "max": 801472
+    },
+    "power_ma": {
+      "mean": 605.05,
+      "std": 3.684,
+      "min": 598.3,
+      "max": 610.3
+    },
+    "thermal_states_observed": [
+      "Normal"
+    ],
+    "note": "TPS/TTFT drift across the run reflects real device thermal state as it heats up under sustained inference, not measurement error.",
+    "rss_note": "peak_RSS_KB is only directly comparable across different models if each was benchmarked in a freshly restarted app process - this script now guarantees that automatically as of this version."
+  }
+}

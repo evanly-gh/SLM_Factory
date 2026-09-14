@@ -1,0 +1,249 @@
+{
+  "run_info": {
+    "model": "qwen3-4b-instruct-2507-q8_0.gguf",
+    "model_device_path": "/sdcard/Android/data/io.shubham0204.smollmandroid/files/qwen3-4b-instruct-2507-q8_0.gguf",
+    "device": "phone",
+    "quant": "Q4_K_M",
+    "start_time": "2026-07-23T21:06:08.387832+00:00",
+    "end_time": "2026-07-23T21:16:24.941931+00:00",
+    "total": 10,
+    "completed": 9,
+    "failed": 1,
+    "context_resets": 0,
+    "battery_warning": true,
+    "battery_level_pct": 100,
+    "battery_status": "Charging",
+    "rebooted_before_run": false,
+    "cold_load_note": "cold_load_ms reflects a genuinely cold read only if --reboot-before was used for this run. Without a reboot, the OS file cache may make cold_load_ms appear faster than a true cold read from storage, especially for larger model files."
+  },
+  "results": [
+    {
+      "question_number": 1,
+      "question": "What is the capital of France?",
+      "run_id": "run_1_1784840768388",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 3014,
+        "ttft_ms": 5077,
+        "tps": 1.0752326,
+        "memory_kb": 4576400,
+        "power_ma": 228.1,
+        "thermal": "Normal",
+        "thermal_temp_cpu_c": 52.1,
+        "thermal_temp_skin_c": 40.5
+      },
+      "response": "The capital of France is Paris.",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 2,
+      "question": "Who wrote Romeo and Juliet?",
+      "run_id": "run_2_1784840795322",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 770,
+        "ttft_ms": 5057,
+        "tps": 1.7107726,
+        "memory_kb": 4531316,
+        "power_ma": 225.8,
+        "thermal": "Normal",
+        "thermal_temp_cpu_c": 53.6,
+        "thermal_temp_skin_c": 40.9
+      },
+      "response": "*Romeo and Juliet* was written by **William Shakespeare**.",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 3,
+      "question": "What is the chemical symbol for gold?",
+      "run_id": "run_3_1784840808073",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 789,
+        "ttft_ms": 4742,
+        "tps": 2.5482194,
+        "memory_kb": 4535904,
+        "power_ma": 224.8,
+        "thermal": "Normal",
+        "thermal_temp_cpu_c": 56.3,
+        "thermal_temp_skin_c": 41.8
+      },
+      "response": "The chemical symbol for gold is **Au**.",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 4,
+      "question": "What is the largest planet in our solar system?",
+      "run_id": "run_4_1784840824159",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 822,
+        "ttft_ms": 5581,
+        "tps": 3.3709903,
+        "memory_kb": 4668064,
+        "power_ma": 209.4,
+        "thermal": "Normal",
+        "thermal_temp_cpu_c": 58.3,
+        "thermal_temp_skin_c": 42.8
+      },
+      "response": "The largest planet in our solar system is **Jupiter**. It is a gas giant and has a diameter of about 110,000 kilometers (68,000 miles), making it approximately 11 times wider than Earth. Jupiter also has the strongest winds in the solar system, with speeds reaching up to 600 km/h (370 mph). It is known for its prominent Great Red Spot, a giant storm that has been raging for at least 300 years.",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 5,
+      "question": "What year did the first human land on the moon?",
+      "run_id": "run_5_1784840860190",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 793,
+        "ttft_ms": 5399,
+        "tps": 2.911971,
+        "memory_kb": 4742608,
+        "power_ma": 23.9,
+        "thermal": "Normal",
+        "thermal_temp_cpu_c": 59.0,
+        "thermal_temp_skin_c": 43.2
+      },
+      "response": "The first human landed on the Moon in **1969**. Specifically, it was on **July 20, 1969**, during NASA's Apollo 11 mission. Astronaut Neil Armstrong became the first person to walk on the lunar surface.",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 6,
+      "question": "What are the three states of matter?",
+      "run_id": "run_6_1784840884658",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 795,
+        "ttft_ms": 4711,
+        "tps": 3.6252458,
+        "memory_kb": 4759352,
+        "power_ma": 20.6,
+        "thermal": "Normal",
+        "thermal_temp_cpu_c": 61.7,
+        "thermal_temp_skin_c": 45.4
+      },
+      "response": "The three primary states of matter are:",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 7,
+      "question": "How does a refrigerator keep food cold?",
+      "run_id": "run_7_1784840947486",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 808,
+        "ttft_ms": 5074,
+        "tps": 3.3428764,
+        "memory_kb": 4783392,
+        "power_ma": 7.0,
+        "thermal": "Normal",
+        "thermal_temp_cpu_c": 63.3,
+        "thermal_temp_skin_c": 48.0
+      },
+      "response": "A refrigerator keeps food cold by using a refrigeration cycle that removes heat from the interior and releases it outside. Here's a step-by-step explanation of how it works:",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 8,
+      "question": "Explain the process of photosynthesis in plants.",
+      "run_id": "run_8_1784841060170",
+      "status": "failed",
+      "metrics": null,
+      "response": null,
+      "error": {
+        "reason": "timeout",
+        "message": "No RUN_DONE/RUN_ERROR within 180s"
+      },
+      "context_reset": false
+    },
+    {
+      "question_number": 9,
+      "question": "Summarize the theory of relativity in simple terms.",
+      "run_id": "run_9_1784841242791",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 870,
+        "ttft_ms": 4784,
+        "tps": 3.7327538,
+        "memory_kb": 4713208,
+        "power_ma": 3.7,
+        "thermal": "Normal",
+        "thermal_temp_cpu_c": 68.3,
+        "thermal_temp_skin_c": 50.4
+      },
+      "response": "Sure! Here's a simple summary of the theory of relativity:",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 10,
+      "question": "Describe the causes and consequences of World War I in a few sentences.",
+      "run_id": "run_10_1784841350768",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 877,
+        "ttft_ms": 6177,
+        "tps": 3.4071717,
+        "memory_kb": 4696908,
+        "power_ma": 23.9,
+        "thermal": "Normal",
+        "thermal_temp_cpu_c": 64.1,
+        "thermal_temp_skin_c": 50.3
+      },
+      "response": "World War I was caused by a complex mix of factors, including nationalism, militarism, alliance systems, imperialism, and the assassination of Archduke Franz Ferdinand in 1914, which triggered a chain reaction of declarations of war. The consequences included the collapse of four major empires (Austro-Hungarian, Ottoman, Russian, and German), widespread destruction and loss of life, the redrawing of national boundaries, the rise of political extremism, and the eventual outbreak of World War II.",
+      "error": null,
+      "context_reset": false
+    }
+  ],
+  "summary": {
+    "ttft_ms": {
+      "mean": 5178,
+      "std": 448.247,
+      "min": 4711,
+      "max": 6177
+    },
+    "tps": {
+      "mean": 2.858,
+      "std": 0.866,
+      "min": 1.0752326,
+      "max": 3.7327538
+    },
+    "memory_kb": {
+      "mean": 4667461.333,
+      "std": 91059.268,
+      "min": 4531316,
+      "max": 4783392
+    },
+    "power_ma": {
+      "mean": 107.467,
+      "std": 102.787,
+      "min": 3.7,
+      "max": 228.1
+    },
+    "thermal_temp_cpu_c": {
+      "mean": 59.633,
+      "std": 4.935,
+      "min": 52.1,
+      "max": 68.3
+    },
+    "thermal_temp_skin_c": {
+      "mean": 44.811,
+      "std": 3.674,
+      "min": 40.5,
+      "max": 50.4
+    },
+    "first_question_cold_load_ms": 3014,
+    "thermal_states_observed": [
+      "Normal"
+    ],
+    "note": "TPS/TTFT drift across the run reflects real device thermal state as it heats up under sustained inference, not measurement error.",
+    "rss_note": "peak_RSS_KB is only directly comparable across different models if each was benchmarked in a freshly restarted app process - this script now guarantees that automatically as of this version."
+  }
+}

@@ -1,0 +1,24 @@
+{
+  "device": "phone",
+  "model": "Qwen2.5-0.5B",
+  "timestamp": "2026-06-30T02:20:27.501297Z",
+  "n_runs": 5,
+  "baseline": {
+    "memory_mb": 0.0,
+    "battery_level": 97,
+    "battery_current_ma": null,
+    "thermal_status": "0"
+  },
+  "statistical_validation": {},
+  "cross_validation": {},
+  "sustained_inference": {},
+  "cold_start": {},
+  "validation_summary": {
+    "TTFT": "WARNING",
+    "TPS": "WARNING",
+    "RSS": "WARNING",
+    "cold_load": "WARNING",
+    "thermal": "WARNING",
+    "power": "WARNING"
+  }
+}

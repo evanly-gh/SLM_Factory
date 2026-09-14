@@ -1,0 +1,249 @@
+{
+  "run_info": {
+    "model": "qwen3-4b-instruct-2507-q4_k_m.gguf",
+    "model_device_path": "/sdcard/Android/data/io.shubham0204.smollmandroid/files/qwen3-4b-instruct-2507-q4_k_m.gguf",
+    "device": "phone",
+    "quant": "Q4_K_M",
+    "start_time": "2026-07-23T20:39:46.395071+00:00",
+    "end_time": "2026-07-23T20:57:54.219251+00:00",
+    "total": 10,
+    "completed": 9,
+    "failed": 1,
+    "context_resets": 0,
+    "battery_warning": true,
+    "battery_level_pct": 100,
+    "battery_status": "Charging",
+    "rebooted_before_run": false,
+    "cold_load_note": "cold_load_ms reflects a genuinely cold read only if --reboot-before was used for this run. Without a reboot, the OS file cache may make cold_load_ms appear faster than a true cold read from storage, especially for larger model files."
+  },
+  "results": [
+    {
+      "question_number": 1,
+      "question": "What is the capital of France?",
+      "run_id": "run_1_1784839186397",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 627,
+        "ttft_ms": 4272,
+        "tps": 1.2750702,
+        "memory_kb": 2991312,
+        "power_ma": 241.5,
+        "thermal": "Normal",
+        "thermal_temp_cpu_c": 48.2,
+        "thermal_temp_skin_c": 36.5
+      },
+      "response": "The capital of France is Paris.",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 2,
+      "question": "Who wrote Romeo and Juliet?",
+      "run_id": "run_2_1784839201607",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 698,
+        "ttft_ms": 4551,
+        "tps": 1.9132322,
+        "memory_kb": 3005916,
+        "power_ma": 241.8,
+        "thermal": "Normal",
+        "thermal_temp_cpu_c": 49.4,
+        "thermal_temp_skin_c": 37.1
+      },
+      "response": "*Romeo and Juliet* was written by **William Shakespeare**.",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 3,
+      "question": "What is the chemical symbol for gold?",
+      "run_id": "run_3_1784839212907",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 701,
+        "ttft_ms": 4277,
+        "tps": 1.565026,
+        "memory_kb": 3011608,
+        "power_ma": 240.2,
+        "thermal": "Normal",
+        "thermal_temp_cpu_c": 49.4,
+        "thermal_temp_skin_c": 36.9
+      },
+      "response": "The chemical symbol for gold is **Au**.",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 4,
+      "question": "What is the largest planet in our solar system?",
+      "run_id": "run_4_1784839223266",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 723,
+        "ttft_ms": 5004,
+        "tps": 3.5885377,
+        "memory_kb": 3018024,
+        "power_ma": 240.9,
+        "thermal": "Normal",
+        "thermal_temp_cpu_c": 53.6,
+        "thermal_temp_skin_c": 38.2
+      },
+      "response": "The largest planet in our solar system is **Jupiter**.",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 5,
+      "question": "What year did the first human land on the moon?",
+      "run_id": "run_5_1784839253277",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 716,
+        "ttft_ms": 4867,
+        "tps": 3.3065007,
+        "memory_kb": 2992324,
+        "power_ma": 240.1,
+        "thermal": "Normal",
+        "thermal_temp_cpu_c": 54.4,
+        "thermal_temp_skin_c": 38.8
+      },
+      "response": "The first human landed on the Moon in **1969**. Specifically, on **July 20, 1969**, during NASA's Apollo 11 mission, astronauts Neil Armstrong and Buzz Aldrin became the first humans to walk on the lunar surface.",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 6,
+      "question": "What are the three states of matter?",
+      "run_id": "run_6_1784839274306",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 735,
+        "ttft_ms": 4275,
+        "tps": 3.9883118,
+        "memory_kb": 2978100,
+        "power_ma": 240.5,
+        "thermal": "Normal",
+        "thermal_temp_cpu_c": 56.3,
+        "thermal_temp_skin_c": 40.7
+      },
+      "response": "The three common states of matter are:",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 7,
+      "question": "How does a refrigerator keep food cold?",
+      "run_id": "run_7_1784839328454",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 730,
+        "ttft_ms": 4542,
+        "tps": 3.6349518,
+        "memory_kb": 2964716,
+        "power_ma": 242.5,
+        "thermal": "Normal",
+        "thermal_temp_cpu_c": 58.7,
+        "thermal_temp_skin_c": 43.3
+      },
+      "response": "A refrigerator keeps food cold by removing heat from the inside and transferring it to the outside environment. Here's how it works step by step:",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 8,
+      "question": "Explain the process of photosynthesis in plants.",
+      "run_id": "run_8_1784839434740",
+      "status": "failed",
+      "metrics": null,
+      "response": null,
+      "error": {
+        "reason": "timeout",
+        "message": "No RUN_DONE/RUN_ERROR within 180s"
+      },
+      "context_reset": false
+    },
+    {
+      "question_number": 9,
+      "question": "Summarize the theory of relativity in simple terms.",
+      "run_id": "run_9_1784840102930",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 724,
+        "ttft_ms": 4998,
+        "tps": 3.5486689,
+        "memory_kb": 3020504,
+        "power_ma": 13.5,
+        "thermal": "Normal",
+        "thermal_temp_cpu_c": 61.7,
+        "thermal_temp_skin_c": 44.8
+      },
+      "response": "Sure! Here's a simple summary of the theory of relativity:",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 10,
+      "question": "Describe the causes and consequences of World War I in a few sentences.",
+      "run_id": "run_10_1784840238068",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 719,
+        "ttft_ms": 5759,
+        "tps": 3.7625325,
+        "memory_kb": 2993372,
+        "power_ma": 12.3,
+        "thermal": "Normal",
+        "thermal_temp_cpu_c": 62.1,
+        "thermal_temp_skin_c": 45.7
+      },
+      "response": "World War I was caused by a complex web of factors, including nationalism, militarism, alliances, and the dispute over Austro-Hungarian and German influence in the Balkans, which escalated after the assassination of Archduke Franz Ferdinand in 1914. The consequences included the deaths of millions, the collapse of four major empires (Austro-Hungarian, Ottoman, Russian, and German), massive economic and social upheaval, and the eventual redrawing of national boundaries through the Treaty of Versailles, leading to widespread resentment and setting the stage for World War II.",
+      "error": null,
+      "context_reset": false
+    }
+  ],
+  "summary": {
+    "ttft_ms": {
+      "mean": 4727.222,
+      "std": 461.137,
+      "min": 4272,
+      "max": 5759
+    },
+    "tps": {
+      "mean": 2.954,
+      "std": 0.994,
+      "min": 1.2750702,
+      "max": 3.9883118
+    },
+    "memory_kb": {
+      "mean": 2997319.556,
+      "std": 17490.517,
+      "min": 2964716,
+      "max": 3020504
+    },
+    "power_ma": {
+      "mean": 190.367,
+      "std": 94.863,
+      "min": 12.3,
+      "max": 242.5
+    },
+    "thermal_temp_cpu_c": {
+      "mean": 54.867,
+      "std": 4.964,
+      "min": 48.2,
+      "max": 62.1
+    },
+    "thermal_temp_skin_c": {
+      "mean": 40.222,
+      "std": 3.357,
+      "min": 36.5,
+      "max": 45.7
+    },
+    "first_question_cold_load_ms": 627,
+    "thermal_states_observed": [
+      "Normal"
+    ],
+    "note": "TPS/TTFT drift across the run reflects real device thermal state as it heats up under sustained inference, not measurement error.",
+    "rss_note": "peak_RSS_KB is only directly comparable across different models if each was benchmarked in a freshly restarted app process - this script now guarantees that automatically as of this version."
+  }
+}

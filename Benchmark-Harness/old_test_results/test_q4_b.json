@@ -1,0 +1,216 @@
+{
+  "run_info": {
+    "model": "qwen2.5-0.5b-instruct-q4_k_m.gguf",
+    "model_device_path": "/sdcard/Download/qwen2.5-0.5b-instruct-q4_k_m.gguf",
+    "device": "phone",
+    "quant": "Q4_K_M",
+    "start_time": "2026-07-07T22:34:47.689992+00:00",
+    "end_time": "2026-07-07T22:36:01.834168+00:00",
+    "total": 10,
+    "completed": 10,
+    "failed": 0,
+    "context_resets": 0
+  },
+  "results": [
+    {
+      "question_number": 1,
+      "question": "What is the capital of France?",
+      "run_id": "run_1_1783463687690",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 464,
+        "ttft_ms": 391,
+        "tps": 13.176793,
+        "memory_kb": 1092212,
+        "power_ma": 847.3,
+        "thermal": "Normal"
+      },
+      "response": "The capital of France is Paris.",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 2,
+      "question": "Who wrote Romeo and Juliet?",
+      "run_id": "run_2_1783463691308",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 455,
+        "ttft_ms": 418,
+        "tps": 18.52823,
+        "memory_kb": 1101436,
+        "power_ma": 835.0,
+        "thermal": "Normal"
+      },
+      "response": "\"Romeo and Juliet\" was written by William Shakespeare.",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 3,
+      "question": "What is the chemical symbol for gold?",
+      "run_id": "run_3_1783463694869",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 457,
+        "ttft_ms": 401,
+        "tps": 14.188774,
+        "memory_kb": 1124956,
+        "power_ma": 845.0,
+        "thermal": "Normal"
+      },
+      "response": "The chemical symbol for gold is Au.",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 4,
+      "question": "What is the largest planet in our solar system?",
+      "run_id": "run_4_1783463698543",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 454,
+        "ttft_ms": 466,
+        "tps": 27.805336,
+        "memory_kb": 1140852,
+        "power_ma": 787.7,
+        "thermal": "Normal"
+      },
+      "response": "The largest planet in our solar system is Jupiter. It is a gas giant, larger than its four known natural satellites. It has a diameter of about 1,398,040 kilometers and has a mass of about 1.898 \u00d7 10^27 kg. It is the fourth planet from the Sun in the solar system.",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 5,
+      "question": "What year did the first human land on the moon?",
+      "run_id": "run_5_1783463704763",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 452,
+        "ttft_ms": 451,
+        "tps": 21.012026,
+        "memory_kb": 1139756,
+        "power_ma": 829.8,
+        "thermal": "Normal"
+      },
+      "response": "The first human person to land on the Moon was Neil Armstrong on July 20, 1969.",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 6,
+      "question": "What are the three states of matter?",
+      "run_id": "run_6_1783463709685",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 462,
+        "ttft_ms": 403,
+        "tps": 18.975082,
+        "memory_kb": 1148496,
+        "power_ma": 840.0,
+        "thermal": "Normal"
+      },
+      "response": "The three states of matter are solid, liquid, and gas.",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 7,
+      "question": "How does a refrigerator keep food cold?",
+      "run_id": "run_7_1783463713373",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 454,
+        "ttft_ms": 436,
+        "tps": 32.73771,
+        "memory_kb": 1157040,
+        "power_ma": 753.4,
+        "thermal": "Normal"
+      },
+      "response": "A refrigerator keeps food cold by lowering the temperature of the air inside. This is achieved through a process called convection cooling. When food is placed in a refrigerator, the air inside rises and cools down. This cooler air then flows to the top of the refrigerator, where it is held up by the cold walls of the box. The lower temperature inside the box raises the temperature of the air near the bottom of the box. This process is repeated, causing the air inside to become colder until it is no longer effective. This process is known as convection cooling.",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 8,
+      "question": "Explain the process of photosynthesis in plants.",
+      "run_id": "run_8_1783463720728",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 452,
+        "ttft_ms": 420,
+        "tps": 31.072588,
+        "memory_kb": 1166036,
+        "power_ma": 725.2,
+        "thermal": "Normal"
+      },
+      "response": "Photosynthesis is the process by which plants, algae, and some bacteria convert light energy, usually from the sun, into chemical energy stored in glucose. It is a critical process for life on Earth, providing energy for basic life processes and allowing plants to grow and reproduce.",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 9,
+      "question": "Summarize the theory of relativity in simple terms.",
+      "run_id": "run_9_1783463736336",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 468,
+        "ttft_ms": 464,
+        "tps": 33.674717,
+        "memory_kb": 1162856,
+        "power_ma": 699.4,
+        "thermal": "Normal"
+      },
+      "response": "The theory of relativity is a set of theories proposed by Albert Einstein that describe the behavior of objects at different speeds. It describes time dilation, length contraction, and the relativistic mass of a moving object. It is the first complete theory of gravity that can be applied to the motion of objects at speeds approaching the speed of light.",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 10,
+      "question": "Describe the causes and consequences of World War I in a few sentences.",
+      "run_id": "run_10_1783463747174",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 449,
+        "ttft_ms": 531,
+        "tps": 32.612583,
+        "memory_kb": 1176064,
+        "power_ma": 707.2,
+        "thermal": "Normal"
+      },
+      "response": "World War I, also known as the First World War, was caused by a combination of factors that escalated tensions between European countries. The main causes were:",
+      "error": null,
+      "context_reset": false
+    }
+  ],
+  "summary": {
+    "ttft_ms": {
+      "mean": 438.1,
+      "std": 39.76,
+      "min": 391,
+      "max": 531
+    },
+    "tps": {
+      "mean": 24.378,
+      "std": 7.647,
+      "min": 13.176793,
+      "max": 33.674717
+    },
+    "memory_kb": {
+      "mean": 1140970.4,
+      "std": 26176.309,
+      "min": 1092212,
+      "max": 1176064
+    },
+    "power_ma": {
+      "mean": 787.0,
+      "std": 57.389,
+      "min": 699.4,
+      "max": 847.3
+    },
+    "thermal_states_observed": [
+      "Normal"
+    ],
+    "note": "TPS/TTFT drift across the run reflects real device thermal state as it heats up under sustained inference, not measurement error."
+  }
+}
