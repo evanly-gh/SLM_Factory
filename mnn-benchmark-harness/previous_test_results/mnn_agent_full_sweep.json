@@ -1,0 +1,48 @@
+{
+  "model": "Qwen/Qwen2.5-0.5B-Instruct",
+  "budget_rss_mb": 700.0,
+  "budget_file_size_mb": null,
+  "timestamp": "2026-07-22T04:51:36.102955+00:00",
+  "sweep_results": [
+    {
+      "quant_bit": 4,
+      "quant_block": 64,
+      "slug": "qwen2.5-0.5b-instruct-mnn-q4",
+      "file_size_mb": 265.6,
+      "peak_rss_mb": 553.8,
+      "ttft_ms": 229.367,
+      "prefill_tps": 125.7,
+      "decode_tps": 30.1,
+      "N_completed": 10,
+      "fits_rss_budget": true,
+      "fits_file_size_budget": true,
+      "fits_budget": true,
+      "status": "success",
+      "error": null
+    },
+    {
+      "quant_bit": 8,
+      "quant_block": 64,
+      "slug": "qwen2.5-0.5b-instruct-mnn-q8",
+      "file_size_mb": 501.2,
+      "peak_rss_mb": 797.2,
+      "ttft_ms": 250.34,
+      "prefill_tps": 115.7,
+      "decode_tps": 22.1,
+      "N_completed": 10,
+      "fits_rss_budget": false,
+      "fits_file_size_budget": true,
+      "fits_budget": false,
+      "status": "success",
+      "error": null
+    }
+  ],
+  "candidates_within_budget": [
+    4
+  ],
+  "recommendation": {
+    "quant_bit": 4,
+    "reasoning": "Deterministic fallback (no LLM reasoning): selected Q4 because it has the highest DecodeTPS (30.1) among quant_bit levels that satisfy 700MB peak RSS (candidates: Q4).",
+    "reasoning_source": "deterministic_fallback"
+  }
+}

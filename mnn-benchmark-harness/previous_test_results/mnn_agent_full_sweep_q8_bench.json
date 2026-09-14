@@ -1,0 +1,319 @@
+{
+  "run_info": {
+    "model_path": "/data/local/tmp/mnn_models/qwen2.5-0.5b-instruct-mnn-q8",
+    "device": "f46d20ad",
+    "start_time": "2026-07-22T04:48:16.609746+00:00",
+    "end_time": "2026-07-22T04:51:36.080051+00:00",
+    "timeout_s": 120,
+    "total": 10,
+    "completed": 10,
+    "failed": 0,
+    "battery_warning": true,
+    "battery_level_pct": 100,
+    "battery_status": "Charging"
+  },
+  "results": [
+    {
+      "question_number": 1,
+      "question": "What is the capital of France?",
+      "run_id": "run_1_1784695696610",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 1342,
+        "ttft_ms": 215.102864,
+        "prefill_time_us": 212229,
+        "decode_time_us": 298450,
+        "prompt_len": 26,
+        "decode_len": 8,
+        "prefill_tps": 122.509,
+        "decode_tps": 26.805,
+        "peak_rss_kb": 803752,
+        "power_ma": 238.0,
+        "power_ma_raw": "238.00",
+        "thermal_status": "Normal",
+        "thermal_cpu_c": 46.3,
+        "thermal_skin_c": 37.0
+      },
+      "response": "The capital of France is Paris.",
+      "error": null
+    },
+    {
+      "question_number": 2,
+      "question": "Who wrote Romeo and Juliet?",
+      "run_id": "run_2_1784695701468",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 1338,
+        "ttft_ms": 206.765468,
+        "prefill_time_us": 203387,
+        "decode_time_us": 2980646,
+        "prompt_len": 25,
+        "decode_len": 68,
+        "prefill_tps": 122.918,
+        "decode_tps": 22.814,
+        "peak_rss_kb": 810952,
+        "power_ma": 237.85,
+        "power_ma_raw": "237.85",
+        "thermal_status": "Normal",
+        "thermal_cpu_c": 56.7,
+        "thermal_skin_c": 38.0
+      },
+      "response": "Romeo and Juliet was written by William Shakespeare, an English playwright and poet. The play was first performed in 1595 and is considered one of Shakespeare's most famous and beloved works. The story is based on the plays of William Shakespeare, who lived from 1564 to 1616.",
+      "error": null
+    },
+    {
+      "question_number": 3,
+      "question": "What is the chemical symbol for gold?",
+      "run_id": "run_3_1784695708781",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 1346,
+        "ttft_ms": 249.12349,
+        "prefill_time_us": 242014,
+        "decode_time_us": 413150,
+        "prompt_len": 27,
+        "decode_len": 9,
+        "prefill_tps": 111.564,
+        "decode_tps": 21.784,
+        "peak_rss_kb": 813400,
+        "power_ma": 236.86,
+        "power_ma_raw": "236.86",
+        "thermal_status": "Normal",
+        "thermal_cpu_c": 45.9,
+        "thermal_skin_c": 38.0
+      },
+      "response": "The chemical symbol for gold is Au.",
+      "error": null
+    },
+    {
+      "question_number": 4,
+      "question": "What is the largest planet in our solar system?",
+      "run_id": "run_4_1784695713821",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 1335,
+        "ttft_ms": 253.61375,
+        "prefill_time_us": 250450,
+        "decode_time_us": 3563107,
+        "prompt_len": 29,
+        "decode_len": 77,
+        "prefill_tps": 115.792,
+        "decode_tps": 21.61,
+        "peak_rss_kb": 811224,
+        "power_ma": 237.49,
+        "power_ma_raw": "237.49",
+        "thermal_status": "Normal",
+        "thermal_cpu_c": 57.1,
+        "thermal_skin_c": 38.0
+      },
+      "response": "The largest planet in our solar system is Jupiter. It is a gas giant, which means it is composed mainly of hydrogen and helium, and has a large mass. Jupiter is also known as the \"King of the Planets\" because it is the largest planet in our solar system and has many of the characteristics of a planet, such as a moon, rings, and storms.",
+      "error": null
+    },
+    {
+      "question_number": 5,
+      "question": "What year did the first human land on the moon?",
+      "run_id": "run_5_1784695722421",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 1327,
+        "ttft_ms": 260.010833,
+        "prefill_time_us": 257296,
+        "decode_time_us": 4001637,
+        "prompt_len": 30,
+        "decode_len": 87,
+        "prefill_tps": 116.597,
+        "decode_tps": 21.741,
+        "peak_rss_kb": 808896,
+        "power_ma": 238.0,
+        "power_ma_raw": "238.00",
+        "thermal_status": "Normal",
+        "thermal_cpu_c": 57.9,
+        "thermal_skin_c": 38.0
+      },
+      "response": "The first human land on the moon was achieved by the Apollo 11 mission, which was launched on July 16, 1969. The mission was successful, and the first human to walk on the moon was Neil Armstrong, who landed on the moon on July 20, 1969. Armstrong famously said, \"That's one small step for man, one giant leap for mankind.\"",
+      "error": null
+    },
+    {
+      "question_number": 6,
+      "question": "What are the three states of matter?",
+      "run_id": "run_6_1784695730801",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 1330,
+        "ttft_ms": 244.905781,
+        "prefill_time_us": 242329,
+        "decode_time_us": 617714,
+        "prompt_len": 27,
+        "decode_len": 14,
+        "prefill_tps": 111.419,
+        "decode_tps": 22.664,
+        "peak_rss_kb": 808744,
+        "power_ma": 238.0,
+        "power_ma_raw": "238.00",
+        "thermal_status": "Normal",
+        "thermal_cpu_c": 49.8,
+        "thermal_skin_c": 38.0
+      },
+      "response": "The three states of matter are solid, liquid, and gas.",
+      "error": null
+    },
+    {
+      "question_number": 7,
+      "question": "How does a refrigerator keep food cold?",
+      "run_id": "run_7_1784695735588",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 1327,
+        "ttft_ms": 249.093177,
+        "prefill_time_us": 245652,
+        "decode_time_us": 114491035,
+        "prompt_len": 27,
+        "decode_len": 2048,
+        "prefill_tps": 109.912,
+        "decode_tps": 17.888,
+        "peak_rss_kb": 858604,
+        "power_ma": 242.44,
+        "power_ma_raw": "242.44",
+        "thermal_status": "Normal",
+        "thermal_cpu_c": 66.8,
+        "thermal_skin_c": 43.0
+      },
+      "response": "A refrigerator works by using a system of cooling coils and a refrigerant to circulate cold air through airtight compartments. Here's how it works:",
+      "error": null
+    },
+    {
+      "question_number": 8,
+      "question": "Explain the process of photosynthesis in plants.",
+      "run_id": "run_8_1784695856368",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 1337,
+        "ttft_ms": 256.349167,
+        "prefill_time_us": 249163,
+        "decode_time_us": 11983416,
+        "prompt_len": 29,
+        "decode_len": 253,
+        "prefill_tps": 116.39,
+        "decode_tps": 21.113,
+        "peak_rss_kb": 818580,
+        "power_ma": 246.61,
+        "power_ma_raw": "246.61",
+        "thermal_status": "Normal",
+        "thermal_cpu_c": 66.8,
+        "thermal_skin_c": 43.0
+      },
+      "response": "Photosynthesis is the process by which plants convert light energy into chemical energy stored in glucose. The basic process of photosynthesis can be explained as follows:",
+      "error": null
+    },
+    {
+      "question_number": 9,
+      "question": "Summarize the theory of relativity in simple terms.",
+      "run_id": "run_9_1784695873176",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 1353,
+        "ttft_ms": 295.606927,
+        "prefill_time_us": 290160,
+        "decode_time_us": 6617577,
+        "prompt_len": 31,
+        "decode_len": 147,
+        "prefill_tps": 106.838,
+        "decode_tps": 22.214,
+        "peak_rss_kb": 815188,
+        "power_ma": 246.01,
+        "power_ma_raw": "246.01",
+        "thermal_status": "Normal",
+        "thermal_cpu_c": 66.0,
+        "thermal_skin_c": 43.0
+      },
+      "response": "The theory of relativity was proposed by Albert Einstein in the early 20th century. It is a set of two separate but related theories that describe the behavior of objects moving at different speeds. The first theory, called the special theory, describes how objects moving at constant speeds in a straight line will behave differently than objects moving at constant speeds in a curved path. The second theory, called the general theory, extends the special theory to objects moving at very high or very low speeds, and describes how they behave in these extreme conditions. Both theories are based on the concept of the speed of light, which is a fundamental constant of the universe that is the same for all observers, regardless of their motion relative to each other.",
+      "error": null
+    },
+    {
+      "question_number": 10,
+      "question": "Describe the causes and consequences of World War I in a few sentences.",
+      "run_id": "run_10_1784695885159",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 1343,
+        "ttft_ms": 272.823802,
+        "prefill_time_us": 267091,
+        "decode_time_us": 5593684,
+        "prompt_len": 33,
+        "decode_len": 126,
+        "prefill_tps": 123.553,
+        "decode_tps": 22.525,
+        "peak_rss_kb": 813556,
+        "power_ma": 245.67,
+        "power_ma_raw": "245.67",
+        "thermal_status": "Normal",
+        "thermal_cpu_c": 65.2,
+        "thermal_skin_c": 43.0
+      },
+      "response": "World War I was caused by a complex mix of factors including nationalism, militarism, economic inequality, and political instability. The war started in 1914 when Germany invaded the Ottoman Empire, and it quickly escalated into a global conflict. The war had severe consequences, including widespread destruction, displacement, and loss of life, and it also had a profound impact on the world's politics and social structures. It led to the formation of the Allied and Central Powers, and the establishment of the League of Nations to prevent future conflicts. It also led to the formation of the United Nations to promote peace and prevent future conflicts.",
+      "error": null
+    }
+  ],
+  "summary": {
+    "cold_load_ms": {
+      "mean": 1337.8,
+      "std": 8.035,
+      "min": 1327,
+      "max": 1353,
+      "n_completed": 10
+    },
+    "ttft_ms": {
+      "mean": 250.34,
+      "std": 24.224,
+      "min": 206.765468,
+      "max": 295.606927,
+      "n_completed": 10
+    },
+    "prefill_tps": {
+      "mean": 115.749,
+      "std": 5.558,
+      "min": 106.838,
+      "max": 123.553,
+      "n_completed": 10
+    },
+    "decode_tps": {
+      "mean": 22.116,
+      "std": 2.058,
+      "min": 17.888,
+      "max": 26.805,
+      "n_completed": 10
+    },
+    "peak_rss_kb": {
+      "mean": 816289.6,
+      "std": 14614.148,
+      "min": 803752,
+      "max": 858604,
+      "n_completed": 10
+    },
+    "power_ma": {
+      "mean": 240.693,
+      "std": 3.82,
+      "min": 236.86,
+      "max": 246.61,
+      "n_completed": 10
+    },
+    "thermal_cpu_c": {
+      "mean": 57.85,
+      "std": 7.896,
+      "min": 45.9,
+      "max": 66.8,
+      "n_completed": 10
+    },
+    "thermal_skin_c": {
+      "mean": 39.9,
+      "std": 2.548,
+      "min": 37.0,
+      "max": 43.0,
+      "n_completed": 10
+    },
+    "thermal_states_observed": [
+      "Normal"
+    ],
+    "note": "power_ma stats exclude questions where POWER_MA was reported as 'unavailable' or missing. n_completed is reported per-metric because failed/timed-out questions - and, for power_ma specifically, 'unavailable' readings - are silently excluded from that metric's mean otherwise, which can bias results toward easier/luckier questions."
+  }
+}

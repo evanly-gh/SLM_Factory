@@ -1,0 +1,151 @@
+{
+  "run_info": {
+    "model_path": "/data/local/tmp/mnn_models/mnn-output-qwen2.5-0.5b-v4",
+    "device": "f46d20ad",
+    "start_time": "2026-07-22T02:33:26.571064+00:00",
+    "end_time": "2026-07-22T02:33:37.681679+00:00",
+    "timeout_s": 60,
+    "total": 3,
+    "completed": 3,
+    "failed": 0,
+    "battery_warning": true,
+    "battery_level_pct": 88,
+    "battery_status": "Charging"
+  },
+  "results": [
+    {
+      "question_number": 1,
+      "question": "What is the capital of France?",
+      "run_id": "run_1_1784687606571",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 576,
+        "ttft_ms": 138.800156,
+        "prefill_time_us": 135790,
+        "decode_time_us": 107681,
+        "prompt_len": 26,
+        "decode_len": 8,
+        "prefill_tps": 191.472,
+        "decode_tps": 74.294,
+        "peak_rss_kb": 155286,
+        "power_ma": 1040.0,
+        "power_ma_raw": "1040.00",
+        "thermal_status": "NONE",
+        "thermal_cpu_c": 42.8,
+        "thermal_skin_c": 35.0
+      },
+      "response": "The capital of France is Paris.",
+      "error": null
+    },
+    {
+      "question_number": 2,
+      "question": "What is the capital of Germany?",
+      "run_id": "run_2_1784687610382",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 566,
+        "ttft_ms": 109.828177,
+        "prefill_time_us": 107211,
+        "decode_time_us": 108862,
+        "prompt_len": 26,
+        "decode_len": 8,
+        "prefill_tps": 242.512,
+        "decode_tps": 73.488,
+        "peak_rss_kb": 155286,
+        "power_ma": 1038.0,
+        "power_ma_raw": "1038.00",
+        "thermal_status": "NONE",
+        "thermal_cpu_c": 42.0,
+        "thermal_skin_c": 36.0
+      },
+      "response": "The capital of Germany is Berlin.",
+      "error": null
+    },
+    {
+      "question_number": 3,
+      "question": "What is the capital of Italy?",
+      "run_id": "run_3_1784687614079",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 565,
+        "ttft_ms": 110.558334,
+        "prefill_time_us": 108264,
+        "decode_time_us": 109118,
+        "prompt_len": 26,
+        "decode_len": 8,
+        "prefill_tps": 240.154,
+        "decode_tps": 73.315,
+        "peak_rss_kb": 155286,
+        "power_ma": 1036.0,
+        "power_ma_raw": "1036.00",
+        "thermal_status": "NONE",
+        "thermal_cpu_c": 42.4,
+        "thermal_skin_c": 36.0
+      },
+      "response": "The capital of Italy is Rome.",
+      "error": null
+    }
+  ],
+  "summary": {
+    "cold_load_ms": {
+      "mean": 569,
+      "std": 4.967,
+      "min": 565,
+      "max": 576,
+      "n_completed": 3
+    },
+    "ttft_ms": {
+      "mean": 119.729,
+      "std": 13.489,
+      "min": 109.828177,
+      "max": 138.800156,
+      "n_completed": 3
+    },
+    "prefill_tps": {
+      "mean": 224.713,
+      "std": 23.524,
+      "min": 191.472,
+      "max": 242.512,
+      "n_completed": 3
+    },
+    "decode_tps": {
+      "mean": 73.699,
+      "std": 0.427,
+      "min": 73.315,
+      "max": 74.294,
+      "n_completed": 3
+    },
+    "peak_rss_kb": {
+      "mean": 155286,
+      "std": 0.0,
+      "min": 155286,
+      "max": 155286,
+      "n_completed": 3
+    },
+    "power_ma": {
+      "mean": 1038.0,
+      "std": 1.633,
+      "min": 1036.0,
+      "max": 1040.0,
+      "n_completed": 3
+    },
+    "thermal_cpu_c": {
+      "mean": 42.4,
+      "std": 0.327,
+      "min": 42.0,
+      "max": 42.8,
+      "n_completed": 3
+    },
+    "thermal_skin_c": {
+      "mean": 35.667,
+      "std": 0.471,
+      "min": 35.0,
+      "max": 36.0,
+      "n_completed": 3
+    },
+    "thermal_states_observed": [
+      "NONE"
+    ],
+    "note": "power_ma stats exclude questions where POWER_MA was reported as 'unavailable' or missing. n_completed is reported per-metric because failed/timed-out questions - and, for power_ma specifically, 'unavailable' readings - are silently excluded from that metric's mean otherwise, which can bias results toward easier/luckier questions."
+  }
+}

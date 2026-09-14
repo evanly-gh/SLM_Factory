@@ -1,0 +1,319 @@
+{
+  "run_info": {
+    "model_path": "/data/local/tmp/mnn_models/qwen3-0.6b-mnn-q8",
+    "device": "f46d20ad",
+    "start_time": "2026-07-24T17:00:02.131679+00:00",
+    "end_time": "2026-07-24T17:04:01.552607+00:00",
+    "timeout_s": 180,
+    "total": 10,
+    "completed": 10,
+    "failed": 0,
+    "battery_warning": true,
+    "battery_level_pct": 100,
+    "battery_status": "Charging"
+  },
+  "results": [
+    {
+      "question_number": 1,
+      "question": "What is the capital of France?",
+      "run_id": "run_1_1784912402132",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 1609,
+        "ttft_ms": 365.067969,
+        "prefill_time_us": 287331,
+        "decode_time_us": 6873383,
+        "prompt_len": 26,
+        "decode_len": 127,
+        "prefill_tps": 90.488,
+        "decode_tps": 18.477,
+        "peak_rss_kb": 910656,
+        "power_ma": 246.14,
+        "power_ma_raw": "246.14",
+        "thermal_status": "Normal",
+        "thermal_cpu_c": 57.1,
+        "thermal_skin_c": 35.0
+      },
+      "response": "\\nOkay, the user is asking for the capital of France. Let me think. I know that France's capital is Paris. But wait, I should double-check to make sure there's no recent change. I remember reading somewhere that there might be a minor change, but I don't recall specific details about it. Maybe it's just a typo or a different country's capital? No, France is correct. Paris is the capital and the most populous city. I should confirm again. Yeah, Paris is definitely the answer. No need to mention anything else here.\\n\\n\\nThe capital of France is **Paris**.",
+      "error": null
+    },
+    {
+      "question_number": 2,
+      "question": "Who wrote Romeo and Juliet?",
+      "run_id": "run_2_1784912414867",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 1586,
+        "ttft_ms": 319.108385,
+        "prefill_time_us": 256912,
+        "decode_time_us": 10145932,
+        "prompt_len": 25,
+        "decode_len": 191,
+        "prefill_tps": 97.31,
+        "decode_tps": 18.825,
+        "peak_rss_kb": 922196,
+        "power_ma": 244.84,
+        "power_ma_raw": "244.84",
+        "thermal_status": "Normal",
+        "thermal_cpu_c": 59.8,
+        "thermal_skin_c": 36.0
+      },
+      "response": "\\nOkay, the user is asking who wrote \"Romeo and Juliet.\" I know that the play is a well-known classic, but I need to make sure I'm accurate. Let me think.\\n\\nI remember that the play was written by William Shakespeare. He was a British playwright and poet. But wait, I should check if there's any possibility of confusion with other works. No, \"Romeo and Juliet\" is definitely his. The user might not be aware that it's Shakespeare, so I should clarify that.\\n\\nAlso, maybe they're thinking of other authors, but \"Romeo and Juliet\" is a specific play. I should confirm the name of the author to avoid any mistakes. Yeah, I think that's correct. So the answer is William Shakespeare.\\n\\n\\nWilliam Shakespeare is the author of *Romeo and Juliet*. He is widely recognized for his contributions to English literature, including this famous play.",
+      "error": null
+    },
+    {
+      "question_number": 3,
+      "question": "What is the chemical symbol for gold?",
+      "run_id": "run_3_1784912429657",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 1578,
+        "ttft_ms": 367.203801,
+        "prefill_time_us": 290895,
+        "decode_time_us": 6978923,
+        "prompt_len": 27,
+        "decode_len": 129,
+        "prefill_tps": 92.817,
+        "decode_tps": 18.484,
+        "peak_rss_kb": 914624,
+        "power_ma": 242.95,
+        "power_ma_raw": "242.95",
+        "thermal_status": "Normal",
+        "thermal_cpu_c": 59.8,
+        "thermal_skin_c": 38.0
+      },
+      "response": "\\nOkay, the user is asking for the chemical symbol of gold. I remember that gold is a metal with the symbol Au. But wait, I should make sure. Let me think. The periodic table shows that gold is in the noble gas element group, and its symbol is indeed \"Au.\" I don't think there's any other symbol associated with it. Maybe they just want confirmation. So the answer is Au. I should present it clearly and maybe explain why it's the symbol. But the user just asked for the symbol, so I'll stick to that.\\n\\n\\nThe chemical symbol for gold is **Au**.",
+      "error": null
+    },
+    {
+      "question_number": 4,
+      "question": "What is the largest planet in our solar system?",
+      "run_id": "run_4_1784912442393",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 1581,
+        "ttft_ms": 379.0775,
+        "prefill_time_us": 301462,
+        "decode_time_us": 19854838,
+        "prompt_len": 29,
+        "decode_len": 303,
+        "prefill_tps": 96.198,
+        "decode_tps": 15.261,
+        "peak_rss_kb": 953476,
+        "power_ma": 242.64,
+        "power_ma_raw": "242.64",
+        "thermal_status": "Normal",
+        "thermal_cpu_c": 61.7,
+        "thermal_skin_c": 39.0
+      },
+      "response": "\\nOkay, so I need to figure out the largest planet in our solar system. Let me start by recalling what I know about the planets. I remember there are eight planets in total, right? The ones we usually think of are Mercury, Venus, Earth, Mars, Jupiter, Saturn, Uranus, and Neptune. Now, which one is the largest?\\n\\nHmm, Jupiter is definitely the biggest. I think it's so big because it has a massive atmosphere, maybe over 60% of the solar system's mass. But wait, are there any other planets that could be bigger? Like, could there be something bigger than Jupiter? I don't think so. The question is about the largest planet, so I need to confirm.\\n\\nWait, sometimes people get confused between the planets and other things. For example, maybe there's a dwarf planet or a moon that's bigger. But I don't think there are any. Jupiter is the only planet that's considered the largest in terms of size. So the answer should be Jupiter. Let me make sure I'm not mixing up with other planets. Mercury is smaller, Venus next, Earth, then Mars, and Jupiter is the largest. Yeah, I think that's right.\\n\\n\\nThe largest planet in our solar system is **Jupiter**. It is known for its massive size, with a volume that is about 318 times that of the Earth, and it plays a crucial role in the solar system's formation.",
+      "error": null
+    },
+    {
+      "question_number": 5,
+      "question": "What year did the first human land on the moon?",
+      "run_id": "run_5_1784912467528",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 1587,
+        "ttft_ms": 411.199114,
+        "prefill_time_us": 333860,
+        "decode_time_us": 10519519,
+        "prompt_len": 30,
+        "decode_len": 173,
+        "prefill_tps": 89.858,
+        "decode_tps": 16.446,
+        "peak_rss_kb": 927420,
+        "power_ma": 241.73,
+        "power_ma_raw": "241.73",
+        "thermal_status": "Normal",
+        "thermal_cpu_c": 61.4,
+        "thermal_skin_c": 39.0
+      },
+      "response": "\\nOkay, the user is asking about the first time a human landed on the moon. I remember that the Apollo 11 mission was the first successful landing. Let me confirm that. The Apollo 11 mission was in 1969, with Neil Armstrong landing on the moon on July 20, 1969. The answer should be 1969. I need to make sure there's no confusion with other lunar missions. Also, the user might be interested in the context of that event, so adding a bit about it's significance would be good. But since the question is straightforward, just stating the year should suffice.\\n\\n\\nThe first human to land on the moon was Neil Armstrong of the Apollo 11 mission, which took place on July 20, 1969.",
+      "error": null
+    },
+    {
+      "question_number": 6,
+      "question": "What are the three states of matter?",
+      "run_id": "run_6_1784912483751",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 1601,
+        "ttft_ms": 389.435782,
+        "prefill_time_us": 308602,
+        "decode_time_us": 20092590,
+        "prompt_len": 27,
+        "decode_len": 345,
+        "prefill_tps": 87.491,
+        "decode_tps": 17.171,
+        "peak_rss_kb": 946920,
+        "power_ma": 241.54,
+        "power_ma_raw": "241.54",
+        "thermal_status": "Normal",
+        "thermal_cpu_c": 64.5,
+        "thermal_skin_c": 40.0
+      },
+      "response": "\\nOkay, the user is asking about the three states of matter. Let me start by recalling what I know. The three states are solid, liquid, and gas. But wait, maybe I should confirm this to avoid any confusion. \\n\\nSolid, liquid, and gas are the three main states of matter. They are classified based on the physical properties of a substance. Solids have a fixed shape and volume, liquids have a fixed volume and can change shape, and gases have no fixed shape and volume.\\n\\nI should explain each state clearly. For solids, the particles are tightly packed, so they don't move. Liquids have particles that are close but not fixed. Gases have particles moving freely. \\n\\nI need to make sure the answer is concise but covers all three states. Also, maybe mention that these states are different because of the way particles interact. Let me check if there's any other state I'm missing. No, the three are solid, liquid, and gas. \\n\\nWait, sometimes people confuse liquid and gas, but that's not the case here. The user just wants the three, so I can list them clearly. Alright, time to put it all together in a friendly and informative way.\\n\\n\\nThe three states of matter are **solid**, **liquid**, and **gas**.  \\n\\n- **Solid**: Particles are tightly packed and fixed in position, forming a rigid structure.  \\n- **Liquid**: Particles are close but not fixed, allowing them to flow and change shape.  \\n- **Gas**: Particles move freely and expand to fill the container they're placed in.  \\n\\nThese states differ in how particles interact and their ability to change shape or volume.",
+      "error": null
+    },
+    {
+      "question_number": 7,
+      "question": "How does a refrigerator keep food cold?",
+      "run_id": "run_7_1784912508648",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 1575,
+        "ttft_ms": 378.53401,
+        "prefill_time_us": 305311,
+        "decode_time_us": 38396428,
+        "prompt_len": 27,
+        "decode_len": 645,
+        "prefill_tps": 88.434,
+        "decode_tps": 16.798,
+        "peak_rss_kb": 991944,
+        "power_ma": 243.4,
+        "power_ma_raw": "243.40",
+        "thermal_status": "Normal",
+        "thermal_cpu_c": 67.2,
+        "thermal_skin_c": 42.0
+      },
+      "response": "\\nOkay, the user is asking how a refrigerator keeps food cold. Let me break this down step by step.\\n\\nFirst, I remember that refrigerators use a cooling system. The main components are the refrigeration coils, a compressor, and a refrigerant. The coils are made of copper or other conductive materials, which helps in transferring heat from the inside to the outside.\\n\\nThen there's the compressor. It takes heat from the inside, which is then moved out through the coils. The refrigerant, a substance that can be liquid or gas, absorbs heat and moves to the coils, where it releases it back into the system. This cycle repeats continuously, keeping the fridge cool.\\n\\nWait, but the question is about how it keeps food cold. So I need to explain the process in terms of maintaining a low temperature. The coils are designed to transfer heat efficiently, and the compressor ensures the refrigerant moves continuously. The temperature inside the fridge should be around 4 degrees Celsius, which is a comfortable level for food storage.\\n\\nI should also mention that the refrigerant doesn't get inside the fridge, so it's not a heat source. The coils are made of materials that conduct heat well, which is why they're effective. Also, the compressor's operation is continuous, so the fridge doesn't have a \"cooling\" effect but rather a controlled process.\\n\\nWait, is there any other factor? Like the insulating material? Maybe, but I think the primary reason is the refrigeration cycle. The user might not have a deep understanding of refrigeration, so explaining the components and the process in simple terms would help. Also, making sure to mention that the temperature is maintained and that the food inside stays cold for a long time.\\n\\nI should structure the answer by first introducing the refrigeration cycle, then the components, and finally the effect on food. Keep it clear and conversational.\\n\\n\\nA refrigerator keeps food cold through a **refrigeration cycle** that uses a **cooling system**. Here's how it works:\\n\\n1. **Cooling System Components**:  \\n   - **Refrigeration Coils**: Copper or other conductive materials absorb heat from the inside of the fridge. These coils transfer the heat to the outside, maintaining a lower temperature.  \\n   - **Compressor**: Converts the heat from the refrigerant into work, compressing the refrigerant gas to move it to the coils.  \\n   - **Refrigerant**: A substance (liquid or gas) absorbs heat from the food, releasing it back into the system. It's essential for the cycle to function.  \\n\\n2. **Temperature Maintenance**:  \\n   - The refrigerant continuously absorbs and releases heat, keeping the inside of the fridge at a **constant 4\u00b0C** (40\u00b0F), which is ideal for storing food.  \\n\\n3. **Efficiency**:  \\n   - The cycle repeats continuously, ensuring food stays cold for extended periods. The coils are designed to transfer heat efficiently, and the refrigerant is not inside the fridge but rather in the system.  \\n\\nIn summary, the refrigerator uses a controlled process to maintain a low temperature, preventing food from getting warmer.",
+      "error": null
+    },
+    {
+      "question_number": 8,
+      "question": "Explain the process of photosynthesis in plants.",
+      "run_id": "run_8_1784912552931",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 1588,
+        "ttft_ms": 365.31401,
+        "prefill_time_us": 302559,
+        "decode_time_us": 34151418,
+        "prompt_len": 29,
+        "decode_len": 553,
+        "prefill_tps": 95.849,
+        "decode_tps": 16.193,
+        "peak_rss_kb": 976184,
+        "power_ma": 245.12,
+        "power_ma_raw": "245.12",
+        "thermal_status": "Normal",
+        "thermal_cpu_c": 68.7,
+        "thermal_skin_c": 43.0
+      },
+      "response": "\\nOkay, the user wants me to explain photosynthesis in plants. Let me start by recalling what I know. Photosynthesis is the process by which plants make their own food. I remember it involves chloroplasts, which are green parts of the plant. So the main steps should include light, water, carbon dioxide, and oxygen. \\n\\nWait, how does it work? Light energy is absorbed by chlorophyll, which helps convert the light into chemical energy. Water is split to release oxygen and provide electrons. Carbon dioxide is taken in, which is used to create glucose and release oxygen. \\n\\nI should break it down step by step. Start with the light, then the water and carbon dioxide. Maybe mention the products: glucose and oxygen. Also, the role of chloroplasts is important here. \\n\\nWait, did I miss any key points? Oh, the light is needed for the process, and plants can't perform photosynthesis without sunlight. Also, the overall process is about converting these materials into energy. \\n\\nI need to make sure the explanation is clear and not too technical. Maybe use a simple analogy or mention the importance of this process for life on Earth. Let me check if I covered all the components: light, water, carbon dioxide, chloroplasts, products, and the role. Yeah, that seems to cover it. Alright, time to put it all together in a friendly and easy-to-understand way.\\n\\n\\nPhotosynthesis is the process by which plants, algae, and some bacteria convert sunlight, water, and carbon dioxide into energy-rich glucose and oxygen. Here\u2019s a simple breakdown of the process:\\n\\n1. **Light Energy**:  \\n   Light energy from the sun is absorbed by chlorophyll, a pigment in chloroplasts (green organelles in plant cells). This energy is used to drive the chemical changes.\\n\\n2. **Water Splitting**:  \\n   Water (H\u2082O) is split in the chloroplasts into oxygen (O\u2082), hydrogen (H\u207a), and electrons. The oxygen is released into the atmosphere as a byproduct.\\n\\n3. **Carbon Dioxide Take-Up**:  \\n   Carbon dioxide (CO\u2082) is absorbed from the air through stomata (tiny pores on leaves).\\n\\n4. **Conversion to Energy**:  \\n   The light energy and water and CO\u2082 are combined to produce glucose (C\u2086H\u2081\u2082O\u2086) and oxygen. This glucose provides energy for the plant, while oxygen is released back into the environment.\\n\\n**Overall**:  \\nPhotosynthesis is the foundation of life on Earth, as it converts inorganic materials into organic matter, sustaining ecosystems. It is a vital biological process for all organisms that use sunlight to produce energy.",
+      "error": null
+    },
+    {
+      "question_number": 9,
+      "question": "Summarize the theory of relativity in simple terms.",
+      "run_id": "run_9_1784912592767",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 1577,
+        "ttft_ms": 418.854687,
+        "prefill_time_us": 351908,
+        "decode_time_us": 21999899,
+        "prompt_len": 31,
+        "decode_len": 372,
+        "prefill_tps": 88.091,
+        "decode_tps": 16.909,
+        "peak_rss_kb": 958060,
+        "power_ma": 246.99,
+        "power_ma_raw": "246.99",
+        "thermal_status": "Normal",
+        "thermal_cpu_c": 67.9,
+        "thermal_skin_c": 44.0
+      },
+      "response": "\\nOkay, the user wants a simple summary of Einstein's theory of relativity. Let me start by recalling the main points. Special relativity deals with objects moving at speeds close to the speed of light, right? It changes the way we perceive time and space. I should explain that time dilation and length contraction are key here.\\n\\nThen there's general relativity, which introduces gravity as a curvature of spacetime. The user might not know about black holes, so I should mention that. Also, the two theories are both formulated by Einstein, so I need to note that.\\n\\nWait, should I mention the differences between the two? Maybe that's useful. Also, the user might be a student or someone learning relativity for the first time, so keeping it simple and avoiding jargon is important. Let me structure it step by step: start with special relativity, then general, and conclude with their significance.\\n\\n\\n**Summary of Einstein's Theory of Relativity in Simple Terms:**\\n\\n1. **Special Relativity (1905):**  \\n   - Speed of light is constant in all directions and at all times.  \\n   - Time and space become relative\u2014time slows for objects moving at high speeds, and distances appear shorter.  \\n   - **Key Concepts:** Time dilation, length contraction.  \\n\\n2. **General Relativity (1915):**  \\n   - Gravity is the curvature of spacetime.  \\n   - Massive objects bend spacetime, creating \"wormholes\" or gravitational wells.  \\n   - **Key Concepts:** Gravitational time dilation and the equivalence principle.  \\n\\n**Why It Matters:**  \\nBoth theories explain how the universe works at extreme scales (e.g., black holes, GPS satellites) and how time and space interact. Einstein\u2019s work changed our understanding of physics forever.",
+      "error": null
+    },
+    {
+      "question_number": 10,
+      "question": "Describe the causes and consequences of World War I in a few sentences.",
+      "run_id": "run_10_1784912620142",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 1579,
+        "ttft_ms": 414.520938,
+        "prefill_time_us": 335452,
+        "decode_time_us": 16249440,
+        "prompt_len": 33,
+        "decode_len": 296,
+        "prefill_tps": 98.375,
+        "decode_tps": 18.216,
+        "peak_rss_kb": 955836,
+        "power_ma": 248.69,
+        "power_ma_raw": "248.69",
+        "thermal_status": "Normal",
+        "thermal_cpu_c": 67.9,
+        "thermal_skin_c": 44.0
+      },
+      "response": "\\nOkay, the user wants a few sentences describing the causes and consequences of World War I. Let me start by recalling the key factors leading up to the war. The main causes include the assassination of Archduke Franz Ferdinand in 1914, which set off the chain reaction of alliances and declarations of war. Then, there were the Triple Alliance and Triple Entente, which led to the Entente Powers and the Triple Alliance. The assassination caused a series of events, including the League of Nations, the Treaty of Versailles, and the resulting political instability.\\n\\nFor the consequences, I should mention the war's outcome, like the defeat of the Central Powers and the collapse of the European powers. Also, the aftermath led to the creation of the League of Nations and the Treaty of Versailles. I need to make sure the sentences are concise and cover both the causes and effects clearly.\\n\\n\\nWorld War I began with the assassination of Archduke Franz Ferdinand in 1914, triggering a chain reaction of alliances and declarations of war. The conflict saw the collapse of European powers and the rise of the Allies (Britain, France, Russia) and the Central Powers (Germany, Austria-Hungary, Bulgaria). The war ended with the Ottoman Empire's defeat and the Treaty of Versailles, which imposed harsh penalties on Germany, leading to long-term economic and political instability. The aftermath created the League of Nations and reshaped global power dynamics.",
+      "error": null
+    }
+  ],
+  "summary": {
+    "cold_load_ms": {
+      "mean": 1586.1,
+      "std": 10.483,
+      "min": 1575,
+      "max": 1609,
+      "n_completed": 10
+    },
+    "ttft_ms": {
+      "mean": 380.832,
+      "std": 28.408,
+      "min": 319.108385,
+      "max": 418.854687,
+      "n_completed": 10
+    },
+    "prefill_tps": {
+      "mean": 92.491,
+      "std": 3.934,
+      "min": 87.491,
+      "max": 98.375,
+      "n_completed": 10
+    },
+    "decode_tps": {
+      "mean": 17.278,
+      "std": 1.117,
+      "min": 15.261,
+      "max": 18.825,
+      "n_completed": 10
+    },
+    "peak_rss_kb": {
+      "mean": 945731.6,
+      "std": 25427.604,
+      "min": 910656,
+      "max": 991944,
+      "n_completed": 10
+    },
+    "power_ma": {
+      "mean": 244.404,
+      "std": 2.244,
+      "min": 241.54,
+      "max": 248.69,
+      "n_completed": 10
+    },
+    "thermal_cpu_c": {
+      "mean": 63.6,
+      "std": 3.954,
+      "min": 57.1,
+      "max": 68.7,
+      "n_completed": 10
+    },
+    "thermal_skin_c": {
+      "mean": 40.0,
+      "std": 3.033,
+      "min": 35.0,
+      "max": 44.0,
+      "n_completed": 10
+    },
+    "thermal_states_observed": [
+      "Normal"
+    ],
+    "note": "power_ma stats exclude questions where POWER_MA was reported as 'unavailable' or missing. n_completed is reported per-metric because failed/timed-out questions - and, for power_ma specifically, 'unavailable' readings - are silently excluded from that metric's mean otherwise, which can bias results toward easier/luckier questions."
+  }
+}

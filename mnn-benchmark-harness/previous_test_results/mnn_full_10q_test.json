@@ -1,0 +1,319 @@
+{
+  "run_info": {
+    "model_path": "/data/local/tmp/mnn_models/mnn-output-qwen2.5-0.5b-v4",
+    "device": "f46d20ad",
+    "start_time": "2026-07-22T02:57:35.664865+00:00",
+    "end_time": "2026-07-22T02:59:59.762458+00:00",
+    "timeout_s": 120,
+    "total": 10,
+    "completed": 10,
+    "failed": 0,
+    "battery_warning": true,
+    "battery_level_pct": 93,
+    "battery_status": "Charging"
+  },
+  "results": [
+    {
+      "question_number": 1,
+      "question": "What is the capital of France?",
+      "run_id": "run_1_1784689055666",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 595,
+        "ttft_ms": 119.615261,
+        "prefill_time_us": 116647,
+        "decode_time_us": 129072,
+        "prompt_len": 26,
+        "decode_len": 8,
+        "prefill_tps": 222.895,
+        "decode_tps": 61.981,
+        "peak_rss_kb": 153069,
+        "power_ma": 641.0,
+        "power_ma_raw": "641.00",
+        "thermal_status": "NONE",
+        "thermal_cpu_c": 42.8,
+        "thermal_skin_c": 35.0
+      },
+      "response": "The capital of France is Paris.",
+      "error": null
+    },
+    {
+      "question_number": 2,
+      "question": "Who wrote Romeo and Juliet?",
+      "run_id": "run_2_1784689059319",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 581,
+        "ttft_ms": 95.984948,
+        "prefill_time_us": 93532,
+        "decode_time_us": 182006,
+        "prompt_len": 25,
+        "decode_len": 12,
+        "prefill_tps": 267.288,
+        "decode_tps": 65.932,
+        "peak_rss_kb": 153069,
+        "power_ma": 640.0,
+        "power_ma_raw": "640.00",
+        "thermal_status": "NONE",
+        "thermal_cpu_c": 42.8,
+        "thermal_skin_c": 36.0
+      },
+      "response": "Romeo and Juliet was written by William Shakespeare.",
+      "error": null
+    },
+    {
+      "question_number": 3,
+      "question": "What is the chemical symbol for gold?",
+      "run_id": "run_3_1784689062983",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 577,
+        "ttft_ms": 110.769583,
+        "prefill_time_us": 107859,
+        "decode_time_us": 130388,
+        "prompt_len": 27,
+        "decode_len": 9,
+        "prefill_tps": 250.327,
+        "decode_tps": 69.025,
+        "peak_rss_kb": 153069,
+        "power_ma": 639.0,
+        "power_ma_raw": "639.00",
+        "thermal_status": "NONE",
+        "thermal_cpu_c": 44.0,
+        "thermal_skin_c": 36.0
+      },
+      "response": "The chemical symbol for gold is Au.",
+      "error": null
+    },
+    {
+      "question_number": 4,
+      "question": "What is the largest planet in our solar system?",
+      "run_id": "run_4_1784689066785",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 568,
+        "ttft_ms": 127.362344,
+        "prefill_time_us": 125003,
+        "decode_time_us": 195454,
+        "prompt_len": 29,
+        "decode_len": 12,
+        "prefill_tps": 231.994,
+        "decode_tps": 61.396,
+        "peak_rss_kb": 153069,
+        "power_ma": 636.0,
+        "power_ma_raw": "636.00",
+        "thermal_status": "NONE",
+        "thermal_cpu_c": 44.4,
+        "thermal_skin_c": 36.0
+      },
+      "response": "The largest planet in our solar system is Uranus.",
+      "error": null
+    },
+    {
+      "question_number": 5,
+      "question": "What year did the first human land on the moon?",
+      "run_id": "run_5_1784689070558",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 569,
+        "ttft_ms": 112.384948,
+        "prefill_time_us": 110272,
+        "decode_time_us": 1041652,
+        "prompt_len": 30,
+        "decode_len": 52,
+        "prefill_tps": 272.055,
+        "decode_tps": 49.921,
+        "peak_rss_kb": 153069,
+        "power_ma": 635.92,
+        "power_ma_raw": "635.92",
+        "thermal_status": "NONE",
+        "thermal_cpu_c": 54.8,
+        "thermal_skin_c": 36.0
+      },
+      "response": "The first human to land on the moon was Neil Armstrong, who flew aboard the Apollo 11 mission in 1969. Armstrong walked on the moon on July 20, 1969, during the third lunar landing.",
+      "error": null
+    },
+    {
+      "question_number": 6,
+      "question": "What are the three states of matter?",
+      "run_id": "run_6_1784689075553",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 595,
+        "ttft_ms": 314.042083,
+        "prefill_time_us": 309897,
+        "decode_time_us": 489989,
+        "prompt_len": 27,
+        "decode_len": 14,
+        "prefill_tps": 87.126,
+        "decode_tps": 28.572,
+        "peak_rss_kb": 153069,
+        "power_ma": 636.0,
+        "power_ma_raw": "636.00",
+        "thermal_status": "NONE",
+        "thermal_cpu_c": 47.8,
+        "thermal_skin_c": 37.0
+      },
+      "response": "The three states of matter are solid, liquid, and gas.",
+      "error": null
+    },
+    {
+      "question_number": 7,
+      "question": "How does a refrigerator keep food cold?",
+      "run_id": "run_7_1784689080510",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 650,
+        "ttft_ms": 227.260989,
+        "prefill_time_us": 224510,
+        "decode_time_us": 82563851,
+        "prompt_len": 27,
+        "decode_len": 2048,
+        "prefill_tps": 120.262,
+        "decode_tps": 24.805,
+        "peak_rss_kb": 153069,
+        "power_ma": 626.28,
+        "power_ma_raw": "626.28",
+        "thermal_status": "NONE",
+        "thermal_cpu_c": 74.1,
+        "thermal_skin_c": 42.0
+      },
+      "response": "A refrigerator keeps food cold by utilizing a process called the Carnot cycle, which is based on the principle of thermodynamics. Here's a breakdown of the process:",
+      "error": null
+    },
+    {
+      "question_number": 8,
+      "question": "Explain the process of photosynthesis in plants.",
+      "run_id": "run_8_1784689168827",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 663,
+        "ttft_ms": 219.700469,
+        "prefill_time_us": 216780,
+        "decode_time_us": 7676562,
+        "prompt_len": 29,
+        "decode_len": 223,
+        "prefill_tps": 133.776,
+        "decode_tps": 29.049,
+        "peak_rss_kb": 153069,
+        "power_ma": 625.02,
+        "power_ma_raw": "625.02",
+        "thermal_status": "NONE",
+        "thermal_cpu_c": 66.0,
+        "thermal_skin_c": 43.0
+      },
+      "response": "Photosynthesis is a process used by plants to convert sunlight into energy for themselves. It involves capturing light energy from the sun and converting it into chemical energy. This chemical energy is used to produce glucose and other nutrients for the plant to use.",
+      "error": null
+    },
+    {
+      "question_number": 9,
+      "question": "Summarize the theory of relativity in simple terms.",
+      "run_id": "run_9_1784689181279",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 649,
+        "ttft_ms": 250.891042,
+        "prefill_time_us": 248243,
+        "decode_time_us": 4261016,
+        "prompt_len": 31,
+        "decode_len": 122,
+        "prefill_tps": 124.878,
+        "decode_tps": 28.632,
+        "peak_rss_kb": 153069,
+        "power_ma": 623.77,
+        "power_ma_raw": "623.77",
+        "thermal_status": "NONE",
+        "thermal_cpu_c": 62.9,
+        "thermal_skin_c": 43.0
+      },
+      "response": "The theory of relativity is a set of ideas developed by Albert Einstein that explain the laws of physics that are consistent regardless of the speed of an object or a reference point. According to the theory, the laws of physics are the same for all observers, regardless of their motion or reference point. This means that an object or a reference point that is stationary will have the same laws of physics as one that is moving at a constant speed, and so on. The theory of relativity has been tested by many experiments, and the results have been consistent, but there are still some questions that remain unanswered.",
+      "error": null
+    },
+    {
+      "question_number": 10,
+      "question": "Describe the causes and consequences of World War I in a few sentences.",
+      "run_id": "run_10_1784689189838",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 653,
+        "ttft_ms": 260.167448,
+        "prefill_time_us": 257272,
+        "decode_time_us": 5483185,
+        "prompt_len": 33,
+        "decode_len": 159,
+        "prefill_tps": 128.269,
+        "decode_tps": 28.998,
+        "peak_rss_kb": 153069,
+        "power_ma": 623.23,
+        "power_ma_raw": "623.23",
+        "thermal_status": "NONE",
+        "thermal_cpu_c": 64.1,
+        "thermal_skin_c": 42.0
+      },
+      "response": "World War I was a conflict that occurred in Europe in 1914 and 1915. It involved the Central Powers (Russia, Austria-Hungary, Bulgaria) and the Allies (Germany, France, Russia, and Britain). It lasted for over a year, resulting in the deaths of over 36 million people worldwide, including more than 17 million civilians, and caused economic damage of around 36 billion marks. The war had serious consequences, including the loss of life, social and economic disruption, economic strain, loss of property, and the impact on the sense of purpose and identity of European nations. The war also led to the formation of the League of Nations, the beginning of World War II, and the beginning of World War II.",
+      "error": null
+    }
+  ],
+  "summary": {
+    "cold_load_ms": {
+      "mean": 610,
+      "std": 36.884,
+      "min": 568,
+      "max": 663,
+      "n_completed": 10
+    },
+    "ttft_ms": {
+      "mean": 183.818,
+      "std": 74.782,
+      "min": 95.984948,
+      "max": 314.042083,
+      "n_completed": 10
+    },
+    "prefill_tps": {
+      "mean": 183.887,
+      "std": 67.437,
+      "min": 87.126,
+      "max": 272.055,
+      "n_completed": 10
+    },
+    "decode_tps": {
+      "mean": 44.831,
+      "std": 17.472,
+      "min": 24.805,
+      "max": 69.025,
+      "n_completed": 10
+    },
+    "peak_rss_kb": {
+      "mean": 153069,
+      "std": 0.0,
+      "min": 153069,
+      "max": 153069,
+      "n_completed": 10
+    },
+    "power_ma": {
+      "mean": 632.622,
+      "std": 6.809,
+      "min": 623.23,
+      "max": 641.0,
+      "n_completed": 10
+    },
+    "thermal_cpu_c": {
+      "mean": 54.37,
+      "std": 11.0,
+      "min": 42.8,
+      "max": 74.1,
+      "n_completed": 10
+    },
+    "thermal_skin_c": {
+      "mean": 38.6,
+      "std": 3.231,
+      "min": 35.0,
+      "max": 43.0,
+      "n_completed": 10
+    },
+    "thermal_states_observed": [
+      "NONE"
+    ],
+    "note": "power_ma stats exclude questions where POWER_MA was reported as 'unavailable' or missing. n_completed is reported per-metric because failed/timed-out questions - and, for power_ma specifically, 'unavailable' readings - are silently excluded from that metric's mean otherwise, which can bias results toward easier/luckier questions."
+  }
+}

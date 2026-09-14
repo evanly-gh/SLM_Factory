@@ -1,0 +1,319 @@
+{
+  "run_info": {
+    "model_path": "/data/local/tmp/mnn_models/mnn-output-qwen2.5-0.5b-v4",
+    "device": "f46d20ad",
+    "start_time": "2026-07-22T03:49:52.420696+00:00",
+    "end_time": "2026-07-22T03:50:41.229234+00:00",
+    "timeout_s": 120,
+    "total": 10,
+    "completed": 10,
+    "failed": 0,
+    "battery_warning": true,
+    "battery_level_pct": 97,
+    "battery_status": "Charging"
+  },
+  "results": [
+    {
+      "question_number": 1,
+      "question": "What is the capital of France?",
+      "run_id": "run_1_1784692192421",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 594,
+        "ttft_ms": 113.023906,
+        "prefill_time_us": 110139,
+        "decode_time_us": 111155,
+        "prompt_len": 26,
+        "decode_len": 8,
+        "prefill_tps": 236.065,
+        "decode_tps": 71.972,
+        "peak_rss_kb": 573688,
+        "power_ma": 436.0,
+        "power_ma_raw": "436.00",
+        "thermal_status": "NONE",
+        "thermal_cpu_c": 41.3,
+        "thermal_skin_c": 35.0
+      },
+      "response": "The capital of France is Paris.",
+      "error": null
+    },
+    {
+      "question_number": 2,
+      "question": "Who wrote Romeo and Juliet?",
+      "run_id": "run_2_1784692196235",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 572,
+        "ttft_ms": 96.2975,
+        "prefill_time_us": 93990,
+        "decode_time_us": 174146,
+        "prompt_len": 25,
+        "decode_len": 12,
+        "prefill_tps": 265.986,
+        "decode_tps": 68.908,
+        "peak_rss_kb": 576468,
+        "power_ma": 436.0,
+        "power_ma_raw": "436.00",
+        "thermal_status": "NONE",
+        "thermal_cpu_c": 40.5,
+        "thermal_skin_c": 35.0
+      },
+      "response": "Romeo and Juliet was written by William Shakespeare.",
+      "error": null
+    },
+    {
+      "question_number": 3,
+      "question": "What is the chemical symbol for gold?",
+      "run_id": "run_3_1784692200055",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 579,
+        "ttft_ms": 106.271406,
+        "prefill_time_us": 103515,
+        "decode_time_us": 125801,
+        "prompt_len": 27,
+        "decode_len": 9,
+        "prefill_tps": 260.832,
+        "decode_tps": 71.542,
+        "peak_rss_kb": 579136,
+        "power_ma": 436.0,
+        "power_ma_raw": "436.00",
+        "thermal_status": "NONE",
+        "thermal_cpu_c": 41.3,
+        "thermal_skin_c": 35.0
+      },
+      "response": "The chemical symbol for gold is Au.",
+      "error": null
+    },
+    {
+      "question_number": 4,
+      "question": "What is the largest planet in our solar system?",
+      "run_id": "run_4_1784692203838",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 561,
+        "ttft_ms": 115.906354,
+        "prefill_time_us": 111348,
+        "decode_time_us": 160180,
+        "prompt_len": 29,
+        "decode_len": 11,
+        "prefill_tps": 260.445,
+        "decode_tps": 68.673,
+        "peak_rss_kb": 579588,
+        "power_ma": 436.0,
+        "power_ma_raw": "436.00",
+        "thermal_status": "NONE",
+        "thermal_cpu_c": 40.5,
+        "thermal_skin_c": 35.0
+      },
+      "response": "The largest planet in our solar system is Mercury.",
+      "error": null
+    },
+    {
+      "question_number": 5,
+      "question": "What year did the first human land on the moon?",
+      "run_id": "run_5_1784692207733",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 572,
+        "ttft_ms": 118.144166,
+        "prefill_time_us": 113665,
+        "decode_time_us": 429438,
+        "prompt_len": 30,
+        "decode_len": 27,
+        "prefill_tps": 263.933,
+        "decode_tps": 62.873,
+        "peak_rss_kb": 580744,
+        "power_ma": 436.0,
+        "power_ma_raw": "436.00",
+        "thermal_status": "NONE",
+        "thermal_cpu_c": 41.3,
+        "thermal_skin_c": 35.0
+      },
+      "response": "The first human to successfully land on the moon was Buzz Aldrin, on January 20, 1969.",
+      "error": null
+    },
+    {
+      "question_number": 6,
+      "question": "What are the three states of matter?",
+      "run_id": "run_6_1784692211427",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 571,
+        "ttft_ms": 120.23,
+        "prefill_time_us": 110933,
+        "decode_time_us": 283703,
+        "prompt_len": 27,
+        "decode_len": 19,
+        "prefill_tps": 243.39,
+        "decode_tps": 66.971,
+        "peak_rss_kb": 566496,
+        "power_ma": 436.0,
+        "power_ma_raw": "436.00",
+        "thermal_status": "NONE",
+        "thermal_cpu_c": 40.9,
+        "thermal_skin_c": 36.0
+      },
+      "response": "The three states of matter are:",
+      "error": null
+    },
+    {
+      "question_number": 7,
+      "question": "How does a refrigerator keep food cold?",
+      "run_id": "run_7_1784692215188",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 581,
+        "ttft_ms": 117.214063,
+        "prefill_time_us": 108355,
+        "decode_time_us": 4087936,
+        "prompt_len": 27,
+        "decode_len": 254,
+        "prefill_tps": 249.181,
+        "decode_tps": 62.134,
+        "peak_rss_kb": 569200,
+        "power_ma": 436.0,
+        "power_ma_raw": "436.00",
+        "thermal_status": "NONE",
+        "thermal_cpu_c": 59.0,
+        "thermal_skin_c": 36.0
+      },
+      "response": "A refrigerator keeps food cold by using a process called **thermohalogenation**, which involves the sublimation of a refrigerant (usually a chlorofluorocarbon or a hydrocarbon) to a sublimatable solid (usually carbon dioxide) that absorbs heat from the surroundings. This process causes the refrigerant to condense and then sublimate back into a solid state, which absorbs heat from the environment.",
+      "error": null
+    },
+    {
+      "question_number": 8,
+      "question": "Explain the process of photosynthesis in plants.",
+      "run_id": "run_8_1784692223803",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 592,
+        "ttft_ms": 118.215208,
+        "prefill_time_us": 109202,
+        "decode_time_us": 2376610,
+        "prompt_len": 29,
+        "decode_len": 150,
+        "prefill_tps": 265.563,
+        "decode_tps": 63.115,
+        "peak_rss_kb": 568976,
+        "power_ma": 436.0,
+        "power_ma_raw": "436.00",
+        "thermal_status": "NONE",
+        "thermal_cpu_c": 57.5,
+        "thermal_skin_c": 37.0
+      },
+      "response": "Photosynthesis is a process used by plants to obtain energy from sunlight. Photosynthesis takes place in the leaves of plants, where light energy is captured by chlorophyll molecules in the leaves, which contain pigments called chlorophyll. These pigments absorb light energy in the form of blue and red light, which is then used by chlorophyll to split water molecules in the leaves and release oxygen as a byproduct. The oxygen released by photosynthesis is then used by plants as an energy source for growth, development, and maintenance, as well as the release of carbon dioxide as a waste product. Photosynthesis is an important part of the Earth's energy cycle, as it allows plants to survive in environments with limited sunlight and limited resources.",
+      "error": null
+    },
+    {
+      "question_number": 9,
+      "question": "Summarize the theory of relativity in simple terms.",
+      "run_id": "run_9_1784692230015",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 578,
+        "ttft_ms": 125.33724,
+        "prefill_time_us": 120827,
+        "decode_time_us": 2386375,
+        "prompt_len": 31,
+        "decode_len": 151,
+        "prefill_tps": 256.565,
+        "decode_tps": 63.276,
+        "peak_rss_kb": 570892,
+        "power_ma": 436.0,
+        "power_ma_raw": "436.00",
+        "thermal_status": "NONE",
+        "thermal_cpu_c": 58.3,
+        "thermal_skin_c": 37.0
+      },
+      "response": "The theory of relativity is a set of ideas proposed by Albert Einstein in the early 20th century that describe how the laws of physics change from place to place as an object moves at different speeds, regardless of how fast that object is moving. Specifically, the theory of relativity states that the laws of physics are the same for all observers, regardless of how fast they are moving, and that time passes slower or faster for different observers. This means that if you are moving at a constant speed, you will see the passage of time pass slower than if you are moving at a constant speed but are also moving with acceleration. This is the basis of the theory of relativity and is one of the most important pieces of knowledge in physics.",
+      "error": null
+    },
+    {
+      "question_number": 10,
+      "question": "Describe the causes and consequences of World War I in a few sentences.",
+      "run_id": "run_10_1784692236126",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 585,
+        "ttft_ms": 125.936615,
+        "prefill_time_us": 123632,
+        "decode_time_us": 1683649,
+        "prompt_len": 33,
+        "decode_len": 108,
+        "prefill_tps": 266.921,
+        "decode_tps": 64.146,
+        "peak_rss_kb": 567988,
+        "power_ma": 436.0,
+        "power_ma_raw": "436.00",
+        "thermal_status": "NONE",
+        "thermal_cpu_c": 55.2,
+        "thermal_skin_c": 37.0
+      },
+      "response": "World War I was a global conflict that lasted from 1914 to 1918, involving alliances of various countries to defend against the perceived threat of German military power. Causes included the increasing militarization of Europe, economic depression in Europe and the United States, and the spread of nationalism and militarism. Consequences included massive casualties on both sides, economic hardship on all nations, loss of life in Europe, loss of life in the United States, and loss of life in other countries, including Russia and China.",
+      "error": null
+    }
+  ],
+  "summary": {
+    "cold_load_ms": {
+      "mean": 578.5,
+      "std": 9.584,
+      "min": 561,
+      "max": 594,
+      "n_completed": 10
+    },
+    "ttft_ms": {
+      "mean": 115.658,
+      "std": 8.398,
+      "min": 96.2975,
+      "max": 125.936615,
+      "n_completed": 10
+    },
+    "prefill_tps": {
+      "mean": 256.888,
+      "std": 10.059,
+      "min": 236.065,
+      "max": 266.921,
+      "n_completed": 10
+    },
+    "decode_tps": {
+      "mean": 66.361,
+      "std": 3.543,
+      "min": 62.134,
+      "max": 71.972,
+      "n_completed": 10
+    },
+    "peak_rss_kb": {
+      "mean": 573317.6,
+      "std": 5049.87,
+      "min": 566496,
+      "max": 580744,
+      "n_completed": 10
+    },
+    "power_ma": {
+      "mean": 436.0,
+      "std": 0.0,
+      "min": 436.0,
+      "max": 436.0,
+      "n_completed": 10
+    },
+    "thermal_cpu_c": {
+      "mean": 47.58,
+      "std": 8.155,
+      "min": 40.5,
+      "max": 59.0,
+      "n_completed": 10
+    },
+    "thermal_skin_c": {
+      "mean": 35.8,
+      "std": 0.872,
+      "min": 35.0,
+      "max": 37.0,
+      "n_completed": 10
+    },
+    "thermal_states_observed": [
+      "NONE"
+    ],
+    "note": "power_ma stats exclude questions where POWER_MA was reported as 'unavailable' or missing. n_completed is reported per-metric because failed/timed-out questions - and, for power_ma specifically, 'unavailable' readings - are silently excluded from that metric's mean otherwise, which can bias results toward easier/luckier questions."
+  }
+}

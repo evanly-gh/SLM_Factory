@@ -1,0 +1,319 @@
+{
+  "run_info": {
+    "model_path": "/data/local/tmp/mnn_models/qwen2.5-0.5b-instruct-mnn-q4",
+    "device": "f46d20ad",
+    "start_time": "2026-07-22T04:45:39.585603+00:00",
+    "end_time": "2026-07-22T04:47:57.554335+00:00",
+    "timeout_s": 120,
+    "total": 10,
+    "completed": 10,
+    "failed": 0,
+    "battery_warning": true,
+    "battery_level_pct": 100,
+    "battery_status": "Charging"
+  },
+  "results": [
+    {
+      "question_number": 1,
+      "question": "What is the capital of France?",
+      "run_id": "run_1_1784695539586",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 703,
+        "ttft_ms": 221.17,
+        "prefill_time_us": 217937,
+        "decode_time_us": 242283,
+        "prompt_len": 26,
+        "decode_len": 8,
+        "prefill_tps": 119.301,
+        "decode_tps": 33.019,
+        "peak_rss_kb": 558356,
+        "power_ma": 258.4,
+        "power_ma_raw": "258.40",
+        "thermal_status": "Normal",
+        "thermal_cpu_c": 40.9,
+        "thermal_skin_c": 32.0
+      },
+      "response": "The capital of France is Paris.",
+      "error": null
+    },
+    {
+      "question_number": 2,
+      "question": "Who wrote Romeo and Juliet?",
+      "run_id": "run_2_1784695543369",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 698,
+        "ttft_ms": 186.235261,
+        "prefill_time_us": 183491,
+        "decode_time_us": 422768,
+        "prompt_len": 25,
+        "decode_len": 12,
+        "prefill_tps": 136.246,
+        "decode_tps": 28.384,
+        "peak_rss_kb": 561564,
+        "power_ma": 254.0,
+        "power_ma_raw": "254.00",
+        "thermal_status": "Normal",
+        "thermal_cpu_c": 40.1,
+        "thermal_skin_c": 32.0
+      },
+      "response": "Romeo and Juliet was written by William Shakespeare.",
+      "error": null
+    },
+    {
+      "question_number": 3,
+      "question": "What is the chemical symbol for gold?",
+      "run_id": "run_3_1784695547046",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 708,
+        "ttft_ms": 228.464636,
+        "prefill_time_us": 225329,
+        "decode_time_us": 281480,
+        "prompt_len": 27,
+        "decode_len": 9,
+        "prefill_tps": 119.825,
+        "decode_tps": 31.974,
+        "peak_rss_kb": 562200,
+        "power_ma": 251.0,
+        "power_ma_raw": "251.00",
+        "thermal_status": "Normal",
+        "thermal_cpu_c": 41.3,
+        "thermal_skin_c": 32.0
+      },
+      "response": "The chemical symbol for gold is Au.",
+      "error": null
+    },
+    {
+      "question_number": 4,
+      "question": "What is the largest planet in our solar system?",
+      "run_id": "run_4_1784695550558",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 687,
+        "ttft_ms": 229.275365,
+        "prefill_time_us": 226406,
+        "decode_time_us": 1498056,
+        "prompt_len": 29,
+        "decode_len": 46,
+        "prefill_tps": 128.088,
+        "decode_tps": 30.706,
+        "peak_rss_kb": 557596,
+        "power_ma": 248.44,
+        "power_ma_raw": "248.44",
+        "thermal_status": "Normal",
+        "thermal_cpu_c": 47.1,
+        "thermal_skin_c": 32.0
+      },
+      "response": "The largest planet in our solar system is Mercury. It has an average diameter of about 4, 778 kilometers (2, 775 miles) and is approximately one-fourth the diameter of Earth.",
+      "error": null
+    },
+    {
+      "question_number": 5,
+      "question": "What year did the first human land on the moon?",
+      "run_id": "run_5_1784695555415",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 681,
+        "ttft_ms": 245.305782,
+        "prefill_time_us": 242669,
+        "decode_time_us": 1954038,
+        "prompt_len": 30,
+        "decode_len": 57,
+        "prefill_tps": 123.625,
+        "decode_tps": 29.17,
+        "peak_rss_kb": 557992,
+        "power_ma": 245.61,
+        "power_ma_raw": "245.61",
+        "thermal_status": "Normal",
+        "thermal_cpu_c": 49.8,
+        "thermal_skin_c": 33.0
+      },
+      "response": "The first human to land on the Moon was Neil Armstrong on July 20, 1969. He was a test pilot with the NASA Apollo missions. Armstrong was a test pilot with the NASA Apollo missions. He became the first human to walk on the Moon.",
+      "error": null
+    },
+    {
+      "question_number": 6,
+      "question": "What are the three states of matter?",
+      "run_id": "run_6_1784695561763",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 689,
+        "ttft_ms": 216.404271,
+        "prefill_time_us": 213084,
+        "decode_time_us": 421967,
+        "prompt_len": 27,
+        "decode_len": 14,
+        "prefill_tps": 126.711,
+        "decode_tps": 33.178,
+        "peak_rss_kb": 558372,
+        "power_ma": 243.0,
+        "power_ma_raw": "243.00",
+        "thermal_status": "Normal",
+        "thermal_cpu_c": 40.5,
+        "thermal_skin_c": 33.0
+      },
+      "response": "The three states of matter are solid, liquid, and gas.",
+      "error": null
+    },
+    {
+      "question_number": 7,
+      "question": "How does a refrigerator keep food cold?",
+      "run_id": "run_7_1784695565734",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 687,
+        "ttft_ms": 235.410729,
+        "prefill_time_us": 232431,
+        "decode_time_us": 5004420,
+        "prompt_len": 27,
+        "decode_len": 144,
+        "prefill_tps": 116.164,
+        "decode_tps": 28.775,
+        "peak_rss_kb": 558792,
+        "power_ma": 242.81,
+        "power_ma_raw": "242.81",
+        "thermal_status": "Normal",
+        "thermal_cpu_c": 52.5,
+        "thermal_skin_c": 33.0
+      },
+      "response": "A refrigerator keeps food cold by using a process called refrigeration, where it draws heat from the surrounding environment to cool down the food inside. This heat transfer is achieved through a combination of factors, including the temperature of the surrounding environment, the design of the refrigerator, and the design of the food items being stored. When food is stored in a refrigerator, it is often placed in an open container or a box that is sealed to prevent the food from absorbing heat from the surrounding environment. Additionally, the refrigerator is designed to maintain the temperature of the food within a specified range, usually around 0 to -40 degrees Celsius (32 to -24 degrees Fahrenheit), which is known as the cold chain.",
+      "error": null
+    },
+    {
+      "question_number": 8,
+      "question": "Explain the process of photosynthesis in plants.",
+      "run_id": "run_8_1784695574308",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 685,
+        "ttft_ms": 220.364115,
+        "prefill_time_us": 217769,
+        "decode_time_us": 78028146,
+        "prompt_len": 29,
+        "decode_len": 2048,
+        "prefill_tps": 133.169,
+        "decode_tps": 26.247,
+        "peak_rss_kb": 610680,
+        "power_ma": 239.27,
+        "power_ma_raw": "239.27",
+        "thermal_status": "Normal",
+        "thermal_cpu_c": 62.5,
+        "thermal_skin_c": 39.0
+      },
+      "response": "Photosynthesis is the process by which plants convert light energy from the sun into chemical energy stored in glucose molecules, which is used as a source of energy for the plant. Here's an overview of the photosynthesis process:",
+      "error": null
+    },
+    {
+      "question_number": 9,
+      "question": "Summarize the theory of relativity in simple terms.",
+      "run_id": "run_9_1784695658229",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 686,
+        "ttft_ms": 268.797552,
+        "prefill_time_us": 266101,
+        "decode_time_us": 5262652,
+        "prompt_len": 31,
+        "decode_len": 151,
+        "prefill_tps": 116.497,
+        "decode_tps": 28.693,
+        "peak_rss_kb": 571152,
+        "power_ma": 238.58,
+        "power_ma_raw": "238.58",
+        "thermal_status": "Normal",
+        "thermal_cpu_c": 59.4,
+        "thermal_skin_c": 39.0
+      },
+      "response": "The theory of relativity is a set of ideas proposed by Albert Einstein that describes how the laws of physics are the same regardless of the observer's frame of reference. This means that the laws of physics are the same for all observers regardless of where they are located or how fast they are moving. This is because the laws of physics are based on the laws of nature that were discovered by scientists long ago and have not changed since then. So, the laws of physics are the same regardless of the observer's frame of reference. This means that time slows down for the observer who is moving faster than the speed of light and faster than the speed of light. This means that the laws of physics are the same regardless of the observer's frame of reference.",
+      "error": null
+    },
+    {
+      "question_number": 10,
+      "question": "Describe the causes and consequences of World War I in a few sentences.",
+      "run_id": "run_10_1784695667865",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 686,
+        "ttft_ms": 242.245781,
+        "prefill_time_us": 239428,
+        "decode_time_us": 5777793,
+        "prompt_len": 33,
+        "decode_len": 178,
+        "prefill_tps": 137.828,
+        "decode_tps": 30.808,
+        "peak_rss_kb": 574556,
+        "power_ma": 238.95,
+        "power_ma_raw": "238.95",
+        "thermal_status": "Normal",
+        "thermal_cpu_c": 59.4,
+        "thermal_skin_c": 38.0
+      },
+      "response": "World War I (1914-1918) was a complex conflict that resulted in many different causes and consequences. On one hand, the assassination of Archduke Franz Ferdinand by Serbian nationalist Gavrilo\u6328\u514b\u91cc\u57281914\u5e7410\u670828\u65e5\u5728\u8428\u62c9\u8303\u5821\u88ab\u6740\u5bb3\u5f15\u53d1\u4e86\u7b2c\u4e00\u6b21\u4e16\u754c\u5927\u6218\u7684\u5f00\u7aef\u3002\u7b2c\u4e00\u6b21\u4e16\u754c\u5927\u6218\u5f00\u59cb\u4e8e1914\u5e74\u7684\u8428\u62c9\u8303\u5821\uff0c\u5f53\u65f6\u5965\u5308\u5e1d\u56fd\u4e0e\u4e09\u56fd\u540c\u76df\u7684\u5176\u4ed6\u6210\u5458\u56fd\u4e4b\u95f4\u7684\u77db\u76fe\u6fc0\u5316\u4e86\u6218\u4e89\u3002\u6218\u4e89\u6301\u7eed\u4e86\u56db\u5e74\uff0c\u6700\u7ec8\u5bfc\u81f4\u4e86\u7b2c\u4e00\u6b21\u4e16\u754c\u5927\u6218\u7684\u7206\u53d1\uff0c\u6700\u7ec8\u57281918\u5e7411\u670811\u65e5\u7684\u51e1\u5c14\u767b\u88ab\u653b\u9677\uff0c\u6218\u4e89\u4ee5\u5931\u8d25\u7684\u5fb7\u610f\u5fd7\u5e1d\u56fd\u7684\u5931\u8d25\u544a\u7ec8\u3002\u6218\u4e89\u9020\u6210\u4e86\u5de8\u5927\u7684\u4eba\u5458\u4f24\u4ea1\u548c\u7ecf\u6d4e\u635f\u5931\uff0c\u6218\u4e89\u4e5f\u52a0\u5267\u4e86\u56fd\u5bb6\u95f4\u7684\u77db\u76fe\uff0c\u6700\u7ec8\u5bfc\u81f4\u4e86\u7b2c\u4e00\u6b21\u4e16\u754c\u5927\u6218\u7684\u7206\u53d1\u3002",
+      "error": null
+    }
+  ],
+  "summary": {
+    "cold_load_ms": {
+      "mean": 691,
+      "std": 8.39,
+      "min": 681,
+      "max": 708,
+      "n_completed": 10
+    },
+    "ttft_ms": {
+      "mean": 229.367,
+      "std": 20.466,
+      "min": 186.235261,
+      "max": 268.797552,
+      "n_completed": 10
+    },
+    "prefill_tps": {
+      "mean": 125.745,
+      "std": 7.591,
+      "min": 116.164,
+      "max": 137.828,
+      "n_completed": 10
+    },
+    "decode_tps": {
+      "mean": 30.095,
+      "std": 2.116,
+      "min": 26.247,
+      "max": 33.178,
+      "n_completed": 10
+    },
+    "peak_rss_kb": {
+      "mean": 567126,
+      "std": 15558.977,
+      "min": 557596,
+      "max": 610680,
+      "n_completed": 10
+    },
+    "power_ma": {
+      "mean": 246.006,
+      "std": 6.466,
+      "min": 238.58,
+      "max": 258.4,
+      "n_completed": 10
+    },
+    "thermal_cpu_c": {
+      "mean": 49.35,
+      "std": 8.308,
+      "min": 40.1,
+      "max": 62.5,
+      "n_completed": 10
+    },
+    "thermal_skin_c": {
+      "mean": 34.3,
+      "std": 2.9,
+      "min": 32.0,
+      "max": 39.0,
+      "n_completed": 10
+    },
+    "thermal_states_observed": [
+      "Normal"
+    ],
+    "note": "power_ma stats exclude questions where POWER_MA was reported as 'unavailable' or missing. n_completed is reported per-metric because failed/timed-out questions - and, for power_ma specifically, 'unavailable' readings - are silently excluded from that metric's mean otherwise, which can bias results toward easier/luckier questions."
+  }
+}

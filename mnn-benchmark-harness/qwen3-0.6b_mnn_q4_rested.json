@@ -1,0 +1,319 @@
+{
+  "run_info": {
+    "model_path": "/data/local/tmp/mnn_models/qwen3-0.6b-mnn-q4",
+    "device": "f46d20ad",
+    "start_time": "2026-07-24T16:45:38.749140+00:00",
+    "end_time": "2026-07-24T16:51:03.213432+00:00",
+    "timeout_s": 180,
+    "total": 10,
+    "completed": 10,
+    "failed": 0,
+    "battery_warning": true,
+    "battery_level_pct": 100,
+    "battery_status": "Charging"
+  },
+  "results": [
+    {
+      "question_number": 1,
+      "question": "What is the capital of France?",
+      "run_id": "run_1_1784911538749",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 590,
+        "ttft_ms": 168.418541,
+        "prefill_time_us": 142868,
+        "decode_time_us": 2085676,
+        "prompt_len": 26,
+        "decode_len": 107,
+        "prefill_tps": 181.986,
+        "decode_tps": 51.302,
+        "peak_rss_kb": 669272,
+        "power_ma": 249.42,
+        "power_ma_raw": "249.42",
+        "thermal_status": "Normal",
+        "thermal_cpu_c": 55.2,
+        "thermal_skin_c": 34.0
+      },
+      "response": "\\nOkay, the user asked, \"What is the capital of France?\" I remember that France is a country in Europe, and its capital is Paris. But I need to make sure if there's any trick here. Since the question is straightforward, I don't think there's any trick. The answer is clear. The user might be testing if I know, so I should provide the answer directly. I'll confirm once more with a simple question to ensure accuracy.\\n\\n\\nThe capital of France is **Paris**.",
+      "error": null
+    },
+    {
+      "question_number": 2,
+      "question": "Who wrote Romeo and Juliet?",
+      "run_id": "run_2_1784911545314",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 581,
+        "ttft_ms": 146.546094,
+        "prefill_time_us": 120258,
+        "decode_time_us": 2373936,
+        "prompt_len": 25,
+        "decode_len": 121,
+        "prefill_tps": 207.886,
+        "decode_tps": 50.97,
+        "peak_rss_kb": 682148,
+        "power_ma": 247.69,
+        "power_ma_raw": "247.69",
+        "thermal_status": "Normal",
+        "thermal_cpu_c": 56.0,
+        "thermal_skin_c": 35.0
+      },
+      "response": "\\nOkay, the user asked, \"Who wrote Romeo and Juliet?\" I remember that the play is a classic, so the answer is Shakespeare. But wait, maybe they want to confirm if it's a play by Shakespeare. I should make sure to mention that it's by Shakespeare. Also, maybe they are curious if there's any other author, but no, it's definitely Shakespeare. So I should present the answer clearly and confirm the origin.\\n\\n\\nThe play \"Romeo and Juliet\" was written by **William Shakespeare**. It is considered a masterpiece of the English Renaissance.",
+      "error": null
+    },
+    {
+      "question_number": 3,
+      "question": "What is the chemical symbol for gold?",
+      "run_id": "run_3_1784911551775",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 581,
+        "ttft_ms": 167.257656,
+        "prefill_time_us": 136906,
+        "decode_time_us": 2861209,
+        "prompt_len": 27,
+        "decode_len": 143,
+        "prefill_tps": 197.216,
+        "decode_tps": 49.979,
+        "peak_rss_kb": 676376,
+        "power_ma": 247.41,
+        "power_ma_raw": "247.41",
+        "thermal_status": "Normal",
+        "thermal_cpu_c": 58.3,
+        "thermal_skin_c": 35.0
+      },
+      "response": "\\nOkay, the user is asking for the chemical symbol of gold. I know that gold is a precious metal, and its symbol is usually represented as Au. But I should make sure I'm not confusing it with another element. The chemical symbol for gold is indeed Au, so I need to confirm that. Wait, sometimes people might mix up the symbol for other elements, but in this case, gold is definitely Au. I think I've got that right. So the answer should be Au. But I should check if there's any other possible symbol. No, I think Au is correct. So I'll present the answer as Au.\\n\\n\\nThe chemical symbol for gold is **Au**.",
+      "error": null
+    },
+    {
+      "question_number": 4,
+      "question": "What is the largest planet in our solar system?",
+      "run_id": "run_4_1784911558171",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 689,
+        "ttft_ms": 345.017864,
+        "prefill_time_us": 290374,
+        "decode_time_us": 7159750,
+        "prompt_len": 29,
+        "decode_len": 158,
+        "prefill_tps": 99.871,
+        "decode_tps": 22.068,
+        "peak_rss_kb": 693884,
+        "power_ma": 245.01,
+        "power_ma_raw": "245.01",
+        "thermal_status": "Normal",
+        "thermal_cpu_c": 61.0,
+        "thermal_skin_c": 36.0
+      },
+      "response": "\\nOkay, the user asked, \"What is the largest planet in our solar system?\" I know from what I remember that the largest planet is Jupiter. But wait, is that still correct? I think I've seen some information that suggests Jupiter is the largest. So, I need to make sure if this is accurate. I think I've read before that Jupiter is indeed the largest. So, I should confirm. But since the user is asking, maybe I can just go with what I know. The answer is Jupiter. But I need to check. Wait, is Jupiter the largest? Yes, according to what I know. So, the answer is Jupiter. So, I think the correct answer is Jupiter.\\n\\n\\nThe largest planet in our solar system is Jupiter.",
+      "error": null
+    },
+    {
+      "question_number": 5,
+      "question": "What year did the first human land on the moon?",
+      "run_id": "run_5_1784911569664",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 692,
+        "ttft_ms": 358.813801,
+        "prefill_time_us": 304522,
+        "decode_time_us": 8263731,
+        "prompt_len": 30,
+        "decode_len": 192,
+        "prefill_tps": 98.515,
+        "decode_tps": 23.234,
+        "peak_rss_kb": 672976,
+        "power_ma": 248.9,
+        "power_ma_raw": "248.90",
+        "thermal_status": "Normal",
+        "thermal_cpu_c": 59.8,
+        "thermal_skin_c": 37.0
+      },
+      "response": "\\nOkay, the user asked, \"What year did the first human land on the moon?\" Hmm, they might be referring to the Apollo missions. The first human landing on the moon was in 1969, when NASA's Apollo missions took place. The user might be confused, but I need to provide the correct information.\\n\\nI should confirm the date. The Apollo landing was in 1969, so the answer is 1969. The user might have a misunderstanding, but I can state the fact. I need to make sure there's no error in the information. The answer is straightforward. I should present it clearly and check if there's any possible confusion. If they have any further questions, I can answer them. But in this case, since the question is straightforward, I can just state the correct information.\\n\\n\\nThe first human landing on the moon was in **1969**.",
+      "error": null
+    },
+    {
+      "question_number": 6,
+      "question": "What are the three states of matter?",
+      "run_id": "run_6_1784911582035",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 695,
+        "ttft_ms": 326.485469,
+        "prefill_time_us": 275681,
+        "decode_time_us": 10590942,
+        "prompt_len": 27,
+        "decode_len": 256,
+        "prefill_tps": 97.939,
+        "decode_tps": 24.172,
+        "peak_rss_kb": 671840,
+        "power_ma": 248.66,
+        "power_ma_raw": "248.66",
+        "thermal_status": "Normal",
+        "thermal_cpu_c": 61.0,
+        "thermal_skin_c": 38.0
+      },
+      "response": "\\nOkay, the user asked, \"What are the three states of matter?\" Let me think. I remember that there are three basic states of matter: solid, liquid, and gas. But I need to make sure I don't confuse with the scientific name. Wait, the question is in English, so I don't need to add any extra. The user wants a straightforward answer. Let me confirm. Yes, the three states of matter are solid, liquid, and gas. I think that's it. I should present it clearly and concisely. Maybe add a brief description for each state. For example, solid has low density, liquid has a fixed volume and shape, and gas has low density and can move freely. But the user is asking for the answer, not details. Just the three states. I think that's all. I think I'm done. I will present the answer as the user requested.\\n\\n\\nThe three states of matter are **solid**, **liquid**, and **gas**. These states describe the physical state of matter, where particles are arranged in a fixed amount of space and form. Solid particles are tightly packed, liquid particles maintain a fixed volume and shape, and gas particles have low density and can move freely.",
+      "error": null
+    },
+    {
+      "question_number": 7,
+      "question": "How does a refrigerator keep food cold?",
+      "run_id": "run_7_1784911596917",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 677,
+        "ttft_ms": 336.845364,
+        "prefill_time_us": 282921,
+        "decode_time_us": 139457608,
+        "prompt_len": 27,
+        "decode_len": 2048,
+        "prefill_tps": 95.433,
+        "decode_tps": 14.685,
+        "peak_rss_kb": 994996,
+        "power_ma": 254.92,
+        "power_ma_raw": "254.92",
+        "thermal_status": "Normal",
+        "thermal_cpu_c": 67.5,
+        "thermal_skin_c": 44.0
+      },
+      "response": "\\nOkay, the user asked, \"How does a refrigerator keep food cold?\" I need to explain the basic principle behind refrigeration. Let me start by recalling the basic science involved. Reversing the process of heating, so the refrigerator cools down the inside. The main components are the coils, which are made of materials like copper. When the coils are turned on, they allow heat to pass through. The inside of the fridge cools down because of this. The air inside is then kept cool by the coils. The air is drawn out through the coils, and then it's kept cool. The inside of the fridge is kept cool because the coils are at a lower temperature. The coils are cooled by the air, which allows the air inside to cool down. The air is drawn out through the coils, and then it's kept cool. The inside of the fridge is kept cool because of the coils and the air passing through. The process is efficient because the coils are at a lower temperature and the air is drawn out. The coils are cooled by the air passing through, which allows the air to cool down. The inside of the fridge is kept cool because the coils are at a lower temperature and the air is drawn out. The process is efficient because the coils are at a lower temperature and the air is drawn out. The coils are cooled by the air passing through, which allows the air to cool down. The inside of the fridge is kept cool because of the coils and the air passing through. The process is efficient because the coils are at a lower temperature and the air is drawn out. The coils are cooled by the air passing through, which allows the air to cool down. The inside of the fridge is kept cool because of the coils and the air passing through. The process is efficient because the coils are at a lower temperature and the air is drawn out. The coils are cooled by the air passing through, which allows the air to cool down. The inside of the fridge is kept cool because of the coils and the air passing through. The process is efficient because the coils are at a lower temperature and the air is drawn out. The coils are cooled by the air passing through, which allows the air to cool down. The inside of the fridge is kept cool because of the coils and the air passing through. The process is efficient because the coils are at a lower temperature and the air is drawn out. The coils are cooled by the air passing through, which allows the air to cool down. The inside of the fridge is kept cool because of the coils and the air passing through. The process is efficient because the coils are at a lower temperature and the air is drawn out. The coils are cooled by the air passing through, which allows the air to cool down. The inside of the fridge is kept cool because of the coils and the air passing through. The process is efficient because the coils are at a lower temperature and the air is drawn out. The coils are cooled by the air passing through, which allows the air to cool down. The inside of the fridge is kept cool because of the coils and the air passing through. The process is efficient because the coils are at a lower temperature and the air is drawn out. The coils are cooled by the air passing through, which allows the air to cool down. The inside of the fridge is kept cool because of the coils and the air passing through. The process is efficient because the coils are at a lower temperature and the air is drawn out. The coils are cooled by the air passing through, which allows the air to cool down. The inside of the fridge is kept cool because of the coils and the air passing through. The process is efficient because the coils are at a lower temperature and the air is drawn out. The coils are cooled by the air passing through, which allows the air to cool down. The inside of the fridge is kept cool because of the coils and the air passing through. The process is efficient because the coils are at a lower temperature and the air is drawn out. The coils are cooled by the air passing through, which allows the",
+      "error": null
+    },
+    {
+      "question_number": 8,
+      "question": "Explain the process of photosynthesis in plants.",
+      "run_id": "run_8_1784911742406",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 695,
+        "ttft_ms": 339.213177,
+        "prefill_time_us": 286026,
+        "decode_time_us": 73084830,
+        "prompt_len": 29,
+        "decode_len": 1355,
+        "prefill_tps": 101.389,
+        "decode_tps": 18.54,
+        "peak_rss_kb": 837992,
+        "power_ma": 265.55,
+        "power_ma_raw": "265.55",
+        "thermal_status": "Normal",
+        "thermal_cpu_c": 69.5,
+        "thermal_skin_c": 45.0
+      },
+      "response": "\\nOkay, so the user wants to know how photosynthesis works in plants. Let me start by recalling the basic process. Photosynthesis is the process where plants convert light energy into food. I need to explain the steps involved here. \\n\\nFirst, I think the process involves chlorophyll. Wait, chlorophyll is the pigment in the chloroplasts. Right, so the plant needs chlorophyll to capture the light. Then, the light energy is converted into chemical energy. That's probably the first part. So, the light is absorbed, and the chemical energy is created. But then, what happens after? The light energy is converted into chemical energy, which is stored in the chlorophyll. \\n\\nThen, the plant uses the chlorophyll to make the chemical energy. So, the light energy is converted into chemical energy. Then, the chemical energy is used to make glucose and other products. So, that's where the first part is. Then, the glucose is stored in the chlorophyll. Wait, maybe that's not right. Let me think again. The process is called photosynthesis. So, the light energy is used to create chemical energy. The chemical energy is then used to create glucose and other products. But then, the chlorophyll is used to make those. So, the first step is the absorption of light. Then, the light is converted into chemical energy. \\n\\nAfter that, the plant uses that chemical energy to make glucose and other products. So, the steps would be: light energy is absorbed by chlorophyll. The chemical energy is then used to create glucose and other products. So, the process is: light is absorbed, chemical energy is created, and then the chemical energy is used to make products. \\n\\nBut maybe I should break it down. The process starts with chlorophyll absorbing light. Then, the light energy is converted into chemical energy. The chemical energy is then used to create glucose and other products. The chlorophyll is then used to make those. So, the process is: chlorophyll absorbs light, converts it into chemical energy, which is then used to make glucose. \\n\\nWait, but why is the chemical energy stored? Maybe after creating the glucose, the chlorophyll is used to make more. But then, the glucose is stored in the chlorophyll. Maybe that's not the right part. Let me think. The process is: light is absorbed by chlorophyll. The chemical energy is stored in the chlorophyll. The chlorophyll is then used to make glucose. The glucose is stored in the chlorophyll. Then, the process continues. So, the steps are: light energy is absorbed, chemical energy is created, then used to make glucose. \\n\\nAlternatively, maybe the process is: chlorophyll absorbs light, which converts into chemical energy. Then, the chemical energy is used to make glucose and other products. But then, the chlorophyll is used to make those. \\n\\nI think the correct order is first the absorption of light, then the conversion into chemical energy, and then the use of that chemical energy to make glucose and other products. So, the process is: light is absorbed by chlorophyll, which creates chemical energy. The chemical energy is then used to make glucose. So, the steps are: light absorption, chemical energy creation, then energy used to make glucose. \\n\\nI need to make sure that I don't mix up the steps. Let me check. For example, in photosynthesis, the light is absorbed, the chemical energy is made, and then that energy is used to make glucose. So, the process is: light energy is converted into chemical energy. The chemical energy is then used to create glucose. \\n\\nSo, the steps would be: chlorophyll absorbs light, which creates chemical energy. Then, that chemical energy is used to make glucose. The glucose is stored in the chlorophyll. \\n\\nBut maybe after creating the glucose, the chlorophyll is used to make more. But that's part of the process. So, the process is: light is absorbed, chemical energy is made, then that energy is used to make glucose. The glucose is stored in the chlorophyll. Then, the chlorophyll is use",
+      "error": null
+    },
+    {
+      "question_number": 9,
+      "question": "Summarize the theory of relativity in simple terms.",
+      "run_id": "run_9_1784911820953",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 689,
+        "ttft_ms": 376.679584,
+        "prefill_time_us": 328391,
+        "decode_time_us": 24666510,
+        "prompt_len": 31,
+        "decode_len": 517,
+        "prefill_tps": 94.4,
+        "decode_tps": 20.96,
+        "peak_rss_kb": 720560,
+        "power_ma": 269.41,
+        "power_ma_raw": "269.41",
+        "thermal_status": "Normal",
+        "thermal_cpu_c": 69.1,
+        "thermal_skin_c": 46.0
+      },
+      "response": "\\nOkay, the user wants a simple summary of the theory of relativity. Let me start by recalling the basic concepts. The theory is about space and time, and it's about how things are relative. So, Einstein and his followers had a lot of things to consider. \\n\\nFirst, I need to explain that time and space are relative, not absolute. The idea is that measurements are different depending on the observer. So, time is not just a number but a variable that depends on how you look at it. That's called time dilation. Also, space is like a four-dimensional space where space is relative, not absolute. \\n\\nThen, there's the idea of the speed of light. The speed is constant for all observers, so even though you feel time is moving, your actual time is different. That's called special relativity. \\n\\nAlso, the general theory of relativity is more about gravity and how it affects space and time. The idea is that massive objects cause a warping of space, which affects time. So, the theory is a combination of special and general. \\n\\nI need to make sure the explanation is simple. Avoid complex terms. Maybe start with a simple example, like how time and space are different depending on the observer. Then mention time dilation, and then the general effect of gravity. \\n\\nWait, the user asked for a summary. They might need it in a short, concise way. So, structure it as a list. Start with the main idea, then the two parts. Keep it simple. Let me check if I'm missing anything. Maybe mention that both special and general are in the same theory. \\n\\nYes, that's important. So, after that, the summary would be clear and easy to understand. Let me put it all together in simple terms. Avoid jargon, and make sure it's clear. That should meet the user's request.\\n\\n\\nThe theory of relativity explains how time and space are relative, meaning they change depending on the observer.  \\n- **Time**: It doesn\u2019t have a fixed value, and it depends on how you measure it.  \\n- **Space**: It changes when you are in a strong gravitational field, like near a massive object.  \\n- **Special relativity**: The speed of light is constant, and time runs slower for observers in different frames.  \\n- **General relativity**: Gravity is a curvature of space and time, not just a force.  \\n\\nIt combines the basic idea of time and space as variables that change with the observer.",
+      "error": null
+    },
+    {
+      "question_number": 10,
+      "question": "Describe the causes and consequences of World War I in a few sentences.",
+      "run_id": "run_10_1784911849481",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 693,
+        "ttft_ms": 363.994218,
+        "prefill_time_us": 308450,
+        "decode_time_us": 9851565,
+        "prompt_len": 33,
+        "decode_len": 229,
+        "prefill_tps": 106.987,
+        "decode_tps": 23.245,
+        "peak_rss_kb": 679524,
+        "power_ma": 270.21,
+        "power_ma_raw": "270.21",
+        "thermal_status": "Normal",
+        "thermal_cpu_c": 69.1,
+        "thermal_skin_c": 45.0
+      },
+      "response": "\\nOkay, the user wants a description of the causes and consequences of World War I in a few sentences. Let me start by recalling the key points. The main causes include the discovery of the First World War, the rise of militarism, and the expansion of national interests. For the consequences, I need to mention the collapse of the empire, the rise of nationalism, and the spread of militarism. I should make sure to keep it concise. Let me check if I have all the elements covered. The causes and consequences are covered. Now, structure it in a few sentences. Maybe start with the causes, then the consequences. Keep it to around 10-15 sentences. Alright, that should work. I think that's all.\\n\\n\\nWorld War I was primarily caused by the discovery of the First World War, the rise of militarism, and the expansion of national interests. The combination of these factors led to a series of events that ultimately resulted in the collapse of the empire. The war's consequences included the rise of nationalism, the spread of militarism, and the overall destruction of global stability.",
+      "error": null
+    }
+  ],
+  "summary": {
+    "cold_load_ms": {
+      "mean": 658.2,
+      "std": 48.871,
+      "min": 581,
+      "max": 695,
+      "n_completed": 10
+    },
+    "ttft_ms": {
+      "mean": 292.927,
+      "std": 87.772,
+      "min": 146.546094,
+      "max": 376.679584,
+      "n_completed": 10
+    },
+    "prefill_tps": {
+      "mean": 128.162,
+      "std": 44.711,
+      "min": 94.4,
+      "max": 207.886,
+      "n_completed": 10
+    },
+    "decode_tps": {
+      "mean": 29.916,
+      "std": 13.887,
+      "min": 14.685,
+      "max": 51.302,
+      "n_completed": 10
+    },
+    "peak_rss_kb": {
+      "mean": 729956.8,
+      "std": 100654.855,
+      "min": 669272,
+      "max": 994996,
+      "n_completed": 10
+    },
+    "power_ma": {
+      "mean": 254.718,
+      "std": 9.321,
+      "min": 245.01,
+      "max": 270.21,
+      "n_completed": 10
+    },
+    "thermal_cpu_c": {
+      "mean": 62.65,
+      "std": 5.347,
+      "min": 55.2,
+      "max": 69.5,
+      "n_completed": 10
+    },
+    "thermal_skin_c": {
+      "mean": 39.5,
+      "std": 4.631,
+      "min": 34.0,
+      "max": 46.0,
+      "n_completed": 10
+    },
+    "thermal_states_observed": [
+      "Normal"
+    ],
+    "note": "power_ma stats exclude questions where POWER_MA was reported as 'unavailable' or missing. n_completed is reported per-metric because failed/timed-out questions - and, for power_ma specifically, 'unavailable' readings - are silently excluded from that metric's mean otherwise, which can bias results toward easier/luckier questions."
+  }
+}

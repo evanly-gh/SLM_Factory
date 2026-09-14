@@ -1,0 +1,151 @@
+{
+  "run_info": {
+    "model_path": "/data/local/tmp/mnn_models/qwen2.5-0.5b-instruct-mnn-q4",
+    "device": "f46d20ad",
+    "start_time": "2026-07-22T04:34:11.757616+00:00",
+    "end_time": "2026-07-22T04:34:23.194504+00:00",
+    "timeout_s": 120,
+    "total": 3,
+    "completed": 3,
+    "failed": 0,
+    "battery_warning": true,
+    "battery_level_pct": 100,
+    "battery_status": "Charging"
+  },
+  "results": [
+    {
+      "question_number": 1,
+      "question": "What is the capital of France?",
+      "run_id": "run_1_1784694851758",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 693,
+        "ttft_ms": 206.812135,
+        "prefill_time_us": 203667,
+        "decode_time_us": 227630,
+        "prompt_len": 26,
+        "decode_len": 8,
+        "prefill_tps": 127.659,
+        "decode_tps": 35.145,
+        "peak_rss_kb": 550392,
+        "power_ma": 243.0,
+        "power_ma_raw": "243.00",
+        "thermal_status": "Normal",
+        "thermal_cpu_c": 41.3,
+        "thermal_skin_c": 34.0
+      },
+      "response": "The capital of France is Paris.",
+      "error": null
+    },
+    {
+      "question_number": 2,
+      "question": "What is the capital of Germany?",
+      "run_id": "run_2_1784694855663",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 698,
+        "ttft_ms": 222.282292,
+        "prefill_time_us": 219398,
+        "decode_time_us": 251457,
+        "prompt_len": 26,
+        "decode_len": 8,
+        "prefill_tps": 118.506,
+        "decode_tps": 31.815,
+        "peak_rss_kb": 552364,
+        "power_ma": 242.0,
+        "power_ma_raw": "242.00",
+        "thermal_status": "Normal",
+        "thermal_cpu_c": 39.0,
+        "thermal_skin_c": 33.0
+      },
+      "response": "The capital of Germany is Berlin.",
+      "error": null
+    },
+    {
+      "question_number": 3,
+      "question": "What is the capital of Italy?",
+      "run_id": "run_3_1784694859490",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 689,
+        "ttft_ms": 210.020104,
+        "prefill_time_us": 207498,
+        "decode_time_us": 251717,
+        "prompt_len": 26,
+        "decode_len": 8,
+        "prefill_tps": 125.302,
+        "decode_tps": 31.782,
+        "peak_rss_kb": 553700,
+        "power_ma": 241.0,
+        "power_ma_raw": "241.00",
+        "thermal_status": "Normal",
+        "thermal_cpu_c": 39.7,
+        "thermal_skin_c": 34.0
+      },
+      "response": "The capital of Italy is Rome.",
+      "error": null
+    }
+  ],
+  "summary": {
+    "cold_load_ms": {
+      "mean": 693.333,
+      "std": 3.682,
+      "min": 689,
+      "max": 698,
+      "n_completed": 3
+    },
+    "ttft_ms": {
+      "mean": 213.038,
+      "std": 6.666,
+      "min": 206.812135,
+      "max": 222.282292,
+      "n_completed": 3
+    },
+    "prefill_tps": {
+      "mean": 123.822,
+      "std": 3.88,
+      "min": 118.506,
+      "max": 127.659,
+      "n_completed": 3
+    },
+    "decode_tps": {
+      "mean": 32.914,
+      "std": 1.578,
+      "min": 31.782,
+      "max": 35.145,
+      "n_completed": 3
+    },
+    "peak_rss_kb": {
+      "mean": 552152,
+      "std": 1358.78,
+      "min": 550392,
+      "max": 553700,
+      "n_completed": 3
+    },
+    "power_ma": {
+      "mean": 242.0,
+      "std": 0.816,
+      "min": 241.0,
+      "max": 243.0,
+      "n_completed": 3
+    },
+    "thermal_cpu_c": {
+      "mean": 40.0,
+      "std": 0.963,
+      "min": 39.0,
+      "max": 41.3,
+      "n_completed": 3
+    },
+    "thermal_skin_c": {
+      "mean": 33.667,
+      "std": 0.471,
+      "min": 33.0,
+      "max": 34.0,
+      "n_completed": 3
+    },
+    "thermal_states_observed": [
+      "Normal"
+    ],
+    "note": "power_ma stats exclude questions where POWER_MA was reported as 'unavailable' or missing. n_completed is reported per-metric because failed/timed-out questions - and, for power_ma specifically, 'unavailable' readings - are silently excluded from that metric's mean otherwise, which can bias results toward easier/luckier questions."
+  }
+}
