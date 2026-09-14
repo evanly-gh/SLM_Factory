@@ -8,6 +8,8 @@ HeadlessBenchmarkReceiver, and collects 6 metrics per question with zero
 human interaction after launch.
 """
 
+from __future__ import annotations
+
 import argparse
 import importlib.util
 import json
@@ -61,6 +63,10 @@ ADB_STAGING_DIR = "/data/local/tmp"
 # affected devices are confirmed.
 KNOWN_AFFECTED_DEVICES = {
     ("SM-S911U", "36"),  # Galaxy S23 (US model), Android 16
+    ("IN2020", "30"),  # OnePlus 8 Pro, Android 11 - confirmed 2026-08-28: run-as dd on the
+    # externally-pushed path now gets EACCES (previously unaffected on this device), and the
+    # internal-pipe fallback's source read then also fails silently (see _push_via_internal_pipe),
+    # producing a 0-byte "model" that the app fails to load.
 }
 
 FALLBACK_ADB = str(Path.home() / "Library/Android/sdk/platform-tools/adb")
@@ -307,12 +313,25 @@ def _app_can_read(adb: Adb, device_path: str) -> bool:
     (likely FUSE/SELinux enforcement specific to external storage) only
     triggers on an actual read() syscall. Reading just 1 byte (count=1)
     keeps this fast and harmless on devices where it already works fine.
+
+    Also confirmed a second false-positive (OnePlus 8 Pro, 2026-08-28): dd
+    with count=1 exits 0 on a genuinely empty (0-byte) file too - it just
+    copies "0+0 records", which is a fine outcome for dd but not evidence
+    the app can read a real model. Require the file to be non-empty as
+    well, via a run-as stat, so an empty/corrupt/truncated push can never
+    read back as "readable".
     """
-    result = adb.run(
+    dd_result = adb.run(
         ["shell", "run-as", PACKAGE, "dd", f"if={device_path}", "of=/dev/null", "bs=1", "count=1"],
         timeout=15,
     )
-    return result.returncode == 0
+    if dd_result.returncode != 0:
+        return False
+    size_result = adb.run(
+        ["shell", "run-as", PACKAGE, "stat", "-c", "%s", device_path],
+        timeout=15,
+    )
+    return size_result.returncode == 0 and size_result.stdout.strip().isdigit() and int(size_result.stdout.strip()) > 0
 
 
 def _push_via_internal_pipe(adb: Adb, source_device_path: str, filename: str) -> str:

@@ -16,6 +16,7 @@
 
 package io.shubham0204.smollmandroid.llm
 
+import android.content.Context
 import android.util.Log
 import io.shubham0204.smollm.SmolLM
 import io.shubham0204.smollmandroid.data.AppDB
@@ -106,7 +107,7 @@ fun readSkinThermalTempC(): Float? {
 }
 
 @Single
-class SmolLMManager(private val appDB: AppDB) {
+class SmolLMManager(private val appDB: AppDB, private val context: Context) {
     private val instance = SmolLM()
 
     // Use ReentrantLock for thread-safe state management without suspending
@@ -180,7 +181,8 @@ class SmolLMManager(private val appDB: AppDB) {
                 modelInitJob = CoroutineScope(Dispatchers.Default).launch {
                     try {
                         previousJob?.join()
-                        val loadDuration = measureTime { instance.load(modelPath, params) }
+                        val loadDuration =
+                            measureTime { instance.load(modelPath, params, context.applicationInfo.nativeLibraryDir) }
                         lastColdLoadTimeMs = loadDuration.inWholeMilliseconds
                         LOGD("Model loaded | Cold load time: ${lastColdLoadTimeMs}ms")
 

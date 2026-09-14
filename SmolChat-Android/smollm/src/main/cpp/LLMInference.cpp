@@ -1,16 +1,134 @@
 #include "LLMInference.h"
 #include <android/log.h>
+#include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <iomanip>
 #include <iostream>
+#include <thread>
+#include <unistd.h>
 
 #define TAG "[SmolLMAndroid-Cpp]"
 #define LOGi(...) __android_log_print(ANDROID_LOG_INFO, TAG, __VA_ARGS__)
 #define LOGe(...) __android_log_print(ANDROID_LOG_ERROR, TAG, __VA_ARGS__)
 
+// DIAGNOSTIC ONLY: ggml-vulkan.cpp reports some failures (e.g. the pipeline
+// name on a compute-pipeline creation failure) only via std::cerr, which by
+// default goes nowhere visible on Android -- it isn't forwarded to logcat.
+// This redirects the process's stderr into a pipe and relays each line to
+// logcat under tag "native-stderr", so those otherwise-invisible diagnostics
+// show up. Runs once per process; safe to leave running for the process
+// lifetime since it just blocks on read() until stderr is closed.
+static void redirectStderrToLogcat() {
+    static bool started = false;
+    if (started) {
+        return;
+    }
+    started = true;
+
+    int pipeFds[2];
+    if (pipe(pipeFds) != 0) {
+        LOGe("redirectStderrToLogcat: pipe() failed");
+        return;
+    }
+    dup2(pipeFds[1], STDERR_FILENO);
+    close(pipeFds[1]);
+
+    int readFd = pipeFds[0];
+    std::thread([readFd]() {
+        FILE *stream = fdopen(readFd, "r");
+        if (!stream) {
+            close(readFd);
+            return;
+        }
+        char *line = nullptr;
+        size_t lineCap = 0;
+        ssize_t lineLen;
+        while ((lineLen = getline(&line, &lineCap, stream)) != -1) {
+            if (lineLen > 0 && line[lineLen - 1] == '\n') {
+                line[lineLen - 1] = '\0';
+            }
+            __android_log_print(ANDROID_LOG_ERROR, "native-stderr", "%s", line);
+        }
+        free(line);
+        fclose(stream);
+    }).detach();
+}
+
+// Forwards llama.cpp's own log lines directly to logcat under tag
+// "llama-native", instead of relying solely on the stderr pipe above.
+// This is what makes llama_model_load_from_file()'s per-model
+// "offloading N repeating layers to GPU" / "offloaded N/M layers to GPU"
+// lines (see llama-model.cpp) show up reliably -- those report how many of
+// *this specific model's* layers actually got placed on a GPU device, which
+// is the real answer to "was the GPU engaged", not just "is a GPU backend
+// linked in". Kept permanently (not diagnostic-only): this is the
+// authoritative per-run backend confirmation, for every run going forward.
+static void llamaLogToLogcat(ggml_log_level level, const char *text, void * /*user_data*/) {
+    android_LogPriority priority;
+    switch (level) {
+        case GGML_LOG_LEVEL_ERROR: priority = ANDROID_LOG_ERROR; break;
+        case GGML_LOG_LEVEL_WARN:  priority = ANDROID_LOG_WARN;  break;
+        case GGML_LOG_LEVEL_DEBUG: priority = ANDROID_LOG_DEBUG; break;
+        default:                   priority = ANDROID_LOG_INFO;  break;
+    }
+    std::string line(text);
+    while (!line.empty() && (line.back() == '\n' || line.back() == '\r')) {
+        line.pop_back();
+    }
+    if (!line.empty()) {
+        __android_log_print(priority, "llama-native", "%s", line.c_str());
+    }
+}
+
+// Explicit, permanent confirmation of which ggml backend device(s) are
+// actually registered in this process -- logged under tag "BACKEND_CHECK"
+// so it's unambiguous in logcat and not easy to miss among the surrounding
+// model-load noise. This proves whether a GPU (Vulkan) device is genuinely
+// present, independent of and complementary to llama-native's per-model
+// layer-offload counts above: this answers "is a GPU device available at
+// all", theirs answers "how many of this model's layers went to it".
+static void logRegisteredBackendDevices() {
+    const size_t deviceCount = ggml_backend_dev_count();
+    __android_log_print(ANDROID_LOG_INFO, "BACKEND_CHECK", "%zu ggml backend device(s) registered:", deviceCount);
+    for (size_t i = 0; i < deviceCount; i++) {
+        ggml_backend_dev_t dev = ggml_backend_dev_get(i);
+        const char *typeName;
+        switch (ggml_backend_dev_type(dev)) {
+            case GGML_BACKEND_DEVICE_TYPE_CPU:   typeName = "CPU";   break;
+            case GGML_BACKEND_DEVICE_TYPE_GPU:   typeName = "GPU";   break;
+            case GGML_BACKEND_DEVICE_TYPE_IGPU:  typeName = "IGPU";  break;
+            case GGML_BACKEND_DEVICE_TYPE_ACCEL: typeName = "ACCEL"; break;
+            default:                             typeName = "OTHER"; break;
+        }
+        __android_log_print(ANDROID_LOG_INFO, "BACKEND_CHECK", "  [%zu] %s (%s) -- type=%s", i,
+                             ggml_backend_dev_name(dev), ggml_backend_dev_description(dev), typeName);
+    }
+}
+
 void
 LLMInference::loadModel(const char *model_path, float minP, float temperature, bool storeChats, long contextSize,
-                        const char *chatTemplate, int nThreads, bool useMmap, bool useMlock) {
+                        const char *chatTemplate, int nThreads, bool useMmap, bool useMlock,
+                        const char *nativeLibraryDir) {
+    redirectStderrToLogcat();
+    llama_log_set(llamaLogToLogcat, nullptr);
+
+    // Our vendored OpenCL ICD loader (vendor/opencl-icd-loader/libOpenCL.so)
+    // discovers vendor drivers by scanning a Linux-style /etc/OpenCL/vendors/
+    // *.icd filesystem registry -- which doesn't exist on Android, so
+    // clGetPlatformIDs() finds nothing even though a real vendor driver is
+    // genuinely present on-device (confirmed via `adb shell ls
+    // /vendor/lib64/libOpenCL.so` on a real device; ggml_backend_opencl_reg()
+    // itself logged "platform IDs not available" as the reason). The loader
+    // supports OCL_ICD_FILENAMES as a direct override -- a colon-separated
+    // list of driver .so paths to load, bypassing that registry scan
+    // entirely. This is harmless outside the "opencl" flavor (the loader
+    // itself, and thus this env var, isn't even present in other flavors'
+    // APKs) and harmless on a device without a driver at this exact path
+    // (the vendor-add attempt just fails, leaving OpenCL unavailable exactly
+    // as before -- no regression risk).
+    setenv("OCL_ICD_FILENAMES", "/vendor/lib64/libOpenCL.so", 1);
+
     LOGi("loading model with"
          "\n\tmodel_path = %s"
          "\n\tminP = %f"
@@ -20,11 +138,50 @@ LLMInference::loadModel(const char *model_path, float minP, float temperature, b
          "\n\tchatTemplate = %s"
          "\n\tnThreads = %d"
          "\n\tuseMmap = %d"
-         "\n\tuseMlock = %d",
-         model_path, minP, temperature, storeChats, contextSize, chatTemplate, nThreads, useMmap, useMlock);
+         "\n\tuseMlock = %d"
+         "\n\tnativeLibraryDir = %s",
+         model_path, minP, temperature, storeChats, contextSize, chatTemplate, nThreads, useMmap, useMlock,
+         nativeLibraryDir);
 
-    // load dynamic backends
-    ggml_backend_load_all();
+    // ggml_backend_load_all()'s no-args form only searches the launching
+    // process's executable directory and cwd for backend .so files -- on
+    // Android neither is where an app's own native libraries live, so
+    // dynamic backends (e.g. libggml-vulkan.so) were silently never found.
+    // ggml_backend_load_all_from_path(nativeLibraryDir) doesn't fix this
+    // either: it discovers backends by fs::directory_iterator-scanning the
+    // directory, and /data/app/.../lib/arm64/ is owned by "system" -- Android
+    // blocks an app process from *listing* that directory even though it can
+    // dlopen() an exact, known file inside it directly (confirmed via a
+    // probe dlopen() of the exact path, which succeeded, right after the
+    // scan-based loader had already silently found nothing there). So we
+    // load each backend by its known exact filename instead, via
+    // ggml_backend_load()'s single-file path -- no directory listing
+    // involved. This also means CPU now needs an explicit call too: it used
+    // to self-register unconditionally regardless of any of this, but that
+    // path requires GGML_USE_CPU to be defined on ggml-base, which the
+    // "vulkan" flavor's CMakeLists.txt no longer sets now that
+    // GGML_BACKEND_DL is on (needed for libggml-vulkan.so's dynamic-load
+    // entrypoint to exist at all -- see CMakeLists.txt) -- confirmed via a
+    // real on-device regression (BACKEND_CHECK dropped from 1 device to 0),
+    // not a guess. libggml-vulkan.so is only present in the "vulkan"
+    // flavor's APK, so failing to find it on "cpu" is expected, not an error.
+    ggml_backend_load((std::string(nativeLibraryDir) + "/libggml-cpu.so").c_str());
+    ggml_backend_reg_t vulkanReg = ggml_backend_load((std::string(nativeLibraryDir) + "/libggml-vulkan.so").c_str());
+    if (vulkanReg) {
+        LOGi("ggml_backend_load: libggml-vulkan.so loaded successfully");
+    } else {
+        LOGi("ggml_backend_load: libggml-vulkan.so not loaded (expected outside the \"vulkan\" flavor)");
+    }
+    // Same as the Vulkan call above, added from day one this time rather
+    // than discovered the hard way -- libggml-opencl.so only exists in the
+    // "opencl" flavor's APK.
+    ggml_backend_reg_t openclReg = ggml_backend_load((std::string(nativeLibraryDir) + "/libggml-opencl.so").c_str());
+    if (openclReg) {
+        LOGi("ggml_backend_load: libggml-opencl.so loaded successfully");
+    } else {
+        LOGi("ggml_backend_load: libggml-opencl.so not loaded (expected outside the \"opencl\" flavor)");
+    }
+    logRegisteredBackendDevices();
 
     // create an instance of llama_model
     llama_model_params model_params = llama_model_default_params();

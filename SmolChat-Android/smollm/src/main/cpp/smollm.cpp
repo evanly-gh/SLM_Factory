@@ -4,18 +4,21 @@
 extern "C" JNIEXPORT jlong JNICALL
 Java_io_shubham0204_smollm_SmolLM_loadModel(JNIEnv* env, jobject thiz, jstring modelPath, jfloat minP,
                                             jfloat temperature, jboolean storeChats, jlong contextSize,
-                                            jstring chatTemplate, jint nThreads, jboolean useMmap, jboolean useMlock) {
-    jboolean    isCopy           = true;
-    const char* modelPathCstr    = env->GetStringUTFChars(modelPath, &isCopy);
-    auto*       llmInference     = new LLMInference();
-    const char* chatTemplateCstr = env->GetStringUTFChars(chatTemplate, &isCopy);
+                                            jstring chatTemplate, jint nThreads, jboolean useMmap, jboolean useMlock,
+                                            jstring nativeLibraryDir) {
+    jboolean    isCopy               = true;
+    const char* modelPathCstr        = env->GetStringUTFChars(modelPath, &isCopy);
+    auto*       llmInference         = new LLMInference();
+    const char* chatTemplateCstr     = env->GetStringUTFChars(chatTemplate, &isCopy);
+    const char* nativeLibraryDirCstr = env->GetStringUTFChars(nativeLibraryDir, &isCopy);
 
     try {
         llmInference->loadModel(modelPathCstr, minP, temperature, storeChats, contextSize, chatTemplateCstr, nThreads,
-                                useMmap, useMlock);
+                                useMmap, useMlock, nativeLibraryDirCstr);
     } catch (std::exception& error) {
         env->ReleaseStringUTFChars(modelPath, modelPathCstr);
         env->ReleaseStringUTFChars(chatTemplate, chatTemplateCstr);
+        env->ReleaseStringUTFChars(nativeLibraryDir, nativeLibraryDirCstr);
         delete llmInference;
         env->ThrowNew(env->FindClass("java/lang/IllegalStateException"), error.what());
         return 0;
@@ -23,6 +26,7 @@ Java_io_shubham0204_smollm_SmolLM_loadModel(JNIEnv* env, jobject thiz, jstring m
 
     env->ReleaseStringUTFChars(modelPath, modelPathCstr);
     env->ReleaseStringUTFChars(chatTemplate, chatTemplateCstr);
+    env->ReleaseStringUTFChars(nativeLibraryDir, nativeLibraryDirCstr);
     return reinterpret_cast<jlong>(llmInference);
 }
 

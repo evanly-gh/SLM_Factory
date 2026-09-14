@@ -31,6 +31,36 @@ class SmolLM {
         init {
             val logTag = SmolLM::class.java.simpleName
 
+            // The "vulkan" and "opencl" flavors each ship exactly one of these two (no
+            // CPU-variant libraries at all -- see smollm/build.gradle.kts), so try both
+            // before falling back; on the "cpu" flavor (or any device where both are
+            // somehow absent) both throw immediately and this falls through to the
+            // existing CPU-feature-detection chain unchanged.
+            val loadedVulkanLibrary =
+                try {
+                    System.loadLibrary("smollm_vulkan")
+                    Log.d(logTag, "Loaded libsmollm_vulkan.so")
+                    true
+                } catch (e: UnsatisfiedLinkError) {
+                    false
+                }
+
+            val loadedOpenclLibrary =
+                !loadedVulkanLibrary &&
+                    try {
+                        System.loadLibrary("smollm_opencl")
+                        Log.d(logTag, "Loaded libsmollm_opencl.so")
+                        true
+                    } catch (e: UnsatisfiedLinkError) {
+                        false
+                    }
+
+            if (!loadedVulkanLibrary && !loadedOpenclLibrary) {
+                loadCpuLibrary(logTag)
+            }
+        }
+
+        private fun loadCpuLibrary(logTag: String) {
             // check if the following CPU features are available,
             // and load the native library accordingly
             val cpuFeatures = getCPUFeatures()
@@ -173,10 +203,16 @@ class SmolLM {
      *   If `contextSize` or `chatTemplate` are not provided in `params`, the values from the GGUF
      *   model file will be used. If those are also not available in the model file, then default
      *   values from [DefaultInferenceParams] will be used.
+     * @param nativeLibraryDir The app's native library directory (from
+     *   `Context.applicationInfo.nativeLibraryDir`), passed down so the native layer can point
+     *   ggml's dynamic backend loader (`ggml_backend_load_all_from_path()`) at where this app's
+     *   own libggml-*.so files actually live -- `ggml_backend_load_all()`'s no-args form only
+     *   searches the launching process's executable directory and cwd, neither of which is where
+     *   Android puts an app's native libraries, so backends like Vulkan were never being found.
      * @return `true` if the model was loaded successfully, `false` otherwise.
      * @throws FileNotFoundException if the model file is not found at the given path.
      */
-    suspend fun load(modelPath: String, params: InferenceParams = InferenceParams()) =
+    suspend fun load(modelPath: String, params: InferenceParams = InferenceParams(), nativeLibraryDir: String) =
         withContext(Dispatchers.IO) {
             val ggufReader = GGUFReader()
             ggufReader.load(modelPath)
@@ -194,6 +230,7 @@ class SmolLM {
                     params.numThreads,
                     params.useMmap,
                     params.useMlock,
+                    nativeLibraryDir,
                 )
         }
 
@@ -329,6 +366,7 @@ class SmolLM {
         nThreads: Int,
         useMmap: Boolean,
         useMlock: Boolean,
+        nativeLibraryDir: String,
     ): Long
 
     private external fun addChatMessage(modelPtr: Long, message: String, role: String)

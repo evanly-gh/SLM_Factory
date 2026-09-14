@@ -21,6 +21,38 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    // Mirrors :smollm's "backend" flavor dimension (see
+    // smollm/build.gradle.kts) so this module's own APK output for each
+    // flavor links against the matching :smollm variant -- "cpu" against
+    // :smollm's CPU-only native build (identical to what this module always
+    // shipped before this dimension existed), "vulkan" against :smollm's
+    // Vulkan-enabled one, and "opencl" against its OpenCL-enabled one, each
+    // as a genuinely separate APK, per the additive-only design in
+    // smollm/src/main/cpp/CMakeLists.txt.
+    flavorDimensions += "backend"
+    productFlavors {
+        create("cpu") {
+            dimension = "backend"
+        }
+        create("vulkan") {
+            dimension = "backend"
+            minSdk = 28
+            // :smollm's vulkan flavor only ever builds arm64-v8a (see
+            // smollm/build.gradle.kts); match that here too.
+            ndk {
+                abiFilters += "arm64-v8a"
+            }
+        }
+        create("opencl") {
+            dimension = "backend"
+            // :smollm's opencl flavor only ever builds arm64-v8a (see
+            // smollm/build.gradle.kts); match that here too.
+            ndk {
+                abiFilters += "arm64-v8a"
+            }
+        }
+    }
+
     signingConfigs {
         create("release") {
             storeFile = file("../keystore.jks")
@@ -57,6 +89,16 @@ android {
     packaging {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
+        }
+        // Required alongside AndroidManifest.xml's android:extractNativeLibs="true": that
+        // attribute alone controls install-time extraction, but AGP still needs this to actually
+        // store native libs compressed/extractable in the APK rather than the modern
+        // uncompressed-and-mmap'd-straight-from-the-zip default. Without both, ggml's dynamic
+        // backend loader (ggml_backend_load_all_from_path(), see LLMInference.cpp) finds an empty
+        // directory on disk instead of the real libggml-*.so files -- confirmed via `adb shell ls`
+        // on-device, not a guess.
+        jniLibs {
+            useLegacyPackaging = true
         }
     }
     applicationVariants.configureEach {

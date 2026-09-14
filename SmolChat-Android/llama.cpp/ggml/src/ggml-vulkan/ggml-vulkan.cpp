@@ -6682,6 +6682,35 @@ static vk_device ggml_vk_get_device(size_t idx) {
         device_create_info.setPNext(&device_features2);
         device->device = device->physical_device.createDevice(device_create_info);
 
+        // Re-resolve device-level function pointers (e.g. vkGetBufferDeviceAddress
+        // and its EXT/KHR fallbacks) via vkGetDeviceProcAddr now that a real
+        // VkDevice exists. Without this follow-up call, VULKAN_HPP_DEFAULT_DISPATCHER
+        // only ever resolved these through the instance-level init() above (line
+        // ~7171, vkGetInstanceProcAddr trampolining). This alone does NOT fix the
+        // known-bad case below -- confirmed via a real on-device retest, not a
+        // guess -- but it's still the correct two-step init pattern Vulkan-Hpp's
+        // own generated code supports (see vulkan.hpp's separate init(Device)
+        // overload) and ggml-vulkan.cpp never previously called, so it stays.
+        VULKAN_HPP_DEFAULT_DISPATCHER.init(device->device);
+
+        // Some Android Vulkan driver/loader combinations report
+        // VkPhysicalDeviceVulkan12Features::bufferDeviceAddress = true (which sets
+        // device->buffer_device_address below) while never actually exposing
+        // vkGetBufferDeviceAddress -- core name, EXT alias, or KHR alias -- through
+        // either vkGetInstanceProcAddr or vkGetDeviceProcAddr. Trusting the feature
+        // flag alone then crashes with a null function-pointer call the first time
+        // ggml_vk_create_buffer_device() calls device->device.getBufferAddress().
+        // Confirmed via a real on-device SIGSEGV, symbol-traced to that exact call,
+        // on a OnePlus 8 Pro (Adreno 650) post-OS-update -- not a guess. Downgrade
+        // to the no-buffer-device-address path here, once, right after dispatcher
+        // init, rather than trusting the driver's own claim.
+        if (device->buffer_device_address && !VULKAN_HPP_DEFAULT_DISPATCHER.vkGetBufferDeviceAddress) {
+            std::cerr << "ggml_vulkan: WARNING: driver reports bufferDeviceAddress support but "
+                      << "vkGetBufferDeviceAddress resolved to a null function pointer; disabling "
+                      << "buffer device address support for this device." << std::endl;
+            device->buffer_device_address = false;
+        }
+
         // Queues
         device->compute_queue = ggml_vk_create_queue(device, compute_queue_family_index, 0, { vk::PipelineStageFlagBits::eComputeShader | vk::PipelineStageFlagBits::eTransfer }, false);
 

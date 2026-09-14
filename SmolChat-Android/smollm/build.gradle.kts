@@ -50,6 +50,66 @@ android {
         }
     }
 
+    // "backend" flavors select the native build variant (see
+    // src/main/cpp/CMakeLists.txt's SMOLLM_BUILD_VULKAN_VARIANT). "cpu" adds
+    // no extra CMake arguments -- its native build invocation is identical
+    // to what this module built before these flavors existed. "vulkan" is
+    // additive only: a separate build directory, separate output, and (see
+    // minSdk below) its own higher floor, none of which affects "cpu".
+    // app/build.gradle.kts mirrors this same dimension/flavor pair so each
+    // flavor's APK links against the matching :smollm variant.
+    flavorDimensions += "backend"
+    productFlavors {
+        create("cpu") {
+            dimension = "backend"
+        }
+        create("vulkan") {
+            dimension = "backend"
+            // vkGetPhysicalDeviceFeatures2 (Vulkan 1.1 core) is only present
+            // in the NDK's stub libvulkan.so from API 28 onward -- confirmed
+            // via a scratch build (see conversation), not a guess.
+            minSdk = 28
+            // GGML_VULKAN is a single global CMake option for this whole
+            // configure pass (see CMakeLists.txt) -- it's not scoped per-ABI,
+            // so without this filter Gradle would still invoke CMake for
+            // every other ABI too, and ggml-vulkan.cpp genuinely does not
+            // compile for 32-bit targets (Vulkan-Hpp deliberately keeps
+            // handle-to-raw-pointer conversions explicit there -- confirmed
+            // via a real build attempt, not a guess). build_library_vulkan()
+            // is arm64-v8a-only anyway (see CMakeLists.txt), so this filter
+            // just stops the other ABIs' CMake invocations from happening at
+            // all, rather than relying on the CMakeLists.txt guard alone.
+            ndk {
+                abiFilters += "arm64-v8a"
+            }
+            externalNativeBuild {
+                cmake {
+                    arguments += "-DSMOLLM_BUILD_VULKAN_VARIANT=ON"
+                }
+            }
+        }
+        create("opencl") {
+            dimension = "backend"
+            // Unlike Vulkan, there's no NDK-stub API-level gate here (Android
+            // ships no NDK OpenCL headers/stub at all -- vendor/opencl-headers
+            // and vendor/opencl-icd-loader supply our own), so no minSdk floor
+            // beyond the module's existing default is needed.
+            // GGML_OPENCL is a single global CMake option for this whole
+            // configure pass (see CMakeLists.txt), same as GGML_VULKAN -- and
+            // build_library_opencl() is arm64-v8a-only, so this filter stops
+            // Gradle from invoking CMake for other ABIs at all, matching the
+            // "vulkan" flavor's own reasoning above.
+            ndk {
+                abiFilters += "arm64-v8a"
+            }
+            externalNativeBuild {
+                cmake {
+                    arguments += "-DSMOLLM_BUILD_OPENCL_VARIANT=ON"
+                }
+            }
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false
