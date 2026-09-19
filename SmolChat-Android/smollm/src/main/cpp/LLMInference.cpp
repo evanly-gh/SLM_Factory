@@ -109,7 +109,7 @@ static void logRegisteredBackendDevices() {
 void
 LLMInference::loadModel(const char *model_path, float minP, float temperature, bool storeChats, long contextSize,
                         const char *chatTemplate, int nThreads, bool useMmap, bool useMlock,
-                        const char *nativeLibraryDir) {
+                        const char *nativeLibraryDir, int nGpuLayers) {
     redirectStderrToLogcat();
     llama_log_set(llamaLogToLogcat, nullptr);
 
@@ -139,9 +139,10 @@ LLMInference::loadModel(const char *model_path, float minP, float temperature, b
          "\n\tnThreads = %d"
          "\n\tuseMmap = %d"
          "\n\tuseMlock = %d"
-         "\n\tnativeLibraryDir = %s",
+         "\n\tnativeLibraryDir = %s"
+         "\n\tnGpuLayers = %d",
          model_path, minP, temperature, storeChats, contextSize, chatTemplate, nThreads, useMmap, useMlock,
-         nativeLibraryDir);
+         nativeLibraryDir, nGpuLayers);
 
     // ggml_backend_load_all()'s no-args form only searches the launching
     // process's executable directory and cwd for backend .so files -- on
@@ -185,6 +186,11 @@ LLMInference::loadModel(const char *model_path, float minP, float temperature, b
 
     // create an instance of llama_model
     llama_model_params model_params = llama_model_default_params();
+    // llama_model_default_params() defaults n_gpu_layers to 0 (CPU-only) -- previously never
+    // overridden here regardless of build flavor, so even a genuinely-registered GPU backend
+    // (see logRegisteredBackendDevices() above) never had any layers assigned to it by ggml's
+    // scheduler. Matches llama-bench/llama-cli's own -ngl flag semantics.
+    model_params.n_gpu_layers = nGpuLayers;
     if (useMmap && useMlock) {
         model_params.load_mode = LLAMA_LOAD_MODE_MMAP_MLOCK;
     } else if (useMmap) {
@@ -266,6 +272,11 @@ LLMInference::addChatMessage(const char *message, const char *role) {
 float
 LLMInference::getResponseGenerationTime() const {
     return (float) _responseNumTokens / (_responseGenerationTime / 1e6);
+}
+
+int
+LLMInference::getPromptTokenCount() const {
+    return (int) _promptTokens.size();
 }
 
 int

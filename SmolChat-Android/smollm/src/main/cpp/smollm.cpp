@@ -5,7 +5,7 @@ extern "C" JNIEXPORT jlong JNICALL
 Java_io_shubham0204_smollm_SmolLM_loadModel(JNIEnv* env, jobject thiz, jstring modelPath, jfloat minP,
                                             jfloat temperature, jboolean storeChats, jlong contextSize,
                                             jstring chatTemplate, jint nThreads, jboolean useMmap, jboolean useMlock,
-                                            jstring nativeLibraryDir) {
+                                            jstring nativeLibraryDir, jint nGpuLayers) {
     jboolean    isCopy               = true;
     const char* modelPathCstr        = env->GetStringUTFChars(modelPath, &isCopy);
     auto*       llmInference         = new LLMInference();
@@ -14,7 +14,7 @@ Java_io_shubham0204_smollm_SmolLM_loadModel(JNIEnv* env, jobject thiz, jstring m
 
     try {
         llmInference->loadModel(modelPathCstr, minP, temperature, storeChats, contextSize, chatTemplateCstr, nThreads,
-                                useMmap, useMlock, nativeLibraryDirCstr);
+                                useMmap, useMlock, nativeLibraryDirCstr, nGpuLayers);
     } catch (std::exception& error) {
         env->ReleaseStringUTFChars(modelPath, modelPathCstr);
         env->ReleaseStringUTFChars(chatTemplate, chatTemplateCstr);
@@ -52,6 +52,12 @@ extern "C" JNIEXPORT jint JNICALL
 Java_io_shubham0204_smollm_SmolLM_getContextSizeUsed(JNIEnv* env, jobject thiz, jlong modelPtr) {
     auto* llmInference = reinterpret_cast<LLMInference*>(modelPtr);
     return llmInference->getContextSizeUsed();
+}
+
+extern "C" JNIEXPORT jint JNICALL
+Java_io_shubham0204_smollm_SmolLM_getPromptTokenCount(JNIEnv* env, jobject thiz, jlong modelPtr) {
+    auto* llmInference = reinterpret_cast<LLMInference*>(modelPtr);
+    return llmInference->getPromptTokenCount();
 }
 
 extern "C" JNIEXPORT void JNICALL
