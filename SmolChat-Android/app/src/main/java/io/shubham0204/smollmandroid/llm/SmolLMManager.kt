@@ -144,6 +144,17 @@ class SmolLMManager(private val appDB: AppDB, private val context: Context) {
 
     data class SmolLMResponse(
         val response: String,
+        // llama.cpp's native token-rate reading (LLMInference::getResponseGenerationSpeed()).
+        // NOT decode-only, despite the name/despite what this field used to be described as
+        // here: completionLoop()'s first call does the entire prompt prefill decode AND
+        // samples the first generated token in one llama_decode(), and the native
+        // _responseGenerationTime accumulator starts from that same first call — so this is a
+        // blended prefill+decode rate (all decode() wall time / generated-token count only,
+        // which understates the true rate since the denominator omits prompt tokens but the
+        // numerator's time includes prefill). Confirmed by reading LLMInference.cpp directly,
+        // not assumed. Kept for backward compat with existing callers/DB rows; use
+        // [prefillTps]/[decodeTps] below for the real, separately-measured paper-definition
+        // rates going forward.
         val generationSpeed: Float,
         val generationTimeSecs: Int,
         val contextLengthUsed: Int,
@@ -154,6 +165,19 @@ class SmolLMManager(private val appDB: AppDB, private val context: Context) {
         // saveToDb=true and a message was actually inserted), so callers can attach inference
         // metrics to that specific message afterward via AppDB.updateMessageMetrics().
         val savedMessageId: Long? = null,
+        // prompt_len / TTFT, matching the paper's own prefill_tps definition. TTFT (Kotlin-side,
+        // wall-clock from dispatch to first emitted token) includes JNI call overhead + chat
+        // template rendering + tokenization + the real prefill decode + first-token sampling —
+        // a real, slightly coarser-than-native-only measurement, not a pure native timer (see
+        // getResponse()'s computation for the exact math). Null when TTFT is 0 (no tokens ever
+        // arrived) to avoid a divide-by-zero producing a meaningless value.
+        val prefillTps: Float? = null,
+        // gen_tokens / (t_last - t_first), matching the paper's own decode_tps definition.
+        // t_first = dispatch + TTFT; t_last = dispatch + total generation duration (both real
+        // wall-clock timestamps already collected for other purposes, not new measurements).
+        // Null when there were fewer than 2 tokens (nothing to measure a rate between) or the
+        // decode window is non-positive.
+        val decodeTps: Float? = null,
     )
 
     fun load(
@@ -248,6 +272,10 @@ class SmolLMManager(private val appDB: AppDB, private val context: Context) {
         // this to run with a larger context window (to fit a raised max_tokens budget) without
         // touching chat.contextSize itself, which the manual chat UI also reads.
         contextSizeOverride: Long? = null,
+        // Forwarded to SmolLM.InferenceParams.nGpuLayers — see its own kdoc. Default 0 keeps
+        // the pre-existing CPU-only behavior for every caller that doesn't explicitly pass this
+        // (the manual chat UI never does).
+        nGpuLayers: Int = 0,
     ) {
         unload()
         load(
@@ -262,6 +290,7 @@ class SmolLMManager(private val appDB: AppDB, private val context: Context) {
                 chat.nThreads,
                 chat.useMmap,
                 chat.useMlock,
+                nGpuLayers,
             ),
             onError = onError,
             onSuccess = onSuccess,
@@ -331,6 +360,11 @@ class SmolLMManager(private val appDB: AppDB, private val context: Context) {
                                           else System.currentTimeMillis()
                     var firstTokenReceived = false
                     var peakRssKb = 0L
+                    // Every Flow piece from getResponseAsFlow() is exactly one generated token
+                    // (SmolLM.kt's flow emits one completionLoop() result per token, stopping
+                    // before emitting the final "[EOG]" sentinel) — this is the real gen_tokens
+                    // count for decode_tps below, not an estimate.
+                    var genTokenCount = 0
 
                     val rssPollingJob = launch(Dispatchers.IO) {
                         while (isActive) {
@@ -346,6 +380,7 @@ class SmolLMManager(private val appDB: AppDB, private val context: Context) {
                                 ttftMs = System.currentTimeMillis() - promptSubmitTime
                                 firstTokenReceived = true
                             }
+                            genTokenCount++
                             response += piece
                             withContext(Dispatchers.Main) {
                                 onPartialResponseGenerated(response)
@@ -356,9 +391,31 @@ class SmolLMManager(private val appDB: AppDB, private val context: Context) {
                     rssPollingJob.cancel()
                     response = responseTransform(response)
 
-                    // Use llama.cpp's native TPS: it has the accurate token count and already
-                    // excludes prompt-processing time from its denominator.
+                    // llama.cpp's native token-rate reading — a BLENDED prefill+decode rate, not
+                    // decode-only (see SmolLMResponse.generationSpeed's kdoc for why; confirmed by
+                    // reading LLMInference.cpp directly, correcting what this comment used to
+                    // claim). Kept only for backward compat with existing callers/DB rows —
+                    // prefillTps/decodeTps below are the real, separately-measured rates that
+                    // actually match the paper's own definitions, and are what should be used for
+                    // the real replication going forward.
                     val nativeTps = instance.getResponseGenerationSpeed()
+
+                    // prefill_tps = prompt_len / TTFT and decode_tps = gen_tokens / (t_last - t_first),
+                    // exactly as the paper defines them. promptTokenCount is the real tokenizer
+                    // output for this exact prompt (LLMInference::getPromptTokenCount(), not an
+                    // estimate); TTFT and duration are the same real wall-clock measurements
+                    // already collected above, not new timers — t_first = dispatch + TTFT,
+                    // t_last = dispatch + duration, so the decode window is just
+                    // (duration - ttftMs). Null (not a garbage 0/Infinity) when the underlying
+                    // window is non-positive or there's nothing to measure a rate between.
+                    val promptTokenCount = instance.getPromptTokenCount()
+                    val prefillTps = if (ttftMs > 0L) promptTokenCount / (ttftMs / 1000.0f) else null
+                    val decodeDurationMs = duration.inWholeMilliseconds - ttftMs
+                    val decodeTps = if (genTokenCount >= 2 && decodeDurationMs > 0L) {
+                        genTokenCount / (decodeDurationMs / 1000.0f)
+                    } else {
+                        null
+                    }
 
                     // Thread-safe access to chat
                     val currentChat = stateLock.withLock { chat }
@@ -372,7 +429,7 @@ class SmolLMManager(private val appDB: AppDB, private val context: Context) {
 
                     LOGD(
                         "Inference complete | TTFT: ${ttftMs}ms | " +
-                        "TPS: $nativeTps | " +
+                        "TPS: $nativeTps (blended, see kdoc) | PrefillTPS: $prefillTps | DecodeTPS: $decodeTps | " +
                         "Peak RSS: ${peakRssKb}KB"
                     )
 
@@ -388,6 +445,8 @@ class SmolLMManager(private val appDB: AppDB, private val context: Context) {
                                 ttftMs = ttftMs,
                                 peakRssKb = peakRssKb,
                                 savedMessageId = savedMessageId,
+                                prefillTps = prefillTps,
+                                decodeTps = decodeTps,
                             )
                         )
                     }

@@ -565,7 +565,7 @@ def clear_logcat(adb: Adb):
     adb.run(["logcat", "-c"], timeout=15)
 
 
-def fire_broadcast(adb: Adb, model_path: str, question: str, run_id: str, max_tokens: int):
+def fire_broadcast(adb: Adb, model_path: str, question: str, run_id: str, max_tokens: int, suppress_early_eos: bool = True, n_gpu_layers: int = 0):
     # CONFIRMED BUG (real A/B test: apostrophes in the prompt text produced
     # response=None/near-instant EOS; the exact same question with
     # apostrophes stripped worked fine): passing model_path/prompt/run_id
@@ -586,29 +586,57 @@ def fire_broadcast(adb: Adb, model_path: str, question: str, run_id: str, max_to
         f"--es model_path {shlex.quote(model_path)} "
         f"--es prompt {shlex.quote(question)} "
         f"--es run_id {shlex.quote(run_id)} "
-        f"--ei max_tokens {int(max_tokens)}"
+        f"--ei max_tokens {int(max_tokens)} "
+        # BenchmarkService.kt reads this as a string extra, defaulting to "true" (the
+        # long-standing behavior) whenever it's absent or not a valid boolean - see
+        # onStartCommand()'s suppressEarlyEos parsing. Explicitly sent every time (not
+        # omitted when true) so the broadcast's own behavior is self-documenting from logcat.
+        f"--es suppress_early_eos {'true' if suppress_early_eos else 'false'} "
+        # Also read via getStringExtra() (see onStartCommand()'s nGpuLayers parsing) - --es,
+        # NOT --ei, deliberately (max_tokens above uses --ei but is read via getStringExtra()
+        # too, which is a real, separate, pre-existing bug - see run_autobench.py's own notes/
+        # conversation; --es is used here specifically to avoid repeating that mismatch).
+        f"--es n_gpu_layers {int(n_gpu_layers)}"
     )
     adb.run(["shell", cmd], timeout=20)
 
 
-KNOWN_TAGS = ["RUN_DONE", "RUN_ERROR", "BROADCAST_RECEIVER", "COLD_LOAD", "TTFT", "TPS", "MEMORY", "POWER", "THERMAL_TEMP_CPU", "THERMAL_TEMP_SKIN", "THERMAL"]
+KNOWN_TAGS = ["RUN_DONE", "RUN_ERROR", "BROADCAST_RECEIVER", "COLD_LOAD", "TTFT", "TPS", "PREFILL_TPS", "DECODE_TPS", "MEMORY", "POWER", "ENERGY_MJ_SAMPLED", "THERMAL_TEMP_CPU", "THERMAL_TEMP_SKIN", "THERMAL"]
 
 
 def parse_run_lines(logcat_text: str, run_id: str) -> dict:
-    """Return {TAG: full_line} for every log line belonging to run_id.
+    """Return {TAG: full_line} for every log line belonging to run_id, plus
+    (see below) a "BACKEND_CHECK" entry collecting every BACKEND_CHECK line
+    in the dump regardless of run_id.
 
     Matches the tag as a standalone token rather than assuming a fixed
     logcat format (brief/time/threadtime all differ in prefix layout).
+
+    BACKEND_CHECK is a special case: it's logged natively (LLMInference.cpp's
+    logRegisteredBackendDevices(), tag "BACKEND_CHECK") during model load,
+    BEFORE the run_id is known on the native side — those lines never carry
+    "run_id=" at all, so the id_pattern filter every other tag uses would
+    never match them. It's also multiple lines per run (one "N ggml backend
+    device(s) registered:" header plus one line per device), not the
+    single-line-per-tag shape every other KNOWN_TAGS entry has. Since the
+    caller always clear_logcat()s before each run and this dump only spans
+    one run's window, every BACKEND_CHECK line present here genuinely
+    belongs to the current run_id even without the tag itself confirming it.
     """
     id_pattern = re.compile(r"run_id=" + re.escape(run_id) + r"(?:\s|$)")
     lines = {}
+    backend_check_lines = []
     for line in logcat_text.splitlines():
+        if re.search(r"\bBACKEND_CHECK\b", line):
+            backend_check_lines.append(line)
         if not id_pattern.search(line):
             continue
         for tag in KNOWN_TAGS:
             if re.search(r"\b" + tag + r"\b", line):
                 lines[tag] = line
                 break
+    if backend_check_lines:
+        lines["BACKEND_CHECK"] = "\n".join(backend_check_lines)
     return lines
 
 
@@ -627,6 +655,23 @@ def extract_error(line: str):
     if m:
         return m.group(1), m.group(2).strip()
     return None, line.strip()
+
+
+def extract_backend_verified(backend_check_text: str):
+    """Parse the joined BACKEND_CHECK lines (see parse_run_lines()) into a compact,
+    comma-separated device-name summary, e.g. "CPU" or "CPU,Vulkan0" or "CPU,GPUOpenCL" -
+    confirming which backend(s) genuinely REGISTERED for this run, not just which one was
+    requested (a device can request GPU offload and still silently end up CPU-only if the
+    backend never registered - see today's Vulkan/OpenCL investigation). Each device line
+    from logRegisteredBackendDevices() looks like "  [0] CPU (CPU) -- type=CPU" or
+    "  [1] Vulkan0 (Adreno (TM) 740) -- type=IGPU" - the device name is the token right
+    after the "[N] " index. None if backend_check_text is falsy/empty (tag never appeared,
+    e.g. a run that failed before native init logged anything).
+    """
+    if not backend_check_text:
+        return None
+    names = re.findall(r"\[\d+\]\s+(\S+)", backend_check_text)
+    return ",".join(names) if names else None
 
 
 def poll_for_result(adb: Adb, run_id: str, timeout: int) -> tuple:
@@ -754,10 +799,10 @@ def reset_smolchat_for_clean_process(adb: Adb):
     time.sleep(4)
 
 
-def run_one(adb: Adb, model_path: str, question: str, n: int, timeout: int, max_tokens: int) -> dict:
+def run_one(adb: Adb, model_path: str, question: str, n: int, timeout: int, max_tokens: int, suppress_early_eos: bool = True, n_gpu_layers: int = 0) -> dict:
     run_id = f"run_{n}_{int(time.time() * 1000)}"
     clear_logcat(adb)
-    fire_broadcast(adb, model_path, question, run_id, max_tokens)
+    fire_broadcast(adb, model_path, question, run_id, max_tokens, suppress_early_eos, n_gpu_layers)
     status, lines = poll_for_result(adb, run_id, timeout)
     return {"run_id": run_id, "status": status, "lines": lines}
 
@@ -777,7 +822,7 @@ def wait_for_broadcast_receipt(adb: Adb, run_id: str, poll_seconds: int) -> bool
     return False
 
 
-def run_first_question_after_reboot(adb: Adb, model_path: str, question: str, n: int, timeout: int, max_tokens: int) -> dict:
+def run_first_question_after_reboot(adb: Adb, model_path: str, question: str, n: int, timeout: int, max_tokens: int, suppress_early_eos: bool = True, n_gpu_layers: int = 0) -> dict:
     """Fire the first broadcast after a --reboot-before reboot, retrying
     with the SAME run_id if BROADCAST_RECEIVER never confirms pickup
     within a short window.
@@ -791,7 +836,7 @@ def run_first_question_after_reboot(adb: Adb, model_path: str, question: str, n:
 
     for attempt in range(1, BROADCAST_RECEIPT_MAX_ATTEMPTS + 1):
         clear_logcat(adb)
-        fire_broadcast(adb, model_path, question, run_id, max_tokens)
+        fire_broadcast(adb, model_path, question, run_id, max_tokens, suppress_early_eos, n_gpu_layers)
         if wait_for_broadcast_receipt(adb, run_id, BROADCAST_RECEIPT_POLL_SECONDS):
             print(f"[COLD] Broadcast received on attempt {attempt}/{BROADCAST_RECEIPT_MAX_ATTEMPTS}")
             received = True
@@ -851,9 +896,21 @@ def build_metrics(lines: dict) -> dict:
     return {
         "cold_load_ms": num("COLD_LOAD", int),
         "ttft_ms": num("TTFT", int),
+        # TPS is llama.cpp's native rate - a BLENDED prefill+decode rate, not decode-only (see
+        # SmolLMManager.SmolLMResponse's kdoc). Kept for backward compat with existing data;
+        # prefill_tps/decode_tps below are the real, separately-measured rates matching the
+        # paper's own definitions (prefill_tps = prompt_len/TTFT, decode_tps =
+        # gen_tokens/(t_last-t_first)) and are what should be used for the real replication.
         "tps": num("TPS", float),
+        "prefill_tps": num("PREFILL_TPS", float),
+        "decode_tps": num("DECODE_TPS", float),
         "memory_kb": num("MEMORY", int),
         "power_ma": num("POWER", float),
+        # True energy (mJ) via trapezoidal current x voltage integration over real per-sample
+        # timestamps - see PowerSampler.kt/BenchmarkService.kt. Independent of power_ma (which
+        # is a plain average), not a replacement - "unsupported" fails the float() cast and
+        # num() already returns None on ValueError, same as thermal_temp_*_c below.
+        "energy_mj_sampled": num("ENERGY_MJ_SAMPLED", float),
         "thermal": extract_value(lines["THERMAL"]) if "THERMAL" in lines else None,
         # "unavailable" fails the float() cast and num() already returns None
         # on ValueError, which is exactly the "unknown reading" value we want.
@@ -862,6 +919,9 @@ def build_metrics(lines: dict) -> dict:
         # Independent reading, captured alongside power_ma (BatteryManager)
         # rather than replacing it - both coexist side by side.
         "power_ma_monsoon": monsoon.get("power_ma_mean"),
+        # Which backend(s) genuinely REGISTERED for this run (see
+        # extract_backend_verified()'s docstring) - not just which one was requested.
+        "backend_verified": extract_backend_verified(lines.get("BACKEND_CHECK")),
     }
 
 
@@ -869,16 +929,16 @@ def build_metrics(lines: dict) -> dict:
 # Main per-question loop
 # ---------------------------------------------------------------------------
 
-def run_benchmark(adb: Adb, model_path: str, questions: list, timeout: int, max_tokens: int, reboot_before: bool = False) -> tuple:
+def run_benchmark(adb: Adb, model_path: str, questions: list, timeout: int, max_tokens: int, reboot_before: bool = False, suppress_early_eos: bool = True, n_gpu_layers: int = 0) -> tuple:
     results = []
     context_resets = 0
     total = len(questions)
 
     for n, question in enumerate(questions, start=1):
         if n == 1 and reboot_before:
-            outcome = run_first_question_after_reboot(adb, model_path, question, n, timeout, max_tokens)
+            outcome = run_first_question_after_reboot(adb, model_path, question, n, timeout, max_tokens, suppress_early_eos, n_gpu_layers)
         else:
-            outcome = run_one(adb, model_path, question, n, timeout, max_tokens)
+            outcome = run_one(adb, model_path, question, n, timeout, max_tokens, suppress_early_eos, n_gpu_layers)
         status, lines, run_id = outcome["status"], outcome["lines"], outcome["run_id"]
         context_reset_for_this_q = False
 
@@ -890,7 +950,7 @@ def run_benchmark(adb: Adb, model_path: str, questions: list, timeout: int, max_
                 restart_smolchat(adb)
                 context_resets += 1
                 context_reset_for_this_q = True
-                outcome = run_one(adb, model_path, question, n, timeout, max_tokens)
+                outcome = run_one(adb, model_path, question, n, timeout, max_tokens, suppress_early_eos, n_gpu_layers)
                 status, lines, run_id = outcome["status"], outcome["lines"], outcome["run_id"]
 
         entry = {
@@ -917,10 +977,19 @@ def run_benchmark(adb: Adb, model_path: str, questions: list, timeout: int, max_
             if metrics["thermal_temp_skin_c"] is not None:
                 temp_parts.append(f"Skin:{metrics['thermal_temp_skin_c']}°C")
             temp_suffix = f" ({' '.join(temp_parts)})" if temp_parts else ""
+            backend_suffix = f" Backend={metrics['backend_verified']}" if metrics["backend_verified"] else ""
+            energy_suffix = f" Energy={metrics['energy_mj_sampled']}mJ" if metrics["energy_mj_sampled"] is not None else ""
+            rate_parts = []
+            if metrics["prefill_tps"] is not None:
+                rate_parts.append(f"Prefill={metrics['prefill_tps']}tok/s")
+            if metrics["decode_tps"] is not None:
+                rate_parts.append(f"Decode={metrics['decode_tps']}tok/s")
+            rate_suffix = f" ({' '.join(rate_parts)})" if rate_parts else ""
             qprint(f"\n[{n}/{total}] \"{question}\"")
             qprint(
-                f"  ColdLoad={metrics['cold_load_ms']}ms TTFT={metrics['ttft_ms']}ms TPS={metrics['tps']} "
-                f"RSS={metrics['memory_kb']}KB Power={metrics['power_ma']}mA Thermal={metrics['thermal']}{temp_suffix}"
+                f"  ColdLoad={metrics['cold_load_ms']}ms TTFT={metrics['ttft_ms']}ms TPS={metrics['tps']}{rate_suffix} "
+                f"RSS={metrics['memory_kb']}KB Power={metrics['power_ma']}mA{energy_suffix} "
+                f"Thermal={metrics['thermal']}{temp_suffix}{backend_suffix}"
             )
             preview = response if response and len(response) <= 160 else (response[:157] + "..." if response else "")
             qprint(f"  Response: \"{preview}\"")
@@ -942,19 +1011,132 @@ def run_benchmark(adb: Adb, model_path: str, questions: list, timeout: int, max_
     return results, context_resets
 
 
+def run_trials_benchmark(adb: Adb, model_path: str, questions: list, timeout: int, max_tokens: int, trials: int = 1, suppress_early_eos: bool = True, n_gpu_layers: int = 0) -> tuple:
+    """Paper-exact protocol, genuinely different from run_benchmark()'s
+    "one run per question" default: for EACH question, run once as a
+    discarded warmup, then run `trials` SEPARATE, real times, recording
+    EVERY one of those trials as its own full result. Each entry carries a
+    "trial_number" (1..trials) field (in addition to the usual
+    "question_number") so per-question trial statistics can be computed
+    afterward (see compute_trial_summary()).
+
+    Deliberately a fully independent function, not a refactor of
+    run_benchmark() into a shared code path - mirrors MNN's own
+    run_trials_benchmark() design. --reboot-before's cold-load retry path
+    is intentionally not wired in here (--trials is a steady-state/warm
+    protocol by construction: every trial after the discarded warmup is
+    already warm), so run_benchmark()'s existing, already-relied-upon
+    behavior cannot be affected by anything added here, even indirectly.
+    Context-window-full retry (run_benchmark()'s CONTEXT_SIZE_PHRASE check)
+    is preserved here since it's a real correctness safety net, not part of
+    the warmup/trial protocol itself.
+    """
+    results = []
+    context_resets = 0
+    total = len(questions)
+
+    for n, question in enumerate(questions, start=1):
+        qprint(f"\n[{n}/{total}] \"{question}\" - warmup (discarded)")
+        run_one(adb, model_path, question, n, timeout, max_tokens, suppress_early_eos, n_gpu_layers)
+        time.sleep(2)
+
+        for trial in range(1, trials + 1):
+            qprint(f"[{n}/{total}] trial {trial}/{trials} (recording)")
+            outcome = run_one(adb, model_path, question, n, timeout, max_tokens, suppress_early_eos, n_gpu_layers)
+            status, lines, run_id = outcome["status"], outcome["lines"], outcome["run_id"]
+            context_reset_for_this_q = False
+
+            if status == "error":
+                reason, message = extract_error(lines.get("RUN_ERROR", ""))
+                if message and CONTEXT_SIZE_PHRASE in message.lower():
+                    qprint(f"  CONTEXT WINDOW FULL (reason={reason}, message={message}) -- restarting SmolChat and retrying once")
+                    restart_smolchat(adb)
+                    context_resets += 1
+                    context_reset_for_this_q = True
+                    outcome = run_one(adb, model_path, question, n, timeout, max_tokens, suppress_early_eos, n_gpu_layers)
+                    status, lines, run_id = outcome["status"], outcome["lines"], outcome["run_id"]
+
+            entry = {
+                "question_number": n,
+                "question": question,
+                "trial_number": trial,
+                "run_id": run_id,
+                "status": None,
+                "metrics": None,
+                "response": None,
+                "error": None,
+                "context_reset": context_reset_for_this_q,
+            }
+
+            if status == "done":
+                metrics = build_metrics(lines)
+                response = extract_response(lines["RUN_DONE"])
+                entry["status"] = "success"
+                entry["metrics"] = metrics
+                entry["response"] = response
+
+                temp_parts = []
+                if metrics["thermal_temp_cpu_c"] is not None:
+                    temp_parts.append(f"CPU:{metrics['thermal_temp_cpu_c']}°C")
+                if metrics["thermal_temp_skin_c"] is not None:
+                    temp_parts.append(f"Skin:{metrics['thermal_temp_skin_c']}°C")
+                temp_suffix = f" ({' '.join(temp_parts)})" if temp_parts else ""
+                backend_suffix = f" Backend={metrics['backend_verified']}" if metrics["backend_verified"] else ""
+                energy_suffix = f" Energy={metrics['energy_mj_sampled']}mJ" if metrics["energy_mj_sampled"] is not None else ""
+                rate_parts = []
+                if metrics["prefill_tps"] is not None:
+                    rate_parts.append(f"Prefill={metrics['prefill_tps']}tok/s")
+                if metrics["decode_tps"] is not None:
+                    rate_parts.append(f"Decode={metrics['decode_tps']}tok/s")
+                rate_suffix = f" ({' '.join(rate_parts)})" if rate_parts else ""
+                qprint(
+                    f"  ColdLoad={metrics['cold_load_ms']}ms TTFT={metrics['ttft_ms']}ms TPS={metrics['tps']}{rate_suffix} "
+                    f"RSS={metrics['memory_kb']}KB Power={metrics['power_ma']}mA{energy_suffix} "
+                    f"Thermal={metrics['thermal']}{temp_suffix}{backend_suffix}"
+                )
+                preview = response if response and len(response) <= 160 else (response[:157] + "..." if response else "")
+                qprint(f"  Response: \"{preview}\"")
+            elif status == "error":
+                reason, message = extract_error(lines.get("RUN_ERROR", ""))
+                entry["status"] = "failed"
+                entry["error"] = {"reason": reason, "message": message}
+                qprint(f"  FAILED: reason={reason} message={message}")
+            else:  # timeout
+                entry["status"] = "failed"
+                entry["error"] = {"reason": "timeout", "message": f"No RUN_DONE/RUN_ERROR within {timeout}s"}
+                qprint(f"  FAILED: timeout after {timeout}s")
+
+            results.append(entry)
+            time.sleep(2)
+
+    return results, context_resets
+
+
 # ---------------------------------------------------------------------------
 # Summary / output
 # ---------------------------------------------------------------------------
 
 def stat_block(values):
     if not values:
-        return {"mean": None, "std": None, "min": None, "max": None}
+        return {"mean": None, "std": None, "min": None, "max": None, "n_completed": 0}
     return {
         "mean": round(statistics.mean(values), 3),
         "std": round(statistics.pstdev(values), 3),
         "min": min(values),
         "max": max(values),
+        "n_completed": len(values),
     }
+
+
+# Every metric build_metrics() produces that --trials' own per-question
+# trial_summary (see compute_trial_summary()) reports mean/std/min/max for.
+# Mirrors MNN's own SUMMARY_METRICS list as closely as this script's actual
+# metric set allows (no peak_rss_kb/power_ma_monsoon equivalents here).
+SUMMARY_METRICS = [
+    "ttft_ms", "tps", "prefill_tps", "decode_tps",
+    "memory_kb", "power_ma", "energy_mj_sampled",
+    "thermal_temp_cpu_c", "thermal_temp_skin_c",
+]
 
 
 def compute_summary(results: list) -> dict:
@@ -969,6 +1151,17 @@ def compute_summary(results: list) -> dict:
         if r["status"] == "success" and r["metrics"] and r["metrics"].get("thermal")
     })
 
+    # Distinct backend(s) genuinely registered across the run (see
+    # extract_backend_verified()'s docstring) - a set rather than a stat_block since it's a
+    # string, not a number. Normally a single value repeated every question (the backend
+    # registers once per process, and every headless call reloads within the same process),
+    # but surfaced as a set so a genuine mid-run change (e.g. a crash/restart landing on a
+    # different backend) would be visible rather than silently showing only the last question.
+    backend_states = sorted({
+        r["metrics"]["backend_verified"] for r in results
+        if r["status"] == "success" and r["metrics"] and r["metrics"].get("backend_verified")
+    })
+
     # Every question reloads the model now (context isolation), so only
     # question 1's cold_load_ms is a genuine cold read - question 2+ reload
     # within an already-booted, already-warm-cached process. Deliberately
@@ -981,15 +1174,26 @@ def compute_summary(results: list) -> dict:
     return {
         "ttft_ms": stat_block(vals("ttft_ms")),
         "tps": stat_block(vals("tps")),
+        "prefill_tps": stat_block(vals("prefill_tps")),
+        "decode_tps": stat_block(vals("decode_tps")),
         "memory_kb": stat_block(vals("memory_kb")),
         "power_ma": stat_block(vals("power_ma")),
+        "energy_mj_sampled": stat_block(vals("energy_mj_sampled")),
         "thermal_temp_cpu_c": stat_block(vals("thermal_temp_cpu_c")),
         "thermal_temp_skin_c": stat_block(vals("thermal_temp_skin_c")),
         "first_question_cold_load_ms": first_cold_load_ms,
         "thermal_states_observed": thermal_states,
+        "backend_verified_observed": backend_states,
         "note": (
             "TPS/TTFT drift across the run reflects real device thermal state "
             "as it heats up under sustained inference, not measurement error."
+        ),
+        "tps_note": (
+            "tps is llama.cpp's native rate - a BLENDED prefill+decode rate, not decode-only "
+            "(confirmed by reading LLMInference.cpp directly). prefill_tps/decode_tps are the "
+            "real, separately-measured rates matching the paper's own definitions "
+            "(prefill_tps = prompt_len/TTFT, decode_tps = gen_tokens/(t_last-t_first)) and are "
+            "what should be used for the real replication, not tps."
         ),
         "rss_note": (
             "peak_RSS_KB is only directly comparable across different models if each was "
@@ -1006,7 +1210,7 @@ def print_summary_table(summary: dict, run_info: dict):
     header = f"{'Metric':<10}{'Mean':>12}{'Std':>12}{'Min':>12}{'Max':>12}"
     qprint(header)
     qprint("-" * len(header))
-    for label, key in [("TTFT_ms", "ttft_ms"), ("TPS", "tps"), ("RSS_KB", "memory_kb"), ("Power_mA", "power_ma"), ("ThermalCPU_C", "thermal_temp_cpu_c"), ("ThermalSkin_C", "thermal_temp_skin_c")]:
+    for label, key in [("TTFT_ms", "ttft_ms"), ("TPS", "tps"), ("PrefillTPS", "prefill_tps"), ("DecodeTPS", "decode_tps"), ("RSS_KB", "memory_kb"), ("Power_mA", "power_ma"), ("Energy_mJ", "energy_mj_sampled"), ("ThermalCPU_C", "thermal_temp_cpu_c"), ("ThermalSkin_C", "thermal_temp_skin_c")]:
         s = summary[key]
         row = f"{label:<10}" + "".join(
             f"{(s[k] if s[k] is not None else 'N/A'):>12}" for k in ("mean", "std", "min", "max")
@@ -1015,13 +1219,70 @@ def print_summary_table(summary: dict, run_info: dict):
     cold_load_q1 = summary.get("first_question_cold_load_ms")
     qprint(f"{'ColdLoad_Q1':<10}{(cold_load_q1 if cold_load_q1 is not None else 'N/A'):>12}{'N/A':>12}{'N/A':>12}{'N/A':>12}")
     qprint(f"\nThermal states observed: {', '.join(summary['thermal_states_observed']) or 'none'}")
+    qprint(f"Backend(s) verified registered: {', '.join(summary['backend_verified_observed']) or 'none'}")
     qprint(summary["note"])
+    qprint(summary["tps_note"])
     qprint(summary["rss_note"])
     qprint(f"{run_info['cold_load_note']} (rebooted_before_run={run_info['rebooted_before_run']})")
 
 
-def save_results(output_path: str, run_info: dict, summary: dict, results: list):
+def compute_trial_summary(results: list, questions: list) -> dict:
+    """--trials' own new summary section: mean/std (plus min/max/n, via the
+    same stat_block() the overall summary uses) across each question's OWN
+    kept trials, for every metric in SUMMARY_METRICS - distinct from
+    compute_summary(), which still pools ALL recorded results together
+    (still meaningful in --trials mode too, just not what this adds).
+
+    Keyed by question_number as a string (JSON object keys must be strings).
+    Mirrors MNN's own compute_trial_summary().
+    """
+    summary_by_question = {}
+    for n, question in enumerate(questions, start=1):
+        question_results = [r for r in results if r["question_number"] == n]
+
+        def vals(key):
+            return [
+                r["metrics"][key] for r in question_results
+                if r["status"] == "success" and r["metrics"] and r["metrics"].get(key) is not None
+            ]
+
+        summary_by_question[str(n)] = {
+            "question": question,
+            "n_trials": len(question_results),
+            "n_completed": sum(1 for r in question_results if r["status"] == "success"),
+            "metrics": {key: stat_block(vals(key)) for key in SUMMARY_METRICS},
+        }
+    return summary_by_question
+
+
+def print_trial_summary(trial_summary: dict):
+    qprint("\n" + "=" * 60)
+    qprint("TRIAL SUMMARY (mean/std across N kept trials, per question)")
+    qprint("=" * 60)
+
+    for qnum, qsum in trial_summary.items():
+        qprint(f"\nQ{qnum}: \"{qsum['question']}\"  (n_trials={qsum['n_trials']}, n_completed={qsum['n_completed']})")
+        header = f"{'Metric':<20}{'Mean':>12}{'Std':>12}{'Min':>12}{'Max':>12}"
+        qprint(header)
+        qprint("-" * len(header))
+        for key in SUMMARY_METRICS:
+            s = qsum["metrics"][key]
+            row = f"{key:<20}" + "".join(
+                f"{(s[k] if s[k] is not None else 'N/A'):>12}" for k in ("mean", "std", "min", "max")
+            )
+            qprint(row)
+
+
+def save_results(output_path: str, run_info: dict, summary: dict, results: list, trial_summary: dict = None):
     report = {"run_info": run_info, "results": results, "summary": summary}
+    # Only added when --trials produced one (default None) - existing
+    # callers/output shape are completely unaffected when this is omitted.
+    if trial_summary is not None:
+        report["trial_summary"] = trial_summary
+    # Auto-create the output directory if it doesn't exist yet - matches
+    # run_mnn_autobench.py's own save_results(), and avoids losing a full
+    # completed run's results to a bare FileNotFoundError at the very end.
+    Path(output_path).parent.mkdir(parents=True, exist_ok=True)
     with open(output_path, "w") as f:
         json.dump(report, f, indent=2, default=str)
     print(f"\n[OUTPUT] Results saved: {output_path}")
@@ -1043,6 +1304,35 @@ def parse_args():
                     help="Max tokens the receiver should generate per response (matches MNN's default)")
     p.add_argument("--reboot-before", action="store_true",
                     help="Reboot the device before benchmarking for a genuine cold-load read (adds ~30-60s)")
+    p.add_argument("--trials", type=int, default=1, dest="trials",
+                    help="Paper-exact protocol: for each question, run ONCE as a discarded warmup, then run "
+                         "this many SEPARATE, real times, recording EVERY one as its own full result (not "
+                         "collapsed into a single kept entry). Adds a new 'trial_summary' section to the "
+                         "output JSON: mean/std (and min/max/n) per metric, per question, across that "
+                         "question's own N kept trials - separate from the existing 'summary' section, which "
+                         "still pools every recorded result together regardless. Mirrors MNN's own --trials "
+                         "flag. Default: 1 (no warmup, unchanged behavior: exactly one run per question via "
+                         "the existing code path, same as before this flag existed).")
+    p.add_argument("--no-eos-suppress", action="store_true", dest="no_eos_suppress",
+                    help="Disable BenchmarkService.kt's suppressEarlyEos behavior (headless-only, on by "
+                         "default: forces the model's own EOG token(s) off for the first 40 generated tokens "
+                         "of every completion, via the suppress_early_eos broadcast extra). Passing this flag "
+                         "sends suppress_early_eos=false so the model can stop naturally at its own real "
+                         "answer length instead of being forced to keep generating - useful when you don't "
+                         "need suppressEarlyEos's premature-stop-rate experiment and instead want fast, "
+                         "coherent completions (it can otherwise push sampling into the tail of the "
+                         "distribution once the model's real answer is exhausted, producing garbage output). "
+                         "Default: OFF (unchanged behavior - suppress_early_eos=true is sent, same as before "
+                         "this flag existed).")
+    p.add_argument("--n-gpu-layers", type=int, default=0, dest="n_gpu_layers",
+                    help="Number of model layers to offload to the GPU backend (Vulkan/OpenCL flavors only - "
+                         "matches llama-bench/llama-cli's own -ngl flag). CONFIRMED REAL GAP: "
+                         "llama_model_default_params() defaults n_gpu_layers to 0 (CPU-only) and, before this "
+                         "flag existed, LLMInference.cpp/SmolLM.kt/SmolLMManager.kt never overrode it anywhere - "
+                         "so even a genuinely-registered GPU backend (see the BACKEND_CHECK log tag) never had "
+                         "any layers actually offloaded to it; every headless run was CPU-only regardless of "
+                         "which flavor's APK was installed. Passing e.g. --n-gpu-layers 99 offloads the whole "
+                         "model. Default: 0 (unchanged behavior - CPU-only, same as before this flag existed).")
     p.add_argument("--quiet", action="store_true",
                     help="Suppress routine per-question and pre-flight progress output. [ERROR]/[WARN] lines "
                          "and the final 'Results saved'/'DONE' confirmation are still always printed.")
@@ -1077,8 +1367,24 @@ def main():
     model_path, model_name = resolve_model(args.model, args.quant, adb)
     questions = load_questions(args.questions)
 
+    if args.trials > 1:
+        qprint(f"  Trials: {args.trials} (1 discarded warmup + {args.trials} SEPARATE recorded trials per question)")
+    suppress_early_eos = not args.no_eos_suppress
+    qprint(f"  suppress_early_eos: {suppress_early_eos}" + (" (--no-eos-suppress)" if args.no_eos_suppress else " (default)"))
+    if args.n_gpu_layers > 0:
+        qprint(f"  n_gpu_layers: {args.n_gpu_layers}")
+
     start_time = datetime.now(timezone.utc).isoformat()
-    results, context_resets = run_benchmark(adb, model_path, questions, args.timeout, args.max_tokens, reboot_before=args.reboot_before)
+    if args.trials > 1:
+        results, context_resets = run_trials_benchmark(
+            adb, model_path, questions, args.timeout, args.max_tokens, trials=args.trials,
+            suppress_early_eos=suppress_early_eos, n_gpu_layers=args.n_gpu_layers,
+        )
+    else:
+        results, context_resets = run_benchmark(
+            adb, model_path, questions, args.timeout, args.max_tokens, reboot_before=args.reboot_before,
+            suppress_early_eos=suppress_early_eos, n_gpu_layers=args.n_gpu_layers,
+        )
     end_time = datetime.now(timezone.utc).isoformat()
 
     completed = sum(1 for r in results if r["status"] == "success")
@@ -1091,10 +1397,16 @@ def main():
         "quant": args.quant,
         "start_time": start_time,
         "end_time": end_time,
-        "total": len(questions),
+        # len(results), not len(questions): with --trials, results holds
+        # len(questions) * args.trials entries (numerically identical to
+        # len(questions) when args.trials is the default 1).
+        "total": len(results),
         "completed": completed,
         "failed": failed,
         "context_resets": context_resets,
+        "trials": args.trials,
+        "suppress_early_eos": suppress_early_eos,
+        "n_gpu_layers": args.n_gpu_layers,
         "battery_warning": battery_info["battery_warning"],
         "battery_level_pct": battery_info["battery_level_pct"],
         "battery_status": battery_info["battery_status"],
@@ -1103,11 +1415,14 @@ def main():
     }
 
     summary = compute_summary(results)
-    save_results(args.output, run_info, summary, results)
+    trial_summary = compute_trial_summary(results, questions) if args.trials > 1 else None
+    save_results(args.output, run_info, summary, results, trial_summary=trial_summary)
     print_summary_table(summary, run_info)
+    if trial_summary is not None:
+        print_trial_summary(trial_summary)
 
     qprint("\n" + "=" * 60)
-    qprint(f"DONE - {completed}/{len(questions)} completed, {failed} failed, {context_resets} context reset(s)")
+    qprint(f"DONE - {completed}/{len(results)} completed, {failed} failed, {context_resets} context reset(s)")
     qprint("=" * 60)
 
 

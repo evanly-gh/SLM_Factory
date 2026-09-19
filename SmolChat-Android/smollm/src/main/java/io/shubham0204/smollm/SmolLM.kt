@@ -191,6 +191,13 @@ class SmolLM {
         val numThreads: Int = 4,
         val useMmap: Boolean = true,
         val useMlock: Boolean = false,
+        // Forwarded to llama_model_params.n_gpu_layers (matches llama-bench/llama-cli's own
+        // -ngl flag). Previously never set anywhere in this codebase - llama_model_default_params()
+        // defaults it to 0 (CPU-only), so even a genuinely-registered GPU backend (Vulkan/OpenCL)
+        // never had any layers actually offloaded to it. Default 0 here keeps that exact
+        // pre-existing behavior; the manual chat UI and every other existing caller are
+        // unaffected unless they explicitly pass a non-zero value.
+        val nGpuLayers: Int = 0,
     )
 
     /**
@@ -231,6 +238,7 @@ class SmolLM {
                     params.useMmap,
                     params.useMlock,
                     nativeLibraryDir,
+                    params.nGpuLayers,
                 )
         }
 
@@ -277,6 +285,17 @@ class SmolLM {
     fun getContextLengthUsed(): Int {
         verifyHandle()
         return getContextSizeUsed(nativePtr)
+    }
+
+    /**
+     * Returns the exact number of prompt tokens from the most recent [startCompletion] call
+     * (real tokenizer output, not an estimate). Lets callers compute prefill_tps = this / TTFT
+     * themselves — llama_decode() has no separate prefill-only timer, so nothing upstream of
+     * this call can give a clean prefill/decode split on its own.
+     */
+    fun getPromptTokenCount(): Int {
+        verifyHandle()
+        return getPromptTokenCount(nativePtr)
     }
 
     /**
@@ -367,6 +386,7 @@ class SmolLM {
         useMmap: Boolean,
         useMlock: Boolean,
         nativeLibraryDir: String,
+        nGpuLayers: Int,
     ): Long
 
     private external fun addChatMessage(modelPtr: Long, message: String, role: String)
@@ -374,6 +394,8 @@ class SmolLM {
     private external fun getResponseGenerationSpeed(modelPtr: Long): Float
 
     private external fun getContextSizeUsed(modelPtr: Long): Int
+
+    private external fun getPromptTokenCount(modelPtr: Long): Int
 
     private external fun close(modelPtr: Long)
 

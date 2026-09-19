@@ -55,6 +55,9 @@ class HeadlessBenchmarkReceiver : BroadcastReceiver() {
         val maxTokens = intent.getStringExtra("max_tokens")
         // DIAGNOSTIC-only override for a repeated-trial rate comparison; see BenchmarkService.
         val suppressEarlyEos = intent.getStringExtra("suppress_early_eos")
+        // Forwards to BenchmarkService's own nGpuLayers parsing; see SmolLM.InferenceParams.nGpuLayers's
+        // kdoc for why this previously had no effect anywhere even before this receiver-side gap.
+        val nGpuLayers = intent.getStringExtra("n_gpu_layers")
 
         if (modelPath == null || prompt == null || runId == null) {
             Log.d("RUN_ERROR", "run_id=${runId ?: "unknown"} reason=missing_extras" +
@@ -109,6 +112,7 @@ class HeadlessBenchmarkReceiver : BroadcastReceiver() {
             // Optional; BenchmarkService defaults to 4096 when absent.
             if (maxTokens != null) putExtra("max_tokens", maxTokens)
             if (suppressEarlyEos != null) putExtra("suppress_early_eos", suppressEarlyEos)
+            if (nGpuLayers != null) putExtra("n_gpu_layers", nGpuLayers)
         }
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {

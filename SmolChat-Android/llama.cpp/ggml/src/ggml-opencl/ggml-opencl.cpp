@@ -7289,8 +7289,30 @@ static bool ggml_opencl_supports_op(ggml_backend_dev_t dev, const struct ggml_te
                        op->src[0]->type == GGML_TYPE_MXFP4 ||
                        op->src[0]->type == GGML_TYPE_IQ4_NL ||
                        op->src[0]->type == GGML_TYPE_Q4_K  ||
-                       op->src[0]->type == GGML_TYPE_Q5_K  ||
-                       op->src[0]->type == GGML_TYPE_Q6_K) {
+                       op->src[0]->type == GGML_TYPE_Q5_K) {
+                return op->src[1]->type == GGML_TYPE_F32 && ggml_is_contiguous(op->src[0]) && ggml_is_contiguous(op->src[1]);
+            } else if (op->src[0]->type == GGML_TYPE_Q6_K) {
+#ifdef GGML_OPENCL_USE_ADRENO_KERNELS
+                // kernel_gemv_noshuffle_q6_K_f32 (the Adreno "noshuffle" GEMV path --
+                // see ggml_cl_mul_mat_q6_K_f32_adreno()/gemv_noshuffle_q6_k_f32.cl)
+                // produces numerically wrong (garbled-decode) output on A6X/A7X,
+                // confirmed via real on-device testing: llama-cli generated garbled
+                // output for Q4_K_M (which contains Q6_K tensors) and Qwen2-1.5B, while
+                // Q8_0 (no Q6_K tensors) and the CPU backend both produced coherent
+                // output on the same device/model. Traced to this exact kernel by
+                // following the real dispatch path in this file (not an external
+                // source), and use_flat_gemv_for_large_m_q6_K() confirmed our model's
+                // tensor shapes route here, not to the (different, unaffected)
+                // mul_mv_q6_k_f32_flat.cl path. Same idiom as
+                // use_adreno_moe_kernels() above, which already excludes A6X/A7X for
+                // an analogous weight-corruption miscompile -- decline the op here so
+                // ggml's scheduler falls back to the CPU backend, rather than routing
+                // around it inside the OpenCL backend itself.
+                if (backend_ctx && (backend_ctx->adreno_gen == ADRENO_GPU_GEN::A6X ||
+                                    backend_ctx->adreno_gen == ADRENO_GPU_GEN::A7X)) {
+                    return false;
+                }
+#endif
                 return op->src[1]->type == GGML_TYPE_F32 && ggml_is_contiguous(op->src[0]) && ggml_is_contiguous(op->src[1]);
             } else if (op->src[0]->type == GGML_TYPE_Q8_0) {
                 return op->src[1]->type == GGML_TYPE_F32;

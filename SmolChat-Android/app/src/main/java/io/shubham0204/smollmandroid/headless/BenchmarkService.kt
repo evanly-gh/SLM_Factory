@@ -19,7 +19,6 @@ package io.shubham0204.smollmandroid.headless
 import android.app.Service
 import android.content.Context
 import android.content.Intent
-import android.os.BatteryManager
 import android.os.Build
 import android.os.IBinder
 import android.os.PowerManager
@@ -47,7 +46,6 @@ import java.io.FileOutputStream
 import java.util.Date
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicReference
-import kotlin.math.abs
 
 /**
  * Foreground service that loads a GGUF model and runs a single inference pass, logging all
@@ -105,12 +103,6 @@ class BenchmarkService : Service() {
         // artifact. GGUF model files are always far larger than this in practice — this is only
         // a cheap sanity floor, not real validation (no magic-byte/GGUF-header check).
         private const val MIN_PLAUSIBLE_MODEL_FILE_BYTES = 1L * 1024 * 1024
-
-        private val CURRENT_SYSFS_PATHS = listOf(
-            "/sys/class/power_supply/battery/current_now",
-            "/sys/class/power_supply/Battery/current_now",
-            "/sys/class/power_supply/bms/current_now",
-        )
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
@@ -126,6 +118,9 @@ class BenchmarkService : Service() {
         // true-by-default headless behavior, without touching the actual default.
         val suppressEarlyEos =
             intent?.getStringExtra("suppress_early_eos")?.toBooleanStrictOrNull() ?: true
+        // Optional broadcast extra; defaults to 0 (CPU-only, the pre-existing behavior — see
+        // SmolLM.InferenceParams.nGpuLayers's kdoc) when absent or not a valid int.
+        val nGpuLayers = intent?.getStringExtra("n_gpu_layers")?.toIntOrNull() ?: 0
 
         if (modelPath == null || prompt == null || runId == null) {
             Log.d("RUN_ERROR", "run_id=${runId ?: "unknown"} reason=missing_extras")
@@ -165,7 +160,7 @@ class BenchmarkService : Service() {
         }
 
         serviceScope.launch(exceptionHandler) {
-            runBenchmark(modelPath, prompt, runId, maxTokens, suppressEarlyEos)
+            runBenchmark(modelPath, prompt, runId, maxTokens, suppressEarlyEos, nGpuLayers)
             stopSelf(startId)
         }
 
@@ -181,9 +176,10 @@ class BenchmarkService : Service() {
 
     private suspend fun runBenchmark(
         modelPath: String, prompt: String, runId: String, maxTokens: Int, suppressEarlyEos: Boolean,
+        nGpuLayers: Int = 0,
     ) {
         try {
-            runBenchmarkInternal(modelPath, prompt, runId, maxTokens, suppressEarlyEos)
+            runBenchmarkInternal(modelPath, prompt, runId, maxTokens, suppressEarlyEos, nGpuLayers)
         } catch (e: Exception) {
             Log.e("RUN_ERROR", "run_id=$runId reason=unexpected_error message=${e.message}", e)
         }
@@ -191,6 +187,7 @@ class BenchmarkService : Service() {
 
     private suspend fun runBenchmarkInternal(
         rawModelPath: String, prompt: String, runId: String, maxTokens: Int, suppressEarlyEos: Boolean,
+        nGpuLayers: Int = 0,
     ) {
         val modelPath = resolveReadableModelPath(rawModelPath, runId) ?: return
 
@@ -227,6 +224,7 @@ class BenchmarkService : Service() {
             onError   = { e -> loadDeferred.complete(Result.failure(e)) },
             onSuccess = {    loadDeferred.complete(Result.success(Unit)) },
             contextSizeOverride = CONTEXT_SIZE,
+            nGpuLayers = nGpuLayers,
         )
         loadDeferred.await().getOrElse { e ->
             Log.d("RUN_ERROR", "run_id=$runId reason=model_load_failed message=${e.message}")
@@ -234,7 +232,6 @@ class BenchmarkService : Service() {
         }
 
         // ── Power / thermal monitoring ─────────────────────────────────────────
-        val currentSamples  = mutableListOf<Long>()
         // Fix 1: track the actual peak PowerManager status level, not just a crossed-threshold
         // boolean, so we can log its real name (Normal/Light/Moderate/Severe/Critical) below.
         val maxThermalStatus = AtomicInteger(PowerManager.THERMAL_STATUS_NONE)
@@ -246,17 +243,18 @@ class BenchmarkService : Service() {
         // "unavailable" if the corresponding sensor is never readable on this device.
         val maxCpuThermalTempC = AtomicReference(0f)
         val maxSkinThermalTempC = AtomicReference(0f)
-        val batteryManager   = getSystemService(Context.BATTERY_SERVICE) as BatteryManager
         val powerManager     = getSystemService(Context.POWER_SERVICE)   as PowerManager
-        val chargeAtStart    = batteryManager.getLongProperty(
-            BatteryManager.BATTERY_PROPERTY_CHARGE_COUNTER
-        )
+        // Real current+voltage sampling with per-sample timestamps and trapezoidal energy
+        // integration — see PowerSampler.kt's kdoc. Replaces the old inline
+        // currentSamples/computeAvgCurrentUa() sampling loop; getAverageMa() below reproduces
+        // that same average-mA computation exactly (same three-tier fallback), so the existing
+        // POWER log line's meaning/units are unchanged.
+        val powerSampler = PowerSampler(this)
+        powerSampler.start(intervalMs = 100)
 
         val monitorJob: Job = serviceScope.launch {
             var tick = 0
             while (true) {
-                val sample = readCurrentUa(batteryManager)
-                if (sample > 0L) currentSamples.add(sample)
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                     val status = powerManager.currentThermalStatus
                     if (status > maxThermalStatus.get()) maxThermalStatus.set(status)
@@ -365,24 +363,29 @@ class BenchmarkService : Service() {
         // Await inference before cancelling the power monitor.
         val response = inferenceDeferred.await().getOrElse { e ->
             monitorJob.cancel()
+            powerSampler.stop()
             if (wakeLock.isHeld) wakeLock.release()
             Log.d("RUN_ERROR", "run_id=$runId reason=inference_failed message=${e.message}")
             return
         }
         monitorJob.cancel()
+        powerSampler.stop()
 
         Log.d("CPU_FREQ", "run_id=$runId after_inference ${readCpuFreqsKhz()}")
         if (wakeLock.isHeld) wakeLock.release()
 
         // ── Compute metrics ────────────────────────────────────────────────────
         val coldLoadMs   = smolLMManager.getColdLoadTimeMs()
-        // Fix 2: average over samples in µA, then convert to mA with one decimal place —
-        // matching ChatScreenViewModel's computeAvgCurrentUa()/mA conversion, but with decimal
-        // precision instead of truncating integer division.
-        val avgCurrentUa = computeAvgCurrentUa(
-            currentSamples, chargeAtStart, response.generationTimeSecs, batteryManager
-        )
-        val avgPowerMa = if (avgCurrentUa == Long.MIN_VALUE) null else avgCurrentUa / 1000.0
+        // getAverageMa() reproduces the exact same average-mA computation the old inline
+        // computeAvgCurrentUa() did (same three-tier fallback: instantaneous samples, then
+        // charge-counter delta) — see PowerSampler.kt. POWER's meaning/units are unchanged.
+        val avgPowerMa = powerSampler.getAverageMa()
+        val avgCurrentUa = avgPowerMa?.let { (it * 1000.0).toLong() } ?: Long.MIN_VALUE
+        // New: true energy (mJ) via trapezoidal current x voltage integration over real
+        // per-sample timestamps — see PowerSampler.getEnergyMjSampled()'s kdoc. Null (and thus
+        // logged as "unsupported") whenever fewer than 2 samples carried a paired voltage
+        // reading, e.g. a very short run or a device where EXTRA_VOLTAGE never populated.
+        val energyMjSampled = powerSampler.getEnergyMjSampled()
         val thermalStatus = thermalStatusName(maxThermalStatus.get())
 
         // Fix 4 / Issue 1: write the assistant's response into the same chat, attach these same
@@ -405,9 +408,18 @@ class BenchmarkService : Service() {
         Log.d("COLD_LOAD", "run_id=$runId value=${coldLoadMs ?: 0}")
         Log.d("TTFT",      "run_id=$runId value=${response.ttftMs}")
         Log.d("TPS",       "run_id=$runId value=${response.generationSpeed}")
+        // Real, separately-measured prefill/decode rates matching the paper's own definitions
+        // (prefill_tps = prompt_len/TTFT, decode_tps = gen_tokens/(t_last-t_first)) — see
+        // SmolLMManager.SmolLMResponse's kdoc for exactly what TPS above actually measures
+        // instead (a blended prefill+decode rate). Null (logged as "unsupported") in the same
+        // edge cases documented there — e.g. too few tokens to measure a decode rate between.
+        Log.d("PREFILL_TPS", "run_id=$runId value=${response.prefillTps ?: "unsupported"}")
+        Log.d("DECODE_TPS",  "run_id=$runId value=${response.decodeTps ?: "unsupported"}")
         Log.d("MEMORY",    "run_id=$runId value=${response.peakRssKb}")
         Log.d("POWER",     "run_id=$runId value=${
             avgPowerMa?.let { "%.1f".format(it) } ?: "unsupported"}")
+        Log.d("ENERGY_MJ_SAMPLED", "run_id=$runId value=${
+            energyMjSampled?.let { "%.1f".format(it) } ?: "unsupported"}")
         Log.d("THERMAL",   "run_id=$runId value=$thermalStatus")
         // Additive real-temperature readings alongside the coarse THERMAL status above — does
         // not change or replace that line. THERMAL_TEMP_CPU is the raw CPU junction sensor (see
@@ -558,34 +570,4 @@ class BenchmarkService : Service() {
         return freqs.joinToString(" ")
     }
 
-    // ── Power helpers ──────────────────────────────────────────────────────────
-
-    private fun readCurrentUa(batteryManager: BatteryManager): Long {
-        val apiVal = batteryManager.getLongProperty(BatteryManager.BATTERY_PROPERTY_CURRENT_NOW)
-        if (apiVal != Long.MIN_VALUE) return abs(apiVal)
-        for (path in CURRENT_SYSFS_PATHS) {
-            try { return abs(File(path).readText().trim().toLong()) } catch (_: Exception) {}
-        }
-        return Long.MIN_VALUE
-    }
-
-    private fun computeAvgCurrentUa(
-        samples: List<Long>,
-        chargeAtStartUah: Long,
-        durationSecs: Int,
-        batteryManager: BatteryManager,
-    ): Long {
-        val valid = samples.filter { it > 0L }
-        if (valid.isNotEmpty()) return valid.average().toLong()
-        if (chargeAtStartUah != Long.MIN_VALUE && durationSecs > 0) {
-            val chargeAtEnd = batteryManager.getLongProperty(
-                BatteryManager.BATTERY_PROPERTY_CHARGE_COUNTER
-            )
-            if (chargeAtEnd != Long.MIN_VALUE) {
-                val deltaUah = chargeAtStartUah - chargeAtEnd
-                if (deltaUah > 0) return deltaUah * 3600L / durationSecs
-            }
-        }
-        return Long.MIN_VALUE
-    }
 }

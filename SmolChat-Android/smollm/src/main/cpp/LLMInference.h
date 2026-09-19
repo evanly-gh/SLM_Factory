@@ -66,7 +66,7 @@ class LLMInference {
   public:
     void loadModel(const char* modelPath, float minP, float temperature, bool storeChats, long contextSize,
                    const char* chatTemplate, int nThreads, bool useMmap, bool useMlock,
-                   const char* nativeLibraryDir);
+                   const char* nativeLibraryDir, int nGpuLayers = 0);
 
     std::string benchModel(int pp, int tg, int pl, int nr);
 
@@ -75,6 +75,16 @@ class LLMInference {
     float getResponseGenerationTime() const;
 
     int getContextSizeUsed() const;
+
+    // Exact prompt token count from the most recent startCompletion() call (i.e. _promptTokens'
+    // real size, not an estimate) — lets callers compute prefill_tps = promptTokenCount / TTFT
+    // themselves, since llama_decode() has no separate prefill-only timer of its own (see
+    // completionLoop(): the very first call processes the whole prompt batch AND samples the
+    // first generated token in one llama_decode(), so _responseGenerationTime/getResponseGenerationSpeed()
+    // below is a blended prefill+decode rate, not decode-only — despite what SmolLMManager.kt
+    // used to assume; see the real fix there for the corrected comment). 0 if startCompletion()
+    // hasn't been called yet.
+    int getPromptTokenCount() const;
 
     // Returns true if Jinja template was used, false if legacy fallback was needed.
     // maxTokens caps the number of tokens completionLoop() will generate before it force-stops

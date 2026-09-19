@@ -1,0 +1,245 @@
+{
+  "run_info": {
+    "model": "qwen2.5-7b-q4_k_m.gguf",
+    "model_device_path": "/data/user/0/io.shubham0204.smollmandroid/files/headless_benchmark_cache/qwen2.5-7b-q4_k_m.gguf",
+    "device": "phone",
+    "quant": "Q4_K_M",
+    "start_time": "2026-09-18T16:02:44.756223+00:00",
+    "end_time": "2026-09-18T16:08:03.641508+00:00",
+    "total": 3,
+    "completed": 3,
+    "failed": 0,
+    "context_resets": 0,
+    "trials": 3,
+    "suppress_early_eos": true,
+    "battery_warning": true,
+    "battery_level_pct": 100,
+    "battery_status": "Full",
+    "rebooted_before_run": false,
+    "cold_load_note": "cold_load_ms reflects a genuinely cold read only if --reboot-before was used for this run. Without a reboot, the OS file cache may make cold_load_ms appear faster than a true cold read from storage, especially for larger model files."
+  },
+  "results": [
+    {
+      "question_number": 1,
+      "question": "The history of artificial intelligence began in antiquity, with myths and stories of artificial beings endowed with intelligence or consciousness by master craftsmen. The seeds of modern AI were planted by classical philosophers who attempted to describe human thinking as a symbolic system. The field of AI research was founded at a workshop held at Dartmouth College in 1956. Attendees became the leaders of AI research for decades. Many of them predicted that a machine as intelligent as a human being would exist in no more than a generation, and they were given millions of dollars to make this vision come true. Eventually, it became obvious that they had grossly underestimated the difficulty of the project. In 1973, in response to the criticism from James Lighthill and ongoing pressure from congress, the U.S. and British Governments stopped funding undirected research into artificial intelligence, and the difficult years that followed would later be known as an AI winter. Seven years later, a revival of interest in neural networks began. Machine learning, integral to AI since its beginnings, is the study of computer algorithms that improve automatically through experience. Deep learning became feasible, which led to an increase in interest and funding. Modern AI research covers a huge number of subfields, from general purpose areas such as learning",
+      "trial_number": 1,
+      "run_id": "run_1_1789747446040",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 506,
+        "ttft_ms": 33102,
+        "tps": 3.4388378,
+        "prefill_tps": 8.307654,
+        "decode_tps": 6.179395,
+        "memory_kb": 5266472,
+        "power_ma": 10.9,
+        "energy_mj_sampled": 1853.7,
+        "thermal": "Normal",
+        "thermal_temp_cpu_c": 65.9,
+        "thermal_temp_skin_c": null,
+        "power_ma_monsoon": null,
+        "backend_verified": "CPU"
+      },
+      "response": "The capabilities of AI have been increasing rapidly in the last half-century. It can take input in the form of text, speech, or images and provide human-like responses. AI can improve its performance based on feedback and new data. It is capable of processing large amounts of data, analyzing complex patterns, and solving problems efficiently. It can also adapt to new situations and learn from its mistakes. AI has been successful in a wide range of tasks, including speech recognition, natural language processing, computer vision, and game playing. It has revolutionized industries such as healthcare, finance, transportation, and entertainment. However, AI is not without its limitations. It is not self-aware, and it cannot reason or make decisions based on emotions. It can only work with the data that it has been given and cannot generalize beyond that. Additionally, AI has the potential to cause unintended harm if it is not properly designed and monitored. Nonetheless, it is clear that AI is a powerful tool that can be used to solve many of the world's problems.",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 1,
+      "question": "The history of artificial intelligence began in antiquity, with myths and stories of artificial beings endowed with intelligence or consciousness by master craftsmen. The seeds of modern AI were planted by classical philosophers who attempted to describe human thinking as a symbolic system. The field of AI research was founded at a workshop held at Dartmouth College in 1956. Attendees became the leaders of AI research for decades. Many of them predicted that a machine as intelligent as a human being would exist in no more than a generation, and they were given millions of dollars to make this vision come true. Eventually, it became obvious that they had grossly underestimated the difficulty of the project. In 1973, in response to the criticism from James Lighthill and ongoing pressure from congress, the U.S. and British Governments stopped funding undirected research into artificial intelligence, and the difficult years that followed would later be known as an AI winter. Seven years later, a revival of interest in neural networks began. Machine learning, integral to AI since its beginnings, is the study of computer algorithms that improve automatically through experience. Deep learning became feasible, which led to an increase in interest and funding. Modern AI research covers a huge number of subfields, from general purpose areas such as learning",
+      "trial_number": 2,
+      "run_id": "run_1_1789747524930",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 411,
+        "ttft_ms": 33094,
+        "tps": 3.4119768,
+        "prefill_tps": 8.309663,
+        "decode_tps": 6.0895834,
+        "memory_kb": 5189444,
+        "power_ma": 27.2,
+        "energy_mj_sampled": 5094.1,
+        "thermal": "Normal",
+        "thermal_temp_cpu_c": 67.8,
+        "thermal_temp_skin_c": null,
+        "power_ma_monsoon": null,
+        "backend_verified": "CPU"
+      },
+      "response": "The provided text covers a wide range of topics related to the history of Artificial Intelligence (AI). Here's a structured summary that condenses the key points into a concise format:",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 1,
+      "question": "The history of artificial intelligence began in antiquity, with myths and stories of artificial beings endowed with intelligence or consciousness by master craftsmen. The seeds of modern AI were planted by classical philosophers who attempted to describe human thinking as a symbolic system. The field of AI research was founded at a workshop held at Dartmouth College in 1956. Attendees became the leaders of AI research for decades. Many of them predicted that a machine as intelligent as a human being would exist in no more than a generation, and they were given millions of dollars to make this vision come true. Eventually, it became obvious that they had grossly underestimated the difficulty of the project. In 1973, in response to the criticism from James Lighthill and ongoing pressure from congress, the U.S. and British Governments stopped funding undirected research into artificial intelligence, and the difficult years that followed would later be known as an AI winter. Seven years later, a revival of interest in neural networks began. Machine learning, integral to AI since its beginnings, is the study of computer algorithms that improve automatically through experience. Deep learning became feasible, which led to an increase in interest and funding. Modern AI research covers a huge number of subfields, from general purpose areas such as learning",
+      "trial_number": 3,
+      "run_id": "run_1_1789747604751",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 433,
+        "ttft_ms": 33046,
+        "tps": 3.4246054,
+        "prefill_tps": 8.3217325,
+        "decode_tps": 6.125574,
+        "memory_kb": 5313776,
+        "power_ma": 35.5,
+        "energy_mj_sampled": 8644.5,
+        "thermal": "Normal",
+        "thermal_temp_cpu_c": 70.5,
+        "thermal_temp_skin_c": null,
+        "power_ma_monsoon": null,
+        "backend_verified": "CPU"
+      },
+      "response": "D",
+      "error": null,
+      "context_reset": false
+    }
+  ],
+  "summary": {
+    "ttft_ms": {
+      "mean": 33080.667,
+      "std": 24.73,
+      "min": 33046,
+      "max": 33102,
+      "n_completed": 3
+    },
+    "tps": {
+      "mean": 3.425,
+      "std": 0.011,
+      "min": 3.4119768,
+      "max": 3.4388378,
+      "n_completed": 3
+    },
+    "prefill_tps": {
+      "mean": 8.313,
+      "std": 0.006,
+      "min": 8.307654,
+      "max": 8.3217325,
+      "n_completed": 3
+    },
+    "decode_tps": {
+      "mean": 6.132,
+      "std": 0.037,
+      "min": 6.0895834,
+      "max": 6.179395,
+      "n_completed": 3
+    },
+    "memory_kb": {
+      "mean": 5256564,
+      "std": 51239.554,
+      "min": 5189444,
+      "max": 5313776,
+      "n_completed": 3
+    },
+    "power_ma": {
+      "mean": 24.533,
+      "std": 10.218,
+      "min": 10.9,
+      "max": 35.5,
+      "n_completed": 3
+    },
+    "energy_mj_sampled": {
+      "mean": 5197.433,
+      "std": 2773.295,
+      "min": 1853.7,
+      "max": 8644.5,
+      "n_completed": 3
+    },
+    "thermal_temp_cpu_c": {
+      "mean": 68.067,
+      "std": 1.887,
+      "min": 65.9,
+      "max": 70.5,
+      "n_completed": 3
+    },
+    "thermal_temp_skin_c": {
+      "mean": null,
+      "std": null,
+      "min": null,
+      "max": null,
+      "n_completed": 0
+    },
+    "first_question_cold_load_ms": 506,
+    "thermal_states_observed": [
+      "Normal"
+    ],
+    "backend_verified_observed": [
+      "CPU"
+    ],
+    "note": "TPS/TTFT drift across the run reflects real device thermal state as it heats up under sustained inference, not measurement error.",
+    "tps_note": "tps is llama.cpp's native rate - a BLENDED prefill+decode rate, not decode-only (confirmed by reading LLMInference.cpp directly). prefill_tps/decode_tps are the real, separately-measured rates matching the paper's own definitions (prefill_tps = prompt_len/TTFT, decode_tps = gen_tokens/(t_last-t_first)) and are what should be used for the real replication, not tps.",
+    "rss_note": "peak_RSS_KB is only directly comparable across different models if each was benchmarked in a freshly restarted app process - this script now guarantees that automatically as of this version."
+  },
+  "trial_summary": {
+    "1": {
+      "question": "The history of artificial intelligence began in antiquity, with myths and stories of artificial beings endowed with intelligence or consciousness by master craftsmen. The seeds of modern AI were planted by classical philosophers who attempted to describe human thinking as a symbolic system. The field of AI research was founded at a workshop held at Dartmouth College in 1956. Attendees became the leaders of AI research for decades. Many of them predicted that a machine as intelligent as a human being would exist in no more than a generation, and they were given millions of dollars to make this vision come true. Eventually, it became obvious that they had grossly underestimated the difficulty of the project. In 1973, in response to the criticism from James Lighthill and ongoing pressure from congress, the U.S. and British Governments stopped funding undirected research into artificial intelligence, and the difficult years that followed would later be known as an AI winter. Seven years later, a revival of interest in neural networks began. Machine learning, integral to AI since its beginnings, is the study of computer algorithms that improve automatically through experience. Deep learning became feasible, which led to an increase in interest and funding. Modern AI research covers a huge number of subfields, from general purpose areas such as learning",
+      "n_trials": 3,
+      "n_completed": 3,
+      "metrics": {
+        "ttft_ms": {
+          "mean": 33080.667,
+          "std": 24.73,
+          "min": 33046,
+          "max": 33102,
+          "n_completed": 3
+        },
+        "tps": {
+          "mean": 3.425,
+          "std": 0.011,
+          "min": 3.4119768,
+          "max": 3.4388378,
+          "n_completed": 3
+        },
+        "prefill_tps": {
+          "mean": 8.313,
+          "std": 0.006,
+          "min": 8.307654,
+          "max": 8.3217325,
+          "n_completed": 3
+        },
+        "decode_tps": {
+          "mean": 6.132,
+          "std": 0.037,
+          "min": 6.0895834,
+          "max": 6.179395,
+          "n_completed": 3
+        },
+        "memory_kb": {
+          "mean": 5256564,
+          "std": 51239.554,
+          "min": 5189444,
+          "max": 5313776,
+          "n_completed": 3
+        },
+        "power_ma": {
+          "mean": 24.533,
+          "std": 10.218,
+          "min": 10.9,
+          "max": 35.5,
+          "n_completed": 3
+        },
+        "energy_mj_sampled": {
+          "mean": 5197.433,
+          "std": 2773.295,
+          "min": 1853.7,
+          "max": 8644.5,
+          "n_completed": 3
+        },
+        "thermal_temp_cpu_c": {
+          "mean": 68.067,
+          "std": 1.887,
+          "min": 65.9,
+          "max": 70.5,
+          "n_completed": 3
+        },
+        "thermal_temp_skin_c": {
+          "mean": null,
+          "std": null,
+          "min": null,
+          "max": null,
+          "n_completed": 0
+        }
+      }
+    }
+  }
+}
