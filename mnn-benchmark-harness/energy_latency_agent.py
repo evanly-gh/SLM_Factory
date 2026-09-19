@@ -68,6 +68,10 @@ RUN_FALLBACK_AGENT_MNN_SCRIPT = SCRIPT_DIR / "run_fallback_agent_mnn.py"
 RUN_MNN_AUTOBENCH_SCRIPT = SCRIPT_DIR / "run_mnn_autobench.py"
 AGENT_QUANTIZE_SCRIPT = SCRIPT_DIR / "agent_mnn_quantize.py"
 CONVERT_TO_MNN_SCRIPT = SCRIPT_DIR.parent / "Model-Conversion" / "convert_to_mnn.py"
+# Only loaded/required when --score-accuracy is set (see main()) - omitting
+# the flag needs no NER-scoring machinery at all, matching every other
+# purely-additive flag in this script.
+NER_METRICS_SCRIPT = SCRIPT_DIR / "ner_metrics.py"
 
 REQUIRED_SCRIPTS = [
     (RUN_FALLBACK_AGENT_MNN_SCRIPT, "run_fallback_agent_mnn.py"),
@@ -154,11 +158,17 @@ def find_backend_confirmation(raw_log: str):
 
 
 def run_repeated_question(mnn_module, adb, device_path: str, question_text: str, question_number: int,
-                           timeout: int, max_tokens, backend_type: str, qlabel: str) -> dict:
+                           timeout: int, max_tokens, backend_type: str, qlabel: str,
+                           ner_metrics=None, gold_entities=None) -> dict:
     """Runs `question_text` REPEATS_PER_QUESTION times in a row (no
     force-stop between repeats), discarding the first REPEATS_PER_QUESTION-1
     and recording only the final one. Returns one per_question_results
     entry.
+
+    `ner_metrics` is the loaded ner_metrics module, or None (the default) to
+    skip accuracy scoring entirely - matching --score-accuracy being off,
+    the exact pre-existing behavior with no entity_f1/format_valid/
+    error_type keys added to the entry at all.
     """
     outcome = None
     for repeat in range(1, REPEATS_PER_QUESTION + 1):
@@ -213,13 +223,29 @@ def run_repeated_question(mnn_module, adb, device_path: str, question_text: str,
         entry["energy_mj_sampled"] = metrics["energy_mj_sampled"]
         entry["response"] = response
 
+        accuracy_disp = ""
+        if ner_metrics is not None:
+            # Reuses score()'s own real logic (JSON parsing with regex
+            # fallback, the None-vs-[] distinction, failure_category_of())
+            # unmodified, just applied to a single-question "eval set" of
+            # length 1 rather than a full corpus - entity_f1/format_valid
+            # over one example is exactly what score() already computes,
+            # nothing reimplemented here.
+            example = {"text": question_text, "entities": gold_entities or []}
+            preds = ner_metrics.extract_predictions([response], [example])
+            result = ner_metrics.score([example], preds)
+            entry["entity_f1"] = result["f1"]
+            entry["format_valid"] = result["format_valid"]
+            entry["error_type"] = result["failures"][0]["error_type"] if result["failures"] else None
+            accuracy_disp = f"  F1={entry['entity_f1']:.3f}  ErrorType={entry['error_type'] or 'none'}"
+
         def fmt(v, unit="", nd=1):
             return f"{v:.{nd}f}{unit}" if isinstance(v, (int, float)) else "N/A"
 
         print(
             f"{qlabel}  TTFT={fmt(entry['ttft_ms'], 'ms')}  TTLT={fmt(entry['ttlt_ms'], 'ms')}  "
             f"Energy={fmt(entry['energy_mj_sampled'], 'mJ')} ({fmt(entry['energy_mas_sampled'], 'mA*s')})  "
-            f"Backend={entry['backend_actual'] or 'unknown'}"
+            f"Backend={entry['backend_actual'] or 'unknown'}{accuracy_disp}"
         )
     elif outcome["status"] == "error":
         reason, message = mnn_module.extract_error(outcome["tag_lines"].get("RUN_ERROR", ""))
@@ -234,7 +260,7 @@ def run_repeated_question(mnn_module, adb, device_path: str, question_text: str,
     return entry
 
 
-def compute_task_summary(per_question_results: list) -> dict:
+def compute_task_summary(per_question_results: list, score_accuracy: bool = False) -> dict:
     def vals(key):
         return [r[key] for r in per_question_results if r["status"] == "success" and r.get(key) is not None]
 
@@ -246,7 +272,7 @@ def compute_task_summary(per_question_results: list) -> dict:
     energy_mj_vals = vals("energy_mj_sampled")
     energy_mas_vals = vals("energy_mas_sampled")
 
-    return {
+    summary = {
         "n_questions": len(per_question_results),
         "mean_ttft_ms": mean(ttft_vals),
         "mean_ttlt_ms": mean(ttlt_vals),
@@ -255,10 +281,18 @@ def compute_task_summary(per_question_results: list) -> dict:
         "mean_energy_mas_sampled": mean(energy_mas_vals),
         "total_energy_mas_sampled": round(sum(energy_mas_vals), 3) if energy_mas_vals else None,
     }
+    # Only added when --score-accuracy is set - matching the per-question
+    # entity_f1/format_valid/error_type fields being similarly absent
+    # otherwise, so the JSON schema is byte-for-byte identical to before
+    # this flag existed when it's omitted.
+    if score_accuracy:
+        summary["mean_entity_f1"] = mean(vals("entity_f1"))
+    return summary
 
 
 def run_mode(mnn_module, mnn_fallback, adb, adb_bin, device_path: str, model_id: str, quant: str,
-             mode: str, questions: list, timeout: int, max_tokens, backend_type: str, output_dir: Path) -> dict:
+             mode: str, questions: list, timeout: int, max_tokens, backend_type: str, output_dir: Path,
+             ner_metrics=None, gold_entities_list=None) -> dict:
     label = f"{model_id} [{quant}] [{mode}]"
     print(f"\n{'=' * 70}\n{label}\n{'=' * 70}")
 
@@ -278,11 +312,12 @@ def run_mode(mnn_module, mnn_fallback, adb, adb_bin, device_path: str, model_id:
     total_q = len(questions)
     for i, question_text in enumerate(questions, start=1):
         qlabel = f"{label} Q{i}/{total_q}"
+        gold_entities = gold_entities_list[i - 1] if gold_entities_list else None
         entry = run_repeated_question(mnn_module, adb, device_path, question_text, i, timeout, max_tokens,
-                                        backend_type, qlabel)
+                                        backend_type, qlabel, ner_metrics=ner_metrics, gold_entities=gold_entities)
         per_question_results.append(entry)
 
-    task_summary = compute_task_summary(per_question_results)
+    task_summary = compute_task_summary(per_question_results, score_accuracy=ner_metrics is not None)
 
     report = {
         "model_id": model_id,
@@ -298,8 +333,9 @@ def run_mode(mnn_module, mnn_fallback, adb, adb_bin, device_path: str, model_id:
     with open(output_path, "w") as f:
         json.dump(report, f, indent=2, default=str)
     print(f"\n[OUTPUT] {label} -> {output_path}")
+    f1_disp = f"  mean_entity_f1={task_summary['mean_entity_f1']}" if "mean_entity_f1" in task_summary else ""
     print(f"  n_questions={task_summary['n_questions']}  mean_ttft_ms={task_summary['mean_ttft_ms']}  "
-          f"mean_ttlt_ms={task_summary['mean_ttlt_ms']}  mean_energy_mj_sampled={task_summary['mean_energy_mj_sampled']}")
+          f"mean_ttlt_ms={task_summary['mean_ttlt_ms']}  mean_energy_mj_sampled={task_summary['mean_energy_mj_sampled']}{f1_disp}")
 
     return report
 
@@ -312,7 +348,15 @@ def parse_args():
                     help="Comma-separated 'model_id:quant' pairs (e.g. 'Qwen/Qwen3-0.6B:Q4_K_M,Qwen/Qwen3-1.7B:F16'), "
                          "or a JSON pool file (same {'fits': [{'model_id','quant'}]} shape as run_fallback_agent_mnn.py's --fit-report).")
     p.add_argument("--questions", required=True,
-                    help="Path to a .txt file, one question per line (same format as run_mnn_autobench.py's --questions).")
+                    help="Path to a .txt file, one question per line (same format as run_mnn_autobench.py's "
+                         "--questions) - or, with --score-accuracy, a NER eval-set JSON "
+                         "({'pos':[...],'neg':[...],'boundary':[...]}, each entry {'text','entities'}).")
+    p.add_argument("--score-accuracy", action="store_true", dest="score_accuracy",
+                    help="Score each question's final (5th) response against its real gold NER entities "
+                         "(ner_metrics.py's extract_predictions()/score()). Requires --questions to point to "
+                         "a NER eval-set JSON (not a plain question-per-line .txt) - adds entity_f1/"
+                         "format_valid/error_type to each per-question result and mean_entity_f1 to "
+                         "task_summary. Default: off (unchanged behavior, no NER-scoring fields added at all).")
     p.add_argument("--cold-load-mode", choices=["cold", "cached", "both"], default="both", dest="cold_load_mode",
                     help="Which cold-load mode(s) to run each model through, as separate outputs (default: both).")
     p.add_argument("--backend-type", choices=["cpu", "vulkan", "opencl"], default="cpu", dest="backend_type",
@@ -345,7 +389,27 @@ def main():
     agent = _load_module(AGENT_QUANTIZE_SCRIPT, "_agent_mnn_quantize")
     mnn_convert = _load_module(CONVERT_TO_MNN_SCRIPT, "_convert_to_mnn")
 
-    questions = mnn_module.load_questions(args.questions)
+    ner_metrics = None
+    gold_entities_list = None
+    if args.score_accuracy:
+        if not NER_METRICS_SCRIPT.exists():
+            print(f"[ERROR] ner_metrics.py not found at {NER_METRICS_SCRIPT} (required by --score-accuracy)")
+            sys.exit(1)
+        ner_metrics = _load_module(NER_METRICS_SCRIPT, "_ner_metrics")
+        try:
+            eval_rows = ner_metrics.load_ner_eval_set(args.questions)
+        except (OSError, json.JSONDecodeError) as exc:
+            print(f"[ERROR] Failed to load NER eval set '{args.questions}': {exc}")
+            sys.exit(1)
+        if not eval_rows:
+            print(f"[ERROR] No rows found in '{args.questions}' (expected a non-empty pos/neg/boundary JSON).")
+            sys.exit(1)
+        questions = [row["text"] for row in eval_rows]
+        gold_entities_list = [row["entities"] for row in eval_rows]
+        print(f"[OK] Loaded {len(questions)} questions with gold entities from {args.questions} (--score-accuracy)")
+    else:
+        questions = mnn_module.load_questions(args.questions)
+
     modes = ["cold", "cached"] if args.cold_load_mode == "both" else [args.cold_load_mode]
 
     # --backend-type mirrors run_mnn_autobench.py's own default-omission
@@ -384,7 +448,8 @@ def main():
 
         for mode in modes:
             report = run_mode(mnn_module, mnn_fallback, adb, adb_bin, conv["device_path"], model_id, quant,
-                               mode, questions, args.timeout, args.max_tokens, broadcast_backend_type, output_dir)
+                               mode, questions, args.timeout, args.max_tokens, broadcast_backend_type, output_dir,
+                               ner_metrics=ner_metrics, gold_entities_list=gold_entities_list)
             all_reports.append(report)
 
     print("\n" + "=" * 70)

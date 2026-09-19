@@ -1,0 +1,60 @@
+[
+  {
+    "model_id": "Qwen/Qwen3-0.6B",
+    "quant": "Q4_K_M",
+    "engine": "mnn",
+    "question_number": 1,
+    "question": "Dora's father's age is eight more than twice Dora's age. If Dora's mother is four years younger than Dora's father, and Dora is 15 years old, calculate the total combined age of Dora, her father, and her mother.",
+    "reference_answer": "87",
+    "response": "We are told that:\\n\\n- Dora is **15 years old**.\\n- Her **father's age is eight more than twice Dora's age**.\\n- Her **mother's age is four years younger than Dora's father's age**.\\n\\nLet's calculate:\\n\\n### Step 1: Find Dora's father's age\\n\\nWe know:\\n\\n$$\\n\\\\text{Dora's father's age} = 2 \\\\times \\\\text{Dora's age} + 8 = 2 \\\\times 15 + 8 = 30 + 8 = 38\\n$$\\n\\nSo, Dora's father is **38 years old**.\\n\\n### Step 2: Find Dora's mother's age\\n\\nWe are told:\\n\\n$$\\n\\\\text{Dora's mother's age} = \\\\text{Dora's father's age} - 4 = 38 - 4 = 34\\n$$\\n\\n### Step 3: Calculate total combined age\\n\\n$$\\n\\\\text{Dora's age} + \\\\text{Father's age} + \\\\text{Mother's age} = 15 + 38 + 34 = 87\\n$$\\n\\n---\\n\\n**Answer:** The",
+    "extracted_answer": "87",
+    "is_correct": true,
+    "metrics": {
+      "cold_load_ms": 712,
+      "ttft_ms": 1082.804739,
+      "prefill_time_us": 1078209,
+      "decode_time_us": 11995477,
+      "prompt_len": 84,
+      "decode_len": 256,
+      "prefill_tps": 77.907,
+      "decode_tps": 21.341,
+      "peak_rss_kb": 637396,
+      "power_ma": 1513.03,
+      "power_ma_raw": "1513.03",
+      "thermal_status": "Normal",
+      "thermal_cpu_c": 65.6,
+      "thermal_skin_c": 40.0,
+      "power_ma_monsoon": null
+    },
+    "run_id": "run_1_1786137173419"
+  },
+  {
+    "model_id": "Qwen/Qwen3-0.6B",
+    "quant": "Q4_K_M",
+    "engine": "mnn",
+    "question_number": 2,
+    "question": "Mary has 30 sheep. She gets 1 kg of milk from half of them and 2 kg of milk from the other half every day. How much milk does she collect every day?",
+    "reference_answer": "45",
+    "response": "Every day, Mary collects **30 kg of milk**. \\n\\nThe calculation is as follows:\\n\\n- Half of 30 sheep = 15 sheep\\n- 1 kg of milk from 15 sheep\\n- 2 kg of milk from the other half (which is 15 sheep)\\n\\nSo, total = 15 kg + 2 kg = 17 kg\\n\\nBut wait, you said: \"1 kg of milk from half of them and 2 kg of milk from the other half every day\".\\n\\nSo you have 1 kg and 2 kg each. So total is 3 kg per day.\\n\\nBut the question says \"How much milk does she collect every day?\"\\n\\nSo the correct answer is 1 kg + 2 kg = 3 kg per day.\\n\\nBut the initial answer said 30 kg. That is wrong.\\n\\nSo the correct answer is **3 kg per day**.",
+    "extracted_answer": "3",
+    "is_correct": false,
+    "metrics": {
+      "cold_load_ms": 723,
+      "ttft_ms": 979.248281,
+      "prefill_time_us": 975336,
+      "decode_time_us": 7972532,
+      "prompt_len": 67,
+      "decode_len": 190,
+      "prefill_tps": 68.694,
+      "decode_tps": 23.832,
+      "peak_rss_kb": 632572,
+      "power_ma": 1622.24,
+      "power_ma_raw": "1622.24",
+      "thermal_status": "Normal",
+      "thermal_cpu_c": 65.6,
+      "thermal_skin_c": 40.0,
+      "power_ma_monsoon": null
+    },
+    "run_id": "run_2_1786137190526"
+  }
+]

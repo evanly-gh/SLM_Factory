@@ -1,0 +1,194 @@
+======================================================================
+STAGE 1: MNN evaluation (run_fallback_agent_mnn.py)
+======================================================================
+[PRE-FLIGHT] Checking device and MNN Chat...
+[OK] Device connected via adb
+[OK] MNN Chat (com.alibaba.mnnllm.android) is installed
+======================================================================
+Stage 1: MNN Evaluation
+  Pool: /Users/ksd/SLM_Factory_Krishna_Personal/model_fit_report_full_run.json (12 models)  Questions: /Users/ksd/SLM_Factory_Krishna_Personal/eval_questions_phase3.json (100)  Timeout: 180s
+  No-think: OFF  MaxTokens: default
+======================================================================
+
+======================================================================
+[1/12] Qwen/Qwen3-0.6B [Q4_K_M]
+======================================================================
+[1/12] Qwen/Qwen3-0.6B [Q4_K_M] [MNN] - reusing existing export at /Users/ksd/SLM_Factory_Krishna_Personal/mnn-benchmark-harness/mnn_models/qwen3-0.6b-mnn-q4
+[1/12] Qwen/Qwen3-0.6B [Q4_K_M] [MNN] - pushing to device...
+
+[PUSH] /Users/ksd/SLM_Factory_Krishna_Personal/mnn-benchmark-harness/mnn_models/qwen3-0.6b-mnn-q4 -> /data/local/tmp/mnn_models/qwen3-0.6b-mnn-q4
+[RESET] Force-stopping and relaunching MNN Chat for a clean process state (required for accurate Peak RSS)...
+[1/12] Qwen/Qwen3-0.6B [Q4_K_M] Q1/100 [mnn] - GARBAGE detected: "We are told that:\\n\\n- Dora is **15 years old**.\\n- Her **father's age is 8 more than twice Dora's age**.\\n- Her **mo..."
+[1/12] Qwen/Qwen3-0.6B [Q4_K_M] - MNN garbage on Q1/100 - stopping MNN for this model, flagging Q1-Q100 (100 question(s)) for GGUF fallback.
+
+======================================================================
+[2/12] Qwen/Qwen3.5-0.8B [Q4_K_M]
+======================================================================
+[2/12] Qwen/Qwen3.5-0.8B [Q4_K_M] [MNN] - reusing existing export at /Users/ksd/SLM_Factory_Krishna_Personal/mnn-benchmark-harness/mnn_models/qwen3.5-0.8b-mnn-q4
+[2/12] Qwen/Qwen3.5-0.8B [Q4_K_M] [MNN] - pushing to device...
+
+[PUSH] /Users/ksd/SLM_Factory_Krishna_Personal/mnn-benchmark-harness/mnn_models/qwen3.5-0.8b-mnn-q4 -> /data/local/tmp/mnn_models/qwen3.5-0.8b-mnn-q4
+[RESET] Force-stopping and relaunching MNN Chat for a clean process state (required for accurate Peak RSS)...
+[2/12] Qwen/Qwen3.5-0.8B [Q4_K_M] Q1/100 [mnn] -> correct=False  response: "**Step 1: Find Dora's age**\\n\\nLet:  \\n- $x$ = age of Dora (Dolce)  \\n- $X$ be the unknown variable (the age of D).\\n..."
+[2/12] Qwen/Qwen3.5-0.8B [Q4_K_M] Q2/100 [mnn] -> correct=False  response: 'Let\'s break it down:\\n\\n- She starts with **0.5 kg** (since 1/4 is 1/4 of a 100-kg animal, and the problem says "a li...'
+[2/12] Qwen/Qwen3.5-0.8B [Q4_K_M] Q3/100 [mnn] -> correct=False  response: 'To find the remaining amount, we can model the situation mathematically based on the given information.\\n\\n**1. Ident...'
+[2/12] Qwen/Qwen3.5-0.8B [Q4_K_M] Q4/100 [mnn] -> correct=False  response: 'To find out how much time it takes, we first calculate the amount of money he has left after spending on the car.\\n\\n...'
+[2/12] Qwen/Qwen3.5-0.8B [Q4_K_M] Q5/100 [mnn] -> correct=True  response: 'To solve this, we first calculate how many feet each of the two types of soil represents. Since one foot equals 12 in...'
+[2/12] Qwen/Qwen3.5-0.8B [Q4_K_M] Q6/100 [mnn] - GARBAGE detected: '**Final Answer:**  \\nThere are **20** people on the bus.\\n\\n---\\n\\n### Step-by-Step Solution:\\n\\n#### **Step 1: Under...'
+[2/12] Qwen/Qwen3.5-0.8B [Q4_K_M] - MNN garbage on Q6/100 - stopping MNN for this model, flagging Q6-Q100 (95 question(s)) for GGUF fallback.
+
+======================================================================
+[3/12] Qwen/Qwen3-0.6B [Q8_0]
+======================================================================
+[3/12] Qwen/Qwen3-0.6B [Q8_0] [MNN] - reusing existing export at /Users/ksd/SLM_Factory_Krishna_Personal/mnn-benchmark-harness/mnn_models/qwen3-0.6b-mnn-q8
+[3/12] Qwen/Qwen3-0.6B [Q8_0] [MNN] - pushing to device...
+
+[PUSH] /Users/ksd/SLM_Factory_Krishna_Personal/mnn-benchmark-harness/mnn_models/qwen3-0.6b-mnn-q8 -> /data/local/tmp/mnn_models/qwen3-0.6b-mnn-q8
+[RESET] Force-stopping and relaunching MNN Chat for a clean process state (required for accurate Peak RSS)...
+[3/12] Qwen/Qwen3-0.6B [Q8_0] Q1/100 [mnn] - GARBAGE detected: "We are given the following information:\\n\\n- Dora's age = 15 years.\\n- Dora's mother is 4 years younger than Dora's f..."
+[3/12] Qwen/Qwen3-0.6B [Q8_0] - MNN garbage on Q1/100 - stopping MNN for this model, flagging Q1-Q100 (100 question(s)) for GGUF fallback.
+
+======================================================================
+[4/12] Qwen/Qwen3.5-0.8B [Q8_0]
+======================================================================
+[4/12] Qwen/Qwen3.5-0.8B [Q8_0] [MNN] - reusing existing export at /Users/ksd/SLM_Factory_Krishna_Personal/mnn-benchmark-harness/mnn_models/qwen3.5-0.8b-mnn-q8
+[4/12] Qwen/Qwen3.5-0.8B [Q8_0] [MNN] - pushing to device...
+
+[PUSH] /Users/ksd/SLM_Factory_Krishna_Personal/mnn-benchmark-harness/mnn_models/qwen3.5-0.8b-mnn-q8 -> /data/local/tmp/mnn_models/qwen3.5-0.8b-mnn-q8
+[RESET] Force-stopping and relaunching MNN Chat for a clean process state (required for accurate Peak RSS)...
+[4/12] Qwen/Qwen3.5-0.8B [Q8_0] Q1/100 [mnn] - GARBAGE detected: "Here is the step-by-step calculation:\\n\\n1.  **Determine Dora's age:**\\n    *   We know Dora is the 4th child of a pa..."
+[4/12] Qwen/Qwen3.5-0.8B [Q8_0] - MNN garbage on Q1/100 - stopping MNN for this model, flagging Q1-Q100 (100 question(s)) for GGUF fallback.
+
+======================================================================
+[5/12] Qwen/Qwen3-1.7B [Q4_K_M]
+======================================================================
+[5/12] Qwen/Qwen3-1.7B [Q4_K_M] [MNN] - reusing existing export at /Users/ksd/SLM_Factory_Krishna_Personal/mnn-benchmark-harness/mnn_models/qwen3-1.7b-mnn-q4
+[5/12] Qwen/Qwen3-1.7B [Q4_K_M] [MNN] - pushing to device...
+
+[PUSH] /Users/ksd/SLM_Factory_Krishna_Personal/mnn-benchmark-harness/mnn_models/qwen3-1.7b-mnn-q4 -> /data/local/tmp/mnn_models/qwen3-1.7b-mnn-q4
+[RESET] Force-stopping and relaunching MNN Chat for a clean process state (required for accurate Peak RSS)...
+[5/12] Qwen/Qwen3-1.7B [Q4_K_M] Q1/100 [mnn] - GARBAGE detected: 'olationROMEngth…\\n\\n\\n…\\n\\n\\n…\\n\\n\\n…\\n\\n\\n…\\n\\n\\n…\\n\\n\\n…\\n\\n\\n…\\n\\n\\n…\\n\\n\\n…\\n\\n\\n…\\n\\n\\n…\\n\\n\\n…\\n\\n\\n…\\n\\n\\n…\\n\\...'
+[5/12] Qwen/Qwen3-1.7B [Q4_K_M] - MNN garbage on Q1/100 - stopping MNN for this model, flagging Q1-Q100 (100 question(s)) for GGUF fallback.
+
+======================================================================
+[6/12] Qwen/Qwen3.5-2B [Q4_K_M]
+======================================================================
+[6/12] Qwen/Qwen3.5-2B [Q4_K_M] [MNN] - reusing existing export at /Users/ksd/SLM_Factory_Krishna_Personal/mnn-benchmark-harness/mnn_models/qwen3.5-2b-mnn-q4
+[6/12] Qwen/Qwen3.5-2B [Q4_K_M] [MNN] - pushing to device...
+
+[PUSH] /Users/ksd/SLM_Factory_Krishna_Personal/mnn-benchmark-harness/mnn_models/qwen3.5-2b-mnn-q4 -> /data/local/tmp/mnn_models/qwen3.5-2b-mnn-q4
+[RESET] Force-stopping and relaunching MNN Chat for a clean process state (required for accurate Peak RSS)...
+[6/12] Qwen/Qwen3.5-2B [Q4_K_M] Q1/100 [mnn] - GARBAGE detected: ''
+[6/12] Qwen/Qwen3.5-2B [Q4_K_M] - MNN garbage on Q1/100 - stopping MNN for this model, flagging Q1-Q100 (100 question(s)) for GGUF fallback.
+
+======================================================================
+[7/12] Qwen/Qwen3-1.7B [Q8_0]
+======================================================================
+[7/12] Qwen/Qwen3-1.7B [Q8_0] [MNN] - reusing existing export at /Users/ksd/SLM_Factory_Krishna_Personal/mnn-benchmark-harness/mnn_models/qwen3-1.7b-mnn-q8
+[7/12] Qwen/Qwen3-1.7B [Q8_0] [MNN] - pushing to device...
+
+[PUSH] /Users/ksd/SLM_Factory_Krishna_Personal/mnn-benchmark-harness/mnn_models/qwen3-1.7b-mnn-q8 -> /data/local/tmp/mnn_models/qwen3-1.7b-mnn-q8
+[RESET] Force-stopping and relaunching MNN Chat for a clean process state (required for accurate Peak RSS)...
+[7/12] Qwen/Qwen3-1.7B [Q8_0] Q1/100 [mnn] - GARBAGE detected: ''
+[7/12] Qwen/Qwen3-1.7B [Q8_0] - MNN garbage on Q1/100 - stopping MNN for this model, flagging Q1-Q100 (100 question(s)) for GGUF fallback.
+
+======================================================================
+[8/12] Qwen/Qwen3.5-2B [Q8_0]
+======================================================================
+[8/12] Qwen/Qwen3.5-2B [Q8_0] [MNN] - reusing existing export at /Users/ksd/SLM_Factory_Krishna_Personal/mnn-benchmark-harness/mnn_models/qwen3.5-2b-mnn-q8
+[8/12] Qwen/Qwen3.5-2B [Q8_0] [MNN] - pushing to device...
+
+[PUSH] /Users/ksd/SLM_Factory_Krishna_Personal/mnn-benchmark-harness/mnn_models/qwen3.5-2b-mnn-q8 -> /data/local/tmp/mnn_models/qwen3.5-2b-mnn-q8
+[RESET] Force-stopping and relaunching MNN Chat for a clean process state (required for accurate Peak RSS)...
+[8/12] Qwen/Qwen3.5-2B [Q8_0] Q1/100 [mnn] - GARBAGE detected: 'Here is the step-by-step breakdown to solve this problem:\\n\\n### Step 1: Determine the current age of the mother (Dad...'
+[8/12] Qwen/Qwen3.5-2B [Q8_0] - MNN garbage on Q1/100 - stopping MNN for this model, flagging Q1-Q100 (100 question(s)) for GGUF fallback.
+
+======================================================================
+[9/12] Qwen/Qwen3-4B-Instruct-2507 [Q4_K_M]
+======================================================================
+[9/12] Qwen/Qwen3-4B-Instruct-2507 [Q4_K_M] [MNN] - reusing existing export at /Users/ksd/SLM_Factory_Krishna_Personal/mnn-benchmark-harness/mnn_models/qwen3-4b-instruct-2507-mnn-q4
+[9/12] Qwen/Qwen3-4B-Instruct-2507 [Q4_K_M] [MNN] - pushing to device...
+
+[PUSH] /Users/ksd/SLM_Factory_Krishna_Personal/mnn-benchmark-harness/mnn_models/qwen3-4b-instruct-2507-mnn-q4 -> /data/local/tmp/mnn_models/qwen3-4b-instruct-2507-mnn-q4
+[RESET] Force-stopping and relaunching MNN Chat for a clean process state (required for accurate Peak RSS)...
+[9/12] Qwen/Qwen3-4B-Instruct-2507 [Q4_K_M] Q1/100 [mnn] - GARBAGE detected: "We are given:\\n\\n- Dora's age = 15 years  \\n- Dora's father's age is **eight more than twice** Dora's age.  \\n- Dora'..."
+[9/12] Qwen/Qwen3-4B-Instruct-2507 [Q4_K_M] - MNN garbage on Q1/100 - stopping MNN for this model, flagging Q1-Q100 (100 question(s)) for GGUF fallback.
+
+======================================================================
+[10/12] Qwen/Qwen3.5-4B [Q4_K_M]
+======================================================================
+[10/12] Qwen/Qwen3.5-4B [Q4_K_M] [MNN] - reusing existing export at /Users/ksd/SLM_Factory_Krishna_Personal/mnn-benchmark-harness/mnn_models/qwen3.5-4b-mnn-q4
+[10/12] Qwen/Qwen3.5-4B [Q4_K_M] [MNN] - pushing to device...
+
+[PUSH] /Users/ksd/SLM_Factory_Krishna_Personal/mnn-benchmark-harness/mnn_models/qwen3.5-4b-mnn-q4 -> /data/local/tmp/mnn_models/qwen3.5-4b-mnn-q4
+[RESET] Force-stopping and relaunching MNN Chat for a clean process state (required for accurate Peak RSS)...
+[10/12] Qwen/Qwen3.5-4B [Q4_K_M] Q1/100 [mnn] -> correct=False  response: 'Based on the information provided in your request, here is the step-by-step breakdown to find the solution:\\n\\n1.  **...'
+[10/12] Qwen/Qwen3.5-4B [Q4_K_M] Q2/100 [mnn] - GARBAGE detected: "To solve this, let's break down the information provided in the riddle:\\n\\n1.  **Analyze the input:** The problem sta..."
+[10/12] Qwen/Qwen3.5-4B [Q4_K_M] - MNN garbage on Q2/100 - stopping MNN for this model, flagging Q2-Q100 (99 question(s)) for GGUF fallback.
+
+======================================================================
+[11/12] Qwen/Qwen3-4B-Instruct-2507 [Q8_0]
+======================================================================
+[11/12] Qwen/Qwen3-4B-Instruct-2507 [Q8_0] [MNN] - downloading (if needed)...
+[DOWNLOAD] Fetching Qwen/Qwen3-4B-Instruct-2507 from HuggingFace Hub …
+Fetching 13 files:   0%|          | 0/13 [00:00<?, ?it/s]Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+Fetching 13 files:   8%|▊         | 1/13 [00:00<00:04,  2.82it/s]Fetching 13 files:  54%|█████▍    | 7/13 [00:49<00:43,  7.30s/it]Fetching 13 files:  62%|██████▏   | 8/13 [00:52<00:32,  6.55s/it]Fetching 13 files: 100%|██████████| 13/13 [00:52<00:00,  4.00s/it]
+⠋ load pretrained model                          Loading weights:   0%|          | 0/398 [00:00<?, ?it/s]Loading weights: 100%|██████████| 398/398 [00:00<00:00, 8465.56it/s]
+                                                  ✅ Done load pretrained model [33;4m/Users/ksd/SLM_Factory_Krishna_Personal/mnn-
+[0m⠋ export onnx model to                         ⠙ export onnx model to                         ⠹ export onnx model to                         ⠸ export onnx model to                         ⠼ export onnx model to                         ⠴ export onnx model to                         ⠦ export onnx model to                         ⠧ export onnx model to                         ⠇ export onnx model to                         ✅ Done export onnx model to [33;4m/Users/ksd/SLM_Factory_Krishna_Personal/mnn-b
+[0m⠋ convert onnx model to                          ✅ Done convert onnx model to [33;4m/Users/ksd/SLM_Factory_Krishna_Personal/mnn-
+[0m⠋ quant model weight to                          Load LayerNorm data:   0%|          | 0/1774 [00:00<?, ?it/s]Load LayerNorm data: 100%|██████████| 1774/1774 [00:00<00:00, 407619.99it/s]
+Quant weights:   0%|          | 0/1774 [00:00<?, ?it/s]Quant weights:   0%|          | 8/1774 [00:00<02:10, 13.50it/s]Quant weights:   5%|▍         | 85/1774 [00:00<00:11, 148.12it/s]Quant weights:   7%|▋         | 118/1774 [00:00<00:10, 162.79it/s]Quant weights:   8%|▊         | 145/1774 [00:01<00:11, 143.77it/s]Quant weights:  10%|█         | 181/1774 [00:01<00:08, 177.17it/s]Quant weights:  12%|█▏        | 205/1774 [00:01<00:09, 169.86it/s]Quant weights:  13%|█▎        | 229/1774 [00:01<00:09, 167.46it/s]Quant weights:  14%|█▍        | 249/1774 [00:01<00:09, 154.17it/s]Quant weights:  16%|█▌        | 277/1774 [00:01<00:08, 172.88it/s]Quant weights:  17%|█▋        | 296/1774 [00:02<00:09, 159.10it/s]Quant weights:  18%|█▊        | 325/1774 [00:02<00:07, 188.20it/s]Quant weights:  20%|█▉        | 346/1774 [00:02<00:08, 165.42it/s]Quant weights:  21%|██        | 373/1774 [00:02<00:07, 178.87it/s]Quant weights:  22%|██▏       | 393/1774 [00:02<00:08, 162.43it/s]Quant weights:  24%|██▎       | 421/1774 [00:02<00:08, 166.51it/s]Quant weights:  25%|██▍       | 439/1774 [00:02<00:09, 148.00it/s]Quant weights:  26%|██▋       | 469/1774 [00:02<00:07, 176.21it/s]Quant weights:  28%|██▊       | 488/1774 [00:03<00:08, 143.04it/s]Quant weights:  29%|██▉       | 517/1774 [00:03<00:07, 173.48it/s]Quant weights:  30%|███       | 537/1774 [00:03<00:07, 158.71it/s]Quant weights:  32%|███▏      | 565/1774 [00:03<00:06, 185.43it/s]Quant weights:  33%|███▎      | 586/1774 [00:03<00:06, 170.25it/s]Quant weights:  35%|███▍      | 615/1774 [00:03<00:06, 175.38it/s]Quant weights:  37%|███▋      | 652/1774 [00:03<00:05, 218.71it/s]Quant weights:  38%|███▊      | 676/1774 [00:04<00:06, 168.60it/s]Quant weights:  40%|████      | 711/1774 [00:04<00:05, 182.48it/s]Quant weights:  41%|████▏     | 732/1774 [00:04<00:05, 175.92it/s]Quant weights:  43%|████▎     | 757/1774 [00:04<00:05, 190.29it/s]Quant weights:  44%|████▍     | 778/1774 [00:04<00:06, 165.87it/s]Quant weights:  45%|████▌     | 805/1774 [00:04<00:05, 188.61it/s]Quant weights:  47%|████▋     | 826/1774 [00:05<00:06, 148.79it/s]Quant weights:  48%|████▊     | 853/1774 [00:05<00:05, 167.57it/s]Quant weights:  49%|████▉     | 872/1774 [00:05<00:07, 113.65it/s]Quant weights:  51%|█████     | 901/1774 [00:05<00:08, 103.30it/s]Quant weights:  52%|█████▏    | 915/1774 [00:06<00:14, 59.96it/s] Quant weights:  53%|█████▎    | 946/1774 [00:06<00:09, 85.39it/s]Quant weights:  54%|█████▍    | 962/1774 [00:07<00:14, 55.91it/s]Quant weights:  56%|█████▌    | 997/1774 [00:07<00:10, 76.49it/s]Quant weights:  57%|█████▋    | 1010/1774 [00:10<00:42, 18.02it/s]Quant weights:  59%|█████▊    | 1042/1774 [00:10<00:26, 27.84it/s]Quant weights:  60%|█████▉    | 1056/1774 [00:12<00:37, 19.03it/s]Quant weights:  61%|██████▏   | 1090/1774 [00:12<00:22, 30.49it/s]Quant weights:  62%|██████▏   | 1106/1774 [00:14<00:36, 18.21it/s]Quant weights:  64%|██████▍   | 1138/1774 [00:15<00:22, 27.77it/s]Quant weights:  65%|██████▍   | 1152/1774 [00:16<00:30, 20.44it/s]Quant weights:  67%|██████▋   | 1186/1774 [00:16<00:18, 31.08it/s]Quant weights:  68%|██████▊   | 1198/1774 [00:18<00:32, 17.83it/s]Quant weights:  70%|██████▉   | 1234/1774 [00:19<00:18, 28.91it/s]Quant weights:  70%|███████   | 1247/1774 [00:20<00:23, 22.13it/s]Quant weights:  72%|███████▏  | 1282/1774 [00:20<00:13, 35.48it/s]Quant weights:  73%|███████▎  | 1298/1774 [00:21<00:14, 32.02it/s]Quant weights:  75%|███████▌  | 1333/1774 [00:21<00:09, 47.00it/s]Quant weights:  76%|███████▌  | 1346/1774 [00:21<00:09, 46.38it/s]Quant weights:  78%|███████▊  | 1378/1774 [00:21<00:05, 66.91it/s]Quant weights:  79%|███████▊  | 1393/1774 [00:22<00:10, 37.15it/s]Quant weights:  80%|████████  | 1426/1774 [00:22<00:06, 55.69it/s]Quant weights:  81%|████████▏ | 1442/1774 [00:23<00:07, 46.18it/s]Quant weights:  83%|████████▎ | 1474/1774 [00:23<00:04, 67.11it/s]Quant weights:  84%|████████▍ | 1491/1774 [00:25<00:08, 31.55it/s]Quant weights:  86%|████████▌ | 1524/1774 [00:25<00:05, 48.18it/s]Quant weights:  87%|████████▋ | 1542/1774 [00:27<00:11, 19.67it/s]Quant weights:  89%|████████▊ | 1570/1774 [00:28<00:07, 28.57it/s]Quant weights:  89%|████████▉ | 1587/1774 [00:28<00:06, 27.31it/s]Quant weights:  91%|█████████ | 1618/1774 [00:28<00:03, 39.91it/s]Quant weights:  92%|█████████▏| 1633/1774 [00:29<00:04, 31.65it/s]Quant weights:  94%|█████████▍| 1666/1774 [00:30<00:02, 44.90it/s]Quant weights:  95%|█████████▍| 1678/1774 [00:30<00:02, 34.97it/s]Quant weights:  97%|█████████▋| 1714/1774 [00:30<00:01, 56.31it/s]Quant weights:  98%|█████████▊| 1731/1774 [00:31<00:01, 42.80it/s]Quant weights:  99%|█████████▉| 1762/1774 [00:31<00:00, 62.15it/s]Quant weights:  99%|█████████▉| 1762/1774 [00:47<00:00, 62.15it/s]Quant weights: 100%|██████████| 1774/1774 [00:52<00:00,  3.24it/s]Quant weights: 100%|██████████| 1774/1774 [00:53<00:00, 33.44it/s]
+                                                  ✅ Done quant model weight to [33;4m/Users/ksd/SLM_Factory_Krishna_Personal/mnn-
+[0m⠋ export tokenizer to                        ⠙ export tokenizer to                        ⠹ export tokenizer to                        ⠸ export tokenizer to                        ⠼ export tokenizer to                        ⠴ export tokenizer to                        ⠦ export tokenizer to                        ⠧ export tokenizer to                        ✅ Done export tokenizer to [33;4m/Users/ksd/SLM_Factory_Krishna_Personal/mnn-be
+[0m⠋ export config to                     ✅ Done export config to [33;4m/Users/ksd/SLM_Factory_Krishna_Personal/mnn-bench
+[0m[DOWNLOAD] Saved to /Users/ksd/SLM_Factory_Krishna_Personal/mnn-benchmark-harness/mnn_models/Qwen__Qwen3-4B-Instruct-2507
+[11/12] Qwen/Qwen3-4B-Instruct-2507 [Q8_0] [MNN] - exporting to Q8...
+
+[RUN] /Users/ksd/SLM_Factory_Krishna_Personal/MNN/transformers/llm/export/.venv/bin/python /Users/ksd/SLM_Factory_Krishna_Personal/MNN/transformers/llm/export/llmexport.py --path /Users/ksd/SLM_Factory_Krishna_Personal/mnn-benchmark-harness/mnn_models/Qwen__Qwen3-4B-Instruct-2507 --export mnn --quant_bit 8 --quant_block 64 --dst_path /Users/ksd/SLM_Factory_Krishna_Personal/mnn-benchmark-harness/mnn_models/qwen3-4b-instruct-2507-mnn-q8 --mnnconvert /Users/ksd/SLM_Factory_Krishna_Personal/MNN/build/MNNConvert
+[11/12] Qwen/Qwen3-4B-Instruct-2507 [Q8_0] [MNN] - pushing to device...
+
+[PUSH] /Users/ksd/SLM_Factory_Krishna_Personal/mnn-benchmark-harness/mnn_models/qwen3-4b-instruct-2507-mnn-q8 -> /data/local/tmp/mnn_models/qwen3-4b-instruct-2507-mnn-q8
+[RESET] Force-stopping and relaunching MNN Chat for a clean process state (required for accurate Peak RSS)...
+[11/12] Qwen/Qwen3-4B-Instruct-2507 [Q8_0] Q1/100 [mnn] -> correct=True  response: "We are given:\\n\\n- Dora's age = **15 years**\\n- Dora's father's age is **eight more than twice** Dora's age.\\n- Dora'..."
+[11/12] Qwen/Qwen3-4B-Instruct-2507 [Q8_0] Q2/100 [mnn] -> correct=True  response: 'Mary has 30 sheep.\\n\\nShe gets:\\n\\n- 1 kg of milk from **half** of them  \\n- 2 kg of milk from the **other half**\\n\\n...'
+[11/12] Qwen/Qwen3-4B-Instruct-2507 [Q8_0] Q3/100 [mnn] - GARBAGE detected: 'Katina starts with **$3000** in her savings account.\\n\\nShe removes **$100 every month**.\\n\\nWe are asked to find how...'
+[11/12] Qwen/Qwen3-4B-Instruct-2507 [Q8_0] - MNN garbage on Q3/100 - stopping MNN for this model, flagging Q3-Q100 (98 question(s)) for GGUF fallback.
+
+======================================================================
+[12/12] Qwen/Qwen3.5-4B [Q8_0]
+======================================================================
+[12/12] Qwen/Qwen3.5-4B [Q8_0] [MNN] - reusing existing export at /Users/ksd/SLM_Factory_Krishna_Personal/mnn-benchmark-harness/mnn_models/qwen3.5-4b-mnn-q8
+[12/12] Qwen/Qwen3.5-4B [Q8_0] [MNN] - pushing to device...
+
+[PUSH] /Users/ksd/SLM_Factory_Krishna_Personal/mnn-benchmark-harness/mnn_models/qwen3.5-4b-mnn-q8 -> /data/local/tmp/mnn_models/qwen3.5-4b-mnn-q8
+[RESET] Force-stopping and relaunching MNN Chat for a clean process state (required for accurate Peak RSS)...
+[12/12] Qwen/Qwen3.5-4B [Q8_0] Q1/100 [mnn] -> correct=False  response: 'Based on the information provided in the prompt, here is the step-by-step logical deduction to solve this problem.\\n\\...'
+[12/12] Qwen/Qwen3.5-4B [Q8_0] Q2/100 [mnn] - GARBAGE detected: 'To find the total amount of milk produced, we need to break down the distribution of the 30 cows based on the standar...'
+[12/12] Qwen/Qwen3.5-4B [Q8_0] - MNN garbage on Q2/100 - stopping MNN for this model, flagging Q2-Q100 (99 question(s)) for GGUF fallback.
+
+[OUTPUT] MNN results saved: mnn_results.json (9 question results)
+[OUTPUT] GGUF fallback queue saved: needs_gguf_fallback.json (12 model(s) flagged)
+[OUTPUT] Summary saved: agent_summary_mnn.json
+
+==========================================================================================
+STAGE 1 (MNN) SUMMARY
+==========================================================================================
+Model                           Quant     Status                Accuracy     N
+------------------------------------------------------------------------------
+Qwen/Qwen3-0.6B                 Q4_K_M    needs_gguf_fallback        N/A     0
+Qwen/Qwen3.5-0.8B               Q4_K_M    needs_gguf_fallback      20.0%     5
+Qwen/Qwen3-0.6B                 Q8_0      needs_gguf_fallback        N/A     0
+Qwen/Qwen3.5-0.8B               Q8_0      needs_gguf_fallback        N/A     0
+Qwen/Qwen3-1.7B                 Q4_K_M    needs_gguf_fallback        N/A     0
+Qwen/Qwen3.5-2B                 Q4_K_M    needs_gguf_fallback        N/A     0
+Qwen/Qwen3-1.7B                 Q8_0      needs_gguf_fallback        N/A     0
+Qwen/Qwen3.5-2B                 Q8_0      needs_gguf_fallback        N/A     0
+Qwen/Qwen3-4B-Instruct-2507     Q4_K_M    needs_gguf_fallback        N/A     0
+Qwen/Qwen3.5-4B                 Q4_K_M    needs_gguf_fallback       0.0%     1
+Qwen/Qwen3-4B-Instruct-2507     Q8_0      needs_gguf_fallback     100.0%     2
+Qwen/Qwen3.5-4B                 Q8_0      needs_gguf_fallback       0.0%     1
+
+======================================================================
+STAGE 1 DONE - 0 succeeded, 12 need GGUF fallback, 0 failed, 0 skipped (of 12)
+======================================================================

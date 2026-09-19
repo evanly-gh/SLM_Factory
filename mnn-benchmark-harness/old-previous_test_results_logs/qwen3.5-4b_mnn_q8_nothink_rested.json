@@ -1,0 +1,321 @@
+{
+  "run_info": {
+    "model_path": "/data/local/tmp/mnn_models/qwen3.5-4b-mnn-q8",
+    "device": "f46d20ad",
+    "start_time": "2026-07-27T19:52:41.205718+00:00",
+    "end_time": "2026-07-27T20:01:41.716983+00:00",
+    "timeout_s": 60,
+    "no_think_mode": true,
+    "max_tokens": 80,
+    "total": 10,
+    "completed": 10,
+    "failed": 0,
+    "battery_warning": true,
+    "battery_level_pct": 92,
+    "battery_status": "Charging"
+  },
+  "results": [
+    {
+      "question_number": 1,
+      "question": "What is the capital of France?",
+      "run_id": "run_1_1785181961206",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 13796,
+        "ttft_ms": 2264.524999,
+        "prefill_time_us": 2243257,
+        "decode_time_us": 32094599,
+        "prompt_len": 32,
+        "decode_len": 80,
+        "prefill_tps": 14.265,
+        "decode_tps": 2.493,
+        "peak_rss_kb": 5991812,
+        "power_ma": 648.3,
+        "power_ma_raw": "648.30",
+        "thermal_status": "Normal",
+        "thermal_cpu_c": 61.4,
+        "thermal_skin_c": 38.0
+      },
+      "response": "Thinking Process:\\n\\n1.  **Analyze the Request:**\\n    *   Input: \"What is the capital of France?\" (Implicitly, based on the context of typical user queries, but the prompt provided is empty/empty string in the prompt provided to me, but the user instruction is \"think silently if needed\".)\\n    *   Wait, I need to check the actual",
+      "error": null
+    },
+    {
+      "question_number": 2,
+      "question": "Who wrote Romeo and Juliet?",
+      "run_id": "run_2_1785182012416",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 13805,
+        "ttft_ms": 2808.857551,
+        "prefill_time_us": 2797165,
+        "decode_time_us": 32993291,
+        "prompt_len": 31,
+        "decode_len": 80,
+        "prefill_tps": 11.083,
+        "decode_tps": 2.425,
+        "peak_rss_kb": 5870596,
+        "power_ma": 648.05,
+        "power_ma_raw": "648.05",
+        "thermal_status": "Normal",
+        "thermal_cpu_c": 63.7,
+        "thermal_skin_c": 40.0
+      },
+      "response": "Thinking Process:\\n\\n1.  **Analyze the Request:**\\n    *   Input: \" Romeo\" (implied from context of the previous prompt \"You are an AI assistant. You will be given a task. You must think silently. Then, answer the user's question. If the user asks a question, you should answer it. If the user asks a question that is not a",
+      "error": null
+    },
+    {
+      "question_number": 3,
+      "question": "What is the chemical symbol for gold?",
+      "run_id": "run_3_1785182065213",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 13533,
+        "ttft_ms": 2581.615467,
+        "prefill_time_us": 2563979,
+        "decode_time_us": 37290497,
+        "prompt_len": 33,
+        "decode_len": 80,
+        "prefill_tps": 12.871,
+        "decode_tps": 2.145,
+        "peak_rss_kb": 5462384,
+        "power_ma": 651.99,
+        "power_ma_raw": "651.99",
+        "thermal_status": "Normal",
+        "thermal_cpu_c": 64.8,
+        "thermal_skin_c": 41.0
+      },
+      "response": "Thinking Process:\\n\\n1.  **Analyze the Request:**\\n    *   Input: \"What is the atomic number of the element that is commonly used in the production of steel?\" (Wait, the user prompt is just \"What is the chemical symbol for the element with the atomic number 79?\").\\n    *   Wait, the user prompt is just \"What is the chemical",
+      "error": null
+    },
+    {
+      "question_number": 4,
+      "question": "What is the largest planet in our solar system?",
+      "run_id": "run_4_1785182122377",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 13688,
+        "ttft_ms": 3087.73328,
+        "prefill_time_us": 3072944,
+        "decode_time_us": 38612553,
+        "prompt_len": 35,
+        "decode_len": 80,
+        "prefill_tps": 11.39,
+        "decode_tps": 2.072,
+        "peak_rss_kb": 6133852,
+        "power_ma": 656.32,
+        "power_ma_raw": "656.32",
+        "thermal_status": "Normal",
+        "thermal_cpu_c": 66.8,
+        "thermal_skin_c": 43.0
+      },
+      "response": "Thinking Process:\\n\\n1.  **Analyze the Request:**\\n    *   Input: \"What is the largest planet in the solar system?\" (implied, though the user prompt is actually \"Jupiter is the largest planet in the solar system, but the user asked 'What is the largest planet in the solar system?')\" - Wait, I need to check the user's input again",
+      "error": null
+    },
+    {
+      "question_number": 5,
+      "question": "What year did the first human land on the moon?",
+      "run_id": "run_5_1785182180846",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 13647,
+        "ttft_ms": 2513.663957,
+        "prefill_time_us": 2503069,
+        "decode_time_us": 34279331,
+        "prompt_len": 36,
+        "decode_len": 80,
+        "prefill_tps": 14.382,
+        "decode_tps": 2.334,
+        "peak_rss_kb": 6127336,
+        "power_ma": 659.44,
+        "power_ma_raw": "659.44",
+        "thermal_status": "Normal",
+        "thermal_cpu_c": 68.3,
+        "thermal_skin_c": 44.0
+      },
+      "response": "Thinking Process:\\n\\n1.  **Analyze the Request:**\\n    *   Input: A simple question \"What is the date of the first moon landing?\" or implicitly asking about the date of the moon landing.\\n    *   Wait, the prompt is actually just a system prompt or a system instruction disguised as a prompt.\\n    *   Wait, looking at the user input: \"",
+      "error": null
+    },
+    {
+      "question_number": 6,
+      "question": "What are the three states of matter?",
+      "run_id": "run_6_1785182234674",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 13572,
+        "ttft_ms": 2553.949946,
+        "prefill_time_us": 2540079,
+        "decode_time_us": 34052978,
+        "prompt_len": 33,
+        "decode_len": 80,
+        "prefill_tps": 12.992,
+        "decode_tps": 2.349,
+        "peak_rss_kb": 5680836,
+        "power_ma": 661.87,
+        "power_ma_raw": "661.87",
+        "thermal_status": "Normal",
+        "thermal_cpu_c": 69.9,
+        "thermal_skin_c": 45.0
+      },
+      "response": "Thinking Process:\\n\\n1.  **Analyze the Request:**\\n    *   Input: \"What is the state of matter?\" (implied, based on the context of the previous turn, though the prompt is just a single line \"What is 3+2?\").\\n    *   Wait, looking at the prompt, it's just \"3.0 + 2 = ?",
+      "error": null
+    },
+    {
+      "question_number": 7,
+      "question": "How does a refrigerator keep food cold?",
+      "run_id": "run_7_1785182287738",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 13773,
+        "ttft_ms": 2563.203645,
+        "prefill_time_us": 2551664,
+        "decode_time_us": 34609399,
+        "prompt_len": 33,
+        "decode_len": 80,
+        "prefill_tps": 12.933,
+        "decode_tps": 2.312,
+        "peak_rss_kb": 5843944,
+        "power_ma": 663.26,
+        "power_ma_raw": "663.26",
+        "thermal_status": "Normal",
+        "thermal_cpu_c": 70.2,
+        "thermal_skin_c": 46.0
+      },
+      "response": "Thinking Process:\\n\\n1.  **Analyze the Request:**\\n    *   Input: A simple prompt asking for an explanation or explanation of a specific concept.\\n    *   Input: \"Explain how a refrigerator works.\" (implied, based on the user's prompt \"Explain the following concept: [missing]... wait, the prompt is just \"How does a refrigerator work",
+      "error": null
+    },
+    {
+      "question_number": 8,
+      "question": "Explain the process of photosynthesis in plants.",
+      "run_id": "run_8_1785182341829",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 13619,
+        "ttft_ms": 3088.542707,
+        "prefill_time_us": 3067438,
+        "decode_time_us": 33526064,
+        "prompt_len": 35,
+        "decode_len": 80,
+        "prefill_tps": 11.41,
+        "decode_tps": 2.386,
+        "peak_rss_kb": 6013212,
+        "power_ma": 663.45,
+        "power_ma_raw": "663.45",
+        "thermal_status": "Normal",
+        "thermal_cpu_c": 71.8,
+        "thermal_skin_c": 47.0
+      },
+      "response": "Thinking Process:\\n\\n1.  **Analyze the Request:**\\n    *   Input: \"Explain the process of photosynthesis.\"\\n    *   Input: \"Explain the process of photosynthesis.\" (Wait, the user prompt is just \"Explain the process of photosynthesis in a way that a 10-year-old can understand.\" - Wait, the user prompt is actually",
+      "error": null
+    },
+    {
+      "question_number": 9,
+      "question": "Summarize the theory of relativity in simple terms.",
+      "run_id": "run_9_1785182395309",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 13873,
+        "ttft_ms": 2733.878281,
+        "prefill_time_us": 2721417,
+        "decode_time_us": 32570778,
+        "prompt_len": 37,
+        "decode_len": 80,
+        "prefill_tps": 13.596,
+        "decode_tps": 2.456,
+        "peak_rss_kb": 5698288,
+        "power_ma": 663.01,
+        "power_ma_raw": "663.01",
+        "thermal_status": "Normal",
+        "thermal_cpu_c": 72.9,
+        "thermal_skin_c": 48.0
+      },
+      "response": "Thinking Process:\\n\\n1.  **Analyze the Request:**\\n    *   Input: \"think silently if needed\" (implied by the user prompt structure, though the user prompt itself is just \"think silently if needed\").\\n    *   Wait, the user prompt is just \"think silently if needed\" or a request to think silently.\\n    *   Wait, the user prompt",
+      "error": null
+    },
+    {
+      "question_number": 10,
+      "question": "Describe the causes and consequences of World War I in a few sentences.",
+      "run_id": "run_10_1785182447460",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 13642,
+        "ttft_ms": 3168.656249,
+        "prefill_time_us": 3140827,
+        "decode_time_us": 33857851,
+        "prompt_len": 39,
+        "decode_len": 80,
+        "prefill_tps": 12.417,
+        "decode_tps": 2.363,
+        "peak_rss_kb": 6228524,
+        "power_ma": 661.74,
+        "power_ma_raw": "661.74",
+        "thermal_status": "Normal",
+        "thermal_cpu_c": 72.9,
+        "thermal_skin_c": 49.0
+      },
+      "response": "Thinking Process:\\n\\n1.  **Analyze the Request:**\\n    *   **Topic:** World War I (implied by the context of \"World War I\" being a common query topic, but the prompt is just \"think silently if needed\" and then a request for a response). Wait, looking at the prompt again, the user input is just \"think\". Wait, no.",
+      "error": null
+    }
+  ],
+  "summary": {
+    "cold_load_ms": {
+      "mean": 13694.8,
+      "std": 106.009,
+      "min": 13533,
+      "max": 13873,
+      "n_completed": 10
+    },
+    "ttft_ms": {
+      "mean": 2736.463,
+      "std": 282.677,
+      "min": 2264.524999,
+      "max": 3168.656249,
+      "n_completed": 10
+    },
+    "prefill_tps": {
+      "mean": 12.734,
+      "std": 1.11,
+      "min": 11.083,
+      "max": 14.382,
+      "n_completed": 10
+    },
+    "decode_tps": {
+      "mean": 2.333,
+      "std": 0.125,
+      "min": 2.072,
+      "max": 2.493,
+      "n_completed": 10
+    },
+    "peak_rss_kb": {
+      "mean": 5905078.4,
+      "std": 227929.848,
+      "min": 5462384,
+      "max": 6228524,
+      "n_completed": 10
+    },
+    "power_ma": {
+      "mean": 657.743,
+      "std": 5.873,
+      "min": 648.05,
+      "max": 663.45,
+      "n_completed": 10
+    },
+    "thermal_cpu_c": {
+      "mean": 68.27,
+      "std": 3.795,
+      "min": 61.4,
+      "max": 72.9,
+      "n_completed": 10
+    },
+    "thermal_skin_c": {
+      "mean": 44.1,
+      "std": 3.419,
+      "min": 38.0,
+      "max": 49.0,
+      "n_completed": 10
+    },
+    "thermal_states_observed": [
+      "Normal"
+    ],
+    "note": "power_ma stats exclude questions where POWER_MA was reported as 'unavailable' or missing. n_completed is reported per-metric because failed/timed-out questions - and, for power_ma specifically, 'unavailable' readings - are silently excluded from that metric's mean otherwise, which can bias results toward easier/luckier questions."
+  }
+}

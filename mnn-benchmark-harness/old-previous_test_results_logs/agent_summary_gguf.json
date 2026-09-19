@@ -1,0 +1,24 @@
+{
+  "timestamp": "2026-08-27T18:46:15.511887+00:00",
+  "fit_report": "/Users/ksd/SLM_Factory_Krishna_Personal/subset_s23_sanity.json",
+  "questions_file": "/Users/ksd/SLM_Factory_Krishna_Personal/generic_5_questions.json",
+  "total_models": 2,
+  "succeeded": 2,
+  "failed": 0,
+  "models": [
+    {
+      "model_id": "Qwen/Qwen3-0.6B",
+      "quant": "Q4_K_M",
+      "status": "success",
+      "error": null,
+      "total_questions_recorded": 5
+    },
+    {
+      "model_id": "Qwen/Qwen3-0.6B",
+      "quant": "F16",
+      "status": "success",
+      "error": null,
+      "total_questions_recorded": 5
+    }
+  ]
+}

@@ -1,0 +1,321 @@
+{
+  "run_info": {
+    "model_path": "/data/local/tmp/mnn_models/qwen3.5-0.8b-mnn-q4",
+    "device": "f46d20ad",
+    "start_time": "2026-07-27T18:43:55.153268+00:00",
+    "end_time": "2026-07-27T18:45:22.801766+00:00",
+    "timeout_s": 60,
+    "no_think_mode": true,
+    "max_tokens": 80,
+    "total": 10,
+    "completed": 10,
+    "failed": 0,
+    "battery_warning": true,
+    "battery_level_pct": 84,
+    "battery_status": "Charging"
+  },
+  "results": [
+    {
+      "question_number": 1,
+      "question": "What is the capital of France?",
+      "run_id": "run_1_1785177835154",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 1080,
+        "ttft_ms": 439.021562,
+        "prefill_time_us": 432558,
+        "decode_time_us": 4172405,
+        "prompt_len": 34,
+        "decode_len": 80,
+        "prefill_tps": 78.602,
+        "decode_tps": 19.174,
+        "peak_rss_kb": 810360,
+        "power_ma": 1280.71,
+        "power_ma_raw": "1280.71",
+        "thermal_status": "Normal",
+        "thermal_cpu_c": 56.3,
+        "thermal_skin_c": 47.0
+      },
+      "response": "The capital of France is Paris.\\n\\n**Paris** is the capital city of France. It is the capital city of the region of the same name, which is itself a region of France. The capital of France is **Paris** (also known as the capital of France).\\n\\nIn contrast, the capital of **France** (the country) is **Paris**.\\n\\n| **City** |",
+      "error": null
+    },
+    {
+      "question_number": 2,
+      "question": "Who wrote Romeo and Juliet?",
+      "run_id": "run_2_1785177843956",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 1042,
+        "ttft_ms": 409.360156,
+        "prefill_time_us": 403897,
+        "decode_time_us": 4152832,
+        "prompt_len": 33,
+        "decode_len": 80,
+        "prefill_tps": 81.704,
+        "decode_tps": 19.264,
+        "peak_rss_kb": 809248,
+        "power_ma": 1260.15,
+        "power_ma_raw": "1260.15",
+        "thermal_status": "Normal",
+        "thermal_cpu_c": 57.5,
+        "thermal_skin_c": 35.0
+      },
+      "response": "The user has made a factual and factual question about the origin of the play *Romeo and Juliet*. However, there is a significant misconception in their query that needs to be addressed first:\\n\\n1.  **There is no such book, book, or book-keeper named \"The Book-keeper\" or \"The Book-keeper\"**.\\n2.  **The most famous work",
+      "error": null
+    },
+    {
+      "question_number": 3,
+      "question": "What is the chemical symbol for gold?",
+      "run_id": "run_3_1785177852708",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 1060,
+        "ttft_ms": 458.598072,
+        "prefill_time_us": 453847,
+        "decode_time_us": 4406561,
+        "prompt_len": 35,
+        "decode_len": 80,
+        "prefill_tps": 77.119,
+        "decode_tps": 18.155,
+        "peak_rss_kb": 809112,
+        "power_ma": 1247.28,
+        "power_ma_raw": "1247.28",
+        "thermal_status": "Normal",
+        "thermal_cpu_c": 58.7,
+        "thermal_skin_c": 36.0
+      },
+      "response": "The chemical symbol for gold is **Au**. thought -\\n\\n**The user is asking for the correct spelling of \"the\" (the word \"a\").**\\n\\nThis is a common misconception that many users make when trying to learn. The correct way to say \"the\" (not the article) is:\\n\\n- **\"I\"** (the article)\\n- **I** (for",
+      "error": null
+    },
+    {
+      "question_number": 4,
+      "question": "What is the largest planet in our solar system?",
+      "run_id": "run_4_1785177861320",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 1058,
+        "ttft_ms": 459.095521,
+        "prefill_time_us": 453909,
+        "decode_time_us": 4357672,
+        "prompt_len": 37,
+        "decode_len": 80,
+        "prefill_tps": 81.514,
+        "decode_tps": 18.358,
+        "peak_rss_kb": 807072,
+        "power_ma": 1236.92,
+        "power_ma_raw": "1236.92",
+        "thermal_status": "Normal",
+        "thermal_cpu_c": 57.9,
+        "thermal_skin_c": 36.0
+      },
+      "response": "The **Solar System** is a flat, flat, flat-topped flat-lying object, so there is no such thing as a \"flat\" or flat-lying object in the context of this specific question.\\n\\nThere is no such thing as a \"flat\" or \"flat\" object in this context.\\n\\n*   **The Solar System** has a total of **128 planets",
+      "error": null
+    },
+    {
+      "question_number": 5,
+      "question": "What year did the first human land on the moon?",
+      "run_id": "run_5_1785177870031",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 1032,
+        "ttft_ms": 484.52026,
+        "prefill_time_us": 480069,
+        "decode_time_us": 4191862,
+        "prompt_len": 38,
+        "decode_len": 80,
+        "prefill_tps": 79.155,
+        "decode_tps": 19.085,
+        "peak_rss_kb": 809648,
+        "power_ma": 1228.51,
+        "power_ma_raw": "1228.51",
+        "thermal_status": "Normal",
+        "thermal_cpu_c": 59.0,
+        "thermal_skin_c": 37.0
+      },
+      "response": "I cannot answer this question with a definitive \"yes\" or \"no\" based on the premise that there is no such thing as \"yes-yes-yes-\". However, if you are looking for the correct answer based on the specific wording \"yes, and no,\" I can't provide that specific answer.\\n\\nHowever, if you are looking for the **answer to the question \"Did the",
+      "error": null
+    },
+    {
+      "question_number": 6,
+      "question": "What are the three states of matter?",
+      "run_id": "run_6_1785177878687",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 1033,
+        "ttft_ms": 459.348906,
+        "prefill_time_us": 453953,
+        "decode_time_us": 4491030,
+        "prompt_len": 35,
+        "decode_len": 80,
+        "prefill_tps": 77.1,
+        "decode_tps": 17.813,
+        "peak_rss_kb": 810884,
+        "power_ma": 1222.81,
+        "power_ma_raw": "1222.81",
+        "thermal_status": "Normal",
+        "thermal_cpu_c": 57.9,
+        "thermal_skin_c": 37.0
+      },
+      "response": "The three states of matter are **solid**, **liquid**, and **gaseous** (which includes gases, though some classifications group gases and gases together).\\n\\n*   **Solid:** Solid-objects are typically rigid, with a defined shape and volume.\\n*   **Solid:** Solid-\\n*   **Liquid:** A liquid is a substance that has the properties of a solid (e",
+      "error": null
+    },
+    {
+      "question_number": 7,
+      "question": "How does a refrigerator keep food cold?",
+      "run_id": "run_7_1785177887304",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 1033,
+        "ttft_ms": 469.442396,
+        "prefill_time_us": 465212,
+        "decode_time_us": 4081370,
+        "prompt_len": 35,
+        "decode_len": 80,
+        "prefill_tps": 75.235,
+        "decode_tps": 19.601,
+        "peak_rss_kb": 811908,
+        "power_ma": 1215.21,
+        "power_ma_raw": "1215.21",
+        "thermal_status": "Normal",
+        "thermal_cpu_c": 58.7,
+        "thermal_skin_c": 37.0
+      },
+      "response": "I cannot answer this question. The question is a request for a specific piece of information that is not available on the internet.\\n\\nHowever, I can provide the answer by explaining the physics behind the science:\\n\\n**1. What is the primary cause?**\\nThe most common reason for a fridge to be cold is that it is not actually a fridge. This is called \"cold chain-keeping.\"",
+      "error": null
+    },
+    {
+      "question_number": 8,
+      "question": "Explain the process of photosynthesis in plants.",
+      "run_id": "run_8_1785177896210",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 1033,
+        "ttft_ms": 463.252188,
+        "prefill_time_us": 454403,
+        "decode_time_us": 4137683,
+        "prompt_len": 37,
+        "decode_len": 80,
+        "prefill_tps": 81.426,
+        "decode_tps": 19.334,
+        "peak_rss_kb": 822212,
+        "power_ma": 1211.83,
+        "power_ma_raw": "1211.83",
+        "thermal_status": "Normal",
+        "thermal_cpu_c": 59.0,
+        "thermal_skin_c": 37.0
+      },
+      "response": "In the biological world, there is no such thing as a \"true\" or \"pure\" **all-yeast** or \"no-thing\" (like a literal word-processor or a blank slate). In reality, we all have to work with something else:\\n\\n*   **The \"No-\":** In the real world, we don't just have \"nothing.\" We have",
+      "error": null
+    },
+    {
+      "question_number": 9,
+      "question": "Summarize the theory of relativity in simple terms.",
+      "run_id": "run_9_1785177905205",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 1027,
+        "ttft_ms": 509.067656,
+        "prefill_time_us": 501899,
+        "decode_time_us": 4295797,
+        "prompt_len": 39,
+        "decode_len": 80,
+        "prefill_tps": 77.705,
+        "decode_tps": 18.623,
+        "peak_rss_kb": 820904,
+        "power_ma": 1206.58,
+        "power_ma_raw": "1206.58",
+        "thermal_status": "Normal",
+        "thermal_cpu_c": 59.4,
+        "thermal_skin_c": 37.0
+      },
+      "response": "Based on the laws of physics, specifically Einstein's **Theory of Relativity**, here is the breakdown:\\n\\n*   **General Relativity**: This describes how the universe works. It explains that the universe is not just a collection of objects, but a dynamic, changing space-time. Gravity is actually the curvature of spacetime caused by the presence of mass (like the sun) and the mass of",
+      "error": null
+    },
+    {
+      "question_number": 10,
+      "question": "Describe the causes and consequences of World War I in a few sentences.",
+      "run_id": "run_10_1785177914021",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 1030,
+        "ttft_ms": 505.754166,
+        "prefill_time_us": 500806,
+        "decode_time_us": 4435455,
+        "prompt_len": 41,
+        "decode_len": 80,
+        "prefill_tps": 81.868,
+        "decode_tps": 18.036,
+        "peak_rss_kb": 819660,
+        "power_ma": 1203.61,
+        "power_ma_raw": "1203.61",
+        "thermal_status": "Normal",
+        "thermal_cpu_c": 59.4,
+        "thermal_skin_c": 38.0
+      },
+      "response": "**1.1.1.1.1.1.**\\n\\n*   **Contextualized:** In the 1940s, this was the primary driver for the US-SS.\\n\\n1.  **Economic and Trade-Related:** The U.S. entered the **We-We-Trade-Off** (1940-1945), where",
+      "error": null
+    }
+  ],
+  "summary": {
+    "cold_load_ms": {
+      "mean": 1042.8,
+      "std": 16.522,
+      "min": 1027,
+      "max": 1080,
+      "n_completed": 10
+    },
+    "ttft_ms": {
+      "mean": 465.746,
+      "std": 28.071,
+      "min": 409.360156,
+      "max": 509.067656,
+      "n_completed": 10
+    },
+    "prefill_tps": {
+      "mean": 79.143,
+      "std": 2.252,
+      "min": 75.235,
+      "max": 81.868,
+      "n_completed": 10
+    },
+    "decode_tps": {
+      "mean": 18.744,
+      "std": 0.594,
+      "min": 17.813,
+      "max": 19.601,
+      "n_completed": 10
+    },
+    "peak_rss_kb": {
+      "mean": 813100.8,
+      "std": 5289.601,
+      "min": 807072,
+      "max": 822212,
+      "n_completed": 10
+    },
+    "power_ma": {
+      "mean": 1231.361,
+      "std": 23.783,
+      "min": 1203.61,
+      "max": 1280.71,
+      "n_completed": 10
+    },
+    "thermal_cpu_c": {
+      "mean": 58.38,
+      "std": 0.928,
+      "min": 56.3,
+      "max": 59.4,
+      "n_completed": 10
+    },
+    "thermal_skin_c": {
+      "mean": 37.7,
+      "std": 3.195,
+      "min": 35.0,
+      "max": 47.0,
+      "n_completed": 10
+    },
+    "thermal_states_observed": [
+      "Normal"
+    ],
+    "note": "power_ma stats exclude questions where POWER_MA was reported as 'unavailable' or missing. n_completed is reported per-metric because failed/timed-out questions - and, for power_ma specifically, 'unavailable' readings - are silently excluded from that metric's mean otherwise, which can bias results toward easier/luckier questions."
+  }
+}

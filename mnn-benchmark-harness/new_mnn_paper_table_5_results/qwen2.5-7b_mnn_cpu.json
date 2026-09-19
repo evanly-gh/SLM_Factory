@@ -1,0 +1,280 @@
+{
+  "run_info": {
+    "model_path": "/data/local/tmp/mnn_models/qwen2.5-7b-mnn-q4",
+    "device": "3C166R00G7Y00000",
+    "start_time": "2026-09-18T08:44:57.923980+00:00",
+    "end_time": "2026-09-18T08:47:50.037865+00:00",
+    "timeout_s": 180,
+    "no_think_mode": false,
+    "max_tokens": 256,
+    "backend_type": "cpu",
+    "warmup_runs": 0,
+    "trials": 3,
+    "process_reset": true,
+    "total": 3,
+    "completed": 3,
+    "failed": 0,
+    "battery_warning": true,
+    "battery_level_pct": 100,
+    "battery_status": "Full"
+  },
+  "results": [
+    {
+      "question_number": 1,
+      "question": "The history of artificial intelligence began in antiquity, with myths and stories of artificial beings endowed with intelligence or consciousness by master craftsmen. The seeds of modern AI were planted by classical philosophers who attempted to describe human thinking as a symbolic system. The field of AI research was founded at a workshop held at Dartmouth College in 1956. Attendees became the leaders of AI research for decades. Many of them predicted that a machine as intelligent as a human being would exist in no more than a generation, and they were given millions of dollars to make this vision come true. Eventually, it became obvious that they had grossly underestimated the difficulty of the project. In 1973, in response to the criticism from James Lighthill and ongoing pressure from congress, the U.S. and British Governments stopped funding undirected research into artificial intelligence, and the difficult years that followed would later be known as an AI winter. Seven years later, a revival of interest in neural networks began. Machine learning, integral to AI since its beginnings, is the study of computer algorithms that improve automatically through experience. Deep learning became feasible, which led to an increase in interest and funding. Modern AI research covers a huge number of subfields, from general purpose areas such as learning",
+      "trial_number": 1,
+      "run_id": "run_1_1789721141901",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 5327,
+        "ttft_ms": 11920.176923,
+        "prefill_time_us": 11910671,
+        "decode_time_us": 23468563,
+        "prompt_len": 275,
+        "decode_len": 256,
+        "prefill_tps": 23.089,
+        "decode_tps": 10.908,
+        "peak_rss_kb": 6137780,
+        "power_ma": 50.09,
+        "power_ma_raw": "50.09",
+        "energy_mas_sampled": 1570.419,
+        "energy_mj_sampled": 7060.604,
+        "thermal_status": "Normal",
+        "thermal_cpu_c": 63.2,
+        "thermal_skin_c": null,
+        "power_ma_monsoon": null
+      },
+      "response": "The history of artificial intelligence began in antiquity, with myths and stories of artificial beings endowed with intelligence or consciousness by master craftsmen. The seeds of modern AI were planted by classical philosophers who attempted to describe human thinking as a symbolic system. The field of AI research was founded at a workshop held at Dartmouth College in 1956. Attendees became the leaders of AI research for decades. Many of them predicted that a machine as intelligent as a human being would exist in no more than a generation, and they were given millions of dollars to make this vision come true. Eventually, it became obvious that they had grossly underestimated the difficulty of the project. In 1973, in response to the criticism from James Lighthill and ongoing pressure from congress, the U.S. and British Governments stopped funding undirected research into artificial intelligence, and the difficult years that followed would later be known as an AI winter. Seven years later, a revival of interest in neural networks began. Machine learning, integral to AI since its beginnings, is the study of computer algorithms that improve automatically through experience. Deep learning became feasible, which led to an increase in interest and funding. Modern AI research covers a huge number of subfields, from general purpose areas such as learning",
+      "error": null
+    },
+    {
+      "question_number": 1,
+      "question": "The history of artificial intelligence began in antiquity, with myths and stories of artificial beings endowed with intelligence or consciousness by master craftsmen. The seeds of modern AI were planted by classical philosophers who attempted to describe human thinking as a symbolic system. The field of AI research was founded at a workshop held at Dartmouth College in 1956. Attendees became the leaders of AI research for decades. Many of them predicted that a machine as intelligent as a human being would exist in no more than a generation, and they were given millions of dollars to make this vision come true. Eventually, it became obvious that they had grossly underestimated the difficulty of the project. In 1973, in response to the criticism from James Lighthill and ongoing pressure from congress, the U.S. and British Governments stopped funding undirected research into artificial intelligence, and the difficult years that followed would later be known as an AI winter. Seven years later, a revival of interest in neural networks began. Machine learning, integral to AI since its beginnings, is the study of computer algorithms that improve automatically through experience. Deep learning became feasible, which led to an increase in interest and funding. Modern AI research covers a huge number of subfields, from general purpose areas such as learning",
+      "trial_number": 2,
+      "run_id": "run_1_1789721185336",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 5061,
+        "ttft_ms": 6258.53229,
+        "prefill_time_us": 6253312,
+        "decode_time_us": 26372675,
+        "prompt_len": 275,
+        "decode_len": 256,
+        "prefill_tps": 43.977,
+        "decode_tps": 9.707,
+        "peak_rss_kb": 6116696,
+        "power_ma": 41.16,
+        "power_ma_raw": "41.16",
+        "energy_mas_sampled": 1111.562,
+        "energy_mj_sampled": 4993.423,
+        "thermal_status": "Normal",
+        "thermal_cpu_c": 67.1,
+        "thermal_skin_c": null,
+        "power_ma_monsoon": null
+      },
+      "response": "The history of artificial intelligence began in antiquity, with myths and stories of artificial beings endowed with intelligence or consciousness by master craftsmen. The seeds of modern AI were planted by classical philosophers who attempted to describe human thinking as a symbolic system. The field of AI research was founded at a workshop held at Dartmouth College in 1956. Attendees became the leaders of AI research for decades. Many of them predicted that a machine as intelligent as a human being would exist in no more than a generation, and they were given millions of dollars to make this vision come true. Eventually, it became obvious that they had grossly underestimated the difficulty of the project. In 1973, in response to the criticism from James Lighthill and ongoing pressure from congress, the U.S. and British Governments stopped funding undirected research into artificial intelligence, and the difficult years that followed would later be known as an AI winter. Seven years later, a revival of interest in neural networks began. Machine learning, integral to AI since its beginnings, is the study of computer algorithms that improve automatically through experience. Deep learning became feasible, which led to an increase in interest and funding. Modern AI research covers a huge number of subfields, from general purpose areas such as learning",
+      "error": null
+    },
+    {
+      "question_number": 1,
+      "question": "The history of artificial intelligence began in antiquity, with myths and stories of artificial beings endowed with intelligence or consciousness by master craftsmen. The seeds of modern AI were planted by classical philosophers who attempted to describe human thinking as a symbolic system. The field of AI research was founded at a workshop held at Dartmouth College in 1956. Attendees became the leaders of AI research for decades. Many of them predicted that a machine as intelligent as a human being would exist in no more than a generation, and they were given millions of dollars to make this vision come true. Eventually, it became obvious that they had grossly underestimated the difficulty of the project. In 1973, in response to the criticism from James Lighthill and ongoing pressure from congress, the U.S. and British Governments stopped funding undirected research into artificial intelligence, and the difficult years that followed would later be known as an AI winter. Seven years later, a revival of interest in neural networks began. Machine learning, integral to AI since its beginnings, is the study of computer algorithms that improve automatically through experience. Deep learning became feasible, which led to an increase in interest and funding. Modern AI research covers a huge number of subfields, from general purpose areas such as learning",
+      "trial_number": 3,
+      "run_id": "run_1_1789721226638",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 4669,
+        "ttft_ms": 11906.779214,
+        "prefill_time_us": 11902852,
+        "decode_time_us": 23334090,
+        "prompt_len": 275,
+        "decode_len": 256,
+        "prefill_tps": 23.104,
+        "decode_tps": 10.971,
+        "peak_rss_kb": 6112736,
+        "power_ma": 65.64,
+        "power_ma_raw": "65.64",
+        "energy_mas_sampled": 1450.95,
+        "energy_mj_sampled": 6511.864,
+        "thermal_status": "Normal",
+        "thermal_cpu_c": 66.3,
+        "thermal_skin_c": null,
+        "power_ma_monsoon": null
+      },
+      "response": "The history of artificial intelligence began in antiquity, with myths and stories of artificial beings endowed with intelligence or consciousness by master craftsmen. The seeds of modern AI were planted by classical philosophers who attempted to describe human thinking as a symbolic system. The field of AI research was founded at a workshop held at Dartmouth College in 1956. Attendees became the leaders of AI research for decades. Many of them predicted that a machine as intelligent as a human being would exist in no more than a generation, and they were given millions of dollars to make this vision come true. Eventually, it became obvious that they had grossly underestimated the difficulty of the project. In 1973, in response to the criticism from James Lighthill and ongoing pressure from congress, the U.S. and British Governments stopped funding undirected research into artificial intelligence, and the difficult years that followed would later be known as an AI winter. Seven years later, a revival of interest in neural networks began. Machine learning, integral to AI since its beginnings, is the study of computer algorithms that improve automatically through experience. Deep learning became feasible, which led to an increase in interest and funding. Modern AI research covers a huge number of subfields, from general purpose areas such as learning",
+      "error": null
+    }
+  ],
+  "summary": {
+    "cold_load_ms": {
+      "mean": 5019,
+      "std": 270.264,
+      "min": 4669,
+      "max": 5327,
+      "n_completed": 3
+    },
+    "ttft_ms": {
+      "mean": 10028.496,
+      "std": 2665.773,
+      "min": 6258.532,
+      "max": 11920.177,
+      "n_completed": 3
+    },
+    "prefill_tps": {
+      "mean": 30.057,
+      "std": 9.843,
+      "min": 23.089,
+      "max": 43.977,
+      "n_completed": 3
+    },
+    "decode_tps": {
+      "mean": 10.529,
+      "std": 0.582,
+      "min": 9.707,
+      "max": 10.971,
+      "n_completed": 3
+    },
+    "peak_rss_kb": {
+      "mean": 6122404,
+      "std": 10992.01,
+      "min": 6112736,
+      "max": 6137780,
+      "n_completed": 3
+    },
+    "power_ma": {
+      "mean": 52.297,
+      "std": 10.115,
+      "min": 41.16,
+      "max": 65.64,
+      "n_completed": 3
+    },
+    "power_ma_monsoon": {
+      "mean": null,
+      "std": null,
+      "min": null,
+      "max": null,
+      "n_completed": 0
+    },
+    "thermal_cpu_c": {
+      "mean": 65.533,
+      "std": 1.682,
+      "min": 63.2,
+      "max": 67.1,
+      "n_completed": 3
+    },
+    "thermal_skin_c": {
+      "mean": null,
+      "std": null,
+      "min": null,
+      "max": null,
+      "n_completed": 0
+    },
+    "energy_mas_sampled": {
+      "mean": 1377.644,
+      "std": 194.367,
+      "min": 1111.562,
+      "max": 1570.419,
+      "n_completed": 3
+    },
+    "energy_mj_sampled": {
+      "mean": 6188.63,
+      "std": 874.326,
+      "min": 4993.423,
+      "max": 7060.604,
+      "n_completed": 3
+    },
+    "thermal_states_observed": [
+      "Normal"
+    ],
+    "power_comparison": {
+      "mean_abs_diff_ma": null,
+      "n_completed": 0
+    },
+    "note": "power_ma stats exclude questions where POWER_MA was reported as 'unavailable' or missing; power_ma_monsoon stats exclude questions where the Monsoon reading failed. n_completed is reported per-metric because failed/timed-out questions - and, for these two power metrics specifically, unavailable/failed readings - are silently excluded from that metric's mean otherwise, which can bias results toward easier/luckier questions."
+  },
+  "trial_summary": {
+    "1": {
+      "question": "The history of artificial intelligence began in antiquity, with myths and stories of artificial beings endowed with intelligence or consciousness by master craftsmen. The seeds of modern AI were planted by classical philosophers who attempted to describe human thinking as a symbolic system. The field of AI research was founded at a workshop held at Dartmouth College in 1956. Attendees became the leaders of AI research for decades. Many of them predicted that a machine as intelligent as a human being would exist in no more than a generation, and they were given millions of dollars to make this vision come true. Eventually, it became obvious that they had grossly underestimated the difficulty of the project. In 1973, in response to the criticism from James Lighthill and ongoing pressure from congress, the U.S. and British Governments stopped funding undirected research into artificial intelligence, and the difficult years that followed would later be known as an AI winter. Seven years later, a revival of interest in neural networks began. Machine learning, integral to AI since its beginnings, is the study of computer algorithms that improve automatically through experience. Deep learning became feasible, which led to an increase in interest and funding. Modern AI research covers a huge number of subfields, from general purpose areas such as learning",
+      "n_trials": 3,
+      "n_completed": 3,
+      "metrics": {
+        "cold_load_ms": {
+          "mean": 5019,
+          "std": 270.264,
+          "min": 4669,
+          "max": 5327,
+          "n_completed": 3
+        },
+        "ttft_ms": {
+          "mean": 10028.496,
+          "std": 2665.773,
+          "min": 6258.532,
+          "max": 11920.177,
+          "n_completed": 3
+        },
+        "prefill_tps": {
+          "mean": 30.057,
+          "std": 9.843,
+          "min": 23.089,
+          "max": 43.977,
+          "n_completed": 3
+        },
+        "decode_tps": {
+          "mean": 10.529,
+          "std": 0.582,
+          "min": 9.707,
+          "max": 10.971,
+          "n_completed": 3
+        },
+        "peak_rss_kb": {
+          "mean": 6122404,
+          "std": 10992.01,
+          "min": 6112736,
+          "max": 6137780,
+          "n_completed": 3
+        },
+        "power_ma": {
+          "mean": 52.297,
+          "std": 10.115,
+          "min": 41.16,
+          "max": 65.64,
+          "n_completed": 3
+        },
+        "power_ma_monsoon": {
+          "mean": null,
+          "std": null,
+          "min": null,
+          "max": null,
+          "n_completed": 0
+        },
+        "thermal_cpu_c": {
+          "mean": 65.533,
+          "std": 1.682,
+          "min": 63.2,
+          "max": 67.1,
+          "n_completed": 3
+        },
+        "thermal_skin_c": {
+          "mean": null,
+          "std": null,
+          "min": null,
+          "max": null,
+          "n_completed": 0
+        },
+        "energy_mas_sampled": {
+          "mean": 1377.644,
+          "std": 194.367,
+          "min": 1111.562,
+          "max": 1570.419,
+          "n_completed": 3
+        },
+        "energy_mj_sampled": {
+          "mean": 6188.63,
+          "std": 874.326,
+          "min": 4993.423,
+          "max": 7060.604,
+          "n_completed": 3
+        }
+      }
+    }
+  }
+}

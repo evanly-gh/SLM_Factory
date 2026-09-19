@@ -1,0 +1,321 @@
+{
+  "run_info": {
+    "model_path": "/data/local/tmp/mnn_models/qwen3-4b-mnn-q8",
+    "device": "f46d20ad",
+    "start_time": "2026-07-27T18:14:01.729138+00:00",
+    "end_time": "2026-07-27T18:19:52.117471+00:00",
+    "timeout_s": 60,
+    "no_think_mode": true,
+    "max_tokens": 80,
+    "total": 10,
+    "completed": 10,
+    "failed": 0,
+    "battery_warning": true,
+    "battery_level_pct": 79,
+    "battery_status": "Charging"
+  },
+  "results": [
+    {
+      "question_number": 1,
+      "question": "What is the capital of France?",
+      "run_id": "run_1_1785176041730",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 12629,
+        "ttft_ms": 2373.093281,
+        "prefill_time_us": 2363653,
+        "decode_time_us": 2576446,
+        "prompt_len": 30,
+        "decode_len": 8,
+        "prefill_tps": 12.692,
+        "decode_tps": 3.105,
+        "peak_rss_kb": 4947940,
+        "power_ma": 1645.84,
+        "power_ma_raw": "1645.84",
+        "thermal_status": "Normal",
+        "thermal_cpu_c": 57.9,
+        "thermal_skin_c": 35.0
+      },
+      "response": "The capital of France is Paris.",
+      "error": null
+    },
+    {
+      "question_number": 2,
+      "question": "Who wrote Romeo and Juliet?",
+      "run_id": "run_2_1785176063061",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 12423,
+        "ttft_ms": 2232.293541,
+        "prefill_time_us": 2210718,
+        "decode_time_us": 5072591,
+        "prompt_len": 29,
+        "decode_len": 12,
+        "prefill_tps": 13.118,
+        "decode_tps": 2.366,
+        "peak_rss_kb": 4924092,
+        "power_ma": 1609.28,
+        "power_ma_raw": "1609.28",
+        "thermal_status": "Normal",
+        "thermal_cpu_c": 59.4,
+        "thermal_skin_c": 36.0
+      },
+      "response": "Romeo and Juliet was written by William Shakespeare.",
+      "error": null
+    },
+    {
+      "question_number": 3,
+      "question": "What is the chemical symbol for gold?",
+      "run_id": "run_3_1785176085967",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 12524,
+        "ttft_ms": 2646.245988,
+        "prefill_time_us": 2634458,
+        "decode_time_us": 392476,
+        "prompt_len": 31,
+        "decode_len": 2,
+        "prefill_tps": 11.767,
+        "decode_tps": 5.096,
+        "peak_rss_kb": 4915900,
+        "power_ma": 1601.13,
+        "power_ma_raw": "1601.13",
+        "thermal_status": "Normal",
+        "thermal_cpu_c": 59.8,
+        "thermal_skin_c": 38.0
+      },
+      "response": "Au",
+      "error": null
+    },
+    {
+      "question_number": 4,
+      "question": "What is the largest planet in our solar system?",
+      "run_id": "run_4_1785176104804",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 12594,
+        "ttft_ms": 2438.134322,
+        "prefill_time_us": 2434048,
+        "decode_time_us": 3918538,
+        "prompt_len": 33,
+        "decode_len": 11,
+        "prefill_tps": 13.558,
+        "decode_tps": 2.807,
+        "peak_rss_kb": 4945636,
+        "power_ma": 1597.03,
+        "power_ma_raw": "1597.03",
+        "thermal_status": "Normal",
+        "thermal_cpu_c": 61.7,
+        "thermal_skin_c": 38.0
+      },
+      "response": "The largest planet in our solar system is Jupiter.",
+      "error": null
+    },
+    {
+      "question_number": 5,
+      "question": "What year did the first human land on the moon?",
+      "run_id": "run_5_1785176127601",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 12420,
+        "ttft_ms": 2617.116769,
+        "prefill_time_us": 2604918,
+        "decode_time_us": 23156088,
+        "prompt_len": 34,
+        "decode_len": 63,
+        "prefill_tps": 13.052,
+        "decode_tps": 2.721,
+        "peak_rss_kb": 4946456,
+        "power_ma": 1543.25,
+        "power_ma_raw": "1543.25",
+        "thermal_status": "Normal",
+        "thermal_cpu_c": 66.8,
+        "thermal_skin_c": 41.0
+      },
+      "response": "The first human landed on the Moon in 1969. Specifically, NASA's Apollo 11 mission successfully landed on the Moon on July 20, 1969. Astronauts Neil Armstrong and Buzz Aldrin became the first and second humans to walk on the lunar surface.",
+      "error": null
+    },
+    {
+      "question_number": 6,
+      "question": "What are the three states of matter?",
+      "run_id": "run_6_1785176168569",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 12587,
+        "ttft_ms": 2650.87427,
+        "prefill_time_us": 2643411,
+        "decode_time_us": 5325450,
+        "prompt_len": 31,
+        "decode_len": 14,
+        "prefill_tps": 11.727,
+        "decode_tps": 2.629,
+        "peak_rss_kb": 4944060,
+        "power_ma": 1566.4,
+        "power_ma_raw": "1566.40",
+        "thermal_status": "Normal",
+        "thermal_cpu_c": 64.5,
+        "thermal_skin_c": 41.0
+      },
+      "response": "The three states of matter are solid, liquid, and gas.",
+      "error": null
+    },
+    {
+      "question_number": 7,
+      "question": "How does a refrigerator keep food cold?",
+      "run_id": "run_7_1785176192305",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 12454,
+        "ttft_ms": 2668.151822,
+        "prefill_time_us": 2662639,
+        "decode_time_us": 29608979,
+        "prompt_len": 31,
+        "decode_len": 80,
+        "prefill_tps": 11.643,
+        "decode_tps": 2.702,
+        "peak_rss_kb": 4944120,
+        "power_ma": 1540.33,
+        "power_ma_raw": "1540.33",
+        "thermal_status": "Normal",
+        "thermal_cpu_c": 69.1,
+        "thermal_skin_c": 43.0
+      },
+      "response": "A refrigerator keeps food cold by removing heat from inside the compartment and transferring it to the outside environment. It does this using a refrigeration cycle that involves a refrigerant, a compressor, condenser, evaporator, and expansion valve.\\n\\nHere\u2019s a simple breakdown:\\n\\n1. **Compressor** compresses the refrigerant gas, raising its temperature and pressure.\\n2. The hot, high-pressure gas",
+      "error": null
+    },
+    {
+      "question_number": 8,
+      "question": "Explain the process of photosynthesis in plants.",
+      "run_id": "run_8_1785176240463",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 12510,
+        "ttft_ms": 2457.832499,
+        "prefill_time_us": 2448539,
+        "decode_time_us": 31487732,
+        "prompt_len": 33,
+        "decode_len": 80,
+        "prefill_tps": 13.477,
+        "decode_tps": 2.541,
+        "peak_rss_kb": 4957928,
+        "power_ma": 1535.66,
+        "power_ma_raw": "1535.66",
+        "thermal_status": "Normal",
+        "thermal_cpu_c": 71.0,
+        "thermal_skin_c": 45.0
+      },
+      "response": "Photosynthesis is the process by which green plants use sunlight to convert carbon dioxide and water into glucose (a form of sugar) and oxygen. This process primarily occurs in the chloroplasts of plant cells, where the green pigment chlorophyll captures light energy.  \\n\\nThe overall chemical equation for photosynthesis is:  \\n6CO\u2082 + 6H\u2082O + light energy \u2192 C\u2086H",
+      "error": null
+    },
+    {
+      "question_number": 9,
+      "question": "Summarize the theory of relativity in simple terms.",
+      "run_id": "run_9_1785176290358",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 12732,
+        "ttft_ms": 2959.192967,
+        "prefill_time_us": 2947863,
+        "decode_time_us": 32216407,
+        "prompt_len": 35,
+        "decode_len": 80,
+        "prefill_tps": 11.873,
+        "decode_tps": 2.483,
+        "peak_rss_kb": 4822364,
+        "power_ma": 1531.04,
+        "power_ma_raw": "1531.04",
+        "thermal_status": "Normal",
+        "thermal_cpu_c": 72.2,
+        "thermal_skin_c": 46.0
+      },
+      "response": "Einstein's theory of relativity says that time, space, and gravity are connected. There are two parts: special relativity and general relativity.\\n\\nSpecial relativity (1905) says that the speed of light is always the same, no matter how fast you're moving. This means time can slow down and lengths can shrink for people moving very fast\u2014like near the speed of",
+      "error": null
+    },
+    {
+      "question_number": 10,
+      "question": "Describe the causes and consequences of World War I in a few sentences.",
+      "run_id": "run_10_1785176341862",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 12654,
+        "ttft_ms": 2601.432499,
+        "prefill_time_us": 2589655,
+        "decode_time_us": 32247593,
+        "prompt_len": 37,
+        "decode_len": 80,
+        "prefill_tps": 14.288,
+        "decode_tps": 2.481,
+        "peak_rss_kb": 4949480,
+        "power_ma": 1498.09,
+        "power_ma_raw": "1498.09",
+        "thermal_status": "Normal",
+        "thermal_cpu_c": 77.2,
+        "thermal_skin_c": 47.0
+      },
+      "response": "World War I was caused by a complex web of alliances, nationalism, imperialism, and tensions over territory and power, particularly in Europe, with the assassination of Archduke Franz Ferdinand triggering a chain reaction. The consequences included the collapse of empires (like Austria-Hungary, Ottoman, and Russian), massive loss of life and economic devastation, the rise of new nation-states, and the eventual outbreak",
+      "error": null
+    }
+  ],
+  "summary": {
+    "cold_load_ms": {
+      "mean": 12552.7,
+      "std": 98.962,
+      "min": 12420,
+      "max": 12732,
+      "n_completed": 10
+    },
+    "ttft_ms": {
+      "mean": 2564.437,
+      "std": 189.511,
+      "min": 2232.293541,
+      "max": 2959.192967,
+      "n_completed": 10
+    },
+    "prefill_tps": {
+      "mean": 12.72,
+      "std": 0.882,
+      "min": 11.643,
+      "max": 14.288,
+      "n_completed": 10
+    },
+    "decode_tps": {
+      "mean": 2.893,
+      "std": 0.76,
+      "min": 2.366,
+      "max": 5.096,
+      "n_completed": 10
+    },
+    "peak_rss_kb": {
+      "mean": 4929797.6,
+      "std": 37699.394,
+      "min": 4822364,
+      "max": 4957928,
+      "n_completed": 10
+    },
+    "power_ma": {
+      "mean": 1566.805,
+      "std": 42.859,
+      "min": 1498.09,
+      "max": 1645.84,
+      "n_completed": 10
+    },
+    "thermal_cpu_c": {
+      "mean": 65.96,
+      "std": 6.062,
+      "min": 57.9,
+      "max": 77.2,
+      "n_completed": 10
+    },
+    "thermal_skin_c": {
+      "mean": 41.0,
+      "std": 4.0,
+      "min": 35.0,
+      "max": 47.0,
+      "n_completed": 10
+    },
+    "thermal_states_observed": [
+      "Normal"
+    ],
+    "note": "power_ma stats exclude questions where POWER_MA was reported as 'unavailable' or missing. n_completed is reported per-metric because failed/timed-out questions - and, for power_ma specifically, 'unavailable' readings - are silently excluded from that metric's mean otherwise, which can bias results toward easier/luckier questions."
+  }
+}

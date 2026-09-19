@@ -1,0 +1,321 @@
+{
+  "run_info": {
+    "model_path": "/data/local/tmp/mnn_models/qwen3-1.7b-mnn-q4",
+    "device": "f46d20ad",
+    "start_time": "2026-07-26T19:40:24.525705+00:00",
+    "end_time": "2026-07-26T19:42:08.262581+00:00",
+    "timeout_s": 60,
+    "no_think_mode": true,
+    "max_tokens": 80,
+    "total": 10,
+    "completed": 10,
+    "failed": 0,
+    "battery_warning": true,
+    "battery_level_pct": 85,
+    "battery_status": "Charging"
+  },
+  "results": [
+    {
+      "question_number": 1,
+      "question": "What is the capital of France?",
+      "run_id": "run_1_1785094824526",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 2405,
+        "ttft_ms": 1407.071666,
+        "prefill_time_us": 1401728,
+        "decode_time_us": 3268314,
+        "prompt_len": 30,
+        "decode_len": 30,
+        "prefill_tps": 21.402,
+        "decode_tps": 9.179,
+        "peak_rss_kb": 1299452,
+        "power_ma": 1324.29,
+        "power_ma_raw": "1324.29",
+        "thermal_status": "Normal",
+        "thermal_cpu_c": 56.0,
+        "thermal_skin_c": 35.0
+      },
+      "response": "\u200b\u200b \u200b\u200b \u200b\u200bngthngthresseresse\u2026\u201d\\n\\n\u2026\\n\\n\\n \u200b\u200b\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n",
+      "error": null
+    },
+    {
+      "question_number": 2,
+      "question": "Who wrote Romeo and Juliet?",
+      "run_id": "run_2_1785094834601",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 2387,
+        "ttft_ms": 828.267135,
+        "prefill_time_us": 822223,
+        "decode_time_us": 3270840,
+        "prompt_len": 29,
+        "decode_len": 30,
+        "prefill_tps": 35.27,
+        "decode_tps": 9.172,
+        "peak_rss_kb": 1303208,
+        "power_ma": 1310.14,
+        "power_ma_raw": "1310.14",
+        "thermal_status": "Normal",
+        "thermal_cpu_c": 57.9,
+        "thermal_skin_c": 37.0
+      },
+      "response": "resse \u200b\u200b \u200b\u200b\u2026\u201d\\n\\n\u2026\u201d\\n\\nresseresseresse\u2026\u201d\\n\\n\u00a0\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n",
+      "error": null
+    },
+    {
+      "question_number": 3,
+      "question": "What is the chemical symbol for gold?",
+      "run_id": "run_3_1785094845003",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 2421,
+        "ttft_ms": 917.191354,
+        "prefill_time_us": 912781,
+        "decode_time_us": 2640805,
+        "prompt_len": 31,
+        "decode_len": 25,
+        "prefill_tps": 33.962,
+        "decode_tps": 9.467,
+        "peak_rss_kb": 1301308,
+        "power_ma": 1299.56,
+        "power_ma_raw": "1299.56",
+        "thermal_status": "Normal",
+        "thermal_cpu_c": 57.5,
+        "thermal_skin_c": 37.0
+      },
+      "response": "resseresse\u2026\\n\\n\\n\u2026\u201d\\n\\nresse\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n",
+      "error": null
+    },
+    {
+      "question_number": 4,
+      "question": "What is the largest planet in our solar system?",
+      "run_id": "run_4_1785094853975",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 2380,
+        "ttft_ms": 921.32,
+        "prefill_time_us": 917237,
+        "decode_time_us": 8423952,
+        "prompt_len": 33,
+        "decode_len": 80,
+        "prefill_tps": 35.978,
+        "decode_tps": 9.497,
+        "peak_rss_kb": 1319516,
+        "power_ma": 1289.74,
+        "power_ma_raw": "1289.74",
+        "thermal_status": "Normal",
+        "thermal_cpu_c": 61.4,
+        "thermal_skin_c": 38.0
+      },
+      "response": "\u200b\u200b",
+      "error": null
+    },
+    {
+      "question_number": 5,
+      "question": "What year did the first human land on the moon?",
+      "run_id": "run_5_1785094869101",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 2406,
+        "ttft_ms": 937.690521,
+        "prefill_time_us": 932961,
+        "decode_time_us": 3824747,
+        "prompt_len": 34,
+        "decode_len": 36,
+        "prefill_tps": 36.443,
+        "decode_tps": 9.412,
+        "peak_rss_kb": 1306388,
+        "power_ma": 1279.45,
+        "power_ma_raw": "1279.45",
+        "thermal_status": "Normal",
+        "thermal_cpu_c": 59.4,
+        "thermal_skin_c": 38.0
+      },
+      "response": "\u200b\u200b \u200b\u200b \u200b\u200b\u2026\u201d\\n\\nresse\ufeff \u200b\u200b \u200b\u200b \u200b\u200b\u2026\u201d\\n\\n\u2026\u201d\\n\\nROME\u2026\\n\\n\\n \u2026\\n\\n\u2026\\n\\n\\n \u2026\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n",
+      "error": null
+    },
+    {
+      "question_number": 6,
+      "question": "What are the three states of matter?",
+      "run_id": "run_6_1785094879355",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 2421,
+        "ttft_ms": 952.231927,
+        "prefill_time_us": 945771,
+        "decode_time_us": 3402289,
+        "prompt_len": 31,
+        "decode_len": 32,
+        "prefill_tps": 32.777,
+        "decode_tps": 9.405,
+        "peak_rss_kb": 1320628,
+        "power_ma": 1273.14,
+        "power_ma_raw": "1273.14",
+        "thermal_status": "Normal",
+        "thermal_cpu_c": 60.6,
+        "thermal_skin_c": 38.0
+      },
+      "response": "resse \u200b\u200b\u2026\u201d\\n\\n \u200b\u200bngthresseresse \u200b\u200bngth \u200b\u200b\u2026\\n\\n\\nerset\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n",
+      "error": null
+    },
+    {
+      "question_number": 7,
+      "question": "How does a refrigerator keep food cold?",
+      "run_id": "run_7_1785094889526",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 2388,
+        "ttft_ms": 952.623802,
+        "prefill_time_us": 948328,
+        "decode_time_us": 2960872,
+        "prompt_len": 31,
+        "decode_len": 27,
+        "prefill_tps": 32.689,
+        "decode_tps": 9.119,
+        "peak_rss_kb": 1327232,
+        "power_ma": 1267.75,
+        "power_ma_raw": "1267.75",
+        "thermal_status": "Normal",
+        "thermal_cpu_c": 59.4,
+        "thermal_skin_c": 39.0
+      },
+      "response": "\u200b\u200b \u200b\u200b \u200b\u200b \u200b\u200bresse \u200b\u200b \u200b\u200b\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n",
+      "error": null
+    },
+    {
+      "question_number": 8,
+      "question": "Explain the process of photosynthesis in plants.",
+      "run_id": "run_8_1785094898546",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 2417,
+        "ttft_ms": 883.603281,
+        "prefill_time_us": 879238,
+        "decode_time_us": 4214495,
+        "prompt_len": 33,
+        "decode_len": 38,
+        "prefill_tps": 37.532,
+        "decode_tps": 9.017,
+        "peak_rss_kb": 1329372,
+        "power_ma": 1261.17,
+        "power_ma_raw": "1261.17",
+        "thermal_status": "Normal",
+        "thermal_cpu_c": 61.0,
+        "thermal_skin_c": 39.0
+      },
+      "response": "\u200b\u200b \u200b\u200b \u200b\u200b\u2026\\n\\n\\nressengthngth\u2026\u201d\\n\\nngth \u200b\u200b \u200b\u200b\u2026\u201d\\n\\n\u2026\u201d\\n\\n \u200b\u200b\u2026\\n\\n\\n \u2026\\n\\nutra\ufeff\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n",
+      "error": null
+    },
+    {
+      "question_number": 9,
+      "question": "Summarize the theory of relativity in simple terms.",
+      "run_id": "run_9_1785094908626",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 2381,
+        "ttft_ms": 1052.164062,
+        "prefill_time_us": 1048130,
+        "decode_time_us": 3269877,
+        "prompt_len": 35,
+        "decode_len": 29,
+        "prefill_tps": 33.393,
+        "decode_tps": 8.869,
+        "peak_rss_kb": 1328692,
+        "power_ma": 1252.45,
+        "power_ma_raw": "1252.45",
+        "thermal_status": "Normal",
+        "thermal_cpu_c": 61.0,
+        "thermal_skin_c": 39.0
+      },
+      "response": "resseressength\u2026\u201d\\n\\nresse \u200b\u200b\ufeff \u200b\u200b \u200b\u200b\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n",
+      "error": null
+    },
+    {
+      "question_number": 10,
+      "question": "Describe the causes and consequences of World War I in a few sentences.",
+      "run_id": "run_10_1785094919076",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 2406,
+        "ttft_ms": 957.049167,
+        "prefill_time_us": 952622,
+        "decode_time_us": 2568003,
+        "prompt_len": 37,
+        "decode_len": 24,
+        "prefill_tps": 38.84,
+        "decode_tps": 9.346,
+        "peak_rss_kb": 1324836,
+        "power_ma": 1253.56,
+        "power_ma_raw": "1253.56",
+        "thermal_status": "Normal",
+        "thermal_cpu_c": 60.2,
+        "thermal_skin_c": 40.0
+      },
+      "response": "resseresse \u200b\u200b\u2026\u201d\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n",
+      "error": null
+    }
+  ],
+  "summary": {
+    "cold_load_ms": {
+      "mean": 2401.2,
+      "std": 15.256,
+      "min": 2380,
+      "max": 2421,
+      "n_completed": 10
+    },
+    "ttft_ms": {
+      "mean": 980.921,
+      "std": 152.03,
+      "min": 828.267135,
+      "max": 1407.071666,
+      "n_completed": 10
+    },
+    "prefill_tps": {
+      "mean": 33.829,
+      "std": 4.576,
+      "min": 21.402,
+      "max": 38.84,
+      "n_completed": 10
+    },
+    "decode_tps": {
+      "mean": 9.248,
+      "std": 0.199,
+      "min": 8.869,
+      "max": 9.497,
+      "n_completed": 10
+    },
+    "peak_rss_kb": {
+      "mean": 1316063.2,
+      "std": 11504.728,
+      "min": 1299452,
+      "max": 1329372,
+      "n_completed": 10
+    },
+    "power_ma": {
+      "mean": 1281.125,
+      "std": 23.119,
+      "min": 1252.45,
+      "max": 1324.29,
+      "n_completed": 10
+    },
+    "thermal_cpu_c": {
+      "mean": 59.44,
+      "std": 1.691,
+      "min": 56.0,
+      "max": 61.4,
+      "n_completed": 10
+    },
+    "thermal_skin_c": {
+      "mean": 38.0,
+      "std": 1.342,
+      "min": 35.0,
+      "max": 40.0,
+      "n_completed": 10
+    },
+    "thermal_states_observed": [
+      "Normal"
+    ],
+    "note": "power_ma stats exclude questions where POWER_MA was reported as 'unavailable' or missing. n_completed is reported per-metric because failed/timed-out questions - and, for power_ma specifically, 'unavailable' readings - are silently excluded from that metric's mean otherwise, which can bias results toward easier/luckier questions."
+  }
+}

@@ -1,0 +1,321 @@
+{
+  "run_info": {
+    "model_path": "/data/local/tmp/mnn_models/qwen3.5-2b-mnn-q4",
+    "device": "f46d20ad",
+    "start_time": "2026-07-27T19:16:11.698919+00:00",
+    "end_time": "2026-07-27T19:17:29.010924+00:00",
+    "timeout_s": 60,
+    "no_think_mode": true,
+    "max_tokens": 80,
+    "total": 10,
+    "completed": 10,
+    "failed": 0,
+    "battery_warning": true,
+    "battery_level_pct": 88,
+    "battery_status": "Charging"
+  },
+  "results": [
+    {
+      "question_number": 1,
+      "question": "What is the capital of France?",
+      "run_id": "run_1_1785179771699",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 3538,
+        "ttft_ms": -1.0,
+        "prefill_time_us": 1004572,
+        "decode_time_us": 0,
+        "prompt_len": 34,
+        "decode_len": 1,
+        "prefill_tps": 33.845,
+        "decode_tps": null,
+        "peak_rss_kb": 2001884,
+        "power_ma": 937.18,
+        "power_ma_raw": "937.18",
+        "thermal_status": "Normal",
+        "thermal_cpu_c": 50.5,
+        "thermal_skin_c": 34.0
+      },
+      "response": "",
+      "error": null
+    },
+    {
+      "question_number": 2,
+      "question": "Who wrote Romeo and Juliet?",
+      "run_id": "run_2_1785179779564",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 3027,
+        "ttft_ms": 962.022135,
+        "prefill_time_us": 956808,
+        "decode_time_us": 123728,
+        "prompt_len": 33,
+        "decode_len": 2,
+        "prefill_tps": 34.49,
+        "decode_tps": 16.164,
+        "peak_rss_kb": 1638848,
+        "power_ma": 933.27,
+        "power_ma_raw": "933.27",
+        "thermal_status": "Normal",
+        "thermal_cpu_c": 50.9,
+        "thermal_skin_c": 34.0
+      },
+      "response": "",
+      "error": null
+    },
+    {
+      "question_number": 3,
+      "question": "What is the chemical symbol for gold?",
+      "run_id": "run_3_1785179787346",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 3001,
+        "ttft_ms": 1112.929062,
+        "prefill_time_us": 1098369,
+        "decode_time_us": 135535,
+        "prompt_len": 35,
+        "decode_len": 2,
+        "prefill_tps": 31.865,
+        "decode_tps": 14.756,
+        "peak_rss_kb": 1640660,
+        "power_ma": 928.0,
+        "power_ma_raw": "928.00",
+        "thermal_status": "Normal",
+        "thermal_cpu_c": 51.3,
+        "thermal_skin_c": 35.0
+      },
+      "response": "",
+      "error": null
+    },
+    {
+      "question_number": 4,
+      "question": "What is the largest planet in our solar system?",
+      "run_id": "run_4_1785179795137",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 2995,
+        "ttft_ms": -1.0,
+        "prefill_time_us": 995921,
+        "decode_time_us": 0,
+        "prompt_len": 37,
+        "decode_len": 1,
+        "prefill_tps": 37.152,
+        "decode_tps": null,
+        "peak_rss_kb": 1636496,
+        "power_ma": 926.0,
+        "power_ma_raw": "926.00",
+        "thermal_status": "Normal",
+        "thermal_cpu_c": 42.8,
+        "thermal_skin_c": 35.0
+      },
+      "response": "",
+      "error": null
+    },
+    {
+      "question_number": 5,
+      "question": "What year did the first human land on the moon?",
+      "run_id": "run_5_1785179802788",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 3004,
+        "ttft_ms": 1067.086874,
+        "prefill_time_us": 1061167,
+        "decode_time_us": 124673,
+        "prompt_len": 38,
+        "decode_len": 2,
+        "prefill_tps": 35.81,
+        "decode_tps": 16.042,
+        "peak_rss_kb": 1641224,
+        "power_ma": 921.5,
+        "power_ma_raw": "921.50",
+        "thermal_status": "Normal",
+        "thermal_cpu_c": 50.9,
+        "thermal_skin_c": 35.0
+      },
+      "response": "",
+      "error": null
+    },
+    {
+      "question_number": 6,
+      "question": "What are the three states of matter?",
+      "run_id": "run_6_1785179810431",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 2991,
+        "ttft_ms": -1.0,
+        "prefill_time_us": 1091381,
+        "decode_time_us": 0,
+        "prompt_len": 35,
+        "decode_len": 1,
+        "prefill_tps": 32.069,
+        "decode_tps": null,
+        "peak_rss_kb": 1644344,
+        "power_ma": 916.55,
+        "power_ma_raw": "916.55",
+        "thermal_status": "Normal",
+        "thermal_cpu_c": 51.3,
+        "thermal_skin_c": 35.0
+      },
+      "response": "",
+      "error": null
+    },
+    {
+      "question_number": 7,
+      "question": "How does a refrigerator keep food cold?",
+      "run_id": "run_7_1785179818057",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 2988,
+        "ttft_ms": 1120.081718,
+        "prefill_time_us": 1110253,
+        "decode_time_us": 133704,
+        "prompt_len": 35,
+        "decode_len": 2,
+        "prefill_tps": 31.524,
+        "decode_tps": 14.958,
+        "peak_rss_kb": 1642296,
+        "power_ma": 913.23,
+        "power_ma_raw": "913.23",
+        "thermal_status": "Normal",
+        "thermal_cpu_c": 51.7,
+        "thermal_skin_c": 35.0
+      },
+      "response": "",
+      "error": null
+    },
+    {
+      "question_number": 8,
+      "question": "Explain the process of photosynthesis in plants.",
+      "run_id": "run_8_1785179825673",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 3006,
+        "ttft_ms": -1.0,
+        "prefill_time_us": 1026720,
+        "decode_time_us": 0,
+        "prompt_len": 37,
+        "decode_len": 1,
+        "prefill_tps": 36.037,
+        "decode_tps": null,
+        "peak_rss_kb": 1639900,
+        "power_ma": 911.0,
+        "power_ma_raw": "911.00",
+        "thermal_status": "Normal",
+        "thermal_cpu_c": 50.9,
+        "thermal_skin_c": 35.0
+      },
+      "response": "",
+      "error": null
+    },
+    {
+      "question_number": 9,
+      "question": "Summarize the theory of relativity in simple terms.",
+      "run_id": "run_9_1785179833262",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 2998,
+        "ttft_ms": 1161.959427,
+        "prefill_time_us": 1156059,
+        "decode_time_us": 139262,
+        "prompt_len": 39,
+        "decode_len": 2,
+        "prefill_tps": 33.735,
+        "decode_tps": 14.361,
+        "peak_rss_kb": 1651456,
+        "power_ma": 906.0,
+        "power_ma_raw": "906.00",
+        "thermal_status": "Normal",
+        "thermal_cpu_c": 51.3,
+        "thermal_skin_c": 35.0
+      },
+      "response": "",
+      "error": null
+    },
+    {
+      "question_number": 10,
+      "question": "Describe the causes and consequences of World War I in a few sentences.",
+      "run_id": "run_10_1785179841199",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 3005,
+        "ttft_ms": 1172.456979,
+        "prefill_time_us": 1165920,
+        "decode_time_us": 137098,
+        "prompt_len": 41,
+        "decode_len": 2,
+        "prefill_tps": 35.165,
+        "decode_tps": 14.588,
+        "peak_rss_kb": 1647800,
+        "power_ma": 902.36,
+        "power_ma_raw": "902.36",
+        "thermal_status": "Normal",
+        "thermal_cpu_c": 51.7,
+        "thermal_skin_c": 35.0
+      },
+      "response": "",
+      "error": null
+    }
+  ],
+  "summary": {
+    "cold_load_ms": {
+      "mean": 3055.3,
+      "std": 161.222,
+      "min": 2988,
+      "max": 3538,
+      "n_completed": 10
+    },
+    "ttft_ms": {
+      "mean": 659.254,
+      "std": 541.85,
+      "min": -1.0,
+      "max": 1172.456979,
+      "n_completed": 10
+    },
+    "prefill_tps": {
+      "mean": 34.169,
+      "std": 1.822,
+      "min": 31.524,
+      "max": 37.152,
+      "n_completed": 10
+    },
+    "decode_tps": {
+      "mean": 15.145,
+      "std": 0.702,
+      "min": 14.361,
+      "max": 16.164,
+      "n_completed": 6
+    },
+    "peak_rss_kb": {
+      "mean": 1678490.8,
+      "std": 107877.886,
+      "min": 1636496,
+      "max": 2001884,
+      "n_completed": 10
+    },
+    "power_ma": {
+      "mean": 919.509,
+      "std": 11.032,
+      "min": 902.36,
+      "max": 937.18,
+      "n_completed": 10
+    },
+    "thermal_cpu_c": {
+      "mean": 50.33,
+      "std": 2.535,
+      "min": 42.8,
+      "max": 51.7,
+      "n_completed": 10
+    },
+    "thermal_skin_c": {
+      "mean": 34.8,
+      "std": 0.4,
+      "min": 34.0,
+      "max": 35.0,
+      "n_completed": 10
+    },
+    "thermal_states_observed": [
+      "Normal"
+    ],
+    "note": "power_ma stats exclude questions where POWER_MA was reported as 'unavailable' or missing. n_completed is reported per-metric because failed/timed-out questions - and, for power_ma specifically, 'unavailable' readings - are silently excluded from that metric's mean otherwise, which can bias results toward easier/luckier questions."
+  }
+}

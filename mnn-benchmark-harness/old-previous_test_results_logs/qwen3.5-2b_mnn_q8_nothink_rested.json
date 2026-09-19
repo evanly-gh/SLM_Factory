@@ -1,0 +1,321 @@
+{
+  "run_info": {
+    "model_path": "/data/local/tmp/mnn_models/qwen3.5-2b-mnn-q8",
+    "device": "f46d20ad",
+    "start_time": "2026-07-28T17:14:51.179438+00:00",
+    "end_time": "2026-07-28T17:18:44.342648+00:00",
+    "timeout_s": 60,
+    "no_think_mode": true,
+    "max_tokens": 80,
+    "total": 10,
+    "completed": 10,
+    "failed": 0,
+    "battery_warning": true,
+    "battery_level_pct": 90,
+    "battery_status": "Charging"
+  },
+  "results": [
+    {
+      "question_number": 1,
+      "question": "What is the capital of France?",
+      "run_id": "run_1_1785258891180",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 6627,
+        "ttft_ms": 1080.873958,
+        "prefill_time_us": 1069953,
+        "decode_time_us": 1608284,
+        "prompt_len": 34,
+        "decode_len": 9,
+        "prefill_tps": 31.777,
+        "decode_tps": 5.596,
+        "peak_rss_kb": 3340568,
+        "power_ma": 884.44,
+        "power_ma_raw": "884.44",
+        "thermal_status": "Normal",
+        "thermal_cpu_c": 54.4,
+        "thermal_skin_c": 36.0
+      },
+      "response": "The capital of France is **Paris**.",
+      "error": null
+    },
+    {
+      "question_number": 2,
+      "question": "Who wrote Romeo and Juliet?",
+      "run_id": "run_2_1785258903806",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 6364,
+        "ttft_ms": 1002.844635,
+        "prefill_time_us": 985545,
+        "decode_time_us": 14450678,
+        "prompt_len": 33,
+        "decode_len": 80,
+        "prefill_tps": 33.484,
+        "decode_tps": 5.536,
+        "peak_rss_kb": 2800868,
+        "power_ma": 851.16,
+        "power_ma_raw": "851.16",
+        "thermal_status": "Normal",
+        "thermal_cpu_c": 62.5,
+        "thermal_skin_c": 38.0
+      },
+      "response": "No, **William Shakespeare** did not write *Romeo and Juliet*.\\n\\nIt is a common misconception that he did not write it, but the story is actually attributed to **William Shakespeare**. He is credited with writing the famous play *Romeo and Juliet*. The play was originally written in **English** and published in **1594**, though it was not published until **",
+      "error": null
+    },
+    {
+      "question_number": 3,
+      "question": "What is the chemical symbol for gold?",
+      "run_id": "run_3_1785258929401",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 5634,
+        "ttft_ms": 1166.629635,
+        "prefill_time_us": 1160089,
+        "decode_time_us": 14498858,
+        "prompt_len": 35,
+        "decode_len": 80,
+        "prefill_tps": 30.17,
+        "decode_tps": 5.518,
+        "peak_rss_kb": 3073304,
+        "power_ma": 828.58,
+        "power_ma_raw": "828.58",
+        "thermal_status": "Normal",
+        "thermal_cpu_c": 62.9,
+        "thermal_skin_c": 39.0
+      },
+      "response": "The chemical symbol for gold is **Au**.\\n\\nIt comes from the Latin word *aurum*, which means \"gold\" in Latin. Gold is element number **79** on the periodic table.<|end_of_text>\\n<|start|>\\n<model_output>\\n- **Symbol**: Au\\n- **Atomic Number**: 79\\n- **Atomic Number",
+      "error": null
+    },
+    {
+      "question_number": 4,
+      "question": "What is the largest planet in our solar system?",
+      "run_id": "run_4_1785258953306",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 5482,
+        "ttft_ms": 1094.971614,
+        "prefill_time_us": 1083822,
+        "decode_time_us": 15287383,
+        "prompt_len": 37,
+        "decode_len": 80,
+        "prefill_tps": 34.138,
+        "decode_tps": 5.233,
+        "peak_rss_kb": 3358656,
+        "power_ma": 817.87,
+        "power_ma_raw": "817.87",
+        "thermal_status": "Normal",
+        "thermal_cpu_c": 63.3,
+        "thermal_skin_c": 40.0
+      },
+      "response": "The planet farthest from the sun is **Jupiter**. It is the largest planet in our solar system and the largest in our solar system by both mass and diameter.\\n\\nNote: While Jupiter is the largest planet, the Sun is technically the most massive object in the solar system. However, among the eight planets, the Sun is the largest, but if comparing the planets themselves, Jupiter is the",
+      "error": null
+    },
+    {
+      "question_number": 5,
+      "question": "What year did the first human land on the moon?",
+      "run_id": "run_5_1785258978543",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 5471,
+        "ttft_ms": 1164.862916,
+        "prefill_time_us": 1158404,
+        "decode_time_us": 14657980,
+        "prompt_len": 38,
+        "decode_len": 80,
+        "prefill_tps": 32.804,
+        "decode_tps": 5.458,
+        "peak_rss_kb": 3357984,
+        "power_ma": 810.83,
+        "power_ma_raw": "810.83",
+        "thermal_status": "Normal",
+        "thermal_cpu_c": 65.2,
+        "thermal_skin_c": 40.0
+      },
+      "response": "1969.\\n\\nThe United States' Apollo 11 mission landed on the Moon on July 20, 1969, during the Apollo 11 mission. Apollo 11 was the mission of the United States Space Agency, led by Neil Armstrong and Neil Armstrong. It was the first time humans landed on another celestial body, and the mission was the first to",
+      "error": null
+    },
+    {
+      "question_number": 6,
+      "question": "What are the three states of matter?",
+      "run_id": "run_6_1785259002512",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 5470,
+        "ttft_ms": 1177.34026,
+        "prefill_time_us": 1170883,
+        "decode_time_us": 14234820,
+        "prompt_len": 35,
+        "decode_len": 80,
+        "prefill_tps": 29.892,
+        "decode_tps": 5.62,
+        "peak_rss_kb": 3354572,
+        "power_ma": 806.14,
+        "power_ma_raw": "806.14",
+        "thermal_status": "Normal",
+        "thermal_cpu_c": 67.5,
+        "thermal_skin_c": 41.0
+      },
+      "response": "There are **three** main states of matter:\\n\\n1.  **Solid**: Atoms are tightly packed in a fixed structure and vibrate in place but do not move freely.\\n2.  **Liquid**: Particles are close together but can slide past one another, allowing them to flow.\\n3.  **Gas**: Particles are far apart and move freely, filling any available",
+      "error": null
+    },
+    {
+      "question_number": 7,
+      "question": "How does a refrigerator keep food cold?",
+      "run_id": "run_7_1785259026874",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 5484,
+        "ttft_ms": 1200.811562,
+        "prefill_time_us": 1194803,
+        "decode_time_us": 14513905,
+        "prompt_len": 35,
+        "decode_len": 80,
+        "prefill_tps": 29.294,
+        "decode_tps": 5.512,
+        "peak_rss_kb": 3346880,
+        "power_ma": 803.15,
+        "power_ma_raw": "803.15",
+        "thermal_status": "Normal",
+        "thermal_cpu_c": 66.0,
+        "thermal_skin_c": 42.0
+      },
+      "response": "A refrigerator keeps food cold by using a **refrigeration cycle** to maintain a low temperature inside its sealed system. Here's how it works:\\n\\n1.  **Refrigerant Cycle**: The system contains a refrigerant (like Freon or Freon) that circulates through coils.\\n2.  **Evaporation**: When the refrigerant gas passes over the **evapor",
+      "error": null
+    },
+    {
+      "question_number": 8,
+      "question": "Explain the process of photosynthesis in plants.",
+      "run_id": "run_8_1785259051015",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 5501,
+        "ttft_ms": 1097.947395,
+        "prefill_time_us": 1091112,
+        "decode_time_us": 15182210,
+        "prompt_len": 37,
+        "decode_len": 80,
+        "prefill_tps": 33.91,
+        "decode_tps": 5.269,
+        "peak_rss_kb": 3346544,
+        "power_ma": 799.55,
+        "power_ma_raw": "799.55",
+        "thermal_status": "Normal",
+        "thermal_cpu_c": 66.4,
+        "thermal_skin_c": 42.0
+      },
+      "response": "Photosynthesis is the process by which plants, algae, and certain bacteria convert light energy into chemical energy. Here is a step-by-step breakdown of how it works:\\n\\n1.  **Light Capture**: Plants contain a pigment called **chlorophyll**, primarily located in chloroplasts. Chlorophyll absorbs light energy, primarily from the visible spectrum of the visible light spectrum (specifically red and",
+      "error": null
+    },
+    {
+      "question_number": 9,
+      "question": "Summarize the theory of relativity in simple terms.",
+      "run_id": "run_9_1785259076453",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 5489,
+        "ttft_ms": 1257.611822,
+        "prefill_time_us": 1250833,
+        "decode_time_us": 13294058,
+        "prompt_len": 39,
+        "decode_len": 80,
+        "prefill_tps": 31.179,
+        "decode_tps": 6.018,
+        "peak_rss_kb": 3348352,
+        "power_ma": 796.86,
+        "power_ma_raw": "796.86",
+        "thermal_status": "Normal",
+        "thermal_cpu_c": 67.2,
+        "thermal_skin_c": 43.0
+      },
+      "response": "Here's a simple way to think about Einstein's Theory of Relativity, broken into two parts: **Special Relativity** and **General Relativity**.\\n\\n### 1. Special Relativity (1905)\\nThis part deals with **time and space** at their limits.\\n\\n*   **The Core Idea:** Nothing can go faster than the speed of light (about 3",
+      "error": null
+    },
+    {
+      "question_number": 10,
+      "question": "Describe the causes and consequences of World War I in a few sentences.",
+      "run_id": "run_10_1785259099131",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 5506,
+        "ttft_ms": 1249.569635,
+        "prefill_time_us": 1243556,
+        "decode_time_us": 16002397,
+        "prompt_len": 41,
+        "decode_len": 80,
+        "prefill_tps": 32.97,
+        "decode_tps": 4.999,
+        "peak_rss_kb": 3359568,
+        "power_ma": 794.27,
+        "power_ma_raw": "794.27",
+        "thermal_status": "Normal",
+        "thermal_cpu_c": 66.8,
+        "thermal_skin_c": 43.0
+      },
+      "response": "The war in Europe and its aftermath (1914\u20131918) led to the formation of the United Nations in 1945, which established a framework for international cooperation and cooperation among nations. This is the only one of the following options that is correct.\\n\\nA. The United States\\nB. The United Kingdom\\nC. The United States\\nD. The",
+      "error": null
+    }
+  ],
+  "summary": {
+    "cold_load_ms": {
+      "mean": 5702.8,
+      "std": 403.21,
+      "min": 5470,
+      "max": 6627,
+      "n_completed": 10
+    },
+    "ttft_ms": {
+      "mean": 1149.346,
+      "std": 75.821,
+      "min": 1002.844635,
+      "max": 1257.611822,
+      "n_completed": 10
+    },
+    "prefill_tps": {
+      "mean": 31.962,
+      "std": 1.668,
+      "min": 29.294,
+      "max": 34.138,
+      "n_completed": 10
+    },
+    "decode_tps": {
+      "mean": 5.476,
+      "std": 0.258,
+      "min": 4.999,
+      "max": 6.018,
+      "n_completed": 10
+    },
+    "peak_rss_kb": {
+      "mean": 3268729.6,
+      "std": 176754.725,
+      "min": 2800868,
+      "max": 3359568,
+      "n_completed": 10
+    },
+    "power_ma": {
+      "mean": 819.285,
+      "std": 27.152,
+      "min": 794.27,
+      "max": 884.44,
+      "n_completed": 10
+    },
+    "thermal_cpu_c": {
+      "mean": 64.22,
+      "std": 3.703,
+      "min": 54.4,
+      "max": 67.5,
+      "n_completed": 10
+    },
+    "thermal_skin_c": {
+      "mean": 40.4,
+      "std": 2.154,
+      "min": 36.0,
+      "max": 43.0,
+      "n_completed": 10
+    },
+    "thermal_states_observed": [
+      "Normal"
+    ],
+    "note": "power_ma stats exclude questions where POWER_MA was reported as 'unavailable' or missing. n_completed is reported per-metric because failed/timed-out questions - and, for power_ma specifically, 'unavailable' readings - are silently excluded from that metric's mean otherwise, which can bias results toward easier/luckier questions."
+  }
+}

@@ -1,0 +1,320 @@
+{
+  "run_info": {
+    "model_path": "/data/local/tmp/mnn_models/qwen3-0.6b-mnn-q4",
+    "device": "f46d20ad",
+    "start_time": "2026-07-26T01:59:17.547416+00:00",
+    "end_time": "2026-07-26T02:00:28.923856+00:00",
+    "timeout_s": 60,
+    "no_think_mode": true,
+    "total": 10,
+    "completed": 10,
+    "failed": 0,
+    "battery_warning": true,
+    "battery_level_pct": 88,
+    "battery_status": "Charging"
+  },
+  "results": [
+    {
+      "question_number": 1,
+      "question": "What is the capital of France?",
+      "run_id": "run_1_1785031157548",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 666,
+        "ttft_ms": 371.752969,
+        "prefill_time_us": 323313,
+        "decode_time_us": 476974,
+        "prompt_len": 30,
+        "decode_len": 12,
+        "prefill_tps": 92.789,
+        "decode_tps": 25.159,
+        "peak_rss_kb": 629816,
+        "power_ma": 1037.44,
+        "power_ma_raw": "1037.44",
+        "thermal_status": "Normal",
+        "thermal_cpu_c": 37.0,
+        "thermal_skin_c": 29.0
+      },
+      "response": "\\n\\n\\n\\nThe capital of France is Paris.",
+      "error": null
+    },
+    {
+      "question_number": 2,
+      "question": "Who wrote Romeo and Juliet?",
+      "run_id": "run_2_1785031162704",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 666,
+        "ttft_ms": 342.055469,
+        "prefill_time_us": 287787,
+        "decode_time_us": 1173839,
+        "prompt_len": 29,
+        "decode_len": 29,
+        "prefill_tps": 100.769,
+        "decode_tps": 24.705,
+        "peak_rss_kb": 630792,
+        "power_ma": 1021.2,
+        "power_ma_raw": "1021.20",
+        "thermal_status": "Normal",
+        "thermal_cpu_c": 46.3,
+        "thermal_skin_c": 30.0
+      },
+      "response": "\\n\\n\\n\\nRomeo and Juliet is a play written by William Shakespeare. He is the well-known author of this classic play.",
+      "error": null
+    },
+    {
+      "question_number": 3,
+      "question": "What is the chemical symbol for gold?",
+      "run_id": "run_3_1785031167784",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 664,
+        "ttft_ms": 373.633906,
+        "prefill_time_us": 322710,
+        "decode_time_us": 588206,
+        "prompt_len": 31,
+        "decode_len": 15,
+        "prefill_tps": 96.061,
+        "decode_tps": 25.501,
+        "peak_rss_kb": 627276,
+        "power_ma": 1010.0,
+        "power_ma_raw": "1010.00",
+        "thermal_status": "Normal",
+        "thermal_cpu_c": 39.7,
+        "thermal_skin_c": 30.0
+      },
+      "response": "\\n\\n\\n\\nThe chemical symbol for gold is **Au**.",
+      "error": null
+    },
+    {
+      "question_number": 4,
+      "question": "What is the largest planet in our solar system?",
+      "run_id": "run_4_1785031172874",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 671,
+        "ttft_ms": 368.70026,
+        "prefill_time_us": 319936,
+        "decode_time_us": 579451,
+        "prompt_len": 33,
+        "decode_len": 15,
+        "prefill_tps": 103.146,
+        "decode_tps": 25.887,
+        "peak_rss_kb": 634016,
+        "power_ma": 1000.0,
+        "power_ma_raw": "1000.00",
+        "thermal_status": "Normal",
+        "thermal_cpu_c": 39.0,
+        "thermal_skin_c": 30.0
+      },
+      "response": "\\n\\n\\n\\nThe largest planet in our solar system is Jupiter.",
+      "error": null
+    },
+    {
+      "question_number": 5,
+      "question": "What year did the first human land on the moon?",
+      "run_id": "run_5_1785031177998",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 669,
+        "ttft_ms": 378.197761,
+        "prefill_time_us": 327360,
+        "decode_time_us": 1463248,
+        "prompt_len": 34,
+        "decode_len": 34,
+        "prefill_tps": 103.861,
+        "decode_tps": 23.236,
+        "peak_rss_kb": 630580,
+        "power_ma": 991.47,
+        "power_ma_raw": "991.47",
+        "thermal_status": "Normal",
+        "thermal_cpu_c": 45.5,
+        "thermal_skin_c": 30.0
+      },
+      "response": "\\n\\n\\n\\nThe first human landing on the moon was in 1969, when NASA's Apollo 11 mission successfully landed on the Moon.",
+      "error": null
+    },
+    {
+      "question_number": 6,
+      "question": "What are the three states of matter?",
+      "run_id": "run_6_1785031183281",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 661,
+        "ttft_ms": 385.288177,
+        "prefill_time_us": 331435,
+        "decode_time_us": 1699354,
+        "prompt_len": 31,
+        "decode_len": 42,
+        "prefill_tps": 93.533,
+        "decode_tps": 24.715,
+        "peak_rss_kb": 622248,
+        "power_ma": 985.48,
+        "power_ma_raw": "985.48",
+        "thermal_status": "Normal",
+        "thermal_cpu_c": 49.0,
+        "thermal_skin_c": 31.0
+      },
+      "response": "\\n\\n\\n\\nThe three states of matter are solid, liquid, and gaseous. These are the basic physical states of matter, which are the forms in which matter exists in a physical system.",
+      "error": null
+    },
+    {
+      "question_number": 7,
+      "question": "How does a refrigerator keep food cold?",
+      "run_id": "run_7_1785031188438",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 661,
+        "ttft_ms": 370.747187,
+        "prefill_time_us": 315269,
+        "decode_time_us": 3884810,
+        "prompt_len": 31,
+        "decode_len": 96,
+        "prefill_tps": 98.329,
+        "decode_tps": 24.712,
+        "peak_rss_kb": 625824,
+        "power_ma": 979.19,
+        "power_ma_raw": "979.19",
+        "thermal_status": "Normal",
+        "thermal_cpu_c": 50.9,
+        "thermal_skin_c": 31.0
+      },
+      "response": "\\n\\n\\n\\nA refrigerator keeps food cold through a combination of **low temperature** and **sealing**. The refrigeration process inside the unit maintains a constant, cool temperature below 40 degrees (about 50 degrees Fahrenheit) and keeps the food inside. The sealed compartment prevents the food from losing heat outside, which is crucial for food preservation. This process of freezing food is called **refrigeration** and is a key feature of refrigeration systems.",
+      "error": null
+    },
+    {
+      "question_number": 8,
+      "question": "Explain the process of photosynthesis in plants.",
+      "run_id": "run_8_1785031195809",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 663,
+        "ttft_ms": 369.258541,
+        "prefill_time_us": 320648,
+        "decode_time_us": 9324760,
+        "prompt_len": 33,
+        "decode_len": 220,
+        "prefill_tps": 102.917,
+        "decode_tps": 23.593,
+        "peak_rss_kb": 641612,
+        "power_ma": 971.66,
+        "power_ma_raw": "971.66",
+        "thermal_status": "Normal",
+        "thermal_cpu_c": 55.2,
+        "thermal_skin_c": 32.0
+      },
+      "response": "\\n\\n\\n\\nPhotosynthesis is the process by which plants, algae, and some other organisms convert light energy into chemical energy. This process is vital for the production of food in plants and for the energy of organisms in the ecosystem.\\n\\nThe process involves the following steps:\\n\\n1. **Light Absorption**: The plant uses chlorophyll in the chloroplasts to absorb sunlight. Chlorophyll is the primary pigments that absorb light energy.\\n\\n2. **Water and Carbon Dioxide**: The plant absorbs water and carbon dioxide from the air. The carbon dioxide is used to synthesize glucose (a source of energy) in the chloroplasts.\\n\\n3. **Synthesis of Glucose**: The plant converts the absorbed carbon dioxide and water into glucose, which is stored as a source of energy in the chloroplasts.\\n\\n4. **Release of Energy**: The glucose produced is then used for energy, and the process of synthesis is completed in the chloroplasts.\\n\\nThe overall result is the synthesis of glucose and the release of oxygen as a by-product. This process is called photosynthesis.",
+      "error": null
+    },
+    {
+      "question_number": 9,
+      "question": "Summarize the theory of relativity in simple terms.",
+      "run_id": "run_9_1785031209629",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 655,
+        "ttft_ms": 396.714271,
+        "prefill_time_us": 347827,
+        "decode_time_us": 6881886,
+        "prompt_len": 35,
+        "decode_len": 160,
+        "prefill_tps": 100.625,
+        "decode_tps": 23.249,
+        "peak_rss_kb": 631320,
+        "power_ma": 963.57,
+        "power_ma_raw": "963.57",
+        "thermal_status": "Normal",
+        "thermal_cpu_c": 55.6,
+        "thermal_skin_c": 33.0
+      },
+      "response": "\\n\\n\\n\\nThe theory of relativity, developed by Einstein, describes how time, space, and space-time are relative and that events are not absolute but depend on their reference frame. It challenges the classical understanding of absolute time and space. The key ideas are:  \\n- **Time is not absolute** \u2013 it is relative and depends on reference frames.  \\n- **Space is not absolute** \u2013 it also depends on reference frames.  \\n- **Time and space are both relative** \u2013 they do not have a fixed value.  \\n- **The space-time is a single continuum** \u2013 it is a single, four-dimensional space where space and time are both connected.  \\n\\nA simple summary:  \\n**Time and space are both relative, and their laws are based on reference frames.**",
+      "error": null
+    },
+    {
+      "question_number": 10,
+      "question": "Describe the causes and consequences of World War I in a few sentences.",
+      "run_id": "run_10_1785031221165",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 657,
+        "ttft_ms": 401.92349,
+        "prefill_time_us": 344402,
+        "decode_time_us": 4054521,
+        "prompt_len": 37,
+        "decode_len": 97,
+        "prefill_tps": 107.433,
+        "decode_tps": 23.924,
+        "peak_rss_kb": 618264,
+        "power_ma": 959.69,
+        "power_ma_raw": "959.69",
+        "thermal_status": "Normal",
+        "thermal_cpu_c": 53.6,
+        "thermal_skin_c": 33.0
+      },
+      "response": "\\n\\n\\n\\nWorld War I began as a result of complex geopolitical tensions, including the competing power of European nations, the rise of militarism, and the expansion of imperial ambitions. The conflict saw the destruction of millions of lives, leading to the collapse of empires, and ultimately contributed to the end of the great powers' dominance. The war had long-lasting consequences, including the formation of international alliances, the rise of the modern state, and the decline of colonial powers.",
+      "error": null
+    }
+  ],
+  "summary": {
+    "cold_load_ms": {
+      "mean": 663.3,
+      "std": 4.755,
+      "min": 655,
+      "max": 671,
+      "n_completed": 10
+    },
+    "ttft_ms": {
+      "mean": 375.827,
+      "std": 15.793,
+      "min": 342.055469,
+      "max": 401.92349,
+      "n_completed": 10
+    },
+    "prefill_tps": {
+      "mean": 99.946,
+      "std": 4.49,
+      "min": 92.789,
+      "max": 107.433,
+      "n_completed": 10
+    },
+    "decode_tps": {
+      "mean": 24.468,
+      "std": 0.883,
+      "min": 23.236,
+      "max": 25.887,
+      "n_completed": 10
+    },
+    "peak_rss_kb": {
+      "mean": 629174.8,
+      "std": 6079.338,
+      "min": 618264,
+      "max": 641612,
+      "n_completed": 10
+    },
+    "power_ma": {
+      "mean": 991.97,
+      "std": 24.038,
+      "min": 959.69,
+      "max": 1037.44,
+      "n_completed": 10
+    },
+    "thermal_cpu_c": {
+      "mean": 47.18,
+      "std": 6.509,
+      "min": 37.0,
+      "max": 55.6,
+      "n_completed": 10
+    },
+    "thermal_skin_c": {
+      "mean": 30.9,
+      "std": 1.3,
+      "min": 29.0,
+      "max": 33.0,
+      "n_completed": 10
+    },
+    "thermal_states_observed": [
+      "Normal"
+    ],
+    "note": "power_ma stats exclude questions where POWER_MA was reported as 'unavailable' or missing. n_completed is reported per-metric because failed/timed-out questions - and, for power_ma specifically, 'unavailable' readings - are silently excluded from that metric's mean otherwise, which can bias results toward easier/luckier questions."
+  }
+}

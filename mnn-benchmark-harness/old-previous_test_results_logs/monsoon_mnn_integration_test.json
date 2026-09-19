@@ -1,0 +1,167 @@
+{
+  "run_info": {
+    "model_path": "/data/local/tmp/mnn_models/qwen3-0.6b-mnn-q4",
+    "device": "f46d20ad",
+    "start_time": "2026-07-29T02:46:32.279803+00:00",
+    "end_time": "2026-07-29T02:46:58.611495+00:00",
+    "timeout_s": 60,
+    "no_think_mode": false,
+    "max_tokens": 80,
+    "total": 3,
+    "completed": 3,
+    "failed": 0,
+    "battery_warning": true,
+    "battery_level_pct": 96,
+    "battery_status": "Not charging"
+  },
+  "results": [
+    {
+      "question_number": 1,
+      "question": "What is the capital of France?",
+      "run_id": "run_1_1785293192280",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 689,
+        "ttft_ms": 329.410729,
+        "prefill_time_us": 276463,
+        "decode_time_us": 2819883,
+        "prompt_len": 26,
+        "decode_len": 72,
+        "prefill_tps": 94.045,
+        "decode_tps": 25.533,
+        "peak_rss_kb": 566420,
+        "power_ma": 603.81,
+        "power_ma_raw": "603.81",
+        "thermal_status": "Normal",
+        "thermal_cpu_c": 47.5,
+        "thermal_skin_c": 30.0,
+        "power_ma_monsoon": 364.91565202469536
+      },
+      "response": "\\nOkay, the user is asking about the capital of France. As an assistant, I need to provide the correct information. The capital of France is Paris. I should make sure to mention that it's the capital of France, and that the information is accurate. I should keep it concise and straightforward.\\n\\n\\nThe capital of France is Paris.",
+      "error": null
+    },
+    {
+      "question_number": 2,
+      "question": "What is the capital of Germany?",
+      "run_id": "run_2_1785293201434",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 683,
+        "ttft_ms": 316.984323,
+        "prefill_time_us": 270042,
+        "decode_time_us": 3257684,
+        "prompt_len": 26,
+        "decode_len": 80,
+        "prefill_tps": 96.281,
+        "decode_tps": 24.557,
+        "peak_rss_kb": 575144,
+        "power_ma": 635.16,
+        "power_ma_raw": "635.16",
+        "thermal_status": "Normal",
+        "thermal_cpu_c": 48.2,
+        "thermal_skin_c": 31.0,
+        "power_ma_monsoon": 385.63687848500246
+      },
+      "response": "\\nOkay, the user asked what the capital of Germany is. Well, I know that the capital is Berlin, but maybe I need to explain why. Let me think. Germany is a country in Europe, and the capital is the most important place. But I should make sure to explain it clearly. Maybe mention that it's the center of the country. Also, maybe mention that it's",
+      "error": null
+    },
+    {
+      "question_number": 3,
+      "question": "What is the capital of Italy?",
+      "run_id": "run_3_1785293210231",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 688,
+        "ttft_ms": 322.383281,
+        "prefill_time_us": 267833,
+        "decode_time_us": 3375434,
+        "prompt_len": 26,
+        "decode_len": 80,
+        "prefill_tps": 97.075,
+        "decode_tps": 23.701,
+        "peak_rss_kb": 573944,
+        "power_ma": 545.11,
+        "power_ma_raw": "545.11",
+        "thermal_status": "Normal",
+        "thermal_cpu_c": 48.6,
+        "thermal_skin_c": 31.0,
+        "power_ma_monsoon": 471.82065532804063
+      },
+      "response": "\\nOkay, the user asked, \"What is the capital of Italy?\" I know that Italy is a country in Europe, and its capital is Rome. But I need to confirm the answer. Since I have the information, I can answer directly. However, maybe I should check if there's any uncertainty. For example, sometimes people confuse with other countries. But the question is straightforward. So",
+      "error": null
+    }
+  ],
+  "summary": {
+    "cold_load_ms": {
+      "mean": 686.667,
+      "std": 2.625,
+      "min": 683,
+      "max": 689,
+      "n_completed": 3
+    },
+    "ttft_ms": {
+      "mean": 322.926,
+      "std": 5.088,
+      "min": 316.984323,
+      "max": 329.410729,
+      "n_completed": 3
+    },
+    "prefill_tps": {
+      "mean": 95.8,
+      "std": 1.283,
+      "min": 94.045,
+      "max": 97.075,
+      "n_completed": 3
+    },
+    "decode_tps": {
+      "mean": 24.597,
+      "std": 0.748,
+      "min": 23.701,
+      "max": 25.533,
+      "n_completed": 3
+    },
+    "peak_rss_kb": {
+      "mean": 571836,
+      "std": 3860.897,
+      "min": 566420,
+      "max": 575144,
+      "n_completed": 3
+    },
+    "power_ma": {
+      "mean": 594.693,
+      "std": 37.324,
+      "min": 545.11,
+      "max": 635.16,
+      "n_completed": 3
+    },
+    "power_ma_monsoon": {
+      "mean": 407.458,
+      "std": 46.291,
+      "min": 364.91565202469536,
+      "max": 471.82065532804063,
+      "n_completed": 3
+    },
+    "thermal_cpu_c": {
+      "mean": 48.1,
+      "std": 0.455,
+      "min": 47.5,
+      "max": 48.6,
+      "n_completed": 3
+    },
+    "thermal_skin_c": {
+      "mean": 30.667,
+      "std": 0.471,
+      "min": 30.0,
+      "max": 31.0,
+      "n_completed": 3
+    },
+    "thermal_states_observed": [
+      "Normal"
+    ],
+    "power_comparison": {
+      "mean_abs_diff_ma": 187.236,
+      "n_completed": 3
+    },
+    "note": "power_ma stats exclude questions where POWER_MA was reported as 'unavailable' or missing; power_ma_monsoon stats exclude questions where the Monsoon reading failed. n_completed is reported per-metric because failed/timed-out questions - and, for these two power metrics specifically, unavailable/failed readings - are silently excluded from that metric's mean otherwise, which can bias results toward easier/luckier questions."
+  }
+}

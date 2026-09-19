@@ -1,0 +1,119 @@
+{
+  "run_info": {
+    "model_path": "/data/local/tmp/mnn_models/qwen2-1.5b-mnn-q4",
+    "device": "f46d20ad",
+    "start_time": "2026-09-06T22:49:23.261708+00:00",
+    "end_time": "2026-09-06T22:54:28.341101+00:00",
+    "timeout_s": 180,
+    "no_think_mode": false,
+    "max_tokens": 16,
+    "backend_type": "opencl",
+    "warmup_runs": 6,
+    "total": 1,
+    "completed": 1,
+    "failed": 0,
+    "battery_warning": true,
+    "battery_level_pct": 84,
+    "battery_status": "Charging"
+  },
+  "results": [
+    {
+      "question_number": 1,
+      "question": "The history of artificial intelligence began in antiquity, with myths and stories of artificial beings endowed with intelligence or consciousness by master craftsmen. The seeds of modern AI were planted by classical philosophers who attempted to describe human thinking as a symbolic system. The field of AI research was founded at a workshop held at Dartmouth College in 1956. Attendees became the leaders of AI research for decades. Many of them predicted that a machine as intelligent as a human being would exist in no more than a generation, and they were given millions of dollars to make this vision come true. Eventually, it became obvious that they had grossly underestimated the difficulty of the project. In 1973, in response to the criticism from James Lighthill and ongoing pressure from congress, the U.S. and British Governments stopped funding undirected research into artificial intelligence, and the difficult years that followed would later be known as an AI winter. Seven years later, a revival of interest in neural networks began. Machine learning, integral to AI since its beginnings, is the study of computer algorithms that improve automatically through experience. Deep learning became feasible, which led to an increase in interest and funding. Modern AI research covers a huge number of subfields, from general purpose areas such as learning",
+      "run_id": "run_1_1788735217772",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 1337,
+        "ttft_ms": 44207.849931,
+        "prefill_time_us": 44198945,
+        "decode_time_us": 2229588,
+        "prompt_len": 275,
+        "decode_len": 16,
+        "prefill_tps": 6.222,
+        "decode_tps": 7.176,
+        "peak_rss_kb": 1338920,
+        "power_ma": 169.12,
+        "power_ma_raw": "169.12",
+        "thermal_status": "Normal",
+        "thermal_cpu_c": 46.7,
+        "thermal_skin_c": 36.0,
+        "power_ma_monsoon": null
+      },
+      "response": "Human intelligence is a complex, symbolic system that allows us to process information, make",
+      "error": null
+    }
+  ],
+  "summary": {
+    "cold_load_ms": {
+      "mean": 1337,
+      "std": 0.0,
+      "min": 1337,
+      "max": 1337,
+      "n_completed": 1
+    },
+    "ttft_ms": {
+      "mean": 44207.85,
+      "std": 0.0,
+      "min": 44207.85,
+      "max": 44207.85,
+      "n_completed": 1
+    },
+    "prefill_tps": {
+      "mean": 6.222,
+      "std": 0.0,
+      "min": 6.222,
+      "max": 6.222,
+      "n_completed": 1
+    },
+    "decode_tps": {
+      "mean": 7.176,
+      "std": 0.0,
+      "min": 7.176,
+      "max": 7.176,
+      "n_completed": 1
+    },
+    "peak_rss_kb": {
+      "mean": 1338920,
+      "std": 0.0,
+      "min": 1338920,
+      "max": 1338920,
+      "n_completed": 1
+    },
+    "power_ma": {
+      "mean": 169.12,
+      "std": 0.0,
+      "min": 169.12,
+      "max": 169.12,
+      "n_completed": 1
+    },
+    "power_ma_monsoon": {
+      "mean": null,
+      "std": null,
+      "min": null,
+      "max": null,
+      "n_completed": 0
+    },
+    "thermal_cpu_c": {
+      "mean": 46.7,
+      "std": 0.0,
+      "min": 46.7,
+      "max": 46.7,
+      "n_completed": 1
+    },
+    "thermal_skin_c": {
+      "mean": 36.0,
+      "std": 0.0,
+      "min": 36.0,
+      "max": 36.0,
+      "n_completed": 1
+    },
+    "thermal_states_observed": [
+      "Normal"
+    ],
+    "power_comparison": {
+      "mean_abs_diff_ma": null,
+      "n_completed": 0
+    },
+    "note": "power_ma stats exclude questions where POWER_MA was reported as 'unavailable' or missing; power_ma_monsoon stats exclude questions where the Monsoon reading failed. n_completed is reported per-metric because failed/timed-out questions - and, for these two power metrics specifically, unavailable/failed readings - are silently excluded from that metric's mean otherwise, which can bias results toward easier/luckier questions."
+  }
+}

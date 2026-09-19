@@ -1,0 +1,60 @@
+[
+  {
+    "model_id": "Qwen/Qwen3-1.7B",
+    "quant": "Q4_K_M",
+    "engine": "mnn",
+    "question_number": 1,
+    "question": "Dora's father's age is eight more than twice Dora's age. If Dora's mother is four years younger than Dora's father, and Dora is 15 years old, calculate the total combined age of Dora, her father, and her mother.",
+    "reference_answer": "87",
+    "response": "resse \u200b\u200b \u200b\u200b\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n",
+    "extracted_answer": "resse \u200b\u200b \u200b\u200b\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026",
+    "is_correct": false,
+    "metrics": {
+      "cold_load_ms": 2366,
+      "ttft_ms": 3221.185833,
+      "prefill_time_us": 3102441,
+      "decode_time_us": 2609661,
+      "prompt_len": 84,
+      "decode_len": 24,
+      "prefill_tps": 27.075,
+      "decode_tps": 9.197,
+      "peak_rss_kb": 1258400,
+      "power_ma": 248.9,
+      "power_ma_raw": "248.90",
+      "thermal_status": "Normal",
+      "thermal_cpu_c": 54.4,
+      "thermal_skin_c": 35.0,
+      "power_ma_monsoon": null
+    },
+    "run_id": "run_1_1786154850924"
+  },
+  {
+    "model_id": "Qwen/Qwen3-1.7B",
+    "quant": "Q4_K_M",
+    "engine": "mnn",
+    "question_number": 2,
+    "question": "Mary has 30 sheep. She gets 1 kg of milk from half of them and 2 kg of milk from the other half every day. How much milk does she collect every day?",
+    "reference_answer": "45",
+    "response": "resseresseresse\u2026\u201d\\n\\n \u200b\u200b \u200b\u200b)!\\n \u200b\u200b \u200b\u200b \u200b\u200b \u200b\u200b \u200b\u200b \u200b\u200b \u200b\u200b \u200b\u200b \u200b\u200b \u200b\u200b \u200b\u200b \u200b\u200b \u200b\u200b \u200b\u200b \u200b\u200b\u2026\\n\\n\\n \u200b\u200b \u200b\u200b\u2026\\n\\n\\n \u200b\u200b \u200b\u200b\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n\u2026\\n\\n\\n",
+    "extracted_answer": "\u200b\u200b \u200b\u200b \u200b\u200b \u200b\u200b \u200b\u200b \u200b\u200b \u200b\u200b \u200b\u200b \u200b\u200b \u200b\u200b \u200b\u200b \u200b\u200b \u200b\u200b \u200b\u200b \u200b\u200b\u2026 \u200b\u200b \u200b\u200b\u2026 \u200b\u200b \u200b\u200b\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026",
+    "is_correct": false,
+    "metrics": {
+      "cold_load_ms": 2356,
+      "ttft_ms": 1291.02875,
+      "prefill_time_us": 1285787,
+      "decode_time_us": 5088209,
+      "prompt_len": 67,
+      "decode_len": 48,
+      "prefill_tps": 52.108,
+      "decode_tps": 9.434,
+      "peak_rss_kb": 1254784,
+      "power_ma": 244.46,
+      "power_ma_raw": "244.46",
+      "thermal_status": "Normal",
+      "thermal_cpu_c": 56.7,
+      "thermal_skin_c": 35.0,
+      "power_ma_monsoon": null
+    },
+    "run_id": "run_2_1786154861726"
+  }
+]

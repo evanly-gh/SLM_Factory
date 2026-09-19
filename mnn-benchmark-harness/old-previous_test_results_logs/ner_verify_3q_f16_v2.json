@@ -1,0 +1,118 @@
+{
+  "run_info": {
+    "model": "partner-ner-merged-f16.gguf",
+    "model_device_path": "/data/user/0/io.shubham0204.smollmandroid/files/headless_benchmark_cache/partner-ner-merged-f16.gguf",
+    "device": "phone",
+    "quant": "Q4_K_M",
+    "start_time": "2026-08-28T23:45:40.269967+00:00",
+    "end_time": "2026-08-28T23:53:38.305175+00:00",
+    "total": 3,
+    "completed": 2,
+    "failed": 1,
+    "context_resets": 0,
+    "battery_warning": true,
+    "battery_level_pct": 97,
+    "battery_status": "Charging",
+    "rebooted_before_run": false,
+    "cold_load_note": "cold_load_ms reflects a genuinely cold read only if --reboot-before was used for this run. Without a reboot, the OS file cache may make cold_load_ms appear faster than a true cold read from storage, especially for larger model files."
+  },
+  "results": [
+    {
+      "question_number": 1,
+      "question": "Identify the named entities in this sentence: late - stage DOX cardiotoxicity was examined in a juvenile model .",
+      "run_id": "run_1_1787960740271",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 6461,
+        "ttft_ms": 23260,
+        "tps": 1.3156916,
+        "memory_kb": 7952424,
+        "power_ma": 359.8,
+        "thermal": "Normal",
+        "thermal_temp_cpu_c": 61.7,
+        "thermal_temp_skin_c": 44.2,
+        "power_ma_monsoon": null
+      },
+      "response": "Based on the sentence provided, here is the identification of the named entities:",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 2,
+      "question": "Identify the named entities in this sentence: Collective data indicates that neuroinflammatory process and oxidative stress occurs earlier to apoptosis and does not affect memory function .",
+      "run_id": "run_2_1787960854985",
+      "status": "failed",
+      "metrics": null,
+      "response": null,
+      "error": {
+        "reason": "timeout",
+        "message": "No RUN_DONE/RUN_ERROR within 180s"
+      },
+      "context_reset": false
+    },
+    {
+      "question_number": 3,
+      "question": "Identify the named entities in this sentence: We report a 45 - year - old lady with chronic kidney disease stage 4 due to chronic tubulointerstial disease .",
+      "run_id": "run_3_1787961037814",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 1519,
+        "ttft_ms": 26242,
+        "tps": 1.4639202,
+        "memory_kb": 8538408,
+        "power_ma": 370.5,
+        "thermal": "Normal",
+        "thermal_temp_cpu_c": 66.4,
+        "thermal_temp_skin_c": 48.5,
+        "power_ma_monsoon": null
+      },
+      "response": "Based on the sentence provided, here are the identified named entities:",
+      "error": null,
+      "context_reset": false
+    }
+  ],
+  "summary": {
+    "ttft_ms": {
+      "mean": 24751,
+      "std": 1491.0,
+      "min": 23260,
+      "max": 26242
+    },
+    "tps": {
+      "mean": 1.39,
+      "std": 0.074,
+      "min": 1.3156916,
+      "max": 1.4639202
+    },
+    "memory_kb": {
+      "mean": 8245416,
+      "std": 292992.0,
+      "min": 7952424,
+      "max": 8538408
+    },
+    "power_ma": {
+      "mean": 365.15,
+      "std": 5.35,
+      "min": 359.8,
+      "max": 370.5
+    },
+    "thermal_temp_cpu_c": {
+      "mean": 64.05,
+      "std": 2.35,
+      "min": 61.7,
+      "max": 66.4
+    },
+    "thermal_temp_skin_c": {
+      "mean": 46.35,
+      "std": 2.15,
+      "min": 44.2,
+      "max": 48.5
+    },
+    "first_question_cold_load_ms": 6461,
+    "thermal_states_observed": [
+      "Normal"
+    ],
+    "note": "TPS/TTFT drift across the run reflects real device thermal state as it heats up under sustained inference, not measurement error.",
+    "rss_note": "peak_RSS_KB is only directly comparable across different models if each was benchmarked in a freshly restarted app process - this script now guarantees that automatically as of this version."
+  }
+}

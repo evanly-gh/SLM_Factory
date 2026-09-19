@@ -1,0 +1,97 @@
+{
+  "mnn_results_file": "mnn_results.json",
+  "gguf_results_file": "gguf_results.json",
+  "total_pairs_compared": 2,
+  "comparisons": [
+    {
+      "model_id": "Qwen/Qwen3-0.6B",
+      "quant": "F16",
+      "mnn_n": 5,
+      "gguf_n": 5,
+      "categories": {
+        "power": {
+          "label": "Power",
+          "unit": "mA",
+          "higher_is_better": false,
+          "mnn": 0.012,
+          "gguf": 0.48,
+          "winner": "mnn"
+        },
+        "memory": {
+          "label": "Memory",
+          "unit": "KB",
+          "higher_is_better": false,
+          "mnn": 2400670.4,
+          "gguf": 1894268.8,
+          "winner": "gguf"
+        },
+        "latency": {
+          "label": "Latency",
+          "unit": "ms",
+          "higher_is_better": false,
+          "mnn": 501.92945840000004,
+          "gguf": 2360.2,
+          "winner": "mnn"
+        },
+        "accuracy": {
+          "label": "Accuracy",
+          "unit": "%",
+          "higher_is_better": true,
+          "mnn": 40.0,
+          "gguf": 40.0,
+          "winner": "tie"
+        }
+      },
+      "wins": {
+        "mnn": 2,
+        "gguf": 1
+      },
+      "recommended_engine": "mnn"
+    },
+    {
+      "model_id": "Qwen/Qwen3-0.6B",
+      "quant": "Q4_K_M",
+      "mnn_n": 5,
+      "gguf_n": 5,
+      "categories": {
+        "power": {
+          "label": "Power",
+          "unit": "mA",
+          "higher_is_better": false,
+          "mnn": 0.026000000000000002,
+          "gguf": 0.02,
+          "winner": "gguf"
+        },
+        "memory": {
+          "label": "Memory",
+          "unit": "KB",
+          "higher_is_better": false,
+          "mnn": 952867.2,
+          "gguf": 893252.8,
+          "winner": "gguf"
+        },
+        "latency": {
+          "label": "Latency",
+          "unit": "ms",
+          "higher_is_better": false,
+          "mnn": 121.50673940000001,
+          "gguf": 663.2,
+          "winner": "mnn"
+        },
+        "accuracy": {
+          "label": "Accuracy",
+          "unit": "%",
+          "higher_is_better": true,
+          "mnn": 60.0,
+          "gguf": 20.0,
+          "winner": "mnn"
+        }
+      },
+      "wins": {
+        "mnn": 2,
+        "gguf": 2
+      },
+      "recommended_engine": "mnn"
+    }
+  ]
+}

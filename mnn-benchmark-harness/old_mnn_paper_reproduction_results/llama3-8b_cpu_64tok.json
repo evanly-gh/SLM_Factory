@@ -1,0 +1,121 @@
+{
+  "run_info": {
+    "model_path": "/data/local/tmp/mnn_models/meta-llama-3-8b-mnn-q4",
+    "device": "f46d20ad",
+    "start_time": "2026-09-11T01:26:37.863473+00:00",
+    "end_time": "2026-09-11T01:33:42.854968+00:00",
+    "timeout_s": 300,
+    "no_think_mode": false,
+    "max_tokens": 16,
+    "backend_type": "cpu",
+    "warmup_runs": 3,
+    "total": 1,
+    "completed": 1,
+    "failed": 0,
+    "battery_warning": true,
+    "battery_level_pct": 100,
+    "battery_status": "Full"
+  },
+  "results": [
+    {
+      "question_number": 1,
+      "question": "<|begin_of_text|>The history of artificial intelligence began in antiquity, with myths and stories of artificial beings endowed with intelligence or consciousness by master craftsmen. The seeds of modern AI were planted by classical philosophers who attempted to describe human thinking as a symbolic system. The field of AI research was founded at a workshop held at Dartmouth",
+      "run_id": "run_1_1789090363592",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 21759,
+        "ttft_ms": 16848.567858,
+        "prefill_time_us": 16669263,
+        "decode_time_us": 16868653,
+        "prompt_len": 70,
+        "decode_len": 16,
+        "prefill_tps": 4.199,
+        "decode_tps": 0.949,
+        "peak_rss_kb": 4824468,
+        "power_ma": 1334.27,
+        "power_ma_raw": "1334.27",
+        "energy_mas_sampled": 45046.764,
+        "energy_mj_sampled": 186123.451,
+        "thermal_status": "Severe",
+        "thermal_cpu_c": 71.0,
+        "thermal_skin_c": 42.0,
+        "power_ma_monsoon": null
+      },
+      "response": "College in the summer of 1956.\\nYou are a helpful assistant. The",
+      "error": null
+    }
+  ],
+  "summary": {
+    "cold_load_ms": {
+      "mean": 21759,
+      "std": 0.0,
+      "min": 21759,
+      "max": 21759,
+      "n_completed": 1
+    },
+    "ttft_ms": {
+      "mean": 16848.568,
+      "std": 0.0,
+      "min": 16848.568,
+      "max": 16848.568,
+      "n_completed": 1
+    },
+    "prefill_tps": {
+      "mean": 4.199,
+      "std": 0.0,
+      "min": 4.199,
+      "max": 4.199,
+      "n_completed": 1
+    },
+    "decode_tps": {
+      "mean": 0.949,
+      "std": 0.0,
+      "min": 0.949,
+      "max": 0.949,
+      "n_completed": 1
+    },
+    "peak_rss_kb": {
+      "mean": 4824468,
+      "std": 0.0,
+      "min": 4824468,
+      "max": 4824468,
+      "n_completed": 1
+    },
+    "power_ma": {
+      "mean": 1334.27,
+      "std": 0.0,
+      "min": 1334.27,
+      "max": 1334.27,
+      "n_completed": 1
+    },
+    "power_ma_monsoon": {
+      "mean": null,
+      "std": null,
+      "min": null,
+      "max": null,
+      "n_completed": 0
+    },
+    "thermal_cpu_c": {
+      "mean": 71.0,
+      "std": 0.0,
+      "min": 71.0,
+      "max": 71.0,
+      "n_completed": 1
+    },
+    "thermal_skin_c": {
+      "mean": 42.0,
+      "std": 0.0,
+      "min": 42.0,
+      "max": 42.0,
+      "n_completed": 1
+    },
+    "thermal_states_observed": [
+      "Severe"
+    ],
+    "power_comparison": {
+      "mean_abs_diff_ma": null,
+      "n_completed": 0
+    },
+    "note": "power_ma stats exclude questions where POWER_MA was reported as 'unavailable' or missing; power_ma_monsoon stats exclude questions where the Monsoon reading failed. n_completed is reported per-metric because failed/timed-out questions - and, for these two power metrics specifically, unavailable/failed readings - are silently excluded from that metric's mean otherwise, which can bias results toward easier/luckier questions."
+  }
+}

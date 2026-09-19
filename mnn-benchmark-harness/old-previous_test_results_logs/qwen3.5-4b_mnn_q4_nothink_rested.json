@@ -1,0 +1,321 @@
+{
+  "run_info": {
+    "model_path": "/data/local/tmp/mnn_models/qwen3.5-4b-mnn-q4",
+    "device": "f46d20ad",
+    "start_time": "2026-07-28T16:56:57.983699+00:00",
+    "end_time": "2026-07-28T17:02:49.070700+00:00",
+    "timeout_s": 60,
+    "no_think_mode": true,
+    "max_tokens": 80,
+    "total": 10,
+    "completed": 10,
+    "failed": 0,
+    "battery_warning": true,
+    "battery_level_pct": 87,
+    "battery_status": "Charging"
+  },
+  "results": [
+    {
+      "question_number": 1,
+      "question": "What is the capital of France?",
+      "run_id": "run_1_1785257817984",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 6475,
+        "ttft_ms": 2177.73302,
+        "prefill_time_us": 2170638,
+        "decode_time_us": 22546564,
+        "prompt_len": 32,
+        "decode_len": 80,
+        "prefill_tps": 14.742,
+        "decode_tps": 3.548,
+        "peak_rss_kb": 3620808,
+        "power_ma": 1002.39,
+        "power_ma_raw": "1002.39",
+        "thermal_status": "Normal",
+        "thermal_cpu_c": 57.9,
+        "thermal_skin_c": 34.0
+      },
+      "response": "Thinking Process:\\n\\n1.  **Analyze the Request:**\\n    *   Input: \"What is the capital of France?\" (Implicitly, the user is asking a question, but the prompt provided is \"What is the capital of France?\" or implied by the context of a typical query. Wait, looking at the prompt provided in the prompt block: \"What is the capital of France",
+      "error": null
+    },
+    {
+      "question_number": 2,
+      "question": "Who wrote Romeo and Juliet?",
+      "run_id": "run_2_1785257852753",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 6507,
+        "ttft_ms": 2486.934322,
+        "prefill_time_us": 2481961,
+        "decode_time_us": 22337768,
+        "prompt_len": 31,
+        "decode_len": 80,
+        "prefill_tps": 12.49,
+        "decode_tps": 3.581,
+        "peak_rss_kb": 3471516,
+        "power_ma": 996.92,
+        "power_ma_raw": "996.92",
+        "thermal_status": "Normal",
+        "thermal_cpu_c": 60.6,
+        "thermal_skin_c": 37.0
+      },
+      "response": "Thinking Process:\\n\\n1.  **Analyze the Request:**\\n    *   Input: \"What is the capital of France?\"\\n    *   Constraint: I need to answer the question directly and concisely.\\n    *   The user is asking a simple question.\\n    *   Wait, I need to check the prompt again. The user prompt is: \"What is the",
+      "error": null
+    },
+    {
+      "question_number": 3,
+      "question": "What is the chemical symbol for gold?",
+      "run_id": "run_3_1785257887795",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 6524,
+        "ttft_ms": 2506.539426,
+        "prefill_time_us": 2500483,
+        "decode_time_us": 22901127,
+        "prompt_len": 33,
+        "decode_len": 80,
+        "prefill_tps": 13.197,
+        "decode_tps": 3.493,
+        "peak_rss_kb": 3475448,
+        "power_ma": 997.01,
+        "power_ma_raw": "997.01",
+        "thermal_status": "Normal",
+        "thermal_cpu_c": 62.5,
+        "thermal_skin_c": 38.0
+      },
+      "response": "Thinking Process:\\n\\n1.  **Analyze the Request:**\\n    *   Input: A question asking for the chemical symbol for the chemical symbol for a specific element.\\n    *   Wait, the user's prompt is \"What is the chemical symbol for the element with the atomic number 79?\"\\n    *   Wait, the user input is just \"What is the chemical symbol",
+      "error": null
+    },
+    {
+      "question_number": 4,
+      "question": "What is the largest planet in our solar system?",
+      "run_id": "run_4_1785257923167",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 6431,
+        "ttft_ms": 2737.183019,
+        "prefill_time_us": 2731102,
+        "decode_time_us": 23289926,
+        "prompt_len": 35,
+        "decode_len": 80,
+        "prefill_tps": 12.815,
+        "decode_tps": 3.435,
+        "peak_rss_kb": 3617880,
+        "power_ma": 999.34,
+        "power_ma_raw": "999.34",
+        "thermal_status": "Normal",
+        "thermal_cpu_c": 62.1,
+        "thermal_skin_c": 39.0
+      },
+      "response": "Thinking Process1. Analyze the user's request.\\n- Input: \"What is the largest planet in our solar system?\"\\n2. Identify the key entity: \"Jupiter\"\\n3. Provide the name of the planet.\\n\\n\\nJupiter is the largest planet in our solar system. It is a gas giant with a mass of over 300 times the mass of",
+      "error": null
+    },
+    {
+      "question_number": 5,
+      "question": "What year did the first human land on the moon?",
+      "run_id": "run_5_1785257958417",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 6442,
+        "ttft_ms": 2421.600572,
+        "prefill_time_us": 2415606,
+        "decode_time_us": 23134703,
+        "prompt_len": 36,
+        "decode_len": 80,
+        "prefill_tps": 14.903,
+        "decode_tps": 3.458,
+        "peak_rss_kb": 3612660,
+        "power_ma": 1000.02,
+        "power_ma_raw": "1000.02",
+        "thermal_status": "Normal",
+        "thermal_cpu_c": 64.1,
+        "thermal_skin_c": 40.0
+      },
+      "response": "Thinking Process:\\n\\n1.  **Analyze the Request:**\\n    *   Input: A simple prompt \"You are a helpful assistant. Your name is [Name].\" (Wait, the user prompt is actually just \"You are a helpful assistant.\" - wait, no, I need to look at the prompt again).\\n    Wait, I need to look at the actual prompt provided by the",
+      "error": null
+    },
+    {
+      "question_number": 6,
+      "question": "What are the three states of matter?",
+      "run_id": "run_6_1785257993374",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 6445,
+        "ttft_ms": 2385.481197,
+        "prefill_time_us": 2379680,
+        "decode_time_us": 23126041,
+        "prompt_len": 33,
+        "decode_len": 80,
+        "prefill_tps": 13.867,
+        "decode_tps": 3.459,
+        "peak_rss_kb": 3610988,
+        "power_ma": 1000.93,
+        "power_ma_raw": "1000.93",
+        "thermal_status": "Normal",
+        "thermal_cpu_c": 64.5,
+        "thermal_skin_c": 41.0
+      },
+      "response": "Thinking Process:\\n\\n1.  **Analyze the Request:**\\n    *   Input: \"What is the state of matter in the context of the given prompt?\"\\n    *   Wait, the user prompt is actually just a prompt asking me to respond to a specific prompt.\\n    *   Wait, I need to re-read the prompt provided by the user.\\n    *   The",
+      "error": null
+    },
+    {
+      "question_number": 7,
+      "question": "How does a refrigerator keep food cold?",
+      "run_id": "run_7_1785258029392",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 6443,
+        "ttft_ms": 2371.340051,
+        "prefill_time_us": 2365095,
+        "decode_time_us": 22475261,
+        "prompt_len": 33,
+        "decode_len": 80,
+        "prefill_tps": 13.953,
+        "decode_tps": 3.559,
+        "peak_rss_kb": 3609768,
+        "power_ma": 1001.32,
+        "power_ma_raw": "1001.32",
+        "thermal_status": "Normal",
+        "thermal_cpu_c": 65.2,
+        "thermal_skin_c": 41.0
+      },
+      "response": "Thinking Process:\\n\\n1.  **Analyze the Request:**\\n    *   Input: A question \"How do you think I should answer this question: 'How do you think I should respond to this question?'\"\\n    Wait, the user prompt is: \"What is the best way to respond to the user's request?\" No, that's not the prompt.\\n    Let's",
+      "error": null
+    },
+    {
+      "question_number": 8,
+      "question": "Explain the process of photosynthesis in plants.",
+      "run_id": "run_8_1785258064284",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 6470,
+        "ttft_ms": 2736.309217,
+        "prefill_time_us": 2730428,
+        "decode_time_us": 22237934,
+        "prompt_len": 35,
+        "decode_len": 80,
+        "prefill_tps": 12.819,
+        "decode_tps": 3.597,
+        "peak_rss_kb": 3603292,
+        "power_ma": 1000.0,
+        "power_ma_raw": "1000.00",
+        "thermal_status": "Normal",
+        "thermal_cpu_c": 66.0,
+        "thermal_skin_c": 42.0
+      },
+      "response": "Thinking Process:\\n\\n1.  **Analyze the Request:**\\n    *   Input: \"Explain the process of photosynthesis\" (implied from the prompt context, though the user prompt is actually just \"Explain the concept of photosynthesis\" or similar, wait, the user prompt is just \"think silently if needed\". Wait, the user prompt is actually empty or just a system",
+      "error": null
+    },
+    {
+      "question_number": 9,
+      "question": "Summarize the theory of relativity in simple terms.",
+      "run_id": "run_9_1785258098716",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 6467,
+        "ttft_ms": 2549.641405,
+        "prefill_time_us": 2544045,
+        "decode_time_us": 22828067,
+        "prompt_len": 37,
+        "decode_len": 80,
+        "prefill_tps": 14.544,
+        "decode_tps": 3.504,
+        "peak_rss_kb": 3599504,
+        "power_ma": 999.1,
+        "power_ma_raw": "999.10",
+        "thermal_status": "Normal",
+        "thermal_cpu_c": 66.8,
+        "thermal_skin_c": 43.0
+      },
+      "response": "Thinking Process:\\n\\n1.  **Analyze the Request:**\\n    *   Input: A request to explain a specific topic (implied: \"Explain [Topic]\").\\n    *   Wait, the user prompt is just \"You are a helpful assistant. Answer the following question. What is the capital of France?\" Wait, no, the prompt is actually asking me to *generate",
+      "error": null
+    },
+    {
+      "question_number": 10,
+      "question": "Describe the causes and consequences of World War I in a few sentences.",
+      "run_id": "run_10_1785258133156",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 6457,
+        "ttft_ms": 2888.985415,
+        "prefill_time_us": 2882171,
+        "decode_time_us": 23241453,
+        "prompt_len": 39,
+        "decode_len": 80,
+        "prefill_tps": 13.531,
+        "decode_tps": 3.442,
+        "peak_rss_kb": 3596768,
+        "power_ma": 996.53,
+        "power_ma_raw": "996.53",
+        "thermal_status": "Normal",
+        "thermal_cpu_c": 66.8,
+        "thermal_skin_c": 44.0
+      },
+      "response": "Thinking Process:\\n\\n1.  **Analyze the Request:**\\n    *   **Task:** Answer a user's query.\\n    *   Constraint: The user is asking me to act as an AI assistant.\\n    *   **Constraint:** The user prompt is a request for information about a specific topic.\\n    *   **Constraint:** I am an AI assistant. I need to",
+      "error": null
+    }
+  ],
+  "summary": {
+    "cold_load_ms": {
+      "mean": 6466.1,
+      "std": 28.275,
+      "min": 6431,
+      "max": 6524,
+      "n_completed": 10
+    },
+    "ttft_ms": {
+      "mean": 2526.175,
+      "std": 199.726,
+      "min": 2177.73302,
+      "max": 2888.985415,
+      "n_completed": 10
+    },
+    "prefill_tps": {
+      "mean": 13.686,
+      "std": 0.815,
+      "min": 12.49,
+      "max": 14.903,
+      "n_completed": 10
+    },
+    "decode_tps": {
+      "mean": 3.508,
+      "std": 0.057,
+      "min": 3.435,
+      "max": 3.597,
+      "n_completed": 10
+    },
+    "peak_rss_kb": {
+      "mean": 3581863.2,
+      "std": 54664.912,
+      "min": 3471516,
+      "max": 3620808,
+      "n_completed": 10
+    },
+    "power_ma": {
+      "mean": 999.356,
+      "std": 1.894,
+      "min": 996.53,
+      "max": 1002.39,
+      "n_completed": 10
+    },
+    "thermal_cpu_c": {
+      "mean": 63.65,
+      "std": 2.735,
+      "min": 57.9,
+      "max": 66.8,
+      "n_completed": 10
+    },
+    "thermal_skin_c": {
+      "mean": 39.9,
+      "std": 2.844,
+      "min": 34.0,
+      "max": 44.0,
+      "n_completed": 10
+    },
+    "thermal_states_observed": [
+      "Normal"
+    ],
+    "note": "power_ma stats exclude questions where POWER_MA was reported as 'unavailable' or missing. n_completed is reported per-metric because failed/timed-out questions - and, for power_ma specifically, 'unavailable' readings - are silently excluded from that metric's mean otherwise, which can bias results toward easier/luckier questions."
+  }
+}

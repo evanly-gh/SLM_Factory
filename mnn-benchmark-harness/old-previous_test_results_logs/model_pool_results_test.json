@@ -1,0 +1,88 @@
+{
+  "run_info": {
+    "timestamp": "2026-07-30T18:53:07.973540+00:00",
+    "total_variants": 2,
+    "completed": 2,
+    "failed": 0,
+    "skipped": 0
+  },
+  "results": [
+    {
+      "model_id": "Qwen/Qwen3-0.6B",
+      "size_mb": 400,
+      "tier": 0,
+      "tok_s_snapdragon_660": 13.0,
+      "tok_s_snapdragon_778g": 21.0,
+      "tok_s_snapdragon_8gen3": 58.0,
+      "peak_memory_mb": 500,
+      "capability_measurements": [],
+      "notes": "Qwen3-0.6B (official); text-only; dual-mode; use non-thinking for classification/NER",
+      "quant": "Q4_K_M",
+      "multimodal": false,
+      "selector": "Qwen/Qwen3-0.6B@Q4_K_M",
+      "label": "Qwen/Qwen3-0.6B [Q4_K_M]",
+      "estimated_rss_mb": 640.0,
+      "fits": true,
+      "status": "success",
+      "error": null,
+      "metrics": {
+        "peak_rss_kb": 547646.8,
+        "ttft_ms": 342.503,
+        "prefill_tps": 97.245,
+        "decode_tps": 24.014,
+        "power_ma_monsoon": 507.839,
+        "power_ma": 603.207,
+        "thermal_cpu_c": 51.25,
+        "thermal_skin_c": 33.3,
+        "N_completed": 10
+      }
+    },
+    {
+      "model_id": "Qwen/Qwen3.5-0.8B",
+      "size_mb": 500,
+      "tier": 0,
+      "tok_s_snapdragon_660": 9.0,
+      "tok_s_snapdragon_778g": 15.0,
+      "tok_s_snapdragon_8gen3": 42.0,
+      "peak_memory_mb": 670,
+      "capability_measurements": [
+        {
+          "metric": "MMLU-Pro",
+          "value": 0.297,
+          "artifact": "Qwen/Qwen3.5-0.8B",
+          "mode": "non-thinking",
+          "protocol": "qwen3.5-small-nonthinking-card-table",
+          "source": "https://huggingface.co/Qwen/Qwen3.5-0.8B"
+        },
+        {
+          "metric": "MMLU-Redux",
+          "value": 0.485,
+          "artifact": "Qwen/Qwen3.5-0.8B",
+          "mode": "non-thinking",
+          "protocol": "qwen3.5-small-nonthinking-card-table",
+          "source": "https://huggingface.co/Qwen/Qwen3.5-0.8B"
+        }
+      ],
+      "notes": "Qwen3.5-0.8B (official, multimodal); text-only LoRA via FastVisionModel; 262K context",
+      "quant": "Q4_K_M",
+      "multimodal": true,
+      "selector": "Qwen/Qwen3.5-0.8B@Q4_K_M",
+      "label": "Qwen/Qwen3.5-0.8B [Q4_K_M]",
+      "estimated_rss_mb": 800.0,
+      "fits": true,
+      "status": "success",
+      "error": null,
+      "metrics": {
+        "peak_rss_kb": 737835.6,
+        "ttft_ms": 427.201,
+        "prefill_tps": 76.808,
+        "decode_tps": 18.695,
+        "power_ma_monsoon": 505.461,
+        "power_ma": 664.727,
+        "thermal_cpu_c": 55.72,
+        "thermal_skin_c": 35.8,
+        "N_completed": 10
+      }
+    }
+  ]
+}

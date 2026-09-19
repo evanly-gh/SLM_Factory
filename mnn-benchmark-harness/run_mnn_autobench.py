@@ -532,6 +532,88 @@ def run_benchmark(adb: Adb, model_path: str, questions: list, timeout: int, no_t
     return results
 
 
+def run_trials_benchmark(adb: Adb, model_path: str, questions: list, timeout: int, no_think: bool = False,
+                          max_tokens: int = 4096, backend_type: str = None, trials: int = 1) -> list:
+    """Paper-exact protocol, genuinely different from --warmup-runs's own
+    "run N, discard N-1, keep only the last" mechanic: for EACH question,
+    run once as a discarded warmup, then run `trials` SEPARATE, real times,
+    recording EVERY one of those trials as its own full result. Each entry
+    carries a "trial_number" (1..trials) field (in addition to the usual
+    "question_number") so per-question trial statistics can be computed
+    afterward (see compute_trial_summary()).
+
+    Deliberately a fully independent function, not a refactor of
+    run_benchmark() into a shared code path - it has its own copy of the
+    entry-building/printing logic below, so --warmup-runs's existing,
+    already-relied-upon behavior in run_benchmark() cannot be affected by
+    anything added here, even indirectly.
+    """
+    results = []
+    total = len(questions)
+
+    for n, question in enumerate(questions, start=1):
+        print(f"\n[{n}/{total}] \"{question}\" - warmup (discarded)")
+        run_one(adb, model_path, question, n, timeout, no_think=no_think, max_tokens=max_tokens,
+                backend_type=backend_type)
+        time.sleep(2)
+
+        for trial in range(1, trials + 1):
+            print(f"[{n}/{total}] trial {trial}/{trials} (recording)")
+            outcome = run_one(adb, model_path, question, n, timeout, no_think=no_think, max_tokens=max_tokens,
+                               backend_type=backend_type)
+            status, tag_lines, run_lines, run_id, monsoon = (
+                outcome["status"], outcome["tag_lines"], outcome["run_lines"], outcome["run_id"], outcome["monsoon"]
+            )
+
+            entry = {
+                "question_number": n,
+                "question": question,
+                "trial_number": trial,
+                "run_id": run_id,
+                "status": None,
+                "metrics": None,
+                "response": None,
+                "error": None,
+            }
+
+            if status == "done":
+                metrics = build_metrics(tag_lines)
+                metrics["power_ma_monsoon"] = monsoon.get("power_ma_mean")
+                response = extract_response(run_lines, run_id)
+                entry["status"] = "success"
+                entry["metrics"] = metrics
+                entry["response"] = response
+
+                def fmt(v, unit="", nd=1):
+                    return f"{v:.{nd}f}{unit}" if isinstance(v, (int, float)) else "N/A"
+
+                battery_power_disp = metrics["power_ma_raw"] if metrics["power_ma_raw"] is not None else "N/A"
+                monsoon_power_disp = fmt(metrics["power_ma_monsoon"], "mA", 2)
+                print(
+                    f"  ColdLoad={fmt(metrics['cold_load_ms'], 'ms', 0)} TTFT={fmt(metrics['ttft_ms'], 'ms')} "
+                    f"PrefillTPS={fmt(metrics['prefill_tps'])} DecodeTPS={fmt(metrics['decode_tps'])} "
+                    f"RSS={fmt(metrics['peak_rss_kb'], 'KB', 0)} "
+                    f"Power={battery_power_disp}mA (BatteryMgr) / {monsoon_power_disp} (Monsoon) "
+                    f"ThermalCPU={fmt(metrics['thermal_cpu_c'], '°C')} ThermalSkin={fmt(metrics['thermal_skin_c'], '°C')}"
+                )
+                preview = response if response and len(response) <= 160 else (response[:157] + "..." if response else "")
+                print(f"  Response: \"{preview}\"")
+            elif status == "error":
+                reason, message = extract_error(tag_lines.get("RUN_ERROR", ""))
+                entry["status"] = "failed"
+                entry["error"] = {"reason": reason, "message": message}
+                print(f"  FAILED: reason={reason} message={message}")
+            else:  # timeout
+                entry["status"] = "failed"
+                entry["error"] = {"reason": "timeout", "message": f"No RUN_DONE/RUN_ERROR within {timeout}s"}
+                print(f"  FAILED: timeout after {timeout}s")
+
+            results.append(entry)
+            time.sleep(2)
+
+    return results
+
+
 # ---------------------------------------------------------------------------
 # Summary / output
 # ---------------------------------------------------------------------------
@@ -555,6 +637,7 @@ def stat_block(values):
 SUMMARY_METRICS = [
     "cold_load_ms", "ttft_ms", "prefill_tps", "decode_tps",
     "peak_rss_kb", "power_ma", "power_ma_monsoon", "thermal_cpu_c", "thermal_skin_c",
+    "energy_mas_sampled", "energy_mj_sampled",
 ]
 
 
@@ -638,8 +721,65 @@ def print_summary_table(summary: dict, run_info: dict):
         print("[WARN] This run's power_ma readings may be unreliable due to battery/charging state - see pre-flight output above.")
 
 
-def save_results(output_path: str, run_info: dict, summary: dict, results: list):
+def compute_trial_summary(results: list, questions: list) -> dict:
+    """--trials' own new summary section: mean/std (plus min/max/n, via the
+    same stat_block() the overall summary uses) across each question's OWN
+    kept trials, for every metric in SUMMARY_METRICS - distinct from
+    compute_summary(), which still pools ALL recorded results together
+    (still meaningful in --trials mode too, just not what this adds).
+    Keyed by question_number as a string (JSON object keys must be strings).
+    """
+    summary_by_question = {}
+    for n, question in enumerate(questions, start=1):
+        question_results = [r for r in results if r["question_number"] == n]
+
+        def vals(key):
+            return [
+                r["metrics"][key] for r in question_results
+                if r["status"] == "success" and r["metrics"] and r["metrics"].get(key) is not None
+            ]
+
+        summary_by_question[str(n)] = {
+            "question": question,
+            "n_trials": len(question_results),
+            "n_completed": sum(1 for r in question_results if r["status"] == "success"),
+            "metrics": {key: stat_block(vals(key)) for key in SUMMARY_METRICS},
+        }
+    return summary_by_question
+
+
+def print_trial_summary(trial_summary: dict):
+    print("\n" + "=" * 70)
+    print("TRIAL SUMMARY (mean/std across N kept trials, per question)")
+    print("=" * 70)
+
+    def fmt_stat(v):
+        return f"{v:.3f}" if isinstance(v, (int, float)) else "N/A"
+
+    for qnum, qsum in trial_summary.items():
+        print(f"\nQ{qnum}: \"{qsum['question']}\"  (n_trials={qsum['n_trials']}, n_completed={qsum['n_completed']})")
+        header = f"{'Metric':<18}{'Mean':>14}{'Std':>14}{'Min':>14}{'Max':>14}{'N':>6}"
+        print(header)
+        print("-" * len(header))
+        for key in SUMMARY_METRICS:
+            s = qsum["metrics"][key]
+            row = (
+                f"{key:<18}"
+                f"{fmt_stat(s['mean']):>14}"
+                f"{fmt_stat(s['std']):>14}"
+                f"{fmt_stat(s['min']):>14}"
+                f"{fmt_stat(s['max']):>14}"
+                f"{s['n_completed']:>6}"
+            )
+            print(row)
+
+
+def save_results(output_path: str, run_info: dict, summary: dict, results: list, trial_summary: dict = None):
     report = {"run_info": run_info, "results": results, "summary": summary}
+    # Only added when --trials produced one (default None) - existing
+    # callers/output shape are completely unaffected when this is omitted.
+    if trial_summary is not None:
+        report["trial_summary"] = trial_summary
     Path(output_path).parent.mkdir(parents=True, exist_ok=True)
     with open(output_path, "w") as f:
         json.dump(report, f, indent=2, default=str)
@@ -687,12 +827,35 @@ def parse_args():
                          "(e.g. reproducing a paper figure) rather than cold-cache-per-question ones. "
                          "Independent of run_fallback_agent_mnn.py's own retry-for-truncation mechanism - no "
                          "quality/garbage checking is attached here. Default: 0 (no warmup, unchanged behavior: "
-                         "exactly one run per question, same as before this flag existed).")
+                         "exactly one run per question, same as before this flag existed). Mutually exclusive "
+                         "with --trials - genuinely different protocols, not meant to be combined.")
+    p.add_argument("--trials", type=int, default=1, dest="trials",
+                    help="A genuinely different protocol from --warmup-runs's 'discard all but last': for each "
+                         "question, run ONCE as a discarded warmup, then run this many SEPARATE, real times, "
+                         "recording EVERY one as its own full result (not collapsed into a single kept entry). "
+                         "Adds a new 'trial_summary' section to the output JSON: mean/std (and min/max/n) per "
+                         "metric, per question, across that question's own N kept trials - separate from the "
+                         "existing overall 'summary' section, which still pools every recorded result together "
+                         "regardless. Mutually exclusive with --warmup-runs. Default: 1 (no warmup, unchanged "
+                         "behavior: exactly one run per question via the existing --warmup-runs code path, same "
+                         "as before this flag existed).")
+    p.add_argument("--no-process-reset", action="store_true", dest="no_process_reset",
+                    help="Skip reset_mnnchat_for_clean_process() (the ONE-TIME force-stop+relaunch that "
+                         "otherwise happens once, at script startup, before any question/warmup/trial runs - "
+                         "NOT before each individual run). Trades away accurate PEAK_RSS_KB (it can be "
+                         "contaminated by a larger model's high-water mark left over from MNN Chat's last use, "
+                         "e.g. the normal chat UI or a prior separate script invocation) for skipping that "
+                         "~4s force-stop+relaunch+settle delay. Default: OFF (unchanged behavior - the reset "
+                         "always runs, same as before this flag existed).")
     return p.parse_args()
 
 
 def main():
     args = parse_args()
+
+    if args.trials > 1 and args.warmup_runs > 0:
+        print("[ERROR] --trials and --warmup-runs are two different, mutually exclusive protocols - use one or the other, not both.")
+        sys.exit(1)
 
     print("=" * 70)
     print("MNN Chat Automated Benchmark Pipeline")
@@ -707,6 +870,8 @@ def main():
     print(f"  Backend type: {args.backend_type}" + (" (default, no override sent)" if broadcast_backend_type is None else " (override)"))
     if args.warmup_runs > 0:
         print(f"  Warmup runs: {args.warmup_runs} (discarding first {args.warmup_runs - 1}, recording only the final run per question)")
+    if args.trials > 1:
+        print(f"  Trials: {args.trials} (1 discarded warmup + {args.trials} SEPARATE recorded trials per question)")
     print("=" * 70)
     print(f"[NOTE] {TIMEOUT_NOTE}")
 
@@ -718,15 +883,24 @@ def main():
     battery_info = check_battery(adb)
     print_thermal_reminder()
 
-    reset_mnnchat_for_clean_process(adb)
+    if args.no_process_reset:
+        print("[NOTE] --no-process-reset: skipping the one-time force-stop+relaunch. PEAK_RSS_KB may be "
+              "contaminated by a high-water mark left over from MNN Chat's prior use.")
+    else:
+        reset_mnnchat_for_clean_process(adb)
 
     questions = load_questions(args.questions)
     device_serial = adb.run(["get-serialno"], timeout=10).stdout.strip()
 
     start_time = datetime.now(timezone.utc).isoformat()
-    results = run_benchmark(adb, args.model_path, questions, args.timeout, no_think=args.no_think,
-                             max_tokens=args.max_tokens, backend_type=broadcast_backend_type,
-                             warmup_runs=args.warmup_runs)
+    if args.trials > 1:
+        results = run_trials_benchmark(adb, args.model_path, questions, args.timeout, no_think=args.no_think,
+                                        max_tokens=args.max_tokens, backend_type=broadcast_backend_type,
+                                        trials=args.trials)
+    else:
+        results = run_benchmark(adb, args.model_path, questions, args.timeout, no_think=args.no_think,
+                                 max_tokens=args.max_tokens, backend_type=broadcast_backend_type,
+                                 warmup_runs=args.warmup_runs)
     end_time = datetime.now(timezone.utc).isoformat()
 
     completed = sum(1 for r in results if r["status"] == "success")
@@ -742,7 +916,12 @@ def main():
         "max_tokens": args.max_tokens,
         "backend_type": args.backend_type,
         "warmup_runs": args.warmup_runs,
-        "total": len(questions),
+        "trials": args.trials,
+        "process_reset": not args.no_process_reset,
+        # len(results), not len(questions): with --trials, results holds
+        # len(questions) * args.trials entries (numerically identical to
+        # len(questions) when args.trials is the default 1).
+        "total": len(results),
         "completed": completed,
         "failed": failed,
         "battery_warning": battery_info["battery_warning"],
@@ -751,11 +930,14 @@ def main():
     }
 
     summary = compute_summary(results)
-    save_results(args.output, run_info, summary, results)
+    trial_summary = compute_trial_summary(results, questions) if args.trials > 1 else None
+    save_results(args.output, run_info, summary, results, trial_summary=trial_summary)
     print_summary_table(summary, run_info)
+    if trial_summary is not None:
+        print_trial_summary(trial_summary)
 
     print("\n" + "=" * 70)
-    print(f"DONE - {completed}/{len(questions)} completed, {failed} failed")
+    print(f"DONE - {completed}/{len(results)} completed, {failed} failed")
     print("=" * 70)
 
 

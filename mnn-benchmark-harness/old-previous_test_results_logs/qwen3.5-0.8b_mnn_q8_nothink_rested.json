@@ -1,0 +1,321 @@
+{
+  "run_info": {
+    "model_path": "/data/local/tmp/mnn_models/qwen3.5-0.8b-mnn-q8",
+    "device": "f46d20ad",
+    "start_time": "2026-07-27T18:57:17.528003+00:00",
+    "end_time": "2026-07-27T18:59:11.129983+00:00",
+    "timeout_s": 60,
+    "no_think_mode": true,
+    "max_tokens": 80,
+    "total": 10,
+    "completed": 10,
+    "failed": 0,
+    "battery_warning": true,
+    "battery_level_pct": 85,
+    "battery_status": "Charging"
+  },
+  "results": [
+    {
+      "question_number": 1,
+      "question": "What is the capital of France?",
+      "run_id": "run_1_1785178637528",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 2159,
+        "ttft_ms": 458.198281,
+        "prefill_time_us": 452323,
+        "decode_time_us": 638301,
+        "prompt_len": 34,
+        "decode_len": 9,
+        "prefill_tps": 75.168,
+        "decode_tps": 14.1,
+        "peak_rss_kb": 1527680,
+        "power_ma": 1208.92,
+        "power_ma_raw": "1208.92",
+        "thermal_status": "Normal",
+        "thermal_cpu_c": 49.0,
+        "thermal_skin_c": 32.0
+      },
+      "response": "The capital of France is **Paris**.",
+      "error": null
+    },
+    {
+      "question_number": 2,
+      "question": "Who wrote Romeo and Juliet?",
+      "run_id": "run_2_1785178643906",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 2148,
+        "ttft_ms": 446.684427,
+        "prefill_time_us": 440971,
+        "decode_time_us": 6362512,
+        "prompt_len": 33,
+        "decode_len": 80,
+        "prefill_tps": 74.835,
+        "decode_tps": 12.574,
+        "peak_rss_kb": 1531424,
+        "power_ma": 1181.96,
+        "power_ma_raw": "1181.96",
+        "thermal_status": "Normal",
+        "thermal_cpu_c": 55.2,
+        "thermal_skin_c": 33.0
+      },
+      "response": "I cannot answer this question. I am an AI, not a human, and I cannot answer the question \"Who wrote ' Romeo and Juliet'?\"\\n\\nHowever, I can explain why this question is difficult:\\n\\n1. **The Question Itself**: The question asks about the creation of the play *Romeo and Juliet*. The play was written by **William Shakespeare**, an English playwright of",
+      "error": null
+    },
+    {
+      "question_number": 3,
+      "question": "What is the chemical symbol for gold?",
+      "run_id": "run_3_1785178656676",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 2136,
+        "ttft_ms": 504.53375,
+        "prefill_time_us": 500149,
+        "decode_time_us": 6307567,
+        "prompt_len": 35,
+        "decode_len": 80,
+        "prefill_tps": 69.979,
+        "decode_tps": 12.683,
+        "peak_rss_kb": 1672864,
+        "power_ma": 1160.21,
+        "power_ma_raw": "1160.21",
+        "thermal_status": "Normal",
+        "thermal_cpu_c": 57.5,
+        "thermal_skin_c": 34.0
+      },
+      "response": "Au\\n\\nThe chemical symbol for gold is **Au**.\\n\\nThe answer is: **100%**.\\n\\n**Reasoning:**\\n\\n1.  **Scientific Fact**: There is a definitive, universally accepted scientific fact that the atomic number of the element **Gold (Au)** is **79**.\\n2.  This number indicates that one atom of gold has a mass number",
+      "error": null
+    },
+    {
+      "question_number": 4,
+      "question": "What is the largest planet in our solar system?",
+      "run_id": "run_4_1785178669354",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 2128,
+        "ttft_ms": 488.274271,
+        "prefill_time_us": 482798,
+        "decode_time_us": 6287543,
+        "prompt_len": 37,
+        "decode_len": 80,
+        "prefill_tps": 76.637,
+        "decode_tps": 12.724,
+        "peak_rss_kb": 1662532,
+        "power_ma": 1144.23,
+        "power_ma_raw": "1144.23",
+        "thermal_status": "Normal",
+        "thermal_cpu_c": 57.5,
+        "thermal_skin_c": 35.0
+      },
+      "response": "There is no such thing as a \"larger\" planet in the solar system. Every planet is smaller than the next one, and there are no \"super-objects\" in our solar system that are larger than the Sun.\\n\\nTherefore, the correct answer is **none** (or \"None of the above\").\\n\\nThe correct answer is: **None**.\\n\\n*(Note: The \"Big",
+      "error": null
+    },
+    {
+      "question_number": 5,
+      "question": "What year did the first human land on the moon?",
+      "run_id": "run_5_1785178682173",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 2122,
+        "ttft_ms": 510.688854,
+        "prefill_time_us": 506517,
+        "decode_time_us": 6083088,
+        "prompt_len": 38,
+        "decode_len": 80,
+        "prefill_tps": 75.022,
+        "decode_tps": 13.151,
+        "peak_rss_kb": 1599068,
+        "power_ma": 1132.62,
+        "power_ma_raw": "1132.62",
+        "thermal_status": "Normal",
+        "thermal_cpu_c": 57.9,
+        "thermal_skin_c": 36.0
+      },
+      "response": "The moon is currently being observed by the **ISS (International Space Station)**.\\n\\nIt is currently **October 2024**.\\n\\n*   **Current Date:** October 15, 2025\\n*   **Current Date:** November 17, 2024\\n\\n*(Note: This is an automated system update. If you are looking for the latest news",
+      "error": null
+    },
+    {
+      "question_number": 6,
+      "question": "What are the three states of matter?",
+      "run_id": "run_6_1785178693329",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 2128,
+        "ttft_ms": 486.659999,
+        "prefill_time_us": 481053,
+        "decode_time_us": 6455689,
+        "prompt_len": 35,
+        "decode_len": 80,
+        "prefill_tps": 72.757,
+        "decode_tps": 12.392,
+        "peak_rss_kb": 1657960,
+        "power_ma": 1124.77,
+        "power_ma_raw": "1124.77",
+        "thermal_status": "Normal",
+        "thermal_cpu_c": 61.4,
+        "thermal_skin_c": 36.0
+      },
+      "response": "Here are the three states of matter:\\n\\n1.  **Solid**\\n    *   **Structure:** Molecules are tightly packed together in a fixed, rigid, and rigidly ordered arrangement.\\n    *   **Examples:** Ice, ice-cream, and solid rocks.\\n\\n2.  **Solid**\\n    *   **Particles:** Particles are held together by **strong chemical",
+      "error": null
+    },
+    {
+      "question_number": 7,
+      "question": "How does a refrigerator keep food cold?",
+      "run_id": "run_7_1785178705099",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 2134,
+        "ttft_ms": 501.425677,
+        "prefill_time_us": 495541,
+        "decode_time_us": 6136233,
+        "prompt_len": 35,
+        "decode_len": 80,
+        "prefill_tps": 70.63,
+        "decode_tps": 13.037,
+        "peak_rss_kb": 1663284,
+        "power_ma": 1119.03,
+        "power_ma_raw": "1119.03",
+        "thermal_status": "Normal",
+        "thermal_cpu_c": 59.4,
+        "thermal_skin_c": 37.0
+      },
+      "response": "A refrigerator uses a **refrigeration cycle** (also known as the refrigerator principle). It works through a simple cycle involving four main parts:\\n\\n1.  **The Condenser**: A coil or plate of metal (usually copper or copper) is placed inside the refrigerator. This is where the heat-losing, low-velocity air from the kitchen is forced into the air.\\n2.",
+      "error": null
+    },
+    {
+      "question_number": 8,
+      "question": "Explain the process of photosynthesis in plants.",
+      "run_id": "run_8_1785178716843",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 2118,
+        "ttft_ms": 482.073282,
+        "prefill_time_us": 469787,
+        "decode_time_us": 6057740,
+        "prompt_len": 37,
+        "decode_len": 80,
+        "prefill_tps": 78.759,
+        "decode_tps": 13.206,
+        "peak_rss_kb": 1528924,
+        "power_ma": 1113.71,
+        "power_ma_raw": "1113.71",
+        "thermal_status": "Normal",
+        "thermal_cpu_c": 61.0,
+        "thermal_skin_c": 37.0
+      },
+      "response": "**Photosynthesis** is the biological process by which plants convert light energy into chemical energy. It is the fundamental process by which plants convert light energy into chemical energy. This process allows plants to synthesize their own food and sustain themselves, making them the foundation of the food web.\\n\\nHere is a breakdown of the process:\\n\\n### 1. The Process of Photosynthesis\\nPhotosynthesis involves two",
+      "error": null
+    },
+    {
+      "question_number": 9,
+      "question": "Summarize the theory of relativity in simple terms.",
+      "run_id": "run_9_1785178728323",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 2154,
+        "ttft_ms": 530.796093,
+        "prefill_time_us": 526765,
+        "decode_time_us": 5478426,
+        "prompt_len": 39,
+        "decode_len": 80,
+        "prefill_tps": 74.037,
+        "decode_tps": 14.603,
+        "peak_rss_kb": 1529740,
+        "power_ma": 1110.0,
+        "power_ma_raw": "1110.00",
+        "thermal_status": "Normal",
+        "thermal_cpu_c": 61.4,
+        "thermal_skin_c": 38.0
+      },
+      "response": "**Summary:**\\n\\n*   **Special Relativity (Time Dilation):** The laws of physics remain the same, but time slows down when you are far from a strong gravitational field (like a planet's gravity).\\n    *   *Example:* A clock on a plane flying at the speed of light would stop ticking. If you were to jump into space and jump into a spaceship, you would",
+      "error": null
+    },
+    {
+      "question_number": 10,
+      "question": "Describe the causes and consequences of World War I in a few sentences.",
+      "run_id": "run_10_1785178739721",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 2116,
+        "ttft_ms": 534.056249,
+        "prefill_time_us": 528954,
+        "decode_time_us": 5529276,
+        "prompt_len": 41,
+        "decode_len": 80,
+        "prefill_tps": 77.511,
+        "decode_tps": 14.468,
+        "peak_rss_kb": 1450316,
+        "power_ma": 1106.56,
+        "power_ma_raw": "1106.56",
+        "thermal_status": "Normal",
+        "thermal_cpu_c": 61.0,
+        "thermal_skin_c": 38.0
+      },
+      "response": "World War I began with the rapid expansion of the U-boat warship fleet and the rapid expansion of the U-boat fleet. This was driven by the rise of the German navy, which utilized a large-scale, mass-issued naval arsenal.\\n\\nKey features of this period included:\\n*   **Massive Scale and Speed**: The U-Boat was a massive, all-steel",
+      "error": null
+    }
+  ],
+  "summary": {
+    "cold_load_ms": {
+      "mean": 2134.3,
+      "std": 14.213,
+      "min": 2116,
+      "max": 2159,
+      "n_completed": 10
+    },
+    "ttft_ms": {
+      "mean": 494.339,
+      "std": 26.742,
+      "min": 446.684427,
+      "max": 534.056249,
+      "n_completed": 10
+    },
+    "prefill_tps": {
+      "mean": 74.534,
+      "std": 2.669,
+      "min": 69.979,
+      "max": 78.759,
+      "n_completed": 10
+    },
+    "decode_tps": {
+      "mean": 13.294,
+      "std": 0.766,
+      "min": 12.392,
+      "max": 14.603,
+      "n_completed": 10
+    },
+    "peak_rss_kb": {
+      "mean": 1582379.2,
+      "std": 74703.412,
+      "min": 1450316,
+      "max": 1672864,
+      "n_completed": 10
+    },
+    "power_ma": {
+      "mean": 1140.201,
+      "std": 32.206,
+      "min": 1106.56,
+      "max": 1208.92,
+      "n_completed": 10
+    },
+    "thermal_cpu_c": {
+      "mean": 58.13,
+      "std": 3.637,
+      "min": 49.0,
+      "max": 61.4,
+      "n_completed": 10
+    },
+    "thermal_skin_c": {
+      "mean": 35.6,
+      "std": 1.96,
+      "min": 32.0,
+      "max": 38.0,
+      "n_completed": 10
+    },
+    "thermal_states_observed": [
+      "Normal"
+    ],
+    "note": "power_ma stats exclude questions where POWER_MA was reported as 'unavailable' or missing. n_completed is reported per-metric because failed/timed-out questions - and, for power_ma specifically, 'unavailable' readings - are silently excluded from that metric's mean otherwise, which can bias results toward easier/luckier questions."
+  }
+}

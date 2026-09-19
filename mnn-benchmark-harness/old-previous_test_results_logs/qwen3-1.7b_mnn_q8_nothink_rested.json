@@ -1,0 +1,321 @@
+{
+  "run_info": {
+    "model_path": "/data/local/tmp/mnn_models/qwen3-1.7b-mnn-q8",
+    "device": "f46d20ad",
+    "start_time": "2026-07-26T19:27:04.321239+00:00",
+    "end_time": "2026-07-26T19:30:11.504646+00:00",
+    "timeout_s": 60,
+    "no_think_mode": true,
+    "max_tokens": 80,
+    "total": 10,
+    "completed": 10,
+    "failed": 0,
+    "battery_warning": true,
+    "battery_level_pct": 81,
+    "battery_status": "Charging"
+  },
+  "results": [
+    {
+      "question_number": 1,
+      "question": "What is the capital of France?",
+      "run_id": "run_1_1785094024322",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 5292,
+        "ttft_ms": 1156.199062,
+        "prefill_time_us": 969721,
+        "decode_time_us": 1924646,
+        "prompt_len": 30,
+        "decode_len": 12,
+        "prefill_tps": 30.937,
+        "decode_tps": 6.235,
+        "peak_rss_kb": 2412376,
+        "power_ma": 1641.33,
+        "power_ma_raw": "1641.33",
+        "thermal_status": "Normal",
+        "thermal_cpu_c": 53.6,
+        "thermal_skin_c": 38.0
+      },
+      "response": "\\n\\n\\n\\nThe capital of France is Paris.",
+      "error": null
+    },
+    {
+      "question_number": 2,
+      "question": "Who wrote Romeo and Juliet?",
+      "run_id": "run_2_1785094035754",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 4668,
+        "ttft_ms": 1010.911458,
+        "prefill_time_us": 850074,
+        "decode_time_us": 12432850,
+        "prompt_len": 29,
+        "decode_len": 80,
+        "prefill_tps": 34.115,
+        "decode_tps": 6.435,
+        "peak_rss_kb": 2144308,
+        "power_ma": 1570.11,
+        "power_ma_raw": "1570.11",
+        "thermal_status": "Normal",
+        "thermal_cpu_c": 60.2,
+        "thermal_skin_c": 35.0
+      },
+      "response": "\\n\\n\\n\\n*pauses, thoughtful*\\n\\nRomeo and Juliet was written by **William Shakespeare**, one of the most renowned playwrights in English literature. It is part of his *Elizabethan tragedies* and was first performed in 1597. The play is known for its tragic love story between two young lovers from feuding families, the Montagues and the Capulets",
+      "error": null
+    },
+    {
+      "question_number": 3,
+      "question": "What is the chemical symbol for gold?",
+      "run_id": "run_3_1785094057139",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 4652,
+        "ttft_ms": 1209.310469,
+        "prefill_time_us": 1020605,
+        "decode_time_us": 2265754,
+        "prompt_len": 31,
+        "decode_len": 15,
+        "prefill_tps": 30.374,
+        "decode_tps": 6.62,
+        "peak_rss_kb": 2134380,
+        "power_ma": 1556.33,
+        "power_ma_raw": "1556.33",
+        "thermal_status": "Normal",
+        "thermal_cpu_c": 58.3,
+        "thermal_skin_c": 36.0
+      },
+      "response": "\\n\\n\\n\\nThe chemical symbol for gold is **Au**.",
+      "error": null
+    },
+    {
+      "question_number": 4,
+      "question": "What is the largest planet in our solar system?",
+      "run_id": "run_4_1785094068675",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 4635,
+        "ttft_ms": 1120.727916,
+        "prefill_time_us": 933288,
+        "decode_time_us": 10039794,
+        "prompt_len": 33,
+        "decode_len": 66,
+        "prefill_tps": 35.359,
+        "decode_tps": 6.574,
+        "peak_rss_kb": 2132888,
+        "power_ma": 1531.39,
+        "power_ma_raw": "1531.39",
+        "thermal_status": "Normal",
+        "thermal_cpu_c": 61.4,
+        "thermal_skin_c": 37.0
+      },
+      "response": "\\n\\n\\n\\nThe largest planet in our solar system is **Jupiter**. It is followed by **Saturn**, **Uranus**, and **Neptune** in terms of size. Jupiter's diameter is about 139,822 kilometers, making it more than ten times wider than Earth.",
+      "error": null
+    },
+    {
+      "question_number": 5,
+      "question": "What year did the first human land on the moon?",
+      "run_id": "run_5_1785094087643",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 4649,
+        "ttft_ms": 1179.094167,
+        "prefill_time_us": 1001592,
+        "decode_time_us": 7001339,
+        "prompt_len": 34,
+        "decode_len": 47,
+        "prefill_tps": 33.946,
+        "decode_tps": 6.713,
+        "peak_rss_kb": 2161216,
+        "power_ma": 1521.63,
+        "power_ma_raw": "1521.63",
+        "thermal_status": "Normal",
+        "thermal_cpu_c": 62.1,
+        "thermal_skin_c": 37.0
+      },
+      "response": "\\n\\n\\n\\nThe first human land on the moon was in **1969**. This occurred during the Apollo 11 mission, when astronaut **Neil Armstrong** became the first person to walk on the moon.",
+      "error": null
+    },
+    {
+      "question_number": 6,
+      "question": "What are the three states of matter?",
+      "run_id": "run_6_1785094104065",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 4639,
+        "ttft_ms": 1211.11224,
+        "prefill_time_us": 1050661,
+        "decode_time_us": 13343339,
+        "prompt_len": 31,
+        "decode_len": 80,
+        "prefill_tps": 29.505,
+        "decode_tps": 5.996,
+        "peak_rss_kb": 2177864,
+        "power_ma": 1511.99,
+        "power_ma_raw": "1511.99",
+        "thermal_status": "Normal",
+        "thermal_cpu_c": 62.9,
+        "thermal_skin_c": 38.0
+      },
+      "response": "\\n\\n\\n\\nThe three states of matter are:\\n\\n1. **Solid** \u2013 A substance that has a definite shape and volume. Examples include ice, wood, and metal.\\n\\n2. **Liquid** \u2013 A substance that has a definite volume but indefinite shape. Examples include water, oil, and juice.\\n\\n3. **Gas** \u2013 A substance that has no definite shape or volume and expands to",
+      "error": null
+    },
+    {
+      "question_number": 7,
+      "question": "How does a refrigerator keep food cold?",
+      "run_id": "run_7_1785094126751",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 4661,
+        "ttft_ms": 1237.023281,
+        "prefill_time_us": 1051942,
+        "decode_time_us": 12148066,
+        "prompt_len": 31,
+        "decode_len": 80,
+        "prefill_tps": 29.469,
+        "decode_tps": 6.585,
+        "peak_rss_kb": 2173932,
+        "power_ma": 1500.32,
+        "power_ma_raw": "1500.32",
+        "thermal_status": "Normal",
+        "thermal_cpu_c": 64.5,
+        "thermal_skin_c": 39.0
+      },
+      "response": "\\n\\n\\n\\nA refrigerator keeps food cold by using a refrigeration cycle to remove heat from the interior and release it to the outside environment. Here's a simplified explanation of how it works:\\n\\n1. **Compression and Expansion**: The refrigeration cycle involves a compressor, condenser, evaporator, and expansion valve. The refrigerant (a gas) is compressed into a high-pressure, high-",
+      "error": null
+    },
+    {
+      "question_number": 8,
+      "question": "Explain the process of photosynthesis in plants.",
+      "run_id": "run_8_1785094148299",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 4673,
+        "ttft_ms": 1157.30677,
+        "prefill_time_us": 963690,
+        "decode_time_us": 12424485,
+        "prompt_len": 33,
+        "decode_len": 80,
+        "prefill_tps": 34.243,
+        "decode_tps": 6.439,
+        "peak_rss_kb": 2174404,
+        "power_ma": 1495.61,
+        "power_ma_raw": "1495.61",
+        "thermal_status": "Normal",
+        "thermal_cpu_c": 65.6,
+        "thermal_skin_c": 40.0
+      },
+      "response": "\\n\\n\\n\\nPhotosynthesis is the process by which plants, algae, and some bacteria convert light energy into chemical energy stored in glucose. This process occurs primarily in the chloroplasts of plant cells, which contain the green pigment chlorophyll.\\n\\n### Steps of Photosynthesis:\\n\\n1. **Light Absorption**:  \\n   - Chlorophyll in the chloroplasts absorbs light energy, mostly from",
+      "error": null
+    },
+    {
+      "question_number": 9,
+      "question": "Summarize the theory of relativity in simple terms.",
+      "run_id": "run_9_1785094169959",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 4667,
+        "ttft_ms": 1337.478698,
+        "prefill_time_us": 1152958,
+        "decode_time_us": 12646115,
+        "prompt_len": 35,
+        "decode_len": 80,
+        "prefill_tps": 30.357,
+        "decode_tps": 6.326,
+        "peak_rss_kb": 2174200,
+        "power_ma": 1485.07,
+        "power_ma_raw": "1485.07",
+        "thermal_status": "Normal",
+        "thermal_cpu_c": 66.0,
+        "thermal_skin_c": 40.0
+      },
+      "response": "\\n\\n\\n\\nThe Theory of Relativity is a set of two theories developed by Albert Einstein. Here's a simple summary:\\n\\n1. **Special Relativity** (1905):  \\n   - Deals with objects moving at constant speeds, especially near the speed of light.  \\n   - Key ideas:  \\n     - Time and space are not absolute.  \\n     - Time slows down (",
+      "error": null
+    },
+    {
+      "question_number": 10,
+      "question": "Describe the causes and consequences of World War I in a few sentences.",
+      "run_id": "run_10_1785094191492",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 4660,
+        "ttft_ms": 1204.787395,
+        "prefill_time_us": 1026501,
+        "decode_time_us": 11462858,
+        "prompt_len": 37,
+        "decode_len": 74,
+        "prefill_tps": 36.045,
+        "decode_tps": 6.456,
+        "peak_rss_kb": 2171024,
+        "power_ma": 1487.77,
+        "power_ma_raw": "1487.77",
+        "thermal_status": "Normal",
+        "thermal_cpu_c": 66.4,
+        "thermal_skin_c": 41.0
+      },
+      "response": "\\n\\n\\n\\nWorld War I was caused by a complex mix of factors, including nationalism, militarism, alliances, and the assassination of Archduke Franz Ferdinand. The war resulted in massive loss of life, territorial changes, and the collapse of empires, leading to the formation of the League of Nations. It also set the stage for future global conflicts.",
+      "error": null
+    }
+  ],
+  "summary": {
+    "cold_load_ms": {
+      "mean": 4719.6,
+      "std": 191.164,
+      "min": 4635,
+      "max": 5292,
+      "n_completed": 10
+    },
+    "ttft_ms": {
+      "mean": 1182.395,
+      "std": 79.763,
+      "min": 1010.911458,
+      "max": 1337.478698,
+      "n_completed": 10
+    },
+    "prefill_tps": {
+      "mean": 32.435,
+      "std": 2.411,
+      "min": 29.469,
+      "max": 36.045,
+      "n_completed": 10
+    },
+    "decode_tps": {
+      "mean": 6.438,
+      "std": 0.2,
+      "min": 5.996,
+      "max": 6.713,
+      "n_completed": 10
+    },
+    "peak_rss_kb": {
+      "mean": 2185659.2,
+      "std": 77325.759,
+      "min": 2132888,
+      "max": 2412376,
+      "n_completed": 10
+    },
+    "power_ma": {
+      "mean": 1530.155,
+      "std": 45.78,
+      "min": 1485.07,
+      "max": 1641.33,
+      "n_completed": 10
+    },
+    "thermal_cpu_c": {
+      "mean": 62.1,
+      "std": 3.783,
+      "min": 53.6,
+      "max": 66.4,
+      "n_completed": 10
+    },
+    "thermal_skin_c": {
+      "mean": 38.1,
+      "std": 1.814,
+      "min": 35.0,
+      "max": 41.0,
+      "n_completed": 10
+    },
+    "thermal_states_observed": [
+      "Normal"
+    ],
+    "note": "power_ma stats exclude questions where POWER_MA was reported as 'unavailable' or missing. n_completed is reported per-metric because failed/timed-out questions - and, for power_ma specifically, 'unavailable' readings - are silently excluded from that metric's mean otherwise, which can bias results toward easier/luckier questions."
+  }
+}

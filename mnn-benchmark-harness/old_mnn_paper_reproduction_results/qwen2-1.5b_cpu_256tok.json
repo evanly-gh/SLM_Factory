@@ -1,0 +1,121 @@
+{
+  "run_info": {
+    "model_path": "/data/local/tmp/mnn_models/qwen2-1.5b-mnn-q4",
+    "device": "f46d20ad",
+    "start_time": "2026-09-09T03:10:12.939702+00:00",
+    "end_time": "2026-09-09T03:11:07.032516+00:00",
+    "timeout_s": 180,
+    "no_think_mode": false,
+    "max_tokens": 16,
+    "backend_type": "cpu",
+    "warmup_runs": 6,
+    "total": 1,
+    "completed": 1,
+    "failed": 0,
+    "battery_warning": true,
+    "battery_level_pct": 86,
+    "battery_status": "Charging"
+  },
+  "results": [
+    {
+      "question_number": 1,
+      "question": "The history of artificial intelligence began in antiquity, with myths and stories of artificial beings endowed with intelligence or consciousness by master craftsmen. The seeds of modern AI were planted by classical philosophers who attempted to describe human thinking as a symbolic system. The field of AI research was founded at a workshop held at Dartmouth College in 1956. Attendees became the leaders of AI research for decades. Many of them predicted that a machine as intelligent as a human being would exist in no more than a generation, and they were given millions of dollars to make this vision come true. Eventually, it became obvious that they had grossly underestimated the difficulty of the project. In 1973, in response to the criticism from James Lighthill and ongoing pressure from congress, the U.S. and British Governments stopped funding undirected research into artificial intelligence, and the difficult years that followed would later be known as an AI winter. Seven years later, a revival of interest in neural networks began. Machine learning, integral to AI since its beginnings, is the study of computer algorithms that improve automatically through experience. Deep learning became feasible, which led to an increase in interest and funding. Modern AI research covers a huge number of subfields, from general purpose areas such as learning",
+      "run_id": "run_1_1788923457858",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 1888,
+        "ttft_ms": 3756.503384,
+        "prefill_time_us": 3749927,
+        "decode_time_us": 784931,
+        "prompt_len": 275,
+        "decode_len": 16,
+        "prefill_tps": 73.335,
+        "decode_tps": 20.384,
+        "peak_rss_kb": 1906808,
+        "power_ma": 958.07,
+        "power_ma_raw": "958.07",
+        "energy_mas_sampled": 4325.369,
+        "energy_mj_sampled": 18100.119,
+        "thermal_status": "Severe",
+        "thermal_cpu_c": 63.3,
+        "thermal_skin_c": 39.0,
+        "power_ma_monsoon": null
+      },
+      "response": "The history of Artificial Intelligence (AI) can be traced back to ancient myths and",
+      "error": null
+    }
+  ],
+  "summary": {
+    "cold_load_ms": {
+      "mean": 1888,
+      "std": 0.0,
+      "min": 1888,
+      "max": 1888,
+      "n_completed": 1
+    },
+    "ttft_ms": {
+      "mean": 3756.503,
+      "std": 0.0,
+      "min": 3756.503,
+      "max": 3756.503,
+      "n_completed": 1
+    },
+    "prefill_tps": {
+      "mean": 73.335,
+      "std": 0.0,
+      "min": 73.335,
+      "max": 73.335,
+      "n_completed": 1
+    },
+    "decode_tps": {
+      "mean": 20.384,
+      "std": 0.0,
+      "min": 20.384,
+      "max": 20.384,
+      "n_completed": 1
+    },
+    "peak_rss_kb": {
+      "mean": 1906808,
+      "std": 0.0,
+      "min": 1906808,
+      "max": 1906808,
+      "n_completed": 1
+    },
+    "power_ma": {
+      "mean": 958.07,
+      "std": 0.0,
+      "min": 958.07,
+      "max": 958.07,
+      "n_completed": 1
+    },
+    "power_ma_monsoon": {
+      "mean": null,
+      "std": null,
+      "min": null,
+      "max": null,
+      "n_completed": 0
+    },
+    "thermal_cpu_c": {
+      "mean": 63.3,
+      "std": 0.0,
+      "min": 63.3,
+      "max": 63.3,
+      "n_completed": 1
+    },
+    "thermal_skin_c": {
+      "mean": 39.0,
+      "std": 0.0,
+      "min": 39.0,
+      "max": 39.0,
+      "n_completed": 1
+    },
+    "thermal_states_observed": [
+      "Severe"
+    ],
+    "power_comparison": {
+      "mean_abs_diff_ma": null,
+      "n_completed": 0
+    },
+    "note": "power_ma stats exclude questions where POWER_MA was reported as 'unavailable' or missing; power_ma_monsoon stats exclude questions where the Monsoon reading failed. n_completed is reported per-metric because failed/timed-out questions - and, for these two power metrics specifically, unavailable/failed readings - are silently excluded from that metric's mean otherwise, which can bias results toward easier/luckier questions."
+  }
+}

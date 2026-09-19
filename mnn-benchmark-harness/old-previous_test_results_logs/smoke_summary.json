@@ -1,0 +1,22 @@
+{
+  "timestamp": "2026-08-07T21:13:23.655517+00:00",
+  "fit_report": "/Users/ksd/SLM_Factory_Krishna_Personal/fallback_agent_smoke_test.json",
+  "questions_file": "/Users/ksd/SLM_Factory_Krishna_Personal/smoke_test_questions.json",
+  "total_models": 1,
+  "succeeded": 1,
+  "failed": 0,
+  "skipped": 0,
+  "models": [
+    {
+      "model_id": "Qwen/Qwen3-0.6B",
+      "quant": "Q4_K_M",
+      "status": "success",
+      "error": null,
+      "engines_used": [
+        "mnn"
+      ],
+      "combined_accuracy": 0.5,
+      "total_questions_recorded": 2
+    }
+  ]
+}

@@ -1,0 +1,23 @@
+{
+  "phone_free_ram_mb": 7095.8984375,
+  "timestamp": "2026-08-05T19:41:21.268236",
+  "fits": [
+    {
+      "model_id": "Qwen/Qwen3-0.6B",
+      "size_mb": 400,
+      "tier": 0,
+      "tok_s_snapdragon_660": 13.0,
+      "tok_s_snapdragon_778g": 21.0,
+      "tok_s_snapdragon_8gen3": 58.0,
+      "peak_memory_mb": 500,
+      "capability_measurements": [],
+      "notes": "Qwen3-0.6B (official); text-only; dual-mode; use non-thinking for classification/NER",
+      "quant": "Q4_K_M",
+      "multimodal": false,
+      "selector": "Qwen/Qwen3-0.6B@Q4_K_M",
+      "label": "Qwen/Qwen3-0.6B [Q4_K_M]",
+      "fits": true
+    }
+  ],
+  "does_not_fit": []
+}

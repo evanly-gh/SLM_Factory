@@ -1,0 +1,23 @@
+{
+  "timestamp": "2026-08-07T21:31:36.539904+00:00",
+  "fit_report": "/Users/ksd/SLM_Factory_Krishna_Personal/fallback_test_1.7b.json",
+  "questions_file": "/Users/ksd/SLM_Factory_Krishna_Personal/smoke_test_questions.json",
+  "total_models": 1,
+  "succeeded": 0,
+  "failed": 1,
+  "skipped": 0,
+  "models": [
+    {
+      "model_id": "Qwen/Qwen3-1.7B",
+      "quant": "Q4_K_M",
+      "status": "failed",
+      "error": "double-garbage on Q1: MNN and GGUF both produced unusable output",
+      "engines_used": [
+        "mnn",
+        "gguf"
+      ],
+      "combined_accuracy": null,
+      "total_questions_recorded": 0
+    }
+  ]
+}
