@@ -67,7 +67,7 @@ ROW_RE = re.compile(r"^\[[\d:]+\]\s+(\d+)\s+(\d\.\d+)(\s+✗)?\s")
 
 
 def gguf_key(weights_ref: str, quant: str) -> str:
-    """Mirror agent/nodes/evaluate.py:_build_or_reuse_gguf exactly."""
+    """Mirror agent/nodes/evaluate.py:_build_or_reuse_quant_artifact exactly."""
     return hashlib.sha1(f"{weights_ref}|{quant}".encode()).hexdigest()[:12]
 
 

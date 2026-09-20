@@ -45,7 +45,7 @@ def _qwen_goal_floor() -> float:
 # Data sizes are no longer run state. `_apply_data_targets` used to clamp an orchestrator-chosen
 # curriculum/eval size to config floors and store it, and `agent/data_sizing.py` then recomputed the
 # curriculum figure per model tier from a novelty x capacity formula. Both are gone: the initial load
-# is `TaskSpec.initial_train_cap` / `eval_cap` rows — as many as the source has, up to those — and the
+# is `TaskSpec.initial_train_cap` / `select_cap` rows — as many as the source has, up to those — and the
 # curriculum grows from there by rebuild, with no target to reach. The formula's output was read by
 # exactly one thing, the `x 0.65` split that produced the mystery 3,250.
 

@@ -149,6 +149,12 @@ captured text is an incomplete JSON array that cannot parse.
 emit the stop token is close to binary, and it is uncorrelated with the intervention — which is
 exactly the pattern in the table. When the model stops: ~0.8. When it does not: ~0.002.
 
+> **Retention note (2026-09-16).** `slm-calendar-json-l40s-38832587` has been deleted from `logs/` —
+> `runs/`, `graphics/`, `slurm/5th runs/` and its `gpu_setup/` endpoint log — because its 0.8262 is
+> the draw where termination happened to work and the trajectory supports no attribution. The
+> tier-3 table above is the surviving record of the run. `slm-calendar-json-l40s-39294409` is the
+> calendar_json run to cite; see `09-16-baselines-ablations-and-probes.md`.
+
 That also explains the pieces that confused me:
 
 - **Why tiers 1–2 were flat at ~0.** Different cause entirely. SmolLM2-360M reached format 0.89 with

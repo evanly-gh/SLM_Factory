@@ -949,7 +949,12 @@ def _llm_iterate(state: AgentState) -> dict:
     """Make one tool-free orchestrator decision, with one JSON-only reask."""
     from langchain_anthropic import ChatAnthropic
     from langchain_core.messages import SystemMessage, HumanMessage
-    from config.config import ANTHROPIC_API_KEY, ORCHESTRATOR_MODEL, orchestrator_client_kwargs
+    from config.config import (
+        ANTHROPIC_API_KEY,
+        ORCHESTRATOR_MODEL,
+        cacheable_system_content,
+        orchestrator_client_kwargs,
+    )
     from agent.context_manager import compact_trajectory, should_compact
     from agent.run_memory import build_run_memory
     from data.curation_log import CurationLog
@@ -1074,14 +1079,28 @@ def _llm_iterate(state: AgentState) -> dict:
             "research has already spent its allowance without finding another."
         )
     if not _synthesis_allowed(state):
+        from agent.ablations import synthesis_disallowed
+
         _fitness = state.get("teacher_fitness") or {}
         _score = _fitness.get("score")
         _shown = f"{_score:.4f}" if isinstance(_score, (int, float)) else "unmeasured"
-        _notes.append(
-            f"surgical_synthesis is UNAVAILABLE: the teacher scored {_shown} against a "
-            f"{_fitness.get('threshold', 0.8):.2f} gate on this task's own eval set, five-shot, so "
-            "its output would be labelled noise rather than training targets."
-        )
+        # Name the REAL reason. Under SLM_SYNTH_DISALLOW the teacher may well have cleared the
+        # gate, and telling the orchestrator its output "would be labelled noise" would be a
+        # fabricated justification sitting in the transcript this ablation gets written up from.
+        if synthesis_disallowed():
+            _notes.append(
+                "surgical_synthesis is UNAVAILABLE: synthetic data is disabled for this entire run "
+                f"by operator configuration, not by the teacher's fitness (it measured {_shown} "
+                f"against a {_fitness.get('threshold', 0.8):.2f} gate). This is a deliberate "
+                "experiment in what mining and hyperparameters achieve alone; no amount of "
+                "trajectory evidence will make generation available, so do not plan around it."
+            )
+        else:
+            _notes.append(
+                f"surgical_synthesis is UNAVAILABLE: the teacher scored {_shown} against a "
+                f"{_fitness.get('threshold', 0.8):.2f} gate on this task's own eval set, five-shot, so "
+                "its output would be labelled noise rather than training targets."
+            )
     if not data_rebuild_available(state):
         _notes.append(
             "data_rebuild CANNOT ADD ROWS this turn — neither sub-strategy is available. Choose "
@@ -1215,7 +1234,15 @@ space is exhausted (all sensible configs tried), choose "data_rebuild" or expect
 escalate to a larger model. Never inspect raw eval rows. Return only the decision JSON.
 """
 
-    messages = [SystemMessage(content=_ITERATE_SYSTEM), HumanMessage(content=user_content)]
+    # The cache breakpoint goes on the SYSTEM block and nowhere else. `user_content` below carries
+    # the trajectory, the tried-config list and the test report, all of which differ every turn, so
+    # marking it would write a fresh cache entry per call and never read one back. See
+    # `config.config.cacheable_system_content` for the rate arithmetic and the TTL choice; the reask
+    # in `_reask_json_only` reuses these same message objects, so it reads the same cached prefix.
+    messages = [
+        SystemMessage(content=cacheable_system_content(_ITERATE_SYSTEM)),
+        HumanMessage(content=user_content),
+    ]
 
     # Iteration 1 logs the COMPLETE decision input — system prompt AND user content — so the run
     # log stays self-contained and any orchestrator call can be replayed from it. Later turns log
@@ -1549,11 +1576,31 @@ def _loads_json_object(text: str) -> dict:
 
 
 def _validate_threshold_raise(decision: object) -> dict | None:
-    """Validate the stretch-goal JSON. Returns None for a well-formed decline."""
+    """Validate the stretch-goal JSON.
+
+    A well-formed DECLINE returns ``{"raise_goal": False, "reason": ...}`` rather than None, so the
+    orchestrator's stated reason survives to the log. It used to return a bare None, which threw
+    the reason away — the prompt asks for one on both branches, so the model had explained itself
+    every time and we discarded it. On the 2026-09-05 ablation arms that left "asking the
+    orchestrator whether to raise it" followed immediately by "TERMINATE" with nothing in between,
+    and the only way to work out WHY two runs stopped at 0.8035/0.8041 while the baseline pushed on
+    to 0.85 was to infer it from the margins afterwards. This decision ends runs; it should say why.
+
+    None is still returned by the CALLER's failure paths (an unusable reply, a dead API), so None
+    continues to mean "no decision" while this dict means "decided not to".
+    """
     if not isinstance(decision, dict):
         raise ValueError("threshold-raise decision must be a JSON object")
     if not decision.get("raise_goal"):
-        return None
+        declined_reason = decision.get("reason")
+        return {
+            "raise_goal": False,
+            "reason": (
+                declined_reason.strip()[:240]
+                if isinstance(declined_reason, str) and declined_reason.strip()
+                else "no reason given"
+            ),
+        }
     new_threshold = decision.get("new_threshold")
     if (
         isinstance(new_threshold, bool)
@@ -1644,6 +1691,16 @@ def _maybe_raise_threshold(
         _log(model_id, f"  Stretch-goal decision invalid ({exc}); keeping the goal")
         return False
     if decision is None:
+        return False
+    if not decision.get("raise_goal"):
+        # The orchestrator's own words for why the run stops here. This is the last decision a
+        # converged run makes and it was previously silent; see `_validate_threshold_raise`.
+        _log(
+            model_id,
+            f"  Stretch goal DECLINED by the orchestrator — keeping the goal at "
+            f"{threshold:.4f} and finishing at {current_score:.4f} "
+            f"(margin {current_score - threshold:+.4f}). Reason: {decision['reason']}",
+        )
         return False
 
     proposed = float(decision["new_threshold"])

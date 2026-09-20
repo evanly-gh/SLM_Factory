@@ -213,7 +213,7 @@ class TestInterpolation:
                 return_value=MagicMock(weights_ref="/probe/weights"),
             ),
             patch(
-                "agent.nodes.evaluate._build_gguf_for_eval",
+                "agent.nodes.evaluate._build_quant_artifact_for_eval",
                 return_value="/probe/model-q8_0.gguf",
             ) as build,
             patch(
@@ -231,7 +231,7 @@ class TestInterpolation:
             "same [Q8_0]",
         )
         assert run_eval.call_args.kwargs["quant"] == "Q8_0"
-        assert run_eval.call_args.kwargs["gguf_path"] == "/probe/model-q8_0.gguf"
+        assert run_eval.call_args.kwargs["quant_artifact"] == "/probe/model-q8_0.gguf"
 
     @patch("agent.nodes.cold_start.model_selection.interpolation._probe_model")
     def test_selects_closest_to_ram_target(self, mock_probe):

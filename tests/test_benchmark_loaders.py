@@ -31,7 +31,9 @@ _NO_CONTEXT = TrainingContext(labels=(), instruction="")
 CURATED_LOADER_REPO_ID_CONSTANTS = {
     "data.loaders.clinc150": ("HF_ID",),
     "data.loaders.routerbench": ("HF_ID",),
-    "data.loaders.dialogsum_samsum": ("DIALOGSUM_ID", "SAMSUM_ID"),
+    # `dialogsum` is deliberately ABSENT. It reads the original release's JSONL over https rather
+    # than a Hub id, because no Hub mirror carries the three test references — so it has no
+    # namespaced repo-id constant for this test to check.
     "data.loaders.xlam_bfcl": ("XLAM_ID", "BFCL_ID"),
     "data.loaders.toolbench": ("TRAIN_REPO", "TOOLENV_REPO"),
 }
@@ -127,19 +129,29 @@ def test_clinc150_loader_does_not_head_slice_grouped_splits():
     assert "stratified_by_label" in source
 
 
-# --- DialogSum / SAMSum (generation) -------------------------------------------
+# --- DialogSum (generation) ----------------------------------------------------
 
-def test_dialogsum_shapes_dialogue_to_answer():
-    from data.loaders.dialogsum_samsum import convert_dialogsum_rows
+def test_dialogsum_shapes_dialogue_to_references():
+    """Reworked 2026-09-06: SAMSum is gone and the target is a REFERENCE LIST.
+
+    `answer` survives as `references[0]` so a train row (one summary) and a test row (three) have
+    the same shape, and so `dataset_integrity.validate_rows`, which type-checks `answer`, still
+    applies to both.
+    """
+    from data.loaders.dialogsum import convert_dialogsum_rows
 
     rows = convert_dialogsum_rows([
         {"dialogue": "A: hi\nB: hey", "summary": "A greets B."},
+        {"dialogue": "A: hi\nB: hey", "summary1": "One.", "summary2": "Two.", "summary3": "Three."},
         {"dialogue": "", "summary": "x"},           # empty dialogue dropped
+        {"dialogue": "A: hi", "summary": "   "},    # empty summary dropped
     ])
-    assert len(rows) == 1
+    assert len(rows) == 2
     assert rows[0]["text"] == "A: hi\nB: hey"
+    assert rows[0]["references"] == ["A greets B."]
     assert rows[0]["answer"] == "A greets B."
-    assert rows[0]["label"] == "generation"
+    assert rows[1]["references"] == ["One.", "Two.", "Three."]
+    assert rows[1]["answer"] == "One."
 
 
 # --- xLAM / BFCL (function_call) -----------------------------------------------

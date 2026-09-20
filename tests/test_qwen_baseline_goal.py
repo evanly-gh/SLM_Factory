@@ -1,10 +1,20 @@
-"""Qwen-3.6-baseline accuracy goal (2026-08-01).
+"""Teacher-baseline accuracy goal (2026-08-01; five-shot and shared with the gate, 2026-08-29).
 
-The accuracy target a run must beat is the separately-hosted Qwen-3.6 reference model's own
-zero-shot score on THIS run's frozen E, floored at 0.8. task_analysis parks the goal PENDING
-(E does not exist yet); eval_setup measures it once E is built. These tests pin the floor/cap
-math, the measurement path (mocked endpoint), the unreachable-endpoint HARD FAILURE (there is
-no fallback — the run raises and stops), and the park/complete handoff.
+The accuracy target a run must beat is the reference teacher's own FIVE-SHOT score on THIS run's
+frozen E, floored at 0.8. task_analysis parks the goal PENDING (E does not exist yet); eval_setup
+completes it once E is built, from the measurement `_measure_teacher` has ALREADY taken for the
+synthesis gate rather than from a second pass of its own.
+
+These tests pin the floor/cap math, the standalone `measure_endpoint_baseline` helper (still used
+by `scripts/probe_teacher_fewshot.py`, no longer by the pipeline), the reuse of the single
+measurement, what the calibration record has to remember about how it was taken, the
+unmeasurable-teacher HARD FAILURE (there is no fallback — the run raises and stops), and the
+park/complete handoff.
+
+The `qwen_baseline` / `pending_qwen_baseline` source strings and the `measured_qwen` field keep
+their names despite the teacher now being configurable: they are persisted checkpoint schema, and
+renaming them would break resume against every checkpoint already on disk. `measured_model`
+records which teacher the number actually came from.
 """
 import os
 
@@ -182,21 +192,38 @@ def test_env_override_still_wins_over_qwen(monkeypatch):
 
 # --- eval_setup completes the goal once E exists -------------------------------
 
-def _pending_state():
-    return {
+def _measured_verdict(**overrides):
+    """The shape `agent/teacher_fitness.measure_teacher_fitness` records on state."""
+    verdict = {
+        "status": "measured",
+        "score": 0.88,
+        "format_valid": 0.97,
+        "metric": "macro_f1",
+        "shots": 5,
+        "shots_requested": 5,
+        "n": 1000,
+        "model": "Qwen/Qwen3.6-35B-A3B",
+        "endpoint": "http://127.0.0.1:8000/v1",
+        "threshold": 0.8,
+        "synthesis_allowed": True,
+    }
+    verdict.update(overrides)
+    return verdict
+
+
+def _pending_state(**overrides):
+    state = {
         "task": "clinc150",
+        "teacher_fitness": _measured_verdict(),
         "threshold_calibration": {"source": "pending_qwen_baseline", "pending": True,
                                   "floor": 0.8},
     }
+    state.update(overrides)
+    return state
 
 
-def test_eval_setup_completes_goal_from_measured_baseline(monkeypatch):
+def test_eval_setup_completes_goal_from_measured_baseline():
     import agent.nodes.cold_start.eval_setup as eval_setup
-    from eval.harness import EvalResult
-
-    fake = EvalResult(f1=0.88, per_class={}, failures=[], metric="macro_f1")
-    monkeypatch.setattr(eval_setup, "measure_endpoint_baseline",
-                        lambda *a, **k: fake, raising=False)
 
     state = _pending_state()
     eval_setup._calibrate_qwen_goal_if_pending(state, _classification_eval_set())
@@ -208,31 +235,77 @@ def test_eval_setup_completes_goal_from_measured_baseline(monkeypatch):
     assert state["initial_stop_threshold"] == pytest.approx(0.88)
 
 
-def test_eval_setup_raises_when_endpoint_unreachable(monkeypatch):
-    """The Qwen baseline is the SOLE accuracy target — an unreachable endpoint has no honest
-    fallback, so eval_setup raises and breaks the loop instead of degrading to the floor."""
+def test_the_goal_reuses_the_fitness_measurement_and_takes_no_second_pass(monkeypatch):
+    """ONE measurement, two consumers — the synthesis gate and the accuracy goal.
+
+    They used to be measured separately: the gate five-shot on 200 rows, the goal ZERO-shot on all
+    1,000, so a run scored its own teacher twice with prompts that disagree by multiples on a
+    format-bound task (BC5CDR: 0.1131 against 0.7190) and set the goal from the shape nothing else
+    in the pipeline ever sends. Calibration must now read the recorded verdict and call nothing.
+    """
     import agent.nodes.cold_start.eval_setup as eval_setup
-    from agent.nodes.cold_start.eval_setup import QwenBaselineUnavailableError
-
-    monkeypatch.setattr(eval_setup, "measure_endpoint_baseline",
-                        lambda *a, **k: None, raising=False)
-    state = _pending_state()
-    with pytest.raises(QwenBaselineUnavailableError):
-        eval_setup._calibrate_qwen_goal_if_pending(state, _classification_eval_set())
-
-
-def test_eval_setup_raises_when_measurement_errors(monkeypatch):
-    """A measurement exception is also fatal — wrapped as QwenBaselineUnavailableError."""
-    import agent.nodes.cold_start.eval_setup as eval_setup
-    from agent.nodes.cold_start.eval_setup import QwenBaselineUnavailableError
+    import eval.endpoint_eval as endpoint_eval
 
     def boom(*a, **k):
-        raise RuntimeError("endpoint refused connection")
+        raise AssertionError("calibration must not take a second teacher measurement")
 
+    monkeypatch.setattr(endpoint_eval, "measure_endpoint_baseline", boom)
     monkeypatch.setattr(eval_setup, "measure_endpoint_baseline", boom, raising=False)
+
     state = _pending_state()
-    with pytest.raises(QwenBaselineUnavailableError):
-        eval_setup._calibrate_qwen_goal_if_pending(state, _classification_eval_set())
+    eval_setup._calibrate_qwen_goal_if_pending(state, _classification_eval_set())
+    assert state["stop_threshold"] == pytest.approx(0.88)
+
+
+def test_the_goal_records_how_the_teacher_was_measured():
+    """The goal is only interpretable with the model, the shot count and the format validity
+    beside it: 0.88 five-shot at format_valid 0.97 and 0.88 zero-shot at 0.40 are different
+    claims about different things, and only one of them is about capability."""
+    import agent.nodes.cold_start.eval_setup as eval_setup
+
+    state = _pending_state()
+    eval_setup._calibrate_qwen_goal_if_pending(state, _classification_eval_set())
+
+    calibration = state["threshold_calibration"]
+    assert calibration["measured_model"] == "Qwen/Qwen3.6-35B-A3B"
+    assert calibration["measured_shots"] == 5
+    assert calibration["measured_n"] == 1000
+    assert calibration["measured_format_valid"] == pytest.approx(0.97)
+    assert calibration["measured_metric"] == "macro_f1"
+
+
+def test_a_weak_but_measured_teacher_is_still_floored_not_rejected():
+    """The floor exists so a weak reference cannot set a trivially-low goal. It must still be
+    distinguishable from a teacher that genuinely set the goal — hence `floored`."""
+    import agent.nodes.cold_start.eval_setup as eval_setup
+
+    state = _pending_state(teacher_fitness=_measured_verdict(score=0.0999,
+                                                             synthesis_allowed=False))
+    eval_setup._calibrate_qwen_goal_if_pending(state, _classification_eval_set())
+
+    assert state["stop_threshold"] == pytest.approx(0.8)
+    assert state["threshold_calibration"]["floored"] is True
+    assert state["threshold_calibration"]["measured_qwen"] == pytest.approx(0.0999)
+
+
+def test_eval_setup_raises_when_the_teacher_was_never_measured():
+    """The teacher baseline is the SOLE accuracy target — an unmeasurable teacher has no honest
+    fallback, so eval_setup raises and breaks the loop instead of degrading to the floor.
+
+    Degrading would be worse here than it looks: the floor is 0.80, so an unreachable endpoint
+    would silently produce a plausible-looking goal that no measurement supports.
+    """
+    import agent.nodes.cold_start.eval_setup as eval_setup
+    from agent.nodes.cold_start.eval_setup import QwenBaselineUnavailableError
+
+    for verdict in (
+        None,
+        {"status": "unmeasured", "reason": "synthesis endpoint unreachable"},
+        {"status": "unmeasured", "reason": "generation failed on 1000 of 1000 eval row(s)"},
+    ):
+        state = _pending_state(teacher_fitness=verdict)
+        with pytest.raises(QwenBaselineUnavailableError):
+            eval_setup._calibrate_qwen_goal_if_pending(state, _classification_eval_set())
 
 
 def test_eval_setup_ignores_non_qwen_calibration(monkeypatch):

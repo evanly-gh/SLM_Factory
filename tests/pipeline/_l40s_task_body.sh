@@ -28,6 +28,21 @@ export HF_HOME=/mmfs1/gscratch/intelligentsystems/evanly/.hf-cache
 export HF_HUB_DISABLE_XET=1
 export PIP_CACHE_DIR=/mmfs1/gscratch/intelligentsystems/evanly/.pip-cache
 
+# --- Report-metric interpreters, defaulted HERE rather than in each launcher ---
+# `gec_bea19` scores through the real ERRANT CLI and `dialogsum`'s report metric adds BERTScore.
+# Neither can live in `.venv_gpu`: errant requires spacy<4 and bert-score predates
+# transformers 5.x, and a resolver that downgrades numpy or pydantic underneath Unsloth does not
+# fail at install time — it fails inside a training run, twenty minutes in, which is exactly the
+# shape of the nvcc failure that killed run 39361189 after the teacher measurement was paid for.
+# `scripts/setup_metric_envs.sh` builds both.
+#
+# Defaulted with `:-` so an operator override still wins, and set in the SHARED body so a task's
+# `_l40s` and `_cse` launchers cannot drift apart on it — which is the whole point of
+# `test_a_task_is_configured_identically_on_all_accounts`. The scorers read these variables and
+# hold no absolute path of their own.
+export ERRANT_VENV="${ERRANT_VENV:-$PROJ/.venv_errant}"
+export METRICS_VENV="${METRICS_VENV:-$PROJ/.venv_metrics}"
+
 if [ -z "${TASK:-}" ]; then echo "ERROR: TASK not set by the caller script"; exit 2; fi
 
 _detect_allocated_gpu_count() {
@@ -79,6 +94,33 @@ _configure_gpu_profile() {
     local -a synth_ids
 
     gpu_count="$(_detect_allocated_gpu_count)" || return $?
+
+    # API TEACHER MODE: no vLLM server, so no GPU is reserved for one and the whole allocation
+    # belongs to training. The 2-GPU floor below exists solely because the teacher needs a card of
+    # its own; enforcing it here would make every API-mode run reserve an idle second GPU on a
+    # shared queue. One GPU is therefore both allowed and sufficient.
+    #
+    # SLM_SYNTH_CONCURRENCY still matters and is NOT zero: it is the synthesis fan-out, which now
+    # sizes in-flight HTTP requests to DeepSeek rather than in-flight sequences on a local server.
+    # It is set well below the local profiles' 48-64 because the constraint has changed from "how
+    # many sequences fit in KV cache" to "how hard may we hammer a third party's rate limit".
+    if [ "${SLM_SYNTH_API_MODE:-0}" = "1" ]; then
+        export SLM_GPU_COUNT="$gpu_count"
+        export SLM_GPU_PROFILE="${SLM_GPU_PROFILE:-api-teacher-${gpu_count}gpu}"
+        export SLM_SYNTH_GPU_IDS=""
+        export SLM_SYNTH_TP=0
+        export SLM_SYNTH_GPU_UTILIZATION=0
+        export SLM_SYNTH_MAX_NUM_SEQS=0
+        export SLM_SYNTH_CONCURRENCY="${SLM_SYNTH_CONCURRENCY:-16}"
+        export SLM_PIPELINE_GPU_ID="${SLM_PIPELINE_GPU_ID:-0}"
+        _validate_gpu_id "$SLM_PIPELINE_GPU_ID" "$gpu_count" "SLM_PIPELINE_GPU_ID" || return $?
+        if ! [[ "$SLM_SYNTH_CONCURRENCY" =~ ^[1-9][0-9]*$ ]]; then
+            echo "ERROR: SLM_SYNTH_CONCURRENCY must be a positive integer" >&2
+            return 2
+        fi
+        return 0
+    fi
+
     if [ "$gpu_count" -lt 2 ]; then
         echo "ERROR: automatic L40S profiles require at least 2 allocated GPUs" >&2
         return 2
@@ -173,7 +215,11 @@ _configure_gpu_profile() {
 }
 
 _configure_gpu_profile
-echo "=== GPU profile $SLM_GPU_PROFILE: allocation=$SLM_GPU_COUNT synth=$SLM_SYNTH_GPU_IDS TP=$SLM_SYNTH_TP util=$SLM_SYNTH_GPU_UTILIZATION max-seqs=$SLM_SYNTH_MAX_NUM_SEQS concurrency=$SLM_SYNTH_CONCURRENCY pipeline=$SLM_PIPELINE_GPU_ID ==="
+if [ "${SLM_SYNTH_API_MODE:-0}" = "1" ]; then
+    echo "=== GPU profile $SLM_GPU_PROFILE: allocation=$SLM_GPU_COUNT pipeline=$SLM_PIPELINE_GPU_ID (no vLLM teacher; synthesis concurrency=$SLM_SYNTH_CONCURRENCY) ==="
+else
+    echo "=== GPU profile $SLM_GPU_PROFILE: allocation=$SLM_GPU_COUNT synth=$SLM_SYNTH_GPU_IDS TP=$SLM_SYNTH_TP util=$SLM_SYNTH_GPU_UTILIZATION max-seqs=$SLM_SYNTH_MAX_NUM_SEQS concurrency=$SLM_SYNTH_CONCURRENCY pipeline=$SLM_PIPELINE_GPU_ID ==="
+fi
 
 # Stable across Slurm requeues (same job id), but operator-overridable for a
 # deliberate continuation or a separately managed run directory.
@@ -188,12 +234,42 @@ if ! [[ "$SLM_TERM_GRACE_S" =~ ^[1-9][0-9]*$ ]]; then
 fi
 nvidia-smi -L || true
 
-# --- Launch the co-located vLLM synth server (localhost) on the selected profile GPUs ---
+# --- CUDA toolkit — required in BOTH teacher modes ---
+# This used to sit inside the `else` below, on the assumption stated there that everything in that
+# block "exists to serve a teacher that DeepSeek is now serving instead". That was wrong about
+# `nvcc`. The TRAINING venv needs it too: Unsloth runs the model through torch.compile, and
+# TorchInductor shells out to `nvcc` to build kernels at runtime. With the module unloaded there is
+# no usable nvcc on PATH, and run 39361189 — the first API-mode run on this launcher — died 21
+# minutes in, after paying for the full 1,000-row teacher measurement, with
+#
+#     torch._inductor.exc.InductorError: PermissionError: [Errno 13] Permission denied: 'nvcc'
+#
+# Hoisted rather than duplicated into the API branch so the two modes cannot drift apart again.
 source /etc/profile.d/modules.sh 2>/dev/null || true
 CUDA_MOD=$(module avail cuda 2>&1 | grep -oE "cuda/12\.8[0-9.]*" | sort -V | tail -1); CUDA_MOD="${CUDA_MOD:-cuda/12.8.1}"
 module load "$CUDA_MOD"
 export CUDA_HOME="$(dirname "$(dirname "$(command -v nvcc)")")"
-# flashinfer JITs kernels at runtime → needs nvcc (CUDA module) AND ninja (vllm venv bin).
+if ! command -v nvcc >/dev/null 2>&1; then
+    # Fail here rather than 20 minutes later inside a compile, after the teacher measurement has
+    # already been paid for.
+    echo "ERROR: nvcc is not on PATH after loading $CUDA_MOD — TorchInductor cannot build kernels" >&2
+    exit 2
+fi
+echo "=== CUDA toolkit: $CUDA_MOD (CUDA_HOME=$CUDA_HOME, nvcc=$(command -v nvcc)) ==="
+
+# --- Launch the co-located vLLM synth server (localhost) on the selected profile GPUs ---
+# SKIPPED ENTIRELY in API teacher mode: the separate .venv_vllm, the 35B weights, the ~40-minute
+# warmup and the GPU it all sits on exist to serve a teacher that DeepSeek is now serving instead.
+# `SLM_SYNTH_ENDPOINT` is deliberately left unset so `config.config` resolves the teacher from
+# SLM_SYNTH_API_MODE rather than from a stale local URL inherited from the submitting shell.
+VLLM_PID=""
+if [ "${SLM_SYNTH_API_MODE:-0}" = "1" ]; then
+    echo "=== API teacher mode: skipping the vLLM synth server (teacher=${SLM_SYNTH_API_MODEL:-deepseek-v4-flash} via DeepSeek) ==="
+    unset SLM_SYNTH_ENDPOINT
+    # There is no server to wait for; the preflight in run.py probes the API once instead.
+    export SLM_SYNTH_WAIT_S=0
+else
+# flashinfer JITs kernels at runtime → needs nvcc (loaded above) AND ninja (vllm venv bin).
 export PATH="$PROJ/.venv_vllm/bin:$PATH"
 .venv_vllm/bin/python -c 'import vllm' >/dev/null 2>&1 || bash scripts/setup_vllm_env.sh
 .venv_vllm/bin/python -c 'import ninja' >/dev/null 2>&1 || .venv_vllm/bin/python -m pip install ninja 2>/dev/null || true
@@ -235,11 +311,16 @@ CUDA_VISIBLE_DEVICES="$SLM_SYNTH_GPU_IDS" .venv_vllm/bin/vllm serve "$SYNTH_MODE
     --language-model-only --reasoning-parser qwen3 --served-model-name "$SYNTH_MODEL" \
     > "$SYNTH_LOG" 2>&1 &
 VLLM_PID=$!
+fi
+
 PIPELINE_PID=""
 REQUEUE_REQUESTED=0
 TERM_REQUESTED=0
 
 _cleanup_task_run() {
+    if [ -z "$VLLM_PID" ]; then
+        return
+    fi
     echo "stopping vLLM ($VLLM_PID)"
     kill "$VLLM_PID" 2>/dev/null || true
 }
@@ -287,7 +368,9 @@ _forward_term() {
 trap _cleanup_task_run EXIT
 trap _checkpoint_and_requeue USR1
 trap _forward_term TERM
-export SLM_SYNTH_ENDPOINT="http://127.0.0.1:${SYNTH_PORT}/v1"
+if [ "${SLM_SYNTH_API_MODE:-0}" != "1" ]; then
+    export SLM_SYNTH_ENDPOINT="http://127.0.0.1:${SYNTH_PORT}/v1"
+fi
 
 # --- Run the pipeline (its own venv), pinned to the profile GPU; Sonnet-1M; NON-cheap ---
 source .venv_gpu/bin/activate
@@ -297,9 +380,20 @@ export SLM_ORCHESTRATOR_1M=1                     # enable Sonnet's 1M-token cont
 unset SLM_CHEAP                                  # NON-cheap: full synthesis + CoT + Sonnet
 export SLM_QUANT_EVAL=1
 export SLM_MODEL_SELECTION_STRATEGY="${SLM_MODEL_SELECTION_STRATEGY:-smallest_first}"
-export SLM_SYNTH_WAIT_S=2400                     # preflight waits up to 40 min for the server
+# Defaulted rather than assigned: the API branch above already set 0, and there is nothing to wait
+# for when the teacher is a hosted endpoint that is either up or misconfigured.
+export SLM_SYNTH_WAIT_S="${SLM_SYNTH_WAIT_S:-2400}"   # preflight waits up to 40 min for the server
 export SLM_SYNTH_CONCURRENCY
 export SLM_MAX_SEQ_LENGTH="${SLM_MAX_SEQ_LENGTH:-4096}"
+# REPRODUCIBILITY. Exported here, before any python starts, because a cuBLAS handle created
+# without CUBLAS_WORKSPACE_CONFIG in the environment ignores it for the life of the process — and
+# without it, bf16 GEMM reduction order follows the scheduler. Probe 40222458 measured the cost of
+# not having this: two trainings of the same 151-row file in one process produced different
+# adapters. `training/determinism.py` applies the rest (seeds, cuDNN, deterministic algorithms)
+# and every run log states the settings its numbers were produced under.
+export CUBLAS_WORKSPACE_CONFIG="${CUBLAS_WORKSPACE_CONFIG:-:4096:8}"
+export SLM_SEED="${SLM_SEED:-3407}"
+export SLM_DETERMINISM="${SLM_DETERMINISM:-warn}"
 # The output-token reserve is declared per TASK on its TaskSpec (`max_new_tokens`) and read by
 # `eval.harness.eval_output_token_reserve`, which validates it against that task's own context
 # window. The five per-channel SLM_EVAL_MAX_NEW_TOKENS_* variables this file used to export were

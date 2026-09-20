@@ -103,19 +103,22 @@ def _train_and_eval(
         f"grad_accum={realized_h['gradient_accumulation_steps']} "
         f"effective_batch={realized_h['effective_batch_size']}"
     )
-    gguf_path = None
+    quant_artifact = None
     if model.quant is not None:
-        from agent.nodes.evaluate import _build_gguf_for_eval
+        from agent.nodes.evaluate import _build_quant_artifact_for_eval
 
-        gguf_path = _build_gguf_for_eval(
+        quant_artifact = _build_quant_artifact_for_eval(
             weights_ref,
             model.model_id,
             model.quant,
             model.label,
         )
+    from training.quant_backend import resolve_backend
+
     result = run_eval(
         state["eval_set"], weights_ref, model_id,
-        quant=model.quant, gguf_path=gguf_path,
+        quant=model.quant, quant_artifact=quant_artifact,
+        quant_backend=resolve_backend(),
     )
     return weights_ref, result
 

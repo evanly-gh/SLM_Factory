@@ -125,6 +125,96 @@ Widely used but without a canonical split or a single citable SOTA. Absent on pu
 
 ---
 
+## On-device SFT suite (added 2026-09-06)
+
+### DialogSum (generation, dialogue summarization)
+
+| metric | value | model | params | source | checked |
+|---|---|---|---|---|---|
+| rouge_l | 0.3812 | BART-large fine-tuned | 400M | https://aclanthology.org/2021.findings-acl.449/ | 2026-09-06 |
+| rouge_l | 0.3945 | BART-large + speaker/turn embeddings | 400M | https://aclanthology.org/2021.findings-acl.449/ | 2026-09-06 |
+
+**THE CEILING IS HUMAN, AND IT IS NOT 1.0.** One annotator's summary scored against the other two
+reaches **ROUGE-1 53.35 / ROUGE-2 26.72 / ROUGE-L 50.84**. Out-of-the-box models sit near 36
+ROUGE-1 and the best fine-tuned near 47. So fine-tuning buys ~11 points and ~6 remain — and a 47
+is about 88% of human, not 47% of perfect. The scorer carries all three ceiling numbers in
+`per_class` so a report cannot lose them.
+
+Full published ladder, for reading a run against: pointer-generator 33.77 / 9.24 / 32.18,
+Transformer 35.91 / 8.74 / 33.50, distilBART out of the box 35.93 / 11.71 / 28.86,
+UniLM 42.38 / 16.88 / 34.36 (R-1 / R-2 / R-L).
+
+### W&I+LOCNESS BEA-2019 (generation, grammatical error correction)
+
+| metric | value | model | params | source | checked |
+|---|---|---|---|---|---|
+| errant_f05 | 0.4300 | GPT-4 zero-shot | — | https://www.cl.cam.ac.uk/research/nl/bea2019st/ | 2026-09-06 |
+| errant_f05 | 0.7124 | recent fine-tuned system (+/- 0.28 over seeds) | — | https://www.cl.cam.ac.uk/research/nl/bea2019st/ | 2026-09-06 |
+
+⚠ **TWO CEILINGS APPLY AND BOTH ARE BELOW 1.0.**
+
+1. **The oracle ceiling here is ~0.89**, measured: feeding the gold correction back in as the
+   hypothesis scores F0.5 0.8934 on 120 dev sentences. The reference edits are the annotator's own
+   segmentation while the hypothesis edits are derived by ERRANT's alignment rules, so the two
+   lists differ even for identical sentences. A system at 0.75 is at ~84% of achievable.
+2. **F0.5 is reference-count dependent and the effect is ~12 points.** These numbers are
+   SINGLE-reference BEA-19 dev. CoNLL-14 at two references puts top systems near 68; the same
+   systems re-scored against a 10-annotator extension reach 80-81 against a human 72.58. Never
+   compare our F0.5 to a number computed under a different reference set.
+
+Fine-tuning GPT-4o gained +22.07 F0.5 over its own zero-shot — the largest SFT delta in the suite.
+
+### MultiCoNER II English (extraction, 33-class fine-grained NER)
+
+| metric | value | model | params | source | checked |
+|---|---|---|---|---|---|
+| macro_f1 | 0.5300 | XLM-R baseline | 270M | https://aclanthology.org/2023.semeval-1.310/ | 2026-09-06 |
+| micro_f1 | 0.6100 | XLM-R-Large + feature/loss engineering | 550M | https://arxiv.org/abs/2401.00698 | 2026-09-06 |
+
+The published ladder is RoBERTa-base 0.31 -> XLM-R-Large 0.53 -> 0.61, with roughly 30 of those
+points from feature, model and loss choices rather than scale. Note the metric split: `macro_f1`
+is the headline and `micro_f1` is what this pipeline SELECTS on, so the 0.61 row is not a target
+for the in-loop number.
+
+### GoEmotions (classification, 28-label multi-label emotion)
+
+| metric | value | model | params | source | checked |
+|---|---|---|---|---|---|
+| macro_auprc | n/a | — | — | — | — |
+| macro_f1_28 | 0.4600 | BERT-base (std 0.19) | 110M | https://arxiv.org/abs/2005.00547 | 2026-09-06 |
+| macro_f1_28 | 0.5400 | BERT-base + clipped asymmetric loss | 110M | https://arxiv.org/abs/2403.06108 | 2026-09-06 |
+
+⚠ `macro_auprc` is this task's HEADLINE and is deliberately `n/a`: the literature reports
+threshold-dependent macro-F1, and there is no citable macro-AUPRC to anchor against. The
+`macro_f1_28` rows are informational — they are a thresholding artifact, which is exactly why the
+headline is threshold-free — and a straight reproduction lands near 0.49.
+
+⚠ Never let the tail carry a headline. Test support: grief 6, relief 11, pride 16,
+nervousness 23, against neutral 1,787. A published `grief` 0.00 -> 0.57 F1 is +2 macro points
+earned on six examples.
+
+### TOPv2 (structured output, compositional semantic parsing)
+
+| metric | value | model | params | source | checked |
+|---|---|---|---|---|---|
+| exact_match | n/a | — | — | — | — |
+
+⚠ Deliberately `n/a` despite published numbers existing (RINE +13.0 EM over the seq2seq-pointer
+baseline on reminder at 25 SPIS; shift-reduce in-order +3.5 / +2.4). Two independent reasons make
+them non-comparable to ours, and a row here would invite exactly that comparison:
+
+1. **Our SPIS splits are reconstructed, not the released files.** The official low-resource splits
+   ship with the gated release and have no public mirror, so `data/loaders/topv2.py` reimplements
+   the sampling rule. It lands within 1.6% of the released 25-SPIS sizes, which validates the rule
+   — it does not make it the same file.
+2. **EM depends on the parse serialization**, and ours is the mirror's `semantic_parse` string
+   verbatim.
+
+So this task is a controlled comparison against our own baseline. The pipeline uses its own
+measured anchor, which is the safer default.
+
+---
+
 ## Adding a row
 
 1. Find a source that states the metric **by name** and the model scale.

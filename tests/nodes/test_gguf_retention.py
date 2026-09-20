@@ -10,7 +10,7 @@ import os
 os.environ.setdefault("ANTHROPIC_API_KEY", "test-key")
 os.environ.setdefault("EXA_API_KEY", "test-key")
 
-from agent.nodes.evaluate import _reap_gguf  # noqa: E402
+from agent.nodes.evaluate import _reap_quant_artifacts  # noqa: E402
 from training.quantize import gguf_validation_sidecar_path  # noqa: E402
 
 
@@ -30,7 +30,7 @@ def test_new_best_gguf_is_retained_and_others_reaped(tmp_path):
     loser = _mk_gguf(tmp_path, "bbbb")
     state = {}
 
-    _reap_gguf(state, [winner, loser], keep_path=winner)
+    _reap_quant_artifacts(state, [winner, loser], keep_path=winner)
 
     assert os.path.isfile(winner), "the new best must survive"
     assert os.path.isfile(gguf_validation_sidecar_path(winner))
@@ -46,7 +46,7 @@ def test_no_new_best_reaps_everything_built_this_iteration(tmp_path):
     b = _mk_gguf(tmp_path, "bbbb")
     state = {}
 
-    _reap_gguf(state, [a, b], keep_path=None)
+    _reap_quant_artifacts(state, [a, b], keep_path=None)
 
     assert not os.path.exists(a)
     assert not os.path.exists(b)
@@ -59,7 +59,7 @@ def test_previously_retained_gguf_is_never_reaped(tmp_path):
     new_best = _mk_gguf(tmp_path, "bbbb")
     state = {"retained_gguf_paths": [old_best]}
 
-    _reap_gguf(state, [old_best, new_best], keep_path=new_best)
+    _reap_quant_artifacts(state, [old_best, new_best], keep_path=new_best)
 
     assert os.path.isfile(old_best), "a prior new-best must not be reaped"
     assert os.path.isfile(new_best)
@@ -69,15 +69,15 @@ def test_previously_retained_gguf_is_never_reaped(tmp_path):
 def test_reaping_removes_the_now_empty_directory(tmp_path):
     loser = _mk_gguf(tmp_path, "bbbb")
 
-    _reap_gguf({}, [loser], keep_path=None)
+    _reap_quant_artifacts({}, [loser], keep_path=None)
 
     assert not os.path.isdir(os.path.dirname(loser))
 
 
 def test_reap_ignores_none_entries_and_missing_files(tmp_path):
-    """gguf_path is None whenever quantized eval is off; that must not raise."""
+    """The artifact path is None whenever quantized eval is off; that must not raise."""
     state = {}
-    _reap_gguf(state, [None, os.path.join(str(tmp_path), "gone", "x.gguf")], keep_path=None)
+    _reap_quant_artifacts(state, [None, os.path.join(str(tmp_path), "gone", "x.gguf")], keep_path=None)
     assert state["retained_gguf_paths"] == []
 
 
@@ -85,8 +85,8 @@ def test_retained_paths_are_deduplicated_across_iterations(tmp_path):
     best = _mk_gguf(tmp_path, "aaaa")
     state = {}
 
-    _reap_gguf(state, [best], keep_path=best)
-    _reap_gguf(state, [best], keep_path=best)
+    _reap_quant_artifacts(state, [best], keep_path=best)
+    _reap_quant_artifacts(state, [best], keep_path=best)
 
     assert state["retained_gguf_paths"] == [best]
     assert os.path.isfile(best)

@@ -152,7 +152,7 @@ def main():
     curriculum = int(args.curriculum or spec.initial_train_cap)
     # The task's own eval cap unless overridden, so the frozen eval set is the size the runs that
     # consume it would have built for themselves.
-    eval_size = int(args.eval or spec.eval_cap)
+    eval_size = int(args.eval or spec.select_cap)
     # Same sizing arithmetic as `eval_setup._load_named_benchmark`: the loader is asked for the
     # task's own share of the curriculum target as gold rows.
     max_train = max(int(curriculum * spec.train_fraction), 60)

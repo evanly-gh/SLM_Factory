@@ -406,6 +406,294 @@ def verify_ner_row(row: dict) -> tuple[bool, str]:
     return True, "every span appears verbatim in the text"
 
 
+def verify_fine_ner_row(row: dict) -> tuple[bool, str]:
+    """`verify_ner_row` plus TAXONOMY MEMBERSHIP, for MultiCoNER's fixed 33-class label space.
+
+    WHY BC5CDR'S VERIFIER IS NOT ENOUGH HERE. `verify_ner_row` checks that every span appears
+    verbatim in the text, which is the right check and says nothing about the TYPE. BC5CDR has two
+    types and a teacher does not invent a third; MultiCoNER has 33 with names like `OtherPROD` and
+    `Medication/Vaccine`, and the 2026-09-09 synthesis audit caught generated rows typed
+    `OtherORG`, `Org` and `OtherPer` — none of which exist. The scorer compares types EXACTLY, so
+    those rows are targets the model can only ever be marked wrong on.
+
+    Membership is decidable, so it belongs here rather than in the teacher pass — which, on the
+    same audit, was simultaneously rejecting `OtherLOC` as invalid when it is a real type. A
+    computation that cannot be talked out of its verdict is the right instrument for a fixed list.
+    """
+    from data.loaders.multiconer import ENTITY_TYPES
+
+    ok, reason = verify_ner_row(row)
+    if not ok:
+        return ok, reason
+    vocabulary = set(ENTITY_TYPES)
+    for entity in row.get("entities") or []:
+        kind = entity.get("type") if isinstance(entity, dict) else None
+        if kind not in vocabulary:
+            return False, (
+                f"entity type {kind!r} is not one of MultiCoNER's 33 classes; the scorer compares "
+                f"types exactly, so this row can only ever score as wrong"
+            )
+    return True, "spans appear verbatim and every type is one of the 33 classes"
+
+
+def verify_multilabel_emotion_row(row: dict) -> tuple[bool, str]:
+    """Exact well-formedness check for a generated GoEmotions row.
+
+    WHY THIS EXISTS, having first been declared unnecessary. `goemotions` originally shipped
+    `synth_verifier=None` on the reasoning that whether a comment expresses `annoyance` or
+    `disapproval` is a judgement rather than a computation. That is true of CORRECTNESS and false
+    of the LABEL SPACE, which is a fixed list of 28 names compared exactly by the scorer.
+
+    Run 39708679 paid for the distinction: 32 of 1,214 synthetic rows carried labels the taxonomy
+    does not contain — `frustration` among them — and with no exact verifier nothing caught them.
+    They went into training as targets the model can only be wrong about, because the scorer will
+    never accept a name outside the 28.
+
+    Four things are decidable here:
+      1. `labels` is a non-empty list of strings;
+      2. every name is one of the 28, spelled exactly — a synonym is a wrong answer;
+      3. no name repeats, since the scorer compares label SETS;
+      4. `label` names the SAME SET as `labels`, because the trainer targets `label` and the
+         scorer grades `labels`, and a row where they disagree teaches one thing and is graded on
+         another.
+
+    (4) COMPARES SETS, NOT ORDER, and the first version of this check got that wrong. It required
+    `label` to equal `", ".join(sorted(labels))`, which rejected 268 of 285 flagged rows for
+    nothing but word order — the loader happens to emit sorted labels and synthesis does not, and
+    `eval.scorers.multilabel_emotion.score` compares `set(pred) != set(gold)`, so order cannot
+    affect a score. Only 17 of those 285 were real disagreements. A verifier that fails a quarter
+    of a synthesis batch over a non-difference is the false-rejection cascade this file's own
+    docstring warns about, arriving from the opposite direction.
+
+    What it cannot check is whether those labels FIT the comment. That is the teacher's job, and
+    it is why this returns a reason string rather than a bare bool.
+    """
+    from data.loaders.goemotions import EMOTIONS
+
+    labels = row.get("labels")
+    if not isinstance(labels, list) or not labels:
+        return False, "labels is not a non-empty list"
+    vocabulary = set(EMOTIONS)
+    seen: set[str] = set()
+    for name in labels:
+        if not isinstance(name, str) or not name.strip():
+            return False, "a label is empty or not a string"
+        if name not in vocabulary:
+            return False, f"label {name!r} is not one of the 28 GoEmotions names"
+        if name in seen:
+            return False, f"label {name!r} is listed twice"
+        seen.add(name)
+    named = {part.strip() for part in str(row.get("label") or "").split(",") if part.strip()}
+    if named != set(labels):
+        return False, (
+            f"the trained target and the graded labels name different sets: "
+            f"label={sorted(named)} against labels={sorted(labels)}"
+        )
+    return True, "every label is one of the 28 names, unique, and matches the trained target"
+
+
+def verify_summarization_row(row: dict) -> tuple[bool, str]:
+    """Exact well-formedness check for a generated DialogSum row.
+
+    WHY THIS EXISTS. `dialogsum` shipped `synth_verifier=None` on the reasoning that whether a
+    summary is accurate and complete is a judgement rather than a computation. That is true, and
+    it is not the whole story: an audit of 1,161 synthetic rows from runs 39708679 / 39719569
+    found three defects that ARE decidable, and nothing was catching any of them.
+
+      1. INVENTED REFERENCES. The reference count came out `{1: 877, 2: 127, 3: 157}` — synthesis
+         was fabricating two or three "human reference summaries" for rows that have exactly one
+         author. Only `references[0]` is trained on, so this was mostly inert; it would stop being
+         inert the moment such a row reached an eval set, where the metric takes the best of three
+         and would be scoring a model against the teacher's own alternatives.
+
+      2. THE TRAINED TARGET DISAGREEING WITH THE STATED ANSWER. 76 rows had
+         `references[0] != answer`. `summarization_turn` targets `references[0]` and the scorer
+         grades `references`, so a row where those disagree teaches one string and is graded on
+         another.
+
+      3. A "SUMMARY" THAT IS ACTUALLY A CONTINUATION. 18 rows carried a transcript TURN LABEL
+         (`#Person1#:`) in the answer — the B250 failure, in generated training data. Training on
+         those actively teaches the model to reply to the conversation instead of summarizing it,
+         which is the single failure this task has already had in production.
+
+         The COLON is the test, not the tag: real DialogSum summaries refer to the speakers by
+         name — "Ms. Dawson helps #Person1# to write a memo" — in 78% of the 1,500 test
+         references, while none of them contains the `#PersonN#:` turn-label form.
+
+    What it cannot check is whether the summary is FAITHFUL to the dialogue. That is the teacher's
+    job, and it is why this returns a reason string rather than a bare bool.
+    """
+    import re
+
+    text = str(row.get("text") or "")
+    if not text.strip():
+        return False, "row has no dialogue to summarize"
+    references = row.get("references")
+    if not isinstance(references, list) or not references:
+        return False, "references is not a non-empty list"
+    if len(references) != 1:
+        return False, (
+            f"a generated row has {len(references)} references; it has one author, so it has one "
+            f"reference. Multiple references exist only in the official test split."
+        )
+    target = str(references[0] or "").strip()
+    if not target:
+        return False, "the reference summary is empty"
+    answer = str(row.get("answer") or "").strip()
+    if answer != target:
+        return False, (
+            "the trained target and the stated answer disagree: "
+            f"references[0]={target[:60]!r} against answer={answer[:60]!r}"
+        )
+    if re.search(r"#person\d+#\s*:", target, re.IGNORECASE):
+        return False, (
+            "the summary carries a transcript turn label (#PersonN#:), so it continues the "
+            "conversation instead of summarizing it — naming a speaker is fine, quoting a turn "
+            "is not"
+        )
+    if target.strip() == " ".join(text.split()):
+        return False, "the summary is a copy of the dialogue"
+    return True, "one reference, matching the trained target, and a summary rather than a reply"
+
+
+#: TOPv2 intents that are slotless in under 5% of gold parses, so a slotless one is a defect.
+#:
+#: DERIVED, NOT CHOSEN. Measured over all 5,000 loaded gold rows on 2026-09-09: of the 21 intents
+#: with at least 10 rows, these 9 are slotless in under 5% of their parses, `UPDATE_REMINDER` in 1
+#: of 65. `HELP_REMINDER` is the clean counter-example and the reason this is a list rather than a
+#: blanket rule — it is slotless in 25 of 25, because "how do I make a recurring reminder?" has no
+#: arguments to label. A rule reading "a real parse has slots" would reject all 872 slotless gold
+#: rows, 17.4% of the corpus.
+#:
+#: `tests/data/test_synth_verifiers.py` re-derives this set from the corpus and fails if it drifts,
+#: so the constant cannot quietly stop describing the data it came from.
+SLOT_BEARING_INTENTS = frozenset({
+    "CREATE_REMINDER", "DELETE_REMINDER", "GET_REMINDER", "GET_REMINDER_DATE_TIME",
+    "GET_REMINDER_LOCATION", "GET_WEATHER", "UPDATE_REMINDER", "UPDATE_REMINDER_DATE_TIME",
+    "UPDATE_REMINDER_TODO",
+})
+
+#: Below this, a slotless parse is plausible even for a slot-bearing intent. The two gold rows the
+#: rule would otherwise misread are both 3-word stubs — "add to reminder", "whats the weather" —
+#: and this guard is what takes the rule to 0 false rejects across all 5,000 gold parses.
+_SLOTLESS_MIN_WORDS = 4
+
+
+def verify_semantic_parse_row(row: dict) -> tuple[bool, str]:
+    """Exact well-formedness check for a generated TOPv2 parse row.
+
+    A nested parse tree looks like the least verifiable thing in the suite and is close to the
+    most, because the format carries almost all of its own correctness conditions:
+
+      1. brackets balance, and the whole answer is ONE tree — an unbalanced or doubled tree is not
+         a parse at all and would score zero at eval;
+      2. the tree opens on an intent, since `[SL:...]` at the root has no intent to belong to;
+      3. every label matches `IN:NAME` / `SL:NAME` in the corpus's own casing, so a plausible
+         invention like `[Slot:date]` is caught rather than trained on;
+      4. THE LOAD-BEARING ONE — the leaf words, concatenated in order, reproduce the utterance
+         EXACTLY, ignoring whitespace. TOPv2 parses are not merely extractive but COMPLETE: every
+         word of the command appears in the tree, including trailing punctuation, and nothing else
+         does. Verified against the mirror: this holds for 4,000 of 4,000 test parses.
+
+         That exactness is what makes the check worth having, because one comparison catches all
+         three ways a generated parse can lie about its input — paraphrase ("set an alarm" for
+         "wake me up"), omission (dropping a clause it did not know how to label), and invention
+         (a span the command never contained). Each produces a row that is fluent, plausible, and
+         teaches the model to hallucinate span text at eval, where exact match scores it zero.
+
+         The comparison ignores whitespace because the parse is TOKENIZED and the utterance is
+         not: "Remind Anita, Madi" has the parse leaves "Remind Anita , Madi", so a word-by-word
+         match would reject every gold row carrying punctuation.
+
+      5. an intent that always takes arguments in gold actually has some, because check 4 passes
+         VACUOUSLY on a parse with no slots at all: with everything a leaf under the root, the
+         leaves reproduce the utterance by construction. The 2026-09-09 audit generated
+         `[IN:UPDATE_REMINDER set a reminder for 5pm ]` and this function passed it — a parse
+         carrying no structure, which teaches the model to emit the utterance back unlabelled.
+         See `SLOT_BEARING_INTENTS` for why this is decidable and where the threshold comes from.
+
+    What it cannot catch is whether the labels are the RIGHT ones — whether this utterance is
+    `IN:CREATE_REMINDER` or `IN:CREATE_ALARM`, and whether a span should have been `SL:TODO`. That
+    is the teacher pass's job, and the reason this returns a reason string is so an unverifiable
+    dimension stays visible in the log rather than being implied by a pass. The same audit shows
+    why that division is worth keeping: 5 of 7 generated `UPDATE_REMINDER` rows were plain
+    creations ("set a reminder for 5pm"), which is a real mislabel that no computation here can
+    see, and the teacher caught every one.
+    """
+    import re
+
+    parse = row.get("answer")
+    if not isinstance(parse, str) or not parse.strip():
+        return False, "answer is empty or not a string"
+    text = str(row.get("text") or "")
+    if not text.strip():
+        return False, "row has no utterance for the parse to describe"
+
+    depth = 0
+    closed_at = None
+    for index, char in enumerate(parse):
+        if char == "[":
+            if closed_at is not None:
+                return False, "answer contains more than one tree"
+            depth += 1
+        elif char == "]":
+            depth -= 1
+            if depth < 0:
+                return False, "brackets close before they open"
+            if depth == 0:
+                closed_at = index
+    if depth != 0:
+        return False, f"brackets do not balance (ends at depth {depth})"
+    if closed_at is None:
+        return False, "answer contains no bracketed tree"
+    if parse.strip()[:4] != "[IN:":
+        return False, "the tree does not open on an intent"
+
+    from data.loaders.topv2 import INTENTS, SLOTS
+
+    for label in re.findall(r"\[([^\s\]]+)", parse):
+        if not re.fullmatch(r"(IN|SL):[A-Z0-9_]+", label):
+            return False, f"label {label!r} is not IN:NAME or SL:NAME"
+        # SHAPE IS NOT MEMBERSHIP. The pattern above admits `[SL:REMINDER_THING]`, which is
+        # well-formed and not a TOPv2 slot; the scorer is exact match, so a parse naming an
+        # invented label is a training target the model can only ever be marked wrong on. The
+        # vocabulary is closed at 82 intents and 84 slots, so this is decidable — and it has to be
+        # decided here, because the teacher demonstrably cannot: on the 2026-09-09 audit it
+        # rejected `SL:DATE_TIME_NEW`, which is a real slot appearing in gold.
+        kind, _, name = label.partition(":")
+        if name not in (INTENTS if kind == "IN" else SLOTS):
+            return False, (
+                f"{label} is not in TOPv2's closed vocabulary of 82 intents and 84 slots; the "
+                f"scorer compares labels exactly, so this row can only ever score as wrong"
+            )
+
+    # Leaf words are everything outside the bracket-and-label tokens, in order.
+    leaves = re.sub(r"\[(?:IN|SL):[A-Z0-9_]+", " ", parse).replace("]", " ").split()
+    covered = "".join(leaves)
+    expected = "".join(text.split())
+    if covered != expected:
+        return False, (
+            "the parse does not reproduce the command: a TOPv2 parse covers every word of the "
+            f"utterance and adds none, but its leaves read {' '.join(leaves)!r} against the "
+            f"command {text.strip()!r}"
+        )
+
+    # Check 4 cannot see the degenerate parse, because with no slots every word is a leaf and the
+    # comparison above succeeds by construction. So ask it separately.
+    root = re.match(r"\[IN:([A-Z0-9_]+)", parse.strip())
+    if (
+        root is not None
+        and "[SL:" not in parse
+        and root.group(1) in SLOT_BEARING_INTENTS
+        and len(text.split()) >= _SLOTLESS_MIN_WORDS
+    ):
+        return False, (
+            f"IN:{root.group(1)} takes arguments in essentially every gold parse, but this one "
+            f"labels no spans and leaves the whole {len(text.split())}-word command as bare text"
+        )
+    return True, "one balanced tree, valid labels, leaves reproduce the command exactly"
+
+
 # No dispatch table here any more. Each task names its verifier directly in its spec
 # (`TaskSpec.synth_verifier`), which is what this module's `_BY_BENCHMARK` was already working
 # around: `calendar_json` and `xlam_bfcl` were both `function_call`, so keying on the task type

@@ -6,7 +6,7 @@ from agent.checkpoint import atomic_write_json
 from agent.timing import TimingEvent, record_timing_event
 from agent.state import AgentState
 from data.eval_set import build_eval_set
-from eval.endpoint_eval import measure_endpoint_baseline
+from agent import ablations as _ablations
 from data.loaders.dataset_integrity import (
     normalize_text,
     normalized_text_overlap,
@@ -60,11 +60,22 @@ def _load_named_benchmark(name: str, state: AgentState, acquire_meta: dict):
     # reach, because the only thing that could have filled the gap was re-drawing rows it already
     # had. The curriculum starts at this size and GROWS from here (see agent/data_rebuild.py).
     max_train = spec.initial_train_cap
-    # A bigger eval set is strictly better for variance — it costs one extra inference pass per
-    # iteration and buys precision on exactly the comparisons this project makes — but the eval runs
-    # EVERY iteration, so an unbounded split makes each turn proportionally slower.
+    # ABLATION 4 starves the run of real data on purpose. Applied here rather than inside a loader
+    # so it holds for every task without one of them having to know about it, and so the number the
+    # log prints below is the number actually loaded.
+    _ablation_cap = _ablations.train_cap_override()
+    if _ablation_cap is not None:
+        print(f"      [ablation] SLM_ABLATION_TRAIN_CAP={_ablation_cap}: loading {_ablation_cap} "
+              f"gold row(s) instead of the task's {max_train}")
+        max_train = _ablation_cap
+    # This is the SELECTION eval: it runs every iteration and its only job is to rank checkpoints.
+    # A bigger split would buy precision, but it would buy it once per iteration, and the number
+    # still would not be the one to publish. Ranking survives a small split because the comparison
+    # is paired — identical rows against successive checkpoints — so the sampling error is largely
+    # common-mode and cancels. The published number comes from `scripts/report_eval.py`, which runs
+    # the FULL split under `TaskSpec.report_score` exactly once.
     _cap = os.environ.get("SLM_EVAL_SIZE_CAP")
-    max_test = int(_cap) if _cap else spec.eval_cap
+    max_test = int(_cap) if _cap else spec.select_cap
     print(f"      [eval_setup] loading {spec.name!r} ({spec.title}): "
           f"train\u2264{max_train} test\u2264{max_test}"
           + ("" if _cap else " (task default; override with SLM_EVAL_SIZE_CAP)"))
@@ -106,29 +117,40 @@ def _load_named_benchmark(name: str, state: AgentState, acquire_meta: dict):
     return train_examples, test_examples
 
 
-# The eval-set cap is per task (`TaskSpec.eval_cap`). Bigger is statistically better — the standard
-# error on a proportion at n=1000 is about 1.5 percentage points, well below the score differences
-# this project cares about — but the eval runs EVERY iteration, so an unbounded split makes each
-# loop turn proportionally slower: RouterBench's whole split is 7,267 rows. Each task picks the
-# point on that trade-off that suits its own split size.
+# The in-loop eval cap is per task (`TaskSpec.select_cap`), and it sizes CHECKPOINT SELECTION
+# only. The eval runs EVERY iteration, so an unbounded split makes each loop turn proportionally
+# slower — RouterBench's whole split is 7,267 rows and MultiCoNER's test split is 249,980 — while
+# buying precision the loop does not need, because ranking is a paired comparison over fixed rows.
+# Nothing here is publishable: `scripts/report_eval.py` runs the full split under the task's
+# `report_score` once, and that is the number that leaves the building.
 
 
 class QwenBaselineUnavailableError(RuntimeError):
-    """The Qwen-3.6 reference endpoint could not be measured, so no accuracy goal exists.
+    """The reference teacher could not be measured, so no accuracy goal exists.
 
-    This is FATAL by design: the Qwen baseline is the sole accuracy target, so an unreachable
-    endpoint has no honest fallback. Raising breaks the pipeline loop rather than degrading to a
+    This is FATAL by design: the teacher baseline is the sole accuracy target, so an unmeasurable
+    teacher has no honest fallback. Raising breaks the pipeline loop rather than degrading to a
     guessed threshold.
+
+    The name predates API mode and is kept because it is raised and caught by name across the
+    tests and referenced in the run's failure status.
     """
 
 
-def _gate_synthetic_data(state: AgentState, eval_set, train_rows: list[dict]) -> None:
-    """Decide, once, whether this run may use synthetic data at all.
+def _measure_teacher(state: AgentState, eval_set, train_rows: list[dict]) -> None:
+    """Measure the teacher ONCE, five-shot, on the full frozen eval set.
 
-    Measured five-shot through the task's own scorer, because that is how synthesis prompts the
-    teacher; a zero-shot number on a format-bound task mostly reports whether it guessed our output
-    contract (B276). Below the gate, `surgical_synthesis` is removed from the intervention menu for
-    the rest of the run — see agent/teacher_fitness.py.
+    The verdict lands in ``state["teacher_fitness"]`` and is read by two consumers that used to
+    each take their own measurement:
+
+      * the SYNTHESIS GATE — below `MIN_ACCURACY`, `surgical_synthesis` leaves the intervention
+        menu for the rest of the run (see agent/teacher_fitness.py);
+      * the ACCURACY GOAL — `_calibrate_qwen_goal_if_pending`, below, floors the same score at 0.8
+        and makes it the run's `stop_threshold`.
+
+    Five-shot because that is how synthesis prompts the teacher; a zero-shot number on a
+    format-bound task mostly reports whether it guessed our output contract (B276). The full eval
+    set because that is the set the student is scored on, so the two numbers are comparable.
     """
     from agent.teacher_fitness import measure_teacher_fitness
     from tasks import get_task
@@ -137,6 +159,11 @@ def _gate_synthetic_data(state: AgentState, eval_set, train_rows: list[dict]) ->
     state["teacher_fitness"] = measure_teacher_fitness(
         spec, eval_set, list(train_rows or []), log=print,
     )
+
+
+# The old name, kept as an alias because it reads correctly at the call sites and is referenced
+# from the design notes. Both names describe the same single measurement.
+_gate_synthetic_data = _measure_teacher
 
 
 def _author_task_brief(state: AgentState, train_rows: list[dict]) -> None:
@@ -193,58 +220,68 @@ def _pin_label_space(state: AgentState, eval_set) -> None:
 
 
 def _calibrate_qwen_goal_if_pending(state: AgentState, eval_set) -> None:
-    """Complete the Qwen-3.6-baseline accuracy goal once the frozen E exists.
+    """Complete the teacher-baseline accuracy goal once the frozen E exists.
 
     task_analysis parks the goal as ``pending_qwen_baseline`` because E is not built until this
-    node. Here we score the hosted reference model zero-shot on E and set the goal to
-    ``min(0.99, max(measured, floor))`` via agent.threshold.threshold_from_endpoint_baseline.
-    ``initial_stop_threshold`` (the immutable floor) is written ONCE, here.
+    node. The goal is ``min(0.99, max(measured, floor))`` via
+    agent.threshold.threshold_from_endpoint_baseline, and ``initial_stop_threshold`` (the
+    immutable floor) is written ONCE, here.
 
-    The Qwen baseline is the ONLY accuracy target. If the endpoint is unreachable or the
-    measurement errors, this RAISES ``QwenBaselineUnavailableError`` and the run stops — there
-    is deliberately no fallback to a guessed threshold. A successfully-measured-but-weak score
-    is still floored at 0.8.
+    THE MEASUREMENT IS NOT TAKEN HERE. It is the FIVE-SHOT full-eval-set verdict `_gate_synthetic_data`
+    already recorded in ``state["teacher_fitness"]`` a few lines above, and reusing it is the point:
+
+      * This used to call `measure_endpoint_baseline` for a second, ZERO-shot pass over the same
+        rows, so the run measured its teacher twice with two different prompts and set the goal
+        from the one nothing else in the pipeline ever sends. On a format-bound task those two
+        numbers differ by multiples — BC5CDR reads 0.1131 zero-shot and 0.7190 five-shot — which
+        meant the synthesis gate and the accuracy goal could disagree about whether the same
+        teacher could do the same task.
+      * It also cost 1,000 extra teacher calls per run to produce the number used for the goal.
+
+    The teacher baseline is the ONLY accuracy target. If the teacher could not be measured — an
+    unreachable endpoint, or too many rows failing to generate — this RAISES
+    ``QwenBaselineUnavailableError`` and the run stops. There is deliberately no fallback to a
+    guessed threshold, and no fallback to a second measurement either: if the teacher is
+    unmeasurable for the gate it is unmeasurable for the goal, and inventing a target from a
+    reference nobody could score is how a run converges against a bar that means nothing. A
+    successfully-measured-but-weak score is still floored at 0.8.
     """
     calibration = state.get("threshold_calibration") or {}
     if calibration.get("source") != "pending_qwen_baseline":
         return
 
+    from agent.teacher_fitness import format_fitness_measurement
     from agent.threshold import threshold_from_endpoint_baseline
 
     floor = float(calibration.get("floor", 0.8))
-    try:
-        # The task comes from the EVAL SET, which is why there is no task argument here. Passing one
-        # put the task NAME in the `generate_fn` slot, so every one of the 1,000 eval rows failed with
-        # `'str' object is not callable`, the baseline measured 0.0000, and the accuracy goal silently
-        # fell back to the 0.80 floor while reporting that the teacher had scored zero (B313).
-        baseline = measure_endpoint_baseline(eval_set, log=print)
-    except Exception as error:  # noqa: BLE001 - re-raised as a fatal calibration failure
+    verdict = state.get("teacher_fitness")
+    if not isinstance(verdict, dict) or verdict.get("status") != "measured":
+        reason = (verdict or {}).get("reason") if isinstance(verdict, dict) else None
         raise QwenBaselineUnavailableError(
-            f"Qwen-3.6 baseline measurement failed ({str(error)[:160]}); the reference "
-            "endpoint is the sole accuracy target, so the run cannot continue"
-        ) from error
-
-    if baseline is None:
-        raise QwenBaselineUnavailableError(
-            "Qwen-3.6 baseline endpoint is unreachable (measure_endpoint_baseline returned "
-            "None); the reference endpoint is the sole accuracy target, so the run cannot "
-            "continue. Set SYNTH_ENDPOINT/SYNTH_MODEL to a reachable Qwen-3.6 server."
+            "the teacher could not be measured on this run's eval set "
+            f"({reason or 'no measurement recorded'}), and its score is the sole accuracy "
+            "target, so the run cannot continue. Check the synthesis endpoint "
+            "(SLM_SYNTH_ENDPOINT / SLM_SYNTH_MODEL, or DEEPSEEK_API_KEY under "
+            "SLM_SYNTH_API_MODE=1)."
         )
 
-    threshold, reason = threshold_from_endpoint_baseline(baseline.f1, floor=floor)
+    measured = float(verdict.get("score") or 0.0)
+    threshold, reason = threshold_from_endpoint_baseline(measured, floor=floor)
     # Whether the FLOOR or the teacher's own measurement set the goal. A floored goal and a
     # teacher-set goal print the same number, so without this flag a run that converged against a
     # floor the teacher never reached is indistinguishable in the summary from one that matched a
     # strong teacher. Recorded here, reported at end of run.
-    floored = float(baseline.f1) < float(floor)
-    print(f"      [threshold] Qwen baseline {baseline.f1:.4f} → goal {threshold:.4f} "
+    floored = measured < float(floor)
+    print(f"      [threshold] teacher baseline {measured:.4f} → goal {threshold:.4f} "
           f"(floor {floor:.2f}) — "
           + (
               f"FLOOR WON: the teacher scored below {floor:.2f}, so the goal is the floor, "
-              f"not the teacher's {baseline.f1:.4f}"
+              f"not the teacher's {measured:.4f}"
               if floored
               else f"teacher's own score set the goal (above the {floor:.2f} floor)"
           ))
+    print(f"      [threshold] measured: {format_fitness_measurement(verdict)} "
+          f"(the SAME measurement that gated synthetic data — one pass, two decisions)")
 
     state["stop_threshold"] = threshold
     state["initial_stop_threshold"] = threshold
@@ -255,8 +292,20 @@ def _calibrate_qwen_goal_if_pending(state: AgentState, eval_set) -> None:
         "floored": floored,
         "reason": reason,
         "pending": False,
-        "measured_qwen": round(float(baseline.f1), 4),
-        "measured_metric": baseline.metric,
+        # `measured_qwen` keeps its name despite no longer always naming Qwen: it is a persisted
+        # checkpoint field that the run report and three test modules read, and renaming it would
+        # break resume against every checkpoint already on disk to gain nothing. `measured_model`
+        # beside it says which teacher the number actually came from.
+        "measured_qwen": round(measured, 4),
+        "measured_metric": verdict.get("metric"),
+        "measured_format_valid": (
+            round(float(verdict["format_valid"]), 4)
+            if isinstance(verdict.get("format_valid"), (int, float))
+            else None
+        ),
+        "measured_shots": verdict.get("shots"),
+        "measured_n": verdict.get("n"),
+        "measured_model": verdict.get("model") or None,
         "endpoint": "reachable",
     }
 

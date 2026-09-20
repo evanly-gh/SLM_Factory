@@ -22,7 +22,7 @@ SPEC = TaskSpec(
     load=_load,
     required_fields=("text", "label"),
     initial_train_cap=5000,
-    eval_cap=1000,
+    select_cap=1000,
     eval_sampling="label_balanced",
     closed_label_space=True,
     # Without these the teacher reads the label as an English word: it rejected a grade-school
@@ -39,6 +39,7 @@ SPEC = TaskSpec(
             "— judge difficulty, NOT whether the topic involves routing or networking"
         ),
     },
+    entity_type_vocabulary=(),  # extracts no spans
     verifier_notes="",
     quality_controls=(
         qc.require_fields("text", "label"),
@@ -61,6 +62,12 @@ SPEC = TaskSpec(
     needs_judge=False,
     judge_overlap=False,
     attach_reasoning=True,
+
+    # Selection and reporting coincide: two classes with label-balanced sampling, so the minority
+    # class has support at selection size.
+    report_load=None,
+    report_score=scorer.score_minority_f1,
+    report_metric_name="minority_f1",
 
     build_training_turn=classification_turn,
 

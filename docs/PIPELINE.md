@@ -531,27 +531,95 @@ as comparable. Scoring runs `SLM_JUDGE_CONCURRENCY` (16) requests concurrent, an
 `SLM_EVAL_JUDGE_OVERLAP_CHUNK` hands each finished generation chunk to the judge while the next
 chunk is still generating.
 
-**Quantized accuracy eval.** A GGUF is built and scored when `quant is not None` **and**
-(`config.QUANT_ACCURACY_EVAL` — default on — **or** `config.HW_ONDEVICE_BACKEND != "theoretical"`).
-With `SLM_QUANT_EVAL=0`, HF/LoRA weights are scored via Unsloth instead (`gguf_path=None`).
+**Quantized accuracy eval.** The quantized artifact is built and scored when `quant is not None`
+**and** (`config.QUANT_ACCURACY_EVAL` — default on — **or**
+`config.HW_ONDEVICE_BACKEND != "theoretical"`). With `SLM_QUANT_EVAL=0`, HF/LoRA weights are
+scored via Unsloth instead (`quant_artifact=None`).
 
-GGUF cache key: `sha1(f"{weights_ref}|{quant}")[:12]` →
-`artifacts/gguf/<model_id>/<key>/model-<method>.gguf`. **Both parts of the key are
+**Two quantization backends, one per run.** `config.QUANT_BACKEND` / `SLM_QUANT_BACKEND` /
+`python tests/pipeline/run.py --quant-backend ...` selects which on-device runtime the artifact is
+built for, and `training/quant_backend.py` is the single place that choice is routed:
+
+| | `llama_cpp` (default) | `mnn` |
+| --- | --- | --- |
+| Builder | `convert_hf_to_gguf` + `llama-quantize` | MNN `llmexport.py` + a built `MNNConvert` |
+| Artifact | one file, `model-<method>.gguf` | a directory, `model-mnn-q<bits>/` |
+| Quant control | named presets `Q4_K_M` / `Q8_0` | `--quant_bit` 4/8, `--quant_block` 64 |
+| Scored by | `llama-cpp-python`, GPU-offloaded | `pymnn`'s LLM API, CUDA (CPU fallback only when no GPU is visible) |
+| Cache tree | `artifacts/gguf/` | `artifacts/mnn/` |
+| Setup | local llama.cpp checkout on PATH | `bash scripts/setup_mnn_env.sh` |
+
+The pool's selectors are shared by both backends, so `@Q4_K_M` means "the 4-bit build for this
+run's backend" and the model ladder, tiering and reporting are untouched by the choice. MNN has no
+k-quant equivalent — it quantizes every linear to the same width — so a llama.cpp-vs-MNN
+comparison is a **bit-width** comparison. Both backends are handed the SAME rendered prompt
+(`_serving_prompt_prefix`; MNN runs with `use_template: false`), because otherwise a score
+difference between them could be the quantization, the runtime, or the template. One backend per
+run: `SLM_QUANT_BACKEND` is resume-sensitive, so a checkpoint cannot be continued under the other
+one and have its old scores compared against new ones.
+
+**MNN scores on the GPU** (`SLM_MNN_BACKEND_TYPE`, default `auto` = CUDA when a GPU is visible,
+else CPU), for the same reason the GGUF path offloads its layers: a quantized artifact's accuracy is
+a property of its weights, tokenizer and greedy decoding, not of the device. Measured on one adapter
+over 150 clinc150 rows — llama.cpp 8s, MNN/CUDA 54s, MNN/CPU 523s — so the GPU is a ~10x win and
+leaves MNN ~6.75x behind llama.cpp rather than 58x. The gain is all prefill (6,867 tok/s against the
+CPU's 671); GPU decode is *slower* (~30 tok/s against ~141), so a fine-tuned model answering with one
+label gains the most and an untrained baseline rambling to its token cap gains least.
+
+Three MNN/CUDA hazards, all measured and all refused rather than absorbed:
+
+| hazard | symptom | handling |
+|---|---|---|
+| CUDA backend not registered (static `libMNN.a` drops its initializer) | `Can't Find type=2 backend, use 0 instead` on stdout, then CPU speed **and** corrupted output | `load_mnn_llm` captures MNN's stdout and fails the load, naming the build fix |
+| `memory=low` with an artifact wider than 4-bit | `<|endoftext|>` on every row, format_valid 0.0000 | `SLM_MNN_MEMORY=auto` picks `low` for 4-bit and `normal` above it; forcing `low` is refused |
+| a second CUDA model load in one process | empty output, scored 0.0000, nothing raised | refused; every eval and artifact build already runs in its own CUDA worker |
+
+`precision=normal` + `memory=low` on CUDA is likewise refused by name: it decodes garbage at no
+speed gain. `memory=normal` dequantizes the quantized weights into fp16 device memory, which costs
+VRAM and not accuracy — it reproduced the CPU score exactly (0.2667 both) at 4x the speed.
+
+Eval concurrency is 1 on both backends. `MAX_GGUF_EVAL_CONCURRENCY` defaults to 1, and
+`SLM_MNN_EVAL_CONCURRENCY` above 1 is refused rather than silently ignored.
+
+**MNN's thread count is a CORRECTNESS setting on the CPU path, not a speed knob.** `Qwen/Qwen3.5-0.8B@Q4_K_M` at
+`thread_num=14` decoded all 1,000 CLINC150 rows as `%+!!!!!!!!!!` and scored 0.0000, while the same
+artifact at 1/2/4/8/10/12/13/16 threads answered them correctly and identically. The logits are
+finite and only the argmax is wrong, so nothing downstream can tell it from a bad model. Every MNN
+artifact build therefore decodes a 512-token prompt at the configured thread count AND at a
+known-good reference count and **refuses the artifact if they disagree** — greedy decoding cannot
+depend on how the work was split. `SLM_MNN_THREADS` defaults to 8; `SLM_MNN_THREAD_CHECK=0` disables
+the cross-check for an operator who has inspected a mismatch and judged it benign.
+
+Artifact cache key: `sha1(f"{weights_ref}|{quant}")[:12]` →
+`artifacts/<backend>/<model_id>/<key>/<artifact name>`. **Both parts of the key are
 essential** — the same base model can be selected at two tiers as different quant variants, and
 the checkpoint path collides across tiers because the iteration counter resets on escalation.
 Keying on `weights_ref` alone made a Q8_0 tier silently reuse the earlier Q4_K_M file, so both
-tiers scored identically. A cached file is reusable only when its size and SHA-256 match an
-atomic sidecar written after a real llama.cpp load.
+tiers scored identically. A cached artifact is reusable only when its contents hash to an atomic
+sidecar written after a real load in the target runtime — one file's size and SHA-256 for a GGUF,
+every file in the directory for MNN. The MNN sidecar additionally re-reads `export_args.json` and
+refuses an artifact whose `quant_bit` does not match its label: a 4-bit and an 8-bit MNN export are
+the same five filenames, so nothing else would notice a mislabelled one. Its EXPORT SETTINGS
+(`quant_block`, `lm_quant_bit`) are part of the hit criterion too, since they change the weights and
+the files cannot say which values built them.
+
+MNN keeps the **lm_head at 8 bits** while the body goes to the selector's width, because `Q4_K_M` is
+itself mixed-precision (`output.weight` at Q6_K): a uniform 4-bit MNN export is not the artifact
+`@Q4_K_M` names, and comparing it against a GGUF would charge MNN for a difference in recipe rather
+than in runtime. Measured on SmolLM2-360M/clinc150: 0.7367 with the 8-bit lm_head against 0.7278
+without, for 22 MB.
 
 **The zero-shot baseline competes as a candidate** at iteration 1. If fine-tuning does not beat
 the base model, the base model is kept — preventing a shipped fine-tune that is *worse* than
 zero-shot, and letting a strong base model converge on its own.
 
-**GGUF retention.** `_reap_gguf` keeps a GGUF only when its iteration set a new best for the
-tier; every other one is deleted along with its validation sidecar. Measured reuse was 0/138
-(NER) and 2/66 (math) at ~2.6 GB apiece. Earlier new-bests are protected by
-`retained_gguf_paths`. A rollback or probe that needs a reaped GGUF simply rebuilds it —
-correctness is unaffected.
+**Artifact retention.** `_reap_quant_artifacts` keeps a quantized artifact only when its iteration
+set a new best for the tier; every other one is deleted along with its validation sidecar (a file
+for GGUF, a whole directory for MNN). Measured reuse was 0/138 (NER) and 2/66 (math) at ~2.6 GB
+apiece. Earlier new-bests are protected by `retained_gguf_paths` — the state key keeps its
+historical spelling because renaming a checkpoint channel would make every in-flight run
+unresumable. A rollback or probe that needs a reaped artifact simply rebuilds it — correctness is
+unaffected.
 
 **Score bookkeeping.** `state["scores"] = list(old) + [current]` — a **new list**, not an
 in-place append. `scores` has no LangGraph reducer, so an in-place mutation keeps the same

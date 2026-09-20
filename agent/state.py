@@ -4,6 +4,17 @@ from data.eval_set import EvalSet
 from eval.harness import EvalResult
 from config.android_pool import ModelSpec, HardwareConstraints
 
+# A DAG node's `status` when its rebuild added no rows and train+evaluate were therefore SKIPPED.
+#
+# Such a node carries `score=None` because no evaluation happened. Every score-based consumer keys
+# on this to leave it alone: `run_health._dag_rows` keeps it out of the attribution table, and
+# `nodes.iterate` keeps it out of the stagnation window, because a turn that produced no measurement
+# is not evidence that the model has stopped improving.
+#
+# It is still RECORDED rather than dropped, because the orchestrator reads the DAG as its own
+# history — an attempt that left no trace is one it will propose again verbatim.
+SKIPPED_NO_ROWS = "skipped_no_rows_added"
+
 class AgentState(TypedDict):
     # Task specification
     description: str
@@ -84,6 +95,17 @@ class AgentState(TypedDict):
     _last_synth_kept: int
     curation_log_path: str            # run-local durable trajectory path
 
+    # SEED SNAPSHOT — written once, at the initial_gold build, and ONLY when
+    # SLM_ABLATION_RESET_DATA_ON_ESCALATION=1 (all four are None on a normal run). They record what
+    # "the dataset before any tier touched it" means, so `agent.ablations.reset_curriculum_to_seed`
+    # can restore it on every tier promotion. The two big pieces live on disk and only their paths
+    # are held here, because the train pool is thousands of rows and this dict crosses the
+    # checkpoint boundary on every write. See agent/ablations.py.
+    seed_dataset_path: Optional[str]        # artifacts/dataset_v1.jsonl — the seed curriculum
+    seed_train_examples_path: Optional[str]  # artifacts/seed_train_examples.jsonl — gold-only pool
+    seed_source_progress: Optional[dict]     # per-source read depth as cold start left it
+    seed_last_curation: Optional[dict]       # the seed curriculum's own composition record
+
     # Search state
     best_weights_ref: Optional[str]
     best_score: float
@@ -137,7 +159,7 @@ class AgentState(TypedDict):
 
     # --- Data-size targets chosen by the orchestrator (task_planner), clamped to config
     # floors/ceiling. curate/eval_setup read these instead of a fixed per-type constant.
-    # Curriculum and eval sizes are per-task caps on the spec (`initial_train_cap`, `eval_cap`), not
+    # Curriculum and eval sizes are per-task caps on the spec (`initial_train_cap`, `select_cap`), not
     # run state: the loader returns as many rows as it has up to those, and the curriculum then grows
     # by rebuild. The old `curriculum_size_target`/`eval_size_target` pair was recomputed per model
     # tier by a novelty x capacity formula whose result nothing read.

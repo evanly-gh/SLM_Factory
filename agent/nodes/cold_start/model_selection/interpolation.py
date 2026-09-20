@@ -152,22 +152,25 @@ def _probe_model(
             output_dir=model_dir,
             task=state["task"],
         ).weights_ref
-        gguf_path = None
+        quant_artifact = None
         if model.quant is not None:
-            from agent.nodes.evaluate import _build_gguf_for_eval
+            from agent.nodes.evaluate import _build_quant_artifact_for_eval
 
-            gguf_path = _build_gguf_for_eval(
+            quant_artifact = _build_quant_artifact_for_eval(
                 weights_ref,
                 model.model_id,
                 model.quant,
                 model.label,
             )
+        from training.quant_backend import resolve_backend
+
         result = run_eval(
             state["eval_set"],
             weights_ref,
             model.model_id,
             quant=model.quant,
-            gguf_path=gguf_path,
+            quant_artifact=quant_artifact,
+            quant_backend=resolve_backend(),
         )
         logger.info("[interpolation] Probe %s -> f1=%.4f", model.model_id, result.f1)
         return result.f1

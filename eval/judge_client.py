@@ -1,4 +1,16 @@
-"""Strict local judge backed by an OpenAI-compatible vLLM server.
+"""Strict judge backed by an OpenAI-compatible server.
+
+TWO BACKENDS
+    LOCAL (default) — a co-located vLLM server that must serve a Qwen3.6 model on a loopback host.
+    Both requirements are enforced at preflight, and both exist because a judged metric is only
+    reproducible if the thing judging it is pinned.
+
+    API (config.SYNTH_API_MODE) — the DeepSeek model. The loopback and Qwen3.6 requirements are
+    lifted, because a hosted endpoint fails both by construction and the run has asked for it
+    explicitly. What is NOT lifted: the model must still be one the endpoint lists, and the reply
+    must still parse. The cache key already includes the model, so DeepSeek scores land in their
+    own entries and cannot contaminate previously-cached Qwen judgements — but for the same reason
+    they cannot REUSE them, and scores from the two backends are not comparable to one another.
 
 TWO RUBRICS, ONE CLIENT
     Everything below the prompt — endpoint validation, the Qwen3.6 identity preflight, the
@@ -70,7 +82,21 @@ _COST_EVENT_PATH_ENV = "SLM_COST_EVENT_PATH"
 
 
 class JudgeInfrastructureError(RuntimeError):
-    """The required local judge could not produce a trustworthy score."""
+    """The required judge could not produce a trustworthy score."""
+
+
+def _api_mode() -> bool:
+    """Whether the run's teacher — and therefore its judge — is a hosted API.
+
+    Read from config rather than os.environ because JUDGE_ENDPOINT/JUDGE_MODEL are resolved from
+    the same flag at config import; consulting the environment separately could disagree with the
+    endpoint this client was actually constructed with.
+    """
+    try:
+        from config.config import SYNTH_API_MODE
+    except Exception:  # noqa: BLE001 — config may be unimportable in a bare unit test
+        return False
+    return bool(SYNTH_API_MODE)
 
 
 def validate_judge_endpoint(endpoint: object, *, allow_remote: bool = False) -> str:
@@ -231,12 +257,17 @@ class LocalJudgeClient:
         cost_event_path: str | Path | None = None,
         timing_event_path: str | Path | None = None,
         rubric: JudgeRubric | None = None,
+        api_mode: bool | None = None,
     ):
         self.rubric = rubric or NUMERIC_RUBRIC
         self.endpoint = str(endpoint or "").strip().rstrip("/")
         self.model = str(model or "")
         self.api_key = str(api_key or "EMPTY")
-        self.allow_remote = bool(allow_remote)
+        self.api_mode = _api_mode() if api_mode is None else bool(api_mode)
+        # A hosted judge is remote by construction, so requiring the remote opt-in on top of the
+        # API-mode flag would mean two switches for one decision the run has already made.
+        self.allow_remote = bool(allow_remote) or self.api_mode
+        self.provider = "deepseek" if self.api_mode else "local"
         try:
             self.concurrency = max(1, int(concurrency))
         except (TypeError, ValueError):
@@ -265,6 +296,7 @@ class LocalJudgeClient:
                 JUDGE_ENDPOINT,
                 JUDGE_MODEL,
                 JUDGE_REQUEST_TIMEOUT_S,
+                SYNTH_API_MODE,
             )
 
             return cls(
@@ -276,6 +308,7 @@ class LocalJudgeClient:
                 allow_remote=JUDGE_ALLOW_REMOTE,
                 cache_path=JUDGE_CACHE_PATH or None,
                 rubric=rubric,
+                api_mode=SYNTH_API_MODE,
             )
         except JudgeInfrastructureError:
             raise
@@ -397,13 +430,18 @@ class LocalJudgeClient:
                 fcntl.flock(output.fileno(), fcntl.LOCK_UN)
 
     def _timing_metadata(self, operation: str) -> dict:
-        return {
-            "provider": "local",
+        # `estimated_usd` is omitted rather than asserted as 0.0 in API mode: the authoritative
+        # per-call charge is computed by agent.cost from the response's own token usage, and a
+        # hardcoded zero here would show a paid judge as free in the timing artifact.
+        metadata = {
+            "provider": self.provider,
             "model": self.model,
             "endpoint": self.endpoint,
             "operation": operation,
-            "estimated_usd": 0.0,
         }
+        if not self.api_mode:
+            metadata["estimated_usd"] = 0.0
+        return metadata
 
     def _make_client(self):
         if self._client is not None:
@@ -423,7 +461,10 @@ class LocalJudgeClient:
                 base_url = f"http://localhost{parsed.path or '/v1'}"
             http_client = httpx.Client(
                 transport=transport,
-                trust_env=False,
+                # Inverted per backend for the same reason as data/synth_client._make_client:
+                # loopback traffic must BYPASS the node's Squid proxy, and api.deepseek.com is
+                # only reachable THROUGH it.
+                trust_env=self.api_mode,
                 timeout=self.request_timeout,
             )
             self._client = OpenAI(
@@ -441,7 +482,7 @@ class LocalJudgeClient:
         return self._client
 
     def preflight(self) -> None:
-        """Require exact local model identity and expose only judge errors."""
+        """Require exact model identity and expose only judge errors."""
         try:
             self._preflight()
         except JudgeInfrastructureError:
@@ -470,12 +511,13 @@ class LocalJudgeClient:
                 )
                 if not self.model:
                     raise JudgeInfrastructureError(
-                        "Local generation judge model is not configured"
+                        "Generation judge model is not configured"
                     )
-                if _QWEN36_MODEL_RE.search(self.model) is None:
+                if not self.api_mode and _QWEN36_MODEL_RE.search(self.model) is None:
                     raise JudgeInfrastructureError(
                         "Local generation judging requires a Qwen3.6 model; "
-                        f"configured model is {self.model!r}"
+                        f"configured model is {self.model!r}. Set SLM_SYNTH_API_MODE=1 to judge "
+                        "with the configured API model instead."
                     )
                 client = self._make_client()
                 try:
@@ -485,12 +527,13 @@ class LocalJudgeClient:
                         model=self.model,
                         operation="models.list",
                         event_path=self.cost_event_path,
+                        provider=self.provider,
                     )
                 except JudgeInfrastructureError:
                     raise
                 except Exception as exc:  # noqa: BLE001
                     raise JudgeInfrastructureError(
-                        f"Local judge endpoint preflight failed at "
+                        f"Judge endpoint preflight failed at "
                         f"{self.endpoint!r}: {type(exc).__name__}: {exc}"
                     ) from exc
                 served_models = {
@@ -498,13 +541,43 @@ class LocalJudgeClient:
                     for item in (getattr(response, "data", None) or [])
                     if getattr(item, "id", None)
                 }
-                if self.model not in served_models:
+                # `/models` is optional in the OpenAI spec, and a hosted gateway that declines to
+                # implement it must not be reported as a judge that serves the wrong model. A
+                # non-empty list that omits the configured model is still fatal either way — that
+                # is a typo, and discovering it 7,000 paid calls later helps nobody.
+                if served_models and self.model not in served_models:
                     available = ", ".join(sorted(served_models)) or "(none)"
                     raise JudgeInfrastructureError(
-                        "Local judge endpoint does not serve the exact configured model "
+                        "Judge endpoint does not serve the exact configured model "
                         f"{self.model!r}; available models: {available}"
                     )
+                if not served_models and not self.api_mode:
+                    raise JudgeInfrastructureError(
+                        f"Local judge endpoint {self.endpoint!r} listed no models, so the "
+                        "Qwen3.6 identity of the judge cannot be confirmed"
+                    )
+                if self.api_mode:
+                    print(
+                        f"      [judge] API judge: {self.model} at {self.endpoint} — scores are "
+                        f"PAID per token and are NOT comparable to runs judged by a local "
+                        f"Qwen3.6 (the score cache is keyed by model, so nothing is reused).",
+                        flush=True,
+                    )
                 self._preflight_complete = True
+
+    def _model_matches(self, response_model: str) -> bool:
+        """Whether the model that answered is the model that was asked.
+
+        Exact locally, where the served id is the one vLLM loaded and any difference is a
+        misrouted request. In API mode a PREFIX also counts: DeepSeek documents `deepseek-v4-flash`
+        as an alias that currently resolves to the `DeepSeek-V4-Flash-0731` checkpoint and echoes
+        the resolved name back, so an exact comparison would reject every reply the moment the
+        vendor rolls a new snapshot. The check still catches the failure it exists for — an
+        endpoint answering with a different model family than the one requested.
+        """
+        if response_model == self.model:
+            return True
+        return self.api_mode and response_model.startswith(self.model)
 
     @staticmethod
     def _normalize_triple(triple: tuple[object, object, object]) -> tuple[str, str, str]:
@@ -535,11 +608,21 @@ class LocalJudgeClient:
             metadata=self._timing_metadata("chat.completions.create"),
             path=self.timing_event_path,
         ):
+            # THINKING OFF on both teachers, each in its own dialect. `chat_template_kwargs` is a
+            # vLLM extension that DeepSeek 400s, so API mode used to send nothing at all — and
+            # therefore judged with reasoning ENABLED, which is DeepSeek's default. A judge returns
+            # a short verdict; a reasoning trace in front of it is billed inside the same
+            # completion budget and can consume `max_tokens` before the verdict is emitted. Shared
+            # with synthesis so the two cannot drift into disabling it on different paths.
+            from data.synth_client import judge_extra_body
+
+            body = judge_extra_body(self.api_mode)
+            extra = {"extra_body": body} if body else {}
             try:
                 response = tracked_openai_chat_create(
                     self._make_client(),
                     stage="generation_judge",
-                    provider="local",
+                    provider=self.provider,
                     event_path=self.cost_event_path,
                     model=self.model,
                     messages=[
@@ -551,27 +634,25 @@ class LocalJudgeClient:
                     ],
                     max_tokens=self.rubric.max_tokens,
                     temperature=self.rubric.temperature,
-                    extra_body={
-                        "chat_template_kwargs": {"enable_thinking": False},
-                    },
+                    **extra,
                 )
             except JudgeInfrastructureError:
                 raise
             except Exception as exc:  # noqa: BLE001
                 raise JudgeInfrastructureError(
-                    f"Local judge request failed for model {self.model!r}: "
+                    f"Judge request failed for model {self.model!r}: "
                     f"{type(exc).__name__}: {exc}"
                 ) from exc
             response_model = getattr(response, "model", None)
-            if response_model is not None and str(response_model) != self.model:
+            if response_model is not None and not self._model_matches(str(response_model)):
                 raise JudgeInfrastructureError(
-                    "Local judge response model does not match the configured model: "
+                    "Judge response model does not match the configured model: "
                     f"expected {self.model!r}, received {response_model!r}"
                 )
             choices = getattr(response, "choices", None)
             if not isinstance(choices, (list, tuple)) or len(choices) != 1:
                 raise JudgeInfrastructureError(
-                    "Local judge must return exactly one completion"
+                    "Judge must return exactly one completion"
                 )
             message = getattr(choices[0], "message", None)
             content = getattr(message, "content", None)

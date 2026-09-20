@@ -41,6 +41,54 @@ export SLM_BENCHMARK_TASK=xlam_bfcl
 # removes a good row AND can stop the run. Until the notes are shown to lower the rejection rate on a
 # live run, the exact verifier is trusted on its own. Set SLM_VERIFY_SYNTH=1 to measure the pass again.
 export SLM_VERIFY_SYNTH=0
+# SYNTHESIS GATE: set for parity with the other two curated benchmarks, and expected to be INERT here.
+#
+# xlam_bfcl is the one task in this group whose teacher clears the bar on its own — measured
+# ast_arg_match 0.8250-0.8650 5-shot across runs 38708719, 38723935, 38732019, 38734202 and 38734723,
+# against a 0.80 gate. BYPASS only changes the decision when the gate was NOT cleared, so on a normal
+# xlam run this flag does nothing and the verdict records a genuine pass with bypassed unset.
+#
+# It is set anyway so that a teacher that drifts below 0.80 does not silently turn synthesis off
+# mid-experiment, which is exactly how calendar_json and ner_bc5cdr came to run without it.
+export SLM_TEACHER_SYNTH_BYPASS=1
+# TEACHER SERVED CONTEXT: 16384, not the 8192 default, because THIS task's rows do not fit 8192.
+#
+# This is the served context (a vLLM `--max-model-len` launch flag), not an output cap. The nine
+# hardcoded `max_tokens` constants are already gone; `config/token_budget.output_budget` now sizes
+# every reply and CLAMPS it to whatever the server was launched with. At 8192 that clamp was the
+# binding constraint on run 39311800:
+#
+#   BadRequestError: 400 - maximum context length is 8192 tokens. However, you requested 4736
+#   output tokens and your prompt contains at least 3457 input tokens, for a total of at least 8193.
+#
+# Over by ONE token: `output_budget` estimates the prompt at 4 chars/token and keeps a 64-token
+# margin, and xlam's dense tool-schema JSON tokenizes worse than that, so the estimate ran short and
+# the margin absorbed the error. Two of five synthesis batches were lost that way (0 of 25 and 4 of
+# 126 kept, 368 of 515 rows overall) and the 5-shot fitness measurement was SKIPPED entirely — an
+# 8126-char demonstration block does not fit beside a 12940-char prompt in a 7936-token input budget
+# — so the synthesis gate fell back to zero-shot.
+#
+# 8192 is NOT a model limit: Qwen3.6-35B-A3B declares max_position_embeddings=262144. It is a memory
+# trade: context costs KV cache on one L40S, so max-num-seqs is halved to pay for it, keeping the
+# in-flight KV footprint (seqs x context) where the auto-2gpu profile already sized it.
+#
+# ALL THREE ARE LOCAL-vLLM SETTINGS AND ARE SKIPPED IN API MODE.
+#     They describe a 35B model sharing one 48 GB L40S: weights take ~35 GB, leaving ~7 GB of KV
+#     cache, and KV demand is context x concurrent sequences — so a wider context has to be paid for
+#     by halving max-num-seqs. None of that is true of a hosted endpoint, where we rent tokens
+#     rather than GPU memory.
+#
+#     Applying them anyway would actively hurt: `config.config` serves DeepSeek at 131072 by
+#     default, and exporting 16384 would cap it to an eighth of that. The demonstration budget is
+#     `SYNTH_MAX_MODEL_LEN * 1.25` characters, so the cap also shrinks the room for demonstrations
+#     from ~164k chars to ~20k — and xlam is the task where too few demonstrations means ZERO kept
+#     rows, not merely worse ones (0 of 1,019 at zero-shot, 0 of 133 at the 1-2 shots that fit an
+#     8,192 context; B276). The local cap fixes a local problem and creates a remote one.
+if [ "${SLM_SYNTH_API_MODE:-0}" != "1" ]; then
+    export SLM_SYNTH_MAX_MODEL_LEN=16384
+    export SLM_SYNTH_MAX_NUM_SEQS=32
+    export SLM_SYNTH_CONCURRENCY=24
+fi
 
 export TASK="Fine tune a small model for function/tool calling (train on xLAM-60k, evaluate on the Berkeley Function-Calling Leaderboard), targeting deployment on my Samsung Galaxy S24 Ultra with 12GB RAM and 256GB storage"
 source /mmfs1/gscratch/intelligentsystems/evanly/SLM_Factory/tests/pipeline/_l40s_task_body.sh

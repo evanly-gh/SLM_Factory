@@ -93,14 +93,40 @@ class TaskSpec:
     Not a fraction of anything. It used to be `curriculum_size_target × 0.65`, which is where the
     mystery 3,250 came from: a 5,000-row "target" the curriculum was then never allowed to reach.
     """
-    eval_cap: int
-    """Maximum held-out eval rows. The loader returns as many as it has, up to this."""
+    select_cap: int
+    """Maximum held-out rows for the IN-LOOP eval. The loader returns as many as it has, up to this.
+
+    This number sizes CHECKPOINT SELECTION, not the published result, and the two want opposite
+    things. It used to be called `eval_cap` and was doing both jobs at once, which made the 1,000
+    indefensible in either direction: too small to report (the 95% CI half-width at n=1,000 and 80%
+    accuracy is +/-2.5 points) and too large to want to pay for on every one of a run's iterations.
+
+    1,000 is right for selection specifically because the comparison is PAIRED — the same fixed
+    rows scored against successive checkpoints — so most of the sampling error is common-mode and
+    cancels out of the ranking. It is not right for a number in a paper, and nothing here should
+    ever publish it. `report_load` / `report_score` are the reporting half, run once by
+    `scripts/report_eval.py`.
+    """
     eval_sampling: str
     """One of EVAL_SAMPLING. `label_balanced` round-robins across classes."""
     closed_label_space: bool
     """True when `label` is a real class to predict and the vocabulary is pinned from the eval set."""
     label_definitions: Mapping[str, str]
     """What each class MEANS, for the teacher's prompts. Empty when the label is self-describing."""
+    entity_type_vocabulary: tuple[str, ...]
+    """The AUTHORITATIVE entity-type taxonomy, for span tasks. `()` when the task extracts no spans.
+
+    The NER counterpart of `label_definitions`, and it exists because deriving this list from the
+    rows in front of the teacher is only safe when the taxonomy is small. `_verifier_context_block`
+    used to do exactly that, telling the teacher that the observed types were "the only ones that
+    may appear". True for BC5CDR, whose two types both show up in any sample. False for MultiCoNER:
+    a 40-row anchor sample contains 5 of its 33 types, so that sentence declared the other 28
+    invalid, and on the 2026-09-09 synthesis audit the teacher duly rejected rows typed `OtherLOC`
+    — a real type — with "OtherLOC is not a valid type for this task."
+
+    A sample is evidence of what a type space CONTAINS and never evidence of its BOUNDARY. Only the
+    task knows the boundary, so the task has to say it.
+    """
     verifier_notes: str
     """CONVENTIONS the teacher must be told before it judges a generated row. `""` is explicit.
 
@@ -143,6 +169,36 @@ class TaskSpec:
     attach_reasoning: bool
     """Record the model's `<reasoning>` block on failure records."""
 
+    # ---- reporting ------------------------------------------------------------------
+    # The eval above runs EVERY iteration and exists to rank checkpoints. These three run ONCE,
+    # from `scripts/report_eval.py`, and produce the number that gets published. Separating them
+    # is what makes both defensible: selection can stay small and cheap because it is a paired
+    # comparison, and the report can be large and slow because it happens once.
+    report_load: Callable[..., list[dict]] | None
+    """`report_load(log=...) -> rows` for the FULL report split. `None` reuses `load`'s eval rows.
+
+    Not merely a bigger `select_cap`: for two tasks the report is a DIFFERENT SPLIT, not a larger
+    draw from the same one. `multiconer` selects on the official 871-row dev — which cannot support
+    a 33-class macro-F1 at all — and reports on a fixed stratified slice of the 249,980-row test.
+    A single `load` cannot express that, so a task that needs it says so here.
+    """
+    report_score: Callable[[object, Sequence], dict]
+    """The scorer for the report pass. Often the same callable as `score`; deliberately separate.
+
+    Selection and reporting metrics SHOULD differ where the honest headline is unusable as a
+    per-iteration signal:
+      * `multiconer` — micro-F1 selects, macro-F1 reports. A 1,000-row draw can contain zero
+        examples of a class that is 0.18% of entities, which makes macro-F1 undefined or wildly
+        noisy as a ranking signal while remaining the right thing to publish.
+      * `goemotions` — Ekman-7 macro-F1 selects, threshold-free macro AUPRC reports. Macro-F1 over
+        28 labels is a thresholding artifact: the same model swings several points between a fixed
+        0.5, a fixed 0.3, and a dev-tuned sweep.
+    Where they genuinely coincide a task names the same function twice, which is an explicit
+    statement that the question was asked rather than a default nobody chose.
+    """
+    report_metric_name: str
+    """What the reported number is. Equals `metric_name` when the report metric is the same."""
+
     # ---- training -------------------------------------------------------------------
     build_training_turn: Callable[[dict, object], tuple[str, str]]
     """`(row, spec) -> (prompt, target)` for completion-only SFT. Must produce the SAME prompt the
@@ -182,7 +238,7 @@ class TaskSpec:
             raise ValueError(f"{self.name}: eval_sampling must be one of {EVAL_SAMPLING}")
         if not self.required_fields:
             raise ValueError(f"{self.name}: required_fields must not be empty")
-        for number in ("initial_train_cap", "eval_cap", "max_new_tokens", "max_seq_length",
+        for number in ("initial_train_cap", "select_cap", "max_new_tokens", "max_seq_length",
                        "eval_batch_size"):
             if int(getattr(self, number)) < 1:
                 raise ValueError(f"{self.name}: {number} must be positive")
@@ -193,14 +249,20 @@ class TaskSpec:
             )
         if not self.metric_name:
             raise ValueError(f"{self.name}: metric_name must be a non-empty string")
+        if not self.report_metric_name:
+            raise ValueError(f"{self.name}: report_metric_name must be a non-empty string")
         for callable_field in ("load", "build_prompts", "extract_predictions", "score",
-                               "build_training_turn"):
+                               "build_training_turn", "report_score"):
             if not callable(getattr(self, callable_field)):
                 raise ValueError(f"{self.name}: {callable_field} must be callable")
+        if self.report_load is not None and not callable(self.report_load):
+            raise ValueError(f"{self.name}: report_load must be callable or None")
         if self.label_definitions and not self.closed_label_space:
             raise ValueError(
                 f"{self.name}: label_definitions only mean something for a closed label space"
             )
+        if len(set(self.entity_type_vocabulary)) != len(self.entity_type_vocabulary):
+            raise ValueError(f"{self.name}: entity_type_vocabulary repeats a type")
 
     def qc_context_labels(self, eval_set) -> set[str] | None:
         """The closed class vocabulary for this task, read from the frozen eval set."""

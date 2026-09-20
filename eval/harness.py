@@ -2,7 +2,7 @@
 import os
 from dataclasses import dataclass
 from data.eval_set import EvalSet
-from training.slm_helpers import infer_batch, infer_batch_gguf
+from training.slm_helpers import infer_batch, infer_batch_gguf, infer_batch_mnn
 
 
 _OVERRIDE_MAX_NEW_TOKENS = "SLM_EVAL_MAX_NEW_TOKENS"
@@ -156,7 +156,26 @@ def _log_prediction_samples(eval_set, raw_outputs, predictions) -> None:
     makes that difference visible — an `__EXTRACTION_FAILED__` next to a chatty answer is a
     prompt/format problem, while a clean wrong label is a real accuracy problem.
 
-    Prefers examples that failed extraction, since those are the diagnostic ones.
+    Prefers examples that failed extraction, since those are the diagnostic ones — and then rows
+    the model got WRONG, which is the case this used to be blind to.
+
+    WHY THE SECOND TIER EXISTS
+        The ordering was `failures + everything else in index order`, so a run whose outputs all
+        parse — the healthy case, and every format-bound task once fine-tuning takes hold — showed
+        rows 0, 1 and 2 and nothing else. On gec_bea19 run 39881529 that meant the same three rows
+        for all 58 eval rounds at `format_valid=1.0000`: 2 unique rows of diagnostic signal out of
+        1,000, and never once a row that was merely SCORED wrong.
+
+        That is backwards for the question these samples exist to answer. An extraction failure is
+        visible in `format_valid` already; a correct-looking answer graded wrong is visible nowhere
+        else, and it is the only symptom a scorer bug has. Preferring mismatches costs one string
+        comparison and turns a fixed window into the rows worth reading.
+
+    Deliberately compares rendered strings rather than calling the scorer. This runs inside a CUDA
+    worker on the eval hot path, the scorer may shell out (ERRANT) or load a model (BERTScore), and
+    a display helper must not be able to fail or stall an eval it was only meant to describe. An
+    approximate match is the right instrument: it over-selects rows a lenient metric would forgive,
+    which still lands on a row worth looking at.
     """
     if _PREDICTION_SAMPLE_N <= 0:
         return
@@ -165,11 +184,35 @@ def _log_prediction_samples(eval_set, raw_outputs, predictions) -> None:
     if n == 0:
         return
     failed = [i for i in range(n) if str(predictions[i]) == "__EXTRACTION_FAILED__"]
-    chosen = (failed + [i for i in range(n) if i not in set(failed)])[:_PREDICTION_SAMPLE_N]
+    failed_set = set(failed)
 
+    def _looks_wrong(index: int) -> bool:
+        gold = _gold_for_display(rows[index])
+        if gold is None:
+            return False
+        norm = lambda value: " ".join(str(value or "").split()).strip().lower()
+        return norm(predictions[index]) != norm(gold)
+
+    mismatched, matched = [], []
+    for index in range(n):
+        if index in failed_set:
+            continue
+        (mismatched if _looks_wrong(index) else matched).append(index)
+    chosen = (failed + mismatched + matched)[:_PREDICTION_SAMPLE_N]
+
+    # GOLD AND PARSED GET THE MOST ROOM, not the least. They used to be clipped to 60 characters
+    # while `input` and `raw` got 110, which is backwards: gold-vs-parsed is the comparison these
+    # samples exist to let a reader make, and a structured prediction is where the characters go.
+    # On multiconer run 39881531 a two-entity row rendered as
+    #   parsed: [{'text': 'china', 'type': 'HumanSettlement'}, {'text': 'ele…
+    # so the entity actually in dispute was the one cut off. Measured while auditing that run: a
+    # third of sampled rows were unusable because the field under examination was truncated away.
     def _clip(value, limit=110):
         text = " ".join(str(value or "").split())
         return text[:limit] + ("…" if len(text) > limit else "")
+
+    # Wide enough for a handful of NER spans or a nested parse, which are the shapes that overflow.
+    _STRUCTURED = 240
 
     print(
         f"      [eval] sample predictions ({len(chosen)} of {n}"
@@ -180,9 +223,28 @@ def _log_prediction_samples(eval_set, raw_outputs, predictions) -> None:
         gold = _gold_for_display(rows[i])
         flag = "  <-- EXTRACTION FAILED" if str(predictions[i]) == "__EXTRACTION_FAILED__" else ""
         print(f"        input : {_clip(rows[i].get('text'))}")
-        print(f"        gold  : {_clip(gold, 60)}")
-        print(f"        raw   : {_clip(raw_outputs[i])}")
-        print(f"        parsed: {_clip(predictions[i], 60)}{flag}")
+        print(f"        gold  : {_clip(gold, _STRUCTURED)}")
+        print(f"        raw   : {_clip(raw_outputs[i], _STRUCTURED)}")
+        print(f"        parsed: {_clip(predictions[i], _STRUCTURED)}{flag}")
+
+
+SCORING_MODES = ("select", "report")
+
+
+def resolve_scorer(spec, scoring: str):
+    """The scorer and metric name for one scoring mode.
+
+    A MODE STRING RATHER THAN A CALLABLE, deliberately. `run_eval` may execute inside a disposable
+    CUDA worker, and the boundary is `pickle` — a bare function would either fail to pickle or,
+    worse, pickle by qualified name and silently resolve to a different object in the child. A
+    two-value enum crosses that boundary as a string and is re-resolved against the registry on
+    the far side, so parent and child cannot disagree about which metric was computed.
+    """
+    if scoring not in SCORING_MODES:
+        raise ValueError(f"scoring must be one of {SCORING_MODES}, got {scoring!r}")
+    if scoring == "report":
+        return spec.report_score, spec.report_metric_name
+    return spec.score, spec.metric_name
 
 
 def run_eval(
@@ -190,12 +252,26 @@ def run_eval(
     weights_ref: str,
     base_model: str,
     quant: str | None = None,
-    gguf_path: str | None = None,
+    quant_artifact: str | None = None,
+    quant_backend: str | None = None,
+    scoring: str = "select",
 ) -> EvalResult:
     """Run one complete evaluation, isolated in a disposable process when enabled.
 
     The task comes from the eval set rather than a separate argument: they can no longer be passed
     inconsistently, and the eval set is the thing that knows which rows these are.
+
+    `quant_artifact` is the built quantized model to score — a `.gguf` FILE under the llama.cpp
+    backend, an MNN model DIRECTORY under the MNN one — and `quant_backend` says which engine to
+    load it with. They arrive as a pair because the path alone cannot say: both are just paths, and
+    guessing from the extension is the kind of inference that scores an MNN artifact through
+    llama.cpp and reports the result under the wrong runtime's name. `None` means score the
+    unquantized HF/LoRA weights through Unsloth instead.
+
+    `scoring` picks which of the task's two scorers grades the run. It defaults to `"select"`
+    because that is what the agent loop wants on every iteration, and because a default of
+    `"report"` would quietly feed a report metric into `best_score` and checkpoint selection.
+    `scripts/report_eval.py` is the only caller that passes `"report"`.
     """
     from training.cuda_isolation import isolation_enabled, run_isolated
 
@@ -207,7 +283,9 @@ def run_eval(
             "weights_ref": weights_ref,
             "base_model": base_model,
             "quant": quant,
-            "gguf_path": gguf_path,
+            "quant_artifact": quant_artifact,
+            "quant_backend": quant_backend,
+            "scoring": scoring,
         }
         clear_inference_cache()
         try:
@@ -216,7 +294,8 @@ def run_eval(
             clear_inference_cache()
 
     return _run_eval_local(
-        eval_set, weights_ref, base_model, quant=quant, gguf_path=gguf_path,
+        eval_set, weights_ref, base_model, quant=quant, quant_artifact=quant_artifact,
+        quant_backend=quant_backend, scoring=scoring,
     )
 
 
@@ -324,12 +403,15 @@ def _run_eval_local(
     weights_ref: str,
     base_model: str,
     quant: str | None = None,
-    gguf_path: str | None = None,
+    quant_artifact: str | None = None,
+    quant_backend: str | None = None,
+    scoring: str = "select",
 ) -> EvalResult:
     """Run inference on the eval set and score it with the task's own scorer.
 
-    When gguf_path is provided (quantized model path), inference uses llama-cpp-python
-    (infer_batch_gguf) to get honest on-device accuracy. When gguf_path is None (base/BF16 model),
+    When `quant_artifact` is provided, inference runs through the ENGINE THAT RUNS ON THE PHONE —
+    llama-cpp-python for a GGUF, pymnn for an MNN directory — so the accuracy recorded is the
+    deployed artifact's, not a full-precision proxy for it. When it is None (base/BF16 model),
     uses Unsloth (infer_batch).
 
     There is no task dispatch here any more. Every choice — which prompt builder, which extractor,
@@ -340,6 +422,7 @@ def _run_eval_local(
     from tasks import get_task
 
     spec = get_task(eval_set.task)
+    score_fn, metric_name = resolve_scorer(spec, scoring)
     max_new_tokens = eval_output_token_reserve(spec.name)
     prompts = spec.build_prompts(eval_set)
     _served_infer = _resolve_served_infer(spec, weights_ref, base_model, max_new_tokens)
@@ -347,10 +430,20 @@ def _run_eval_local(
     def _infer(chunk: list[str]) -> list[str]:
         if _served_infer is not None:
             return _served_infer(chunk)
-        if gguf_path is not None:
+        if quant_artifact is not None:
+            from training.quant_backend import MNN, resolve_backend
+
+            if resolve_backend(quant_backend) == MNN:
+                return infer_batch_mnn(
+                    chunk,
+                    quant_artifact,
+                    max_new_tokens=max_new_tokens,
+                    base_model=base_model,
+                    task=spec.name,
+                )
             return infer_batch_gguf(
                 chunk,
-                gguf_path,
+                quant_artifact,
                 max_new_tokens=max_new_tokens,
                 base_model=base_model,
                 # The task, so the GGUF path can size its scoring concurrency from the spec's
@@ -377,7 +470,7 @@ def _run_eval_local(
 
     predictions = spec.extract_predictions(raw_outputs, eval_set)
     _log_prediction_samples(eval_set, raw_outputs, predictions)
-    result = spec.score(eval_set, predictions)
+    result = score_fn(eval_set, predictions)
     if spec.attach_reasoning:
         _attach_reasoning_to_failures(result, eval_set, raw_outputs, predictions)
 
@@ -385,6 +478,6 @@ def _run_eval_local(
         f1=result["f1"],
         per_class=result["per_class"],
         failures=result["failures"],
-        metric=result.get("metric", spec.metric_name),
+        metric=result.get("metric", metric_name),
         format_valid=float(result.get("format_valid", 1.0)),
     )

@@ -289,7 +289,18 @@ def escalate_node(state: AgentState) -> AgentState:
          f"  PROMOTING: tier {current_tier} → tier {next_tier}  |  "
          f"{current_id} (best {state['best_score']:.4f}) → {chosen.model_id} "
          f"[{chosen.quant or 'bf16'}, {chosen.size_mb}MB, size {chosen.size_mb}MB]")
-    _log(mlabel, f"  Dataset carried forward: {state.get('current_dataset_path')}")
+    # CARRY THE DATASET FORWARD — unless the reset ablation is switched on.
+    #
+    # Reuse is the default because escalation exists to ask what a bigger model is worth on the
+    # curriculum you already have. `SLM_ABLATION_RESET_DATA_ON_ESCALATION=1` asks the other
+    # question — what each tier is worth WITHOUT inheriting the tiers below it — by rewinding to
+    # the seed here, before the tier's first (plain-retrain) iteration measures the new model.
+    from agent.ablations import reset_curriculum_to_seed, reset_data_on_escalation
+
+    if reset_data_on_escalation():
+        reset_curriculum_to_seed(state, log=lambda m: _log(mlabel, m))
+    else:
+        _log(mlabel, f"  Dataset carried forward: {state.get('current_dataset_path')}")
 
     # Record this model's completed run BEFORE resetting, so the end-of-run summary can
     # show the FULL trajectory across every tier, not just the final model (Q15/B147).
@@ -345,8 +356,27 @@ def escalate_node(state: AgentState) -> AgentState:
     state["best_score"] = 0.0
     state["best_weights_ref"] = None
     state["last_eval"] = None
-    state["last_intervention"] = "data_rebuild"
-    state["last_hypothesis"] = ""
+    # A NEW TIER'S FIRST ITERATION IS A PLAIN RETRAIN — no intervention, no data rebuild.
+    #
+    # This used to be `data_rebuild`, which is the one value `curate_node` does NOT skip on. With
+    # the orchestrator's plan cleared just below, curate fell through to `fallback_data_rebuild_plan`
+    # and that picks `surgical_synthesis` whenever mining is unavailable — so the first iteration of
+    # every new tier silently GENERATED rows before the new model had been measured even once.
+    #
+    # On run 39294409 tier 3 iteration 1 scored 0.8168 having changed TWO things at once: a new
+    # model AND +173 synthetic rows. That number is the run's entire reported gain and it cannot be
+    # attributed to either cause. Escalation exists to measure what a bigger model is worth on the
+    # curriculum you already have, and it could not answer that question.
+    #
+    # `hyperparameter` is the value chosen because curate already treats it as "dataset held fixed";
+    # the train node carries the best-known config forward unchanged, so this is a retrain of the
+    # SAME data with the SAME settings on the NEW model. Synthesis is still fully available from
+    # iteration 2 onward, chosen deliberately by the orchestrator against a clean baseline.
+    state["last_intervention"] = "hyperparameter"
+    state["last_hypothesis"] = (
+        "first iteration on a newly promoted tier: retrain the carried-forward curriculum "
+        "unchanged, so the next decision is made against a clean measurement of this model"
+    )
     state["llm_iterate_decision"] = None
     state["data_rebuild_plan"] = None
     state["data_rebuild_plan_identity"] = None

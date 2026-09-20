@@ -134,8 +134,12 @@ def graph_topology_descriptor(mode: str = "cold_start") -> dict:
                 "curate": "curate",
                 "terminate": "__end__",
             },
+            # `iterate` is the empty-rebuild escape: a rebuild that added no rows goes straight
+            # back to the orchestrator instead of training on a curriculum identical to the one
+            # already trained. See `_route_after_curate`.
             "curate": {
                 "train": "train",
+                "iterate": "iterate",
                 "terminate": "__end__",
             },
             "train": {
@@ -202,6 +206,31 @@ def _route_after_downward_probe(state: AgentState) -> str:
     if _must_terminate(state):
         return "terminate"
     return state.get("next_action", "terminate")
+
+
+def _route_after_curate(state: AgentState) -> str:
+    """Normally curate → train. But a rebuild that added NO rows goes straight back to iterate.
+
+    Training on an unchanged curriculum with unchanged hyperparameters reproduces the previous
+    iteration — the run's own log says so: "the curriculum is unchanged at 3,900 row(s), so training
+    this iteration would repeat the previous one exactly". It cost a full train+eval cycle to learn
+    nothing, twice in calendar run 39294409 and eight times in run 38566712 (7h42m).
+
+    Worse than the wasted time, it produced a SCORE. Training is not deterministic here (nothing
+    seeds it, and every iteration re-quantizes), so the repeat came back with a *different* number
+    for an unchanged experiment, and that number entered the trajectory, the rollback decision and
+    the attribution table as though it meant something. Returning to iterate spends one orchestrator
+    call instead, and lets it pick a lever that can actually move.
+
+    The health safeguards are unaffected: `observe_iteration` runs at the END of curate, before this
+    routes anywhere, so an empty rebuild still counts toward retiring mining (2 rounds), stopping on
+    repeated empty synthesis (3) and the generic empty-rebuild budget (4).
+    """
+    if _must_terminate(state):
+        return "terminate"
+    if state.get("next_action") == "iterate":
+        return "iterate"
+    return "train"
 
 
 def _route_before(target: str):
@@ -273,8 +302,8 @@ def build_graph(
     # Shared loop edges
     graph.add_conditional_edges(
         "curate",
-        _route_before("train"),
-        {"train": "train", "terminate": END},
+        _route_after_curate,
+        {"train": "train", "iterate": "iterate", "terminate": END},
     )
     graph.add_conditional_edges(
         "train",

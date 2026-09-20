@@ -15,3 +15,15 @@ python-dotenv>=1.0.0
 kaggle==1.6.17
 pandas>=2.0.0
 matplotlib>=3.7.0
+# ROUGE for dialogsum. Safe in this environment: pure Python, and its only dependencies
+# (absl-py, nltk, six) touch nothing the training stack pins. Used rather than reimplemented
+# because ROUGE is defined by its Porter stemming and tokenization, so a hand-rolled version
+# would not be comparable to any published number.
+rouge-score>=0.1.2
+#
+# NOT HERE, ON PURPOSE: `errant` (gec_bea19) and `bert-score` (dialogsum report metric) live in
+# their own venvs, built by `scripts/setup_metric_envs.sh`. errant requires spacy<4 and
+# bert-score predates transformers 5.x; a resolver that downgrades numpy or pydantic underneath
+# Unsloth does not fail at install time, it fails inside a training run. Both are reached over a
+# boundary instead — text files for ERRANT, a subprocess for BERTScore — so they never need to
+# coexist with torch in one interpreter. Same reasoning as .venv_vllm.

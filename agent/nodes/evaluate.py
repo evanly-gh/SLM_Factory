@@ -14,11 +14,17 @@ from training.lora_trainer import (
 )
 from training.quantize import (
     QuantizationInfrastructureError,
-    invalidate_gguf_cache,
-    quantize_from_model_spec,
     resolve_hf_snapshot,
-    validate_and_record_gguf,
-    validated_gguf_cache_hit,
+)
+from training.quant_backend import (
+    artifact_name as quant_artifact_name,
+    artifacts_subdir,
+    backend_label,
+    invalidate_cache,
+    quantize_from_model_spec,
+    resolve_backend,
+    validate_and_record,
+    validated_cache_hit,
 )
 from agent.nodes.iterate import apply_iteration_policy
 from training.hparams import normalize_hyperparams
@@ -27,8 +33,19 @@ def _log(model_id: str, msg: str):
     print(f"[evaluate][{model_id}] {msg}")
 
 
-def _build_or_reuse_gguf(weights_ref: str, model_id: str, quant: str, mlabel: str):
-    """Resolve base/adapter weights, quantize, strongly validate, and cache a GGUF.
+def _build_or_reuse_quant_artifact(
+    weights_ref: str,
+    model_id: str,
+    quant: str,
+    mlabel: str,
+    backend: str | None = None,
+):
+    """Resolve base/adapter weights, quantize, strongly validate, and cache the artifact.
+
+    Backend-agnostic by construction: `training/quant_backend.py` decides whether "the artifact"
+    is a `model-<method>.gguf` file built by llama.cpp or an MNN model directory built by
+    `llmexport.py`, and both halves of the cache protocol (validate-then-record, hash-checked
+    reuse) exist for each. Nothing else in this node knows which one it is holding.
 
     CACHING (B160): keyed by the exact `weights_ref` AND the quant method, so a given
     trained checkpoint is quantized to a given format at most ONCE. Both parts of the key
@@ -38,29 +55,31 @@ def _build_or_reuse_gguf(weights_ref: str, model_id: str, quant: str, mlabel: st
     escalation). Keying on weights_ref alone — and reusing ANY *.gguf in the dir — made the
     Q8_0 tier silently reuse the earlier Q4_K_M file, so Q8_0 was never actually produced
     and the two tiers scored identically. We now key on (weights_ref, quant) and check for
-    the SPECIFIC `model-<method>.gguf`.
+    the SPECIFIC artifact name. The BACKEND is part of the path rather than the hash, so the
+    two backends' caches are separate trees and a GGUF can never answer for an MNN build.
 
-    A cached file is reusable only when its size and SHA-256 match an atomic sidecar that
-    was written after a real llama.cpp model load. Raw base-model IDs bypass Unsloth's
+    A cached artifact is reusable only when its contents hash to an atomic sidecar that was
+    written after a real load in the target runtime. Raw base-model IDs bypass Unsloth's
     adapter merge and convert the immutable local Hugging Face snapshot directly.
     """
     import hashlib
 
-    method = {"Q4_K_M": "q4_k_m", "Q8_0": "q8_0"}.get(quant, str(quant).lower())
+    backend = resolve_backend(backend)
+    label = backend_label(backend)
     model_id_safe = model_id.replace("/", "_")
     wkey = hashlib.sha1(f"{weights_ref}|{quant}".encode()).hexdigest()[:12]
-    gguf_dir = os.path.join("artifacts", "gguf", model_id_safe, wkey)
-    expected = os.path.join(gguf_dir, f"model-{method}.gguf")
-    if validated_gguf_cache_hit(expected):
-        _log(mlabel, f"  Reusing cached {quant} GGUF for these weights: {expected}")
+    artifact_dir = os.path.join("artifacts", artifacts_subdir(backend), model_id_safe, wkey)
+    expected = os.path.join(artifact_dir, quant_artifact_name(quant, backend))
+    if validated_cache_hit(expected, backend):
+        _log(mlabel, f"  Reusing cached {quant} {label} artifact for these weights: {expected}")
         return expected
     if os.path.exists(expected):
-        _log(mlabel, f"  Invalidating unvalidated or changed GGUF cache: {expected}")
-    invalidate_gguf_cache(expected)
+        _log(mlabel, f"  Invalidating unvalidated or changed {label} cache: {expected}")
+    invalidate_cache(expected, backend)
 
     cleanup_path = None
     try:
-        _log(mlabel, f"  ── STEP 1/2: QUANTIZE → {quant} GGUF (llama.cpp; no scoring yet) ──")
+        _log(mlabel, f"  ── STEP 1/2: QUANTIZE → {quant} via {label} (no scoring yet) ──")
         is_remote_base = (
             weights_ref == model_id and not os.path.exists(weights_ref)
         )
@@ -74,26 +93,28 @@ def _build_or_reuse_gguf(weights_ref: str, model_id: str, quant: str, mlabel: st
                 base_model_id=model_id,
             )
             cleanup_path = source_path
-        gguf_path = quantize_from_model_spec(source_path, gguf_dir, quant)
+        artifact_path = quantize_from_model_spec(source_path, artifact_dir, quant, backend)
         try:
             # The load is the gate. The generation smoke test only reports (B289): as a fatal check it
             # ended three healthy runs, because a small base model answering a trivial prompt is not a
             # corrupt artifact. A near-zero eval score is the reliable signal, and rollback handles it.
-            validate_and_record_gguf(gguf_path, base_model=model_id)
+            validate_and_record(
+                artifact_path, base_model=model_id, quant=quant, backend=backend
+            )
         except Exception:
-            invalidate_gguf_cache(gguf_path)
+            invalidate_cache(artifact_path, backend)
             raise
         _log(
             mlabel,
-            f"  ── STEP 2/2: RUN EVAL on the quantized GGUF via llama-cpp-python ──",
+            f"  ── STEP 2/2: RUN EVAL on the quantized artifact via {label} ──",
         )
-        _log(mlabel, f"     GGUF built and load-validated: {gguf_path}")
-        return gguf_path
+        _log(mlabel, f"     {label} artifact built and load-validated: {artifact_path}")
+        return artifact_path
     except QuantizationInfrastructureError:
         raise
     except Exception as exc:  # noqa: BLE001 - normalize toolchain/backend failures
         raise QuantizationInfrastructureError(
-            f"Failed to build required {quant} GGUF for {model_id}: {exc}"
+            f"Failed to build required {quant} {label} artifact for {model_id}: {exc}"
         ) from exc
     finally:
         if cleanup_path is not None:
@@ -101,20 +122,25 @@ def _build_or_reuse_gguf(weights_ref: str, model_id: str, quant: str, mlabel: st
             shutil.rmtree(cleanup_path, ignore_errors=True)
 
 
-def _reap_gguf(state, gguf_paths, keep_path, mlabel: str = "") -> None:
-    """Delete the GGUFs built this iteration unless they are a retained new-best.
+def _reap_quant_artifacts(state, artifact_paths, keep_path, mlabel: str = "") -> None:
+    """Delete the quantized artifacts built this iteration unless one is a retained new-best.
 
-    The `(weights_ref, quant)` cache key is unique per iteration, so a GGUF is written,
+    The `(weights_ref, quant)` cache key is unique per iteration, so an artifact is written,
     read once by run_eval, and then never hit again — measured 0/138 (NER) and 2/66
-    (math) reuses, at 2.6 GB apiece. Retention policy: keep a GGUF only when its
+    (math) reuses, at 2.6 GB apiece. Retention policy: keep one only when its
     iteration set a new best for the tier, which preserves every score-improving model
     (and the run's final winner, which is a new-best by construction) while bounding
     steady-state disk.
 
-    `keep_path` is the GGUF of this iteration's best config when it improved on the
+    `keep_path` is the artifact of this iteration's best config when it improved on the
     prior best, else None. Paths already in `state["retained_gguf_paths"]` are earlier
     new-bests and are never reaped. A rollback or downward probe that needs a reaped
-    GGUF simply rebuilds it — correctness is unaffected, only a re-quantization.
+    artifact simply rebuilds it — correctness is unaffected, only a re-quantization.
+
+    The state key keeps its historical `retained_gguf_paths` spelling although it now holds
+    whichever backend's artifacts the run built. It is a checkpoint channel: renaming it would
+    make every in-flight run's `checkpoint.json` unresumable, which is a far worse trade than a
+    key whose name is one backend too specific.
     """
     retained = list(state.get("retained_gguf_paths") or [])
     retained_abs = {os.path.abspath(p) for p in retained}
@@ -125,54 +151,61 @@ def _reap_gguf(state, gguf_paths, keep_path, mlabel: str = "") -> None:
             retained.append(keep_path)
             retained_abs.add(keep_abs)
 
-    for path in gguf_paths:
+    backend = resolve_backend()
+    for path in artifact_paths:
         if not path or os.path.abspath(path) in retained_abs:
             continue
-        # Drop the sidecar with the file: a surviving validation record would let a
-        # later build mistake a partially-written file for a warm cache hit.
-        invalidate_gguf_cache(path)
+        # Drop the sidecar with the artifact: a surviving validation record would let a
+        # later build mistake a partially-written one for a warm cache hit.
+        invalidate_cache(path, backend)
         parent = os.path.dirname(path)
         try:
             if os.path.isdir(parent) and not os.listdir(parent):
                 os.rmdir(parent)
         except OSError:
             pass
-        _log(mlabel, f"  Reaped non-best GGUF: {path}")
+        _log(mlabel, f"  Reaped non-best {backend_label(backend)} artifact: {path}")
 
     state["retained_gguf_paths"] = retained
 
 
-def _build_gguf_for_eval(weights_ref: str, model_id: str, quant: str, mlabel: str):
-    """Build/reuse GGUF outside the parent CUDA context when isolation is enabled."""
+def _build_quant_artifact_for_eval(
+    weights_ref: str, model_id: str, quant: str, mlabel: str
+):
+    """Build/reuse the quantized artifact outside the parent CUDA context when isolation is on."""
     from training.cuda_isolation import (
         CudaWorkerError,
         isolation_enabled,
         run_isolated,
     )
 
+    backend = resolve_backend()
     try:
         if isolation_enabled():
-            gguf_path = run_isolated(
-                "build_gguf",
+            artifact_path = run_isolated(
+                "build_quant_artifact",
                 {
                     "weights_ref": weights_ref,
                     "model_id": model_id,
                     "quant": quant,
                     "mlabel": mlabel,
+                    "backend": backend,
                 },
             )
         else:
-            gguf_path = _build_or_reuse_gguf(weights_ref, model_id, quant, mlabel)
+            artifact_path = _build_or_reuse_quant_artifact(
+                weights_ref, model_id, quant, mlabel, backend
+            )
     except CudaWorkerError as exc:
         if exc.remote_error_type == "QuantizationInfrastructureError":
             raise QuantizationInfrastructureError(str(exc)) from exc
         raise
-    if not gguf_path:
+    if not artifact_path:
         raise QuantizationInfrastructureError(
-            f"Failed to build required {quant} quantized GGUF for {model_id}; "
-            "refusing to silently score BF16 under a quantized variant label"
+            f"Failed to build required {quant} {backend_label(backend)} artifact for "
+            f"{model_id}; refusing to silently score BF16 under a quantized variant label"
         )
-    return gguf_path
+    return artifact_path
 
 
 def evaluate_node(state: AgentState) -> AgentState:
@@ -192,9 +225,11 @@ def evaluate_node(state: AgentState) -> AgentState:
         raise RuntimeError("evaluate_node called before eval_setup_node built the eval set")
     pending = state.get("_pending_weights_refs") or {}
 
+    quant_backend = resolve_backend()
+
     # --- Baseline measurement (first eval for this model) ---
     baseline_result = None
-    baseline_gguf_path = None
+    baseline_artifact = None
     if state["iteration"] == 1:
         _log(mlabel, "")
         _log(mlabel, "=" * 78)
@@ -203,7 +238,7 @@ def evaluate_node(state: AgentState) -> AgentState:
         try:
             baseline_quant = state["selected_model"].quant
             if baseline_quant is not None:
-                baseline_gguf_path = _build_gguf_for_eval(
+                baseline_artifact = _build_quant_artifact_for_eval(
                     model_id,
                     model_id,
                     baseline_quant,
@@ -214,7 +249,8 @@ def evaluate_node(state: AgentState) -> AgentState:
                 model_id,
                 model_id,
                 quant=baseline_quant,
-                gguf_path=baseline_gguf_path,
+                quant_artifact=baseline_artifact,
+                quant_backend=quant_backend,
             )
             baseline_f1 = baseline_result.f1
         except Exception as e:
@@ -272,7 +308,7 @@ def evaluate_node(state: AgentState) -> AgentState:
 
     # --- Score all trained configs ---
     scored = {}
-    gguf_by_label = {}
+    artifact_by_label = {}
     for label, weights_ref in pending.items():
         _log(mlabel, "")
         _log(mlabel, "=" * 78)
@@ -283,17 +319,23 @@ def evaluate_node(state: AgentState) -> AgentState:
         _log(mlabel, "=" * 78)
         _log(mlabel, f"  weights: {weights_ref}")
         quant = state["selected_model"].quant
-        gguf_path = None
-        # Build + score the ACTUAL quantized GGUF (honest per-quant accuracy) when EITHER
+        quant_artifact = None
+        # Build + score the ACTUAL quantized artifact (honest per-quant accuracy) when EITHER
         # (a) QUANT_ACCURACY_EVAL is on (default; accuracy-only, no phone needed), OR (b) a
-        # real on-device backend is selected (latency/power measurement). Both require
-        # llama.cpp (convert_hf_to_gguf + llama-quantize) + llama-cpp-python. If the flag is
-        # off (SLM_QUANT_EVAL=0), we score the HF/LoRA weights via Unsloth (gguf_path=None).
-        want_gguf_eval = config.QUANT_ACCURACY_EVAL or config.HW_ONDEVICE_BACKEND != "theoretical"
-        if quant is not None and want_gguf_eval:
-            gguf_path = _build_gguf_for_eval(weights_ref, model_id, quant, mlabel)
-        result = run_eval(eval_set, weights_ref, model_id, quant=quant, gguf_path=gguf_path)
-        gguf_by_label[label] = gguf_path
+        # real on-device backend is selected (latency/power measurement). Each quantization
+        # backend needs its own toolchain present — llama.cpp's convert/quantize CLIs plus
+        # llama-cpp-python, or MNN's llmexport + MNNConvert plus pymnn. If the flag is off
+        # (SLM_QUANT_EVAL=0), we score the HF/LoRA weights via Unsloth (quant_artifact=None).
+        want_quant_eval = config.QUANT_ACCURACY_EVAL or config.HW_ONDEVICE_BACKEND != "theoretical"
+        if quant is not None and want_quant_eval:
+            quant_artifact = _build_quant_artifact_for_eval(
+                weights_ref, model_id, quant, mlabel
+            )
+        result = run_eval(
+            eval_set, weights_ref, model_id, quant=quant,
+            quant_artifact=quant_artifact, quant_backend=quant_backend,
+        )
+        artifact_by_label[label] = quant_artifact
         scored[label] = (weights_ref, result)
         _log(
             mlabel,
@@ -326,7 +368,7 @@ def evaluate_node(state: AgentState) -> AgentState:
     # goal. weights_ref=model_id resolves to the base model (no adapter) in run_eval.
     if state["iteration"] == 1 and baseline_result is not None:
         scored["baseline (zero-shot, no adapter)"] = (model_id, baseline_result)
-        gguf_by_label["baseline (zero-shot, no adapter)"] = baseline_gguf_path
+        artifact_by_label["baseline (zero-shot, no adapter)"] = baseline_artifact
         _log(mlabel, f"  Baseline counted as a candidate (F1={baseline_result.f1:.4f}) — "
                      f"fine-tuning must beat zero-shot to be kept")
 
@@ -357,13 +399,13 @@ def evaluate_node(state: AgentState) -> AgentState:
     else:
         state["consecutive_no_improvement"] += 1
 
-    # Keep the GGUF only when this iteration improved on the prior best; every other
-    # one is write-once-read-once scratch worth 2.6 GB. Earlier new-bests are protected
+    # Keep the quantized artifact only when this iteration improved on the prior best; every
+    # other one is write-once-read-once scratch worth 2.6 GB. Earlier new-bests are protected
     # by state["retained_gguf_paths"].
-    _reap_gguf(
+    _reap_quant_artifacts(
         state,
-        list(gguf_by_label.values()),
-        gguf_by_label.get(best_label) if is_new_best else None,
+        list(artifact_by_label.values()),
+        artifact_by_label.get(best_label) if is_new_best else None,
         mlabel,
     )
 
@@ -451,6 +493,11 @@ def evaluate_node(state: AgentState) -> AgentState:
         "selector": selector,
         "model_id": model_id,
         "quant": state["selected_model"].quant,
+        # WHICH RUNTIME this score was measured through. `quant` alone is not enough: `Q4_K_M`
+        # names a 4-bit build for both backends, and a llama.cpp number and an MNN number for the
+        # same variant are different measurements of different artifacts. Recorded per iteration
+        # so a post-run report cannot average across the two.
+        "quant_backend": quant_backend,
         # The size tier this iteration ran on. Recorded because a run that escalates is really several
         # experiments, and both the score-attribution table and the accuracy chart group by tier to
         # avoid averaging deltas across models with different ceilings. Both read it from here, and

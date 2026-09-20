@@ -20,12 +20,16 @@ from tasks import (
     calendar_json,
     clinc150,
     dialogsum,
+    gec_bea19,
+    goemotions,
     gsm8k,
+    multiconer,
     ner_bc5cdr,
     proactive_listening,
     routerbench,
     sms_spam,
     toolbench,
+    topv2,
     xlam_bfcl,
 )
 
@@ -40,6 +44,10 @@ _MODULES = (
     routerbench,
     proactive_listening,
     clinc150,
+    topv2,
+    multiconer,
+    gec_bea19,
+    goemotions,
 )
 
 TASKS: dict[str, TaskSpec] = {}

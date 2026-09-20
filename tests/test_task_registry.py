@@ -39,6 +39,13 @@ EXPECTED_TASKS = {
     "routerbench",
     "proactive_listening",
     "clinc150",
+    # The on-device SFT suite, added 2026-09-06. Each one covers a capability the ten above did
+    # not: nested structured prediction under a published low-resource protocol, a fine-grained
+    # label space, and pure text-to-text generation scored on edits.
+    "topv2",
+    "multiconer",
+    "gec_bea19",
+    "goemotions",
 }
 
 PROJECT_ROOT = pathlib.Path(__file__).resolve().parent.parent
@@ -50,7 +57,7 @@ PRODUCTION_PACKAGES = ("agent", "data", "eval", "training", "tasks", "config")
 # --------------------------------------------------------------------------
 
 
-def test_all_ten_tasks_are_registered():
+def test_every_task_in_the_suite_is_registered():
     assert set(TASKS) == EXPECTED_TASKS
     assert task_names() == sorted(EXPECTED_TASKS)
 
@@ -148,7 +155,40 @@ def test_the_data_caps_are_uniform_across_the_suite():
     """
     for name, spec in TASKS.items():
         assert spec.initial_train_cap == CAP_EXCEPTIONS.get(name, 5000), name
-        assert spec.eval_cap == 1000, name
+
+
+def test_the_in_loop_eval_is_capped_for_selection_not_for_publication():
+    """`select_cap` bounds the eval that runs EVERY iteration, so it must stay small.
+
+    The bound is `<= 1000` rather than `== 1000` because the number is a CAP and some tasks have
+    less held-out data than that — DialogSum's test split is 500 rows in total — and a task with a
+    smaller split is not a task that drifted.
+
+    What must never happen is the reverse. Raising this to get a publishable error bar was the
+    tempting move and it is the wrong one: the eval runs on every iteration of the loop, so the
+    cost is multiplied by the iteration count, and the number still would not be the one to
+    publish. Selection is a PAIRED comparison — the same fixed rows against successive
+    checkpoints — so its sampling error is largely common-mode and cancels out of the ranking,
+    which is what makes 1,000 defensible here and indefensible in a paper. The reporting half is
+    `report_load` / `report_score`, run once by `scripts/report_eval.py`.
+    """
+    for name, spec in TASKS.items():
+        assert spec.select_cap <= 1000, (
+            f"{name}: select_cap={spec.select_cap} sizes the per-iteration eval; a bigger number "
+            f"belongs in report_load, not here"
+        )
+
+
+def test_the_overloaded_eval_cap_field_is_gone():
+    """The removed name. Worth asserting because the rename IS the fix.
+
+    One field called `eval_cap` was sizing two things that want opposite values: checkpoint
+    selection, which wants to be small because it runs every iteration, and the published result,
+    which wants to be large because a +/-2.5-point error bar is not a result. Nothing in the code
+    distinguished them, so the 1,000 could be defended only by ignoring one of the two jobs.
+    """
+    assert "eval_cap" not in spec_field_names()
+    assert "select_cap" in spec_field_names()
 
 
 def test_a_cap_exception_is_only_worth_having_if_it_leaves_mining_room():
@@ -174,6 +214,80 @@ def test_token_budgets_leave_room_for_a_prompt():
     for name, spec in TASKS.items():
         assert 0 < spec.max_new_tokens < spec.max_seq_length, name
         assert spec.eval_batch_size >= 1, name
+
+
+# --------------------------------------------------------------------------
+# The reporting half
+# --------------------------------------------------------------------------
+
+
+# Tasks where the SELECTION metric and the REPORTED metric are deliberately different, with the
+# reason. Written out rather than derived so that a task quietly starting to publish its selection
+# metric fails here — the two being different is a considered choice, and so is their being equal.
+REPORT_METRIC_EXCEPTIONS = {
+    # 33 classes with a 0.18%-of-entities tail. A <=1,000-row selection draw can contain ZERO
+    # examples of a rare class, which makes macro-F1 undefined or wildly noisy as a ranking signal
+    # while remaining the honest headline. Micro selects; macro publishes.
+    "multiconer": ("micro_f1", "macro_f1"),
+    # Macro-F1 over 28 labels is a thresholding artifact — the same model moves several points
+    # between a fixed 0.5, a fixed 0.3 and a dev-tuned sweep — so the headline is threshold-free
+    # AUPRC. AUPRC needs per-label rankings, which only the report pass computes; the loop selects
+    # on the 7-way Ekman grouping, whose classes all have real support.
+    "goemotions": ("ekman_macro_f1", "macro_auprc"),
+    # ROUGE-L alone ranks checkpoints fine and is cheap. The headline adds ROUGE-1/2 and BERTScore,
+    # because ROUGE punishes a correct summary that is worded differently and BERTScore catches it.
+    "dialogsum": ("rouge_l", "rouge_1_2_l_bertscore"),
+}
+
+
+def test_a_task_reporting_a_different_metric_than_it_selects_on_says_so():
+    for name, spec in TASKS.items():
+        expected = REPORT_METRIC_EXCEPTIONS.get(name)
+        if expected is None:
+            assert spec.report_metric_name == spec.metric_name, (
+                f"{name} selects on {spec.metric_name!r} but reports {spec.report_metric_name!r} "
+                f"without an entry in REPORT_METRIC_EXCEPTIONS explaining why"
+            )
+            continue
+        assert (spec.metric_name, spec.report_metric_name) == expected, name
+
+
+def test_every_task_names_a_report_scorer():
+    """`report_score` has no default, so a task cannot reach the registry without deciding.
+
+    A task whose report metric equals its selection metric names the same function twice. That is
+    the point: it records that the question was asked, rather than letting a default answer it.
+    """
+    for name, spec in TASKS.items():
+        assert callable(spec.report_score), name
+        assert spec.report_metric_name.strip(), name
+        if spec.report_metric_name == spec.metric_name:
+            assert spec.report_score is spec.score, (
+                f"{name} reports the same metric name as it selects on but through a DIFFERENT "
+                f"function, which means one of the two is mislabelled"
+            )
+
+
+# Tasks whose report split is a different split, not a bigger draw from the same one.
+REPORT_LOAD_TASKS = {
+    # Selects on the official 871-row dev, which cannot support a 33-class macro-F1 at all, and
+    # reports on a fixed stratified slice of the 249,980-row test split.
+    "multiconer",
+}
+
+
+def test_only_the_tasks_that_need_a_separate_report_split_declare_one():
+    for name, spec in TASKS.items():
+        if name in REPORT_LOAD_TASKS:
+            assert spec.report_load is not None, (
+                f"{name} is declared as needing its own report split but does not provide one"
+            )
+            assert callable(spec.report_load), name
+        else:
+            assert spec.report_load is None, (
+                f"{name} declares a report_load; if its report split really is a different split "
+                f"from its selection split, add it to REPORT_LOAD_TASKS with the reason"
+            )
 
 
 # --------------------------------------------------------------------------
@@ -300,10 +414,25 @@ def test_required_fields_are_the_fields_the_scorer_reads():
     a `"prompt"` key they never carried (B299)."""
     targets = {
         "gsm8k": "answer",
-        "dialogsum": "answer",
+        # `references`, not `answer`. The scorer grades against ALL THREE of DialogSum's human
+        # test summaries, and requiring only `answer` would let a source that flattens them —
+        # knkarthick/dialogsum's test.csv is 1,500 rows with one `summary` column — load cleanly
+        # and silently reduce the metric to single-reference ROUGE.
+        "dialogsum": "references",
         "xlam_bfcl": "answer",
         "calendar_json": "answer",
         "ner_bc5cdr": "entities",
+        "multiconer": "entities",
+        # The parse string. `domain` is required too, because the headline is the mean of the
+        # per-domain exact-match rates and a row without a domain cannot enter it.
+        "topv2": "answer",
+        # `m2` is required alongside it: the corpus's own gold edit annotation, which the scorer
+        # reassembles into a reference file. Regenerating it from `answer` would re-segment the
+        # annotator's edits and change the number.
+        "gec_bea19": "m2",
+        # `labels` is the list the scorer grades; `label` is its serialization, which is what the
+        # model is trained to emit.
+        "goemotions": "labels",
         "routerbench": "label",
         "proactive_listening": "label",
         "clinc150": "label",
@@ -325,15 +454,21 @@ def test_the_judged_tasks_say_so_and_are_the_only_ones():
     """`needs_judge` exists so a judge outage fails loudly instead of scoring zero and sending the
     loop chasing a phantom regression.
 
-    Two tasks score through the judge, for different reasons, and both are deliberate:
-      * `dialogsum` — a summary has no exact gold, so similarity is judged.
-      * `toolbench` — ToolEval pass rate is DEFINED as a majority vote of judged assessments, and
-        its test queries ship with no reference solution at all.
-    Every other task is scored by computation, and adding a third judged task should have to
+    ONE task scores through the judge, and it is the one where the judge is not a proxy for a
+    metric but IS the metric: `toolbench`'s ToolEval pass rate is DEFINED as a majority vote of
+    judged assessments, and its test queries ship with no reference solution at all.
+
+    `dialogsum` used to be the second, on the reasoning that a summary has no exact gold so
+    similarity must be judged. That was wrong about the data. DialogSum's test split ships THREE
+    human summaries per dialogue, so multi-reference ROUGE has a real gold to score against — and
+    unlike a judge it is comparable to the published baselines and to the human ceiling, is
+    deterministic, and costs nothing per eval. It moved off the judge on 2026-09-06.
+
+    Every other task is scored by computation, and adding a second judged task should have to
     argue for itself here.
     """
     judged = {name for name, spec in TASKS.items() if spec.needs_judge}
-    assert judged == {"dialogsum", "toolbench"}
+    assert judged == {"toolbench"}
     for name, spec in TASKS.items():
         # Overlapping the judge with the next generation batch is only meaningful when there is
         # a judge to overlap.

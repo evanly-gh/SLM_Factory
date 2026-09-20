@@ -44,6 +44,10 @@ if sys.platform == "win32" and "fcntl" not in sys.modules:
 # gets fixed. Nothing under tests/ needs a working key.
 os.environ["ANTHROPIC_API_KEY"] = "test-placeholder-not-a-real-key"
 os.environ["EXA_API_KEY"] = "test-placeholder-not-a-real-key"
+# Only read when SLM_SYNTH_API_MODE=1, which no test enables globally — but a test that flips API
+# mode on must not then fail at config import for a missing key, and must not reach DeepSeek if it
+# forgets to patch the client. Same reasoning as the two above: a placeholder fails fast on auth.
+os.environ["DEEPSEEK_API_KEY"] = "test-placeholder-not-a-real-key"
 
 # No test may block on a real network wait. `curate` blocks for SLM_SYNTH_MIDRUN_WAIT_S
 # (default 600s) waiting for the local synthesis endpoint to return before it stops the run;
@@ -56,6 +60,14 @@ os.environ.setdefault("SLM_SYNTH_MIDRUN_WAIT_S", "0")
 # assert terminal routing on a threshold-clearing score would each make one. Tests that exercise
 # raising turn it on explicitly and patch the call.
 os.environ.setdefault("SLM_THRESHOLD_RAISE", "0")
+
+# The quantization backend is FORCED to the default, not defaulted, for the same reason the API keys
+# above are. Anyone working on the MNN backend exports SLM_QUANT_BACKEND=mnn in their shell to run an
+# export by hand, and an inherited value silently rewrites what the suite is testing: the GGUF
+# retention tests reaped "MNN artifacts", and every assertion that a llama.cpp artifact name was
+# produced failed with no indication that the environment, not the code, had changed. Tests that
+# exercise MNN set the variable themselves through monkeypatch, which is scoped and visible.
+os.environ["SLM_QUANT_BACKEND"] = "llama_cpp"
 
 # --------------------------------------------------------------------------
 # Heavyweight test modules, skipped unless asked for

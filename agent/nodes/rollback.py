@@ -1,7 +1,7 @@
 # agent/nodes/rollback.py
 from copy import deepcopy
 
-from agent.state import AgentState
+from agent.state import SKIPPED_NO_ROWS, AgentState
 from eval.harness import EvalResult
 
 
@@ -43,12 +43,38 @@ def rollback_node(state: AgentState) -> AgentState:
     if state["dag"]:
         pruned_node = state["dag"][-1]
         pruned_node["pruned"] = True
-        _log(model_id, f"  Pruned DAG node: iteration={pruned_node['iteration']}  "
+        # `score` is formatted defensively for the same reason the filter below exists: a scoreless
+        # node in this position would turn a rollback into a TypeError inside a log line.
+        _pruned_score = pruned_node.get("score")
+        _pruned_shown = (
+            f"{_pruned_score:.4f}" if isinstance(_pruned_score, (int, float)) else "unmeasured"
+        )
+        _log(model_id, f"  Pruned DAG node: iteration={pruned_node.get('iteration', '?')}  "
              f"config={pruned_node.get('best_config', '?')}  "
-             f"score={pruned_node['score']:.4f}")
+             f"score={_pruned_shown}")
 
-    # Restore best_weights_ref to the most recent non-pruned DAG node
-    non_pruned = [n for n in state["dag"] if not n.get("pruned", False)]
+    # Restore best_weights_ref to the best MEASURED, non-pruned DAG node.
+    #
+    # `pruned` alone is not enough. `curate._record_skipped_iteration` puts a node in the DAG for a
+    # rebuild that added no rows — deliberately with `score: None`, because nothing was trained or
+    # evaluated and inventing a score would put a fabricated measurement into the trajectory. That
+    # node is not pruned (it was never rejected, it was never measured), so it passed this filter
+    # and reached the `max()` below, where comparing None against a float raises. It also carries
+    # no `weights_ref` key at all, so the very next line would KeyError even with the score handled.
+    #
+    # This killed all three ablation runs of 2026-09-04 (39562028/29/30) at tier 1 iteration 8,
+    # after 5h40m of L40S time between them. BC5CDR guarantees it: the local bundle holds 5,096
+    # train rows against the 5,000 eval_setup takes, so `mine_new_real` yields +96 once and +0
+    # forever after — two consecutive skipped iterations, then the first regression, then here.
+    #
+    # `status` is the documented marker for this and `score is None` is the belt-and-braces check,
+    # because a node that cannot be compared must not be reachable by either route.
+    non_pruned = [
+        n for n in state["dag"]
+        if not n.get("pruned", False)
+        and n.get("status") != SKIPPED_NO_ROWS
+        and n.get("score") is not None
+    ]
     if non_pruned:
         best_node = max(non_pruned, key=lambda n: n["score"])
         state["best_weights_ref"] = best_node["weights_ref"]
@@ -128,10 +154,18 @@ def rollback_node(state: AgentState) -> AgentState:
                 f"effective_batch={best_hparams.get('effective_batch_size')}",
             )
     else:
-        _log(model_id, "  WARNING: all DAG nodes pruned, no checkpoint to restore")
+        # The message now counts the two ways a node can be unusable, because they are not the
+        # same failure and the old wording ("all DAG nodes pruned") named only one of them. A
+        # skipped iteration is not pruned and never had a checkpoint to begin with, so a DAG made
+        # of skipped nodes plus one pruned node lands here while being nothing like "all pruned".
+        _n_pruned = sum(1 for n in state["dag"] if n.get("pruned", False))
+        _n_skipped = sum(1 for n in state["dag"] if n.get("score") is None)
+        _log(model_id, f"  WARNING: no measured, unpruned DAG node to restore "
+                       f"({_n_pruned} pruned, {_n_skipped} unmeasured of {len(state['dag'])})")
         raise RuntimeError(
-            f"[rollback][{model_id}] Inconsistent state: all DAG nodes pruned but rollback "
-            f"was triggered. scores={state['scores']} — cannot restore a valid checkpoint."
+            f"[rollback][{model_id}] Inconsistent state: rollback was triggered but no DAG node "
+            f"holds a restorable checkpoint — {_n_pruned} of {len(state['dag'])} are pruned and "
+            f"{_n_skipped} were never evaluated. scores={state['scores']}."
         )
 
     _log(model_id, f"  Restored best checkpoint; re-entering decision loop (iterate) to pick a "

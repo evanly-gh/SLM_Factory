@@ -127,11 +127,11 @@ def test_official_pricing_accounts_for_anthropic_cache_tokens():
     assert sonnet == pytest.approx(3 + 15 + 0.30 + 3.75)
     assert haiku == pytest.approx(1 + 5 + 0.10 + 1.25)
     registry = pricing_registry()
-    assert registry["effective_date"] == "2026-07-21"
-    # Cloud non-Anthropic teachers (gpt-4.1 / deepseek-v4-flash) were removed — the only
-    # priced models are Anthropic tiers; the local Qwen synth endpoint is charged $0.
+    assert registry["effective_date"] == "2026-08-28"
+    # gpt-4.1 stays out: there is no OpenAI teacher on any path. DeepSeek is priced because it is
+    # a real backend a run can select (SLM_SYNTH_API_MODE=1), and an unpriced paid provider is
+    # recorded at $0.00 — which is how a run's whole synthesis bill would vanish from the ledger.
     assert "gpt-4.1" not in registry["models"]
-    assert "deepseek-v4-flash" not in registry["models"]
     assert registry["models"]["claude-sonnet-5"]["input_per_mtok"] == 2.0
     assert registry["models"]["claude-sonnet-5"]["output_per_mtok"] == 10.0
     assert registry["models"]["claude-sonnet-5"]["valid_through"] == "2026-08-31"
@@ -453,7 +453,7 @@ def test_cost_snapshot_has_provider_model_and_stage_summaries(tmp_path):
     assert snapshot["by_model"]["Qwen/Qwen3.6-35B-A3B"]["calls"] == 1
     assert snapshot["by_stage"]["generation_judge"]["calls"] == 1
     assert snapshot["total_cost_usd"] == 0.0
-    assert snapshot["pricing"]["effective_date"] == "2026-07-21"
+    assert snapshot["pricing"]["effective_date"] == "2026-08-28"
 
 
 def test_event_paths_are_absolute_exported_and_required_for_pipeline(
@@ -733,15 +733,36 @@ def test_paid_callsites_use_central_tracking_wrappers():
         assert stage in iterate, f"missing billing stage {stage}"
 
 
-def test_no_cloud_cot_teacher_config_or_curriculum_residue():
-    """The CoT teacher is the local Qwen3.6 synth model only — no DeepSeek/OpenAI cloud
-    teacher constants or thinking-mode plumbing may remain in config or curriculum."""
+def test_no_cloud_cot_teacher_fallback_config_or_curriculum_residue():
+    """There is ONE teacher per run, chosen up front — never a silent per-call fallback chain.
+
+    This used to assert that the string "deepseek" appeared nowhere in config, which was the right
+    guard for the world it was written in: the CoT path had a `get_cot_fallbacks` ladder that tried
+    a cloud model when the local one declined, so a run's CoT provenance depended on which
+    endpoints happened to be up. DeepSeek is now a sanctioned teacher BACKEND selected once by
+    SLM_SYNTH_API_MODE, which is the opposite arrangement — one model, named in the config
+    snapshot, for the whole run.
+
+    So the guard moves from "this vendor is forbidden" to what actually mattered: no per-task
+    teacher constants, no fallback ladder, and no cloud CoT path that can fire without the run
+    having asked for it. Claude is still never a CoT teacher.
+    """
     root = Path(__file__).parents[1]
     config_source = (root / "config" / "config.py").read_text()
     curriculum_source = (root / "data" / "curriculum.py").read_text()
 
-    assert "deepseek" not in config_source.lower()
     assert "TEACHER_MODEL_GPT" not in config_source
     assert "TEACHER_MODEL_DEEPSEEK" not in config_source
+    assert "OPENAI_API_KEY" not in config_source
     assert "get_cot_fallbacks" not in curriculum_source
     assert 'reasoning_effort="high"' not in curriculum_source
+    # The teacher is resolved from ONE flag into the SYNTH_* constants every consumer already
+    # reads, so there is exactly one place a run's teacher is decided.
+    assert "SYNTH_API_MODE" in config_source
+    # Claude reachability, not the word "Claude" — the file says "there is no Claude CoT fallback"
+    # in a comment, and a substring ban would forbid documenting the very property it checks.
+    # Curriculum synthesis takes its backend from the injected `generate_fn` and constructs no
+    # client of its own, so an Anthropic import or a billed Anthropic call site is the signal.
+    assert "tracked_anthropic" not in curriculum_source
+    assert "import anthropic" not in curriculum_source
+    assert "ChatAnthropic" not in curriculum_source

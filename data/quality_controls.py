@@ -57,6 +57,20 @@ def require_fields(*names: str) -> QCStep:
     Named explicitly per task rather than inferred, because the inference was wrong: the
     generation-family branch accepted a row on `("text" and "label")` and then filtered it on
     `"prompt"`, so every row passed the gate and none was measurable.
+
+    PRESENCE, NOT NON-EMPTINESS, and that is deliberate rather than an oversight. `n in r` passes
+    a row carrying `references: []` or `labels: []`, which is how 249 synthetic `dialogsum` rows
+    with no reference summary at all reached a curriculum (audited 2026-09-08).
+
+    Tightening this to reject empty values would be wrong, because whether empty is legitimate is
+    a PER-TASK fact and this step is shared by fourteen of them: `entities: []` is a valid
+    `ner_bc5cdr` and `multiconer` row — a sentence containing no entities, and a useful negative —
+    while `references: []` is meaningless for `dialogsum`. A blanket rule here would silently
+    delete the negatives from both extraction tasks.
+
+    So emptiness is checked where the knowledge lives: `TaskSpec.synth_verifier`, which is
+    per-task by construction. `verify_ner_row` accepts an empty span list; `verify_summarization_row`
+    and `verify_multilabel_emotion_row` reject an empty one.
     """
 
     def step(rows: list[dict], ctx: QCContext) -> list[dict]:

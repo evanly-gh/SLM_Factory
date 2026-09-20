@@ -118,3 +118,60 @@ class TestReaskCorrectsLengthNotFormat:
         text = self._capture_reask_prompt(ValueError("unsupported field(s): primary_strategy"))
         assert "RAN OUT OF OUTPUT SPACE" not in text
         assert "diagnostic" in text
+
+
+def test_the_prompt_estimate_covers_the_worst_tokenizing_corpus_in_the_suite():
+    """The output budget must never let prompt + budget exceed the served context.
+
+    THE BUG THIS EXISTS FOR, TWICE. `output_budget` subtracts an ESTIMATE of the prompt's token
+    count from a hard server limit, so an optimistic estimate produces an HTTP 400 rather than a
+    truncation. It has now happened to two different corpora with the same arithmetic:
+
+        xlam run 39311800  requested 4736 out, prompt >= 3457, total >= 8193  (max 8192)
+        gec_bea19 audit    requested 15796 out, prompt >= 589,  total >= 16385 (max 16384)
+
+    Both are over by exactly one token, from a ~65-token shortfall against the 64-token margin.
+    The first was addressed by lowering chars/token from 4.0 to 3.5; the second shows that moved
+    the threshold rather than removing the failure. W&I+LOCNESS is word-tokenized — every
+    punctuation mark is its own token and contractions are split — so its prompts tokenize at 3.01
+    chars/token and 3.5 underestimated them by 109 tokens. 97 of 112 generations failed.
+
+    Pinned as an ARITHMETIC INVARIANT over the worst ratio actually observed, not as an assertion
+    that the constant equals some number: the constant may legitimately change again, but
+    `prompt_tokens + output_budget(prompt) <= served_context()` may not stop holding.
+    """
+    from config.token_budget import _FLOOR_TOKENS, output_budget, served_context
+
+    # The worst ratio measured across real 5-shot generation prompts for all five suite tasks,
+    # which is gec_bea19's. A prompt of `chars` that really costs `chars / 3.01` tokens.
+    worst_chars_per_token = 3.01
+    context = served_context()
+    for chars in (500, 1834, 2302, 4298, 12000):
+        prompt = "x" * chars
+        real_tokens = int(chars / worst_chars_per_token) + 1
+        # Only meaningful for a prompt that FITS. A prompt whose own tokens exceed the window
+        # cannot be rescued by any output budget, and `_FLOOR_TOKENS` deliberately returns a
+        # working-sized request there rather than a zero — trading a loud 400 for a silent
+        # truncation is the one thing that module refuses to do. That case is asserted separately.
+        if real_tokens >= context - _FLOOR_TOKENS:
+            continue
+        budget = output_budget(prompt)
+        assert real_tokens + budget <= context, (
+            f"a {chars}-char prompt really costs ~{real_tokens} tokens; asking for {budget} "
+            f"output tokens totals {real_tokens + budget} against a served context of "
+            f"{context} — that is an HTTP 400, not a truncation"
+        )
+
+
+def test_the_budget_still_asks_for_something_usable_after_the_conservative_estimate():
+    """A conservative prompt estimate must not shrink the budget into uselessness.
+
+    The estimate exists to avoid a 400, and the floor exists so that avoiding one never turns into
+    a request too small to carry a reply. Over-asking is free — generation stops at EOS — so the
+    only real requirement is that a short prompt still gets a large budget.
+    """
+    from config.token_budget import _FLOOR_TOKENS, output_budget
+
+    assert output_budget("short prompt") > 4096
+    # Even a prompt that has nearly filled the window returns a working request rather than 0.
+    assert output_budget("x" * 200_000) >= _FLOOR_TOKENS

@@ -65,23 +65,44 @@ def test_gsm8k_converter_preserves_gold_reasoning_and_final_answer():
     assert labels == ["gsm8k"]
 
 
-def test_samsum_converter_preserves_dialogue_summary_pair():
-    from data.loaders.dialogsum_samsum import SUMMARIZATION_INSTRUCTION
+def test_dialogsum_converter_preserves_the_three_references():
+    """The bundle must carry all three test summaries, or it silently reduces the metric.
+
+    This is the property that made the whole rework necessary: `knkarthick/dialogsum`'s test.csv
+    flattens the three references into three single-summary rows, and a bundle built from it would
+    pass every other check while scoring single-reference ROUGE under a multi-reference name.
+
+    `labels` is empty because summarization has no classes — the removed SAMSum bundle carried a
+    synthetic `"generation"` placeholder, which was a label vocabulary of one meaningless value.
+    """
+    from data.loaders.dialogsum import SUMMARIZATION_INSTRUCTION
 
     rows, labels = download_datasets._convert(
-        [{"id": "chat-1", "dialogue": "A: Hi\nB: Hello", "summary": "A greets B."}],
-        _spec("samsum"),
+        [{
+            "fname": "test_0",
+            "dialogue": "#Person1#: Hi\n#Person2#: Hello",
+            "summary1": "A greets B.",
+            "summary2": "#Person1# says hello to #Person2#.",
+            "summary3": "The two exchange greetings.",
+            "topic1": "greeting",
+        }],
+        _spec("dialogsum"),
     )
 
     assert rows == [
         {
-            "text": "A: Hi\nB: Hello",
+            "text": "#Person1#: Hi\n#Person2#: Hello",
             "answer": "A greets B.",
-            "label": "generation",
+            "references": [
+                "A greets B.",
+                "#Person1# says hello to #Person2#.",
+                "The two exchange greetings.",
+            ],
+            "topic": "greeting",
             "_instruction": SUMMARIZATION_INSTRUCTION,
         }
     ]
-    assert labels == ["generation"]
+    assert labels == []
 
 
 def test_manifest_records_schema_counts_provenance_and_eval_ban():
@@ -121,17 +142,20 @@ def test_manifest_records_schema_counts_provenance_and_eval_ban():
 
 
 def test_write_bundle_rejects_normalized_train_test_contamination(tmp_path):
-    train = {"text": " Same\n  Prompt ", "answer": "gold", "label": "generation"}
-    test = {"text": "same prompt", "answer": "gold", "label": "generation"}
+    # Rows in the `dialogsum` bundle's own schema, `references` included: the writer validates
+    # against BOTH the bundle's declared `row_schema` and `required_fields_for_task`, so a row
+    # missing the field the scorer grades fails before the overlap check is reached.
+    train = {"text": " Same\n  Prompt ", "answer": "gold", "references": ["gold"]}
+    test = {"text": "same prompt", "answer": "gold", "references": ["gold"]}
 
     with pytest.raises(ValueError, match="normalized train/test text overlap"):
         download_datasets._write_bundle(
             tmp_path,
-            _spec("samsum"),
-            _spec("samsum")["sources"][0],
+            _spec("dialogsum"),
+            _spec("dialogsum")["sources"][0],
             [train],
             [test],
-            labels=["generation"],
+            labels=[],
         )
 
 
@@ -158,25 +182,32 @@ def test_normalized_decontamination_keeps_official_test_rows():
 
 
 def test_write_bundle_creates_hashed_jsonl_and_manifest(tmp_path):
-    train = [{"text": "train dialogue", "answer": "train summary", "label": "generation"}]
-    test = [{"text": "test dialogue", "answer": "test summary", "label": "generation"}]
+    train = [{
+        "text": "train dialogue", "answer": "train summary", "references": ["train summary"],
+    }]
+    # Three references on the test side, which is the shape the real test split has and the
+    # property the bundle exists to preserve.
+    test = [{
+        "text": "test dialogue", "answer": "test summary",
+        "references": ["test summary", "another wording", "a third wording"],
+    }]
 
     manifest = download_datasets._write_bundle(
         tmp_path,
-        _spec("samsum"),
-        _spec("samsum")["sources"][0],
+        _spec("dialogsum"),
+        _spec("dialogsum")["sources"][0],
         train,
         test,
-        labels=["generation"],
+        labels=[],
         removed_train_overlap=42,
         source_revision="deadbeef",
     )
 
-    bundle = tmp_path / "samsum"
+    bundle = tmp_path / "dialogsum"
     assert json.loads((bundle / "train.jsonl").read_text()) == train[0]
     assert json.loads((bundle / "test.jsonl").read_text()) == test[0]
     assert json.loads((bundle / "manifest.json").read_text()) == manifest
-    assert manifest["hf_id"] == "knkarthick/samsum"
+    assert manifest["hf_id"] == "cylnlp/dialogsum"
     assert manifest["overlap"]["removed_from_train"] == 42
     assert manifest["source_revision"] == "deadbeef"
     checksums = {}
@@ -214,11 +245,11 @@ def test_only_cli_downloads_selected_bundles(tmp_path, monkeypatch):
     monkeypatch.setattr(download_datasets, "_download_dataset", fake_download)
     monkeypatch.setenv("SLM_LOCAL_DATASET_DIR", str(tmp_path))
 
-    assert download_datasets.main(["--only", "gsm8k", "bc5cdr", "samsum"]) == 0
+    assert download_datasets.main(["--only", "gsm8k", "bc5cdr", "dialogsum"]) == 0
     assert downloaded == [
         ("gsm8k", tmp_path),
         ("bc5cdr", tmp_path),
-        ("samsum", tmp_path),
+        ("dialogsum", tmp_path),
     ]
 
 
@@ -231,8 +262,8 @@ def test_only_cli_accepts_comma_separated_names_and_rejects_unknown(tmp_path, mo
     )
     monkeypatch.setenv("SLM_LOCAL_DATASET_DIR", str(tmp_path))
 
-    assert download_datasets.main(["--only", "bc5cdr,samsum"]) == 0
-    assert downloaded == ["bc5cdr", "samsum"]
+    assert download_datasets.main(["--only", "bc5cdr,dialogsum"]) == 0
+    assert downloaded == ["bc5cdr", "dialogsum"]
     with pytest.raises(SystemExit):
         download_datasets.main(["--only", "not-a-dataset"])
 
@@ -249,9 +280,9 @@ def test_list_cli_reports_supported_task_aware_catalog(tmp_path, monkeypatch, ca
     # and go_emotions bundles went with the channels they belonged to.
     from tasks import TASKS
 
-    assert set(by_name) == {"bc5cdr", "gsm8k", "samsum"}
+    assert set(by_name) == {"bc5cdr", "gsm8k", "dialogsum"}
     assert by_name["bc5cdr"]["task"] == "ner_bc5cdr"
     assert by_name["gsm8k"]["task"] == "gsm8k"
-    assert by_name["samsum"]["task"] == "dialogsum"
+    assert by_name["dialogsum"]["task"] == "dialogsum"
     assert all(item["task"] in TASKS for item in listed)
-    assert by_name["samsum"]["installed"] is False
+    assert by_name["dialogsum"]["installed"] is False

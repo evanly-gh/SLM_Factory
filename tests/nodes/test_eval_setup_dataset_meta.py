@@ -15,7 +15,7 @@ def _state():
         "task": "dialogsum",
         "task_plan": {
             "task": "dialogsum",
-            "benchmark": "SAMSum",
+            "benchmark": "DialogSum",
             "multi_label": False,
             "schema": None,
             "multilingual": False,
@@ -79,8 +79,10 @@ def test_eval_setup_records_only_declared_eval_split_bans(tmp_path, monkeypatch,
     _pin_loader(
         monkeypatch, "dialogsum",
         lambda max_train, max_test, log=print: (
-            [{"text": "train dialogue", "answer": "train summary", "label": "generation"}],
-            [{"text": "test dialogue", "answer": "test summary", "label": "generation"}],
+            [{"text": "train dialogue", "answer": "train summary",
+              "references": ["train summary"]}],
+            [{"text": "test dialogue", "answer": "test summary",
+              "references": ["test summary"]}],
         ),
     )
     _install_lightweight_dependencies(monkeypatch, tmp_path)
@@ -112,8 +114,8 @@ def test_eval_setup_does_not_invent_eval_bans_from_provenance(tmp_path, monkeypa
     shared = tmp_path / "shared"
     prepare_shared_dataset._write_shared_bundle(
         shared,
-        [{"text": "train", "answer": "a", "label": "generation"}],
-        [{"text": "test", "answer": "b", "label": "generation"}],
+        [{"text": "train", "answer": "a", "references": ["a"]}],
+        [{"text": "test", "answer": "b", "references": ["b"]}],
         task="dialogsum",
         plan={"task": "dialogsum"},
         difficulty=None,
@@ -139,8 +141,8 @@ def test_eval_setup_enforces_normalized_train_test_separation(tmp_path, monkeypa
     _pin_loader(
         monkeypatch, "dialogsum",
         lambda max_train, max_test, log=print: (
-            [{"text": " Same\n  Dialogue ", "answer": "train", "label": "generation"}],
-            [{"text": "same dialogue", "answer": "test", "label": "generation"}],
+            [{"text": " Same\n  Dialogue ", "answer": "train", "references": ["train"]}],
+            [{"text": "same dialogue", "answer": "test", "references": ["test"]}],
         ),
     )
     monkeypatch.setattr(
@@ -221,8 +223,8 @@ def test_eval_restriction_text_does_not_claim_unimplemented_repo_ban():
 
 def test_shared_dataset_uses_explicit_eval_ban_file(tmp_path, monkeypatch):
     shared = tmp_path / "shared"
-    train = [{"text": "train", "answer": "a", "label": "generation"}]
-    test = [{"text": "test", "answer": "b", "label": "generation"}]
+    train = [{"text": "train", "answer": "a", "references": ["a"]}]
+    test = [{"text": "test", "answer": "b", "references": ["b"]}]
     records = [
         {"kind": "hf", "id": "source", "split": "train", "role": "curriculum"},
         {"kind": "hf", "id": "source", "split": "test", "role": "eval"},
@@ -235,7 +237,7 @@ def test_shared_dataset_uses_explicit_eval_ban_file(tmp_path, monkeypatch):
         train,
         test,
         task="dialogsum",
-        plan={"task": "dialogsum", "benchmark": "SAMSum"},
+        plan={"task": "dialogsum", "benchmark": "DialogSum"},
         difficulty=None,
         meta={
             "source": "local SAMSum",
@@ -266,7 +268,7 @@ def test_shared_dataset_preparer_persists_eval_ban_metadata():
 @pytest.mark.parametrize(
     ("task", "row"),
     [
-        ("dialogsum", {"answer": "answer", "label": "generation"}),
+        ("dialogsum", {"answer": "answer", "references": ["answer"]}),
         ("xlam_bfcl", {"answer": "[]", "label": "function_call"}),
     ],
 )
@@ -308,8 +310,8 @@ def test_shared_dataset_loader_rejects_checksum_tampering(tmp_path):
     shared = tmp_path / "shared"
     writer(
         shared,
-        [{"text": "train", "answer": "a", "label": "generation"}],
-        [{"text": "test", "answer": "b", "label": "generation"}],
+        [{"text": "train", "answer": "a", "references": ["a"]}],
+        [{"text": "test", "answer": "b", "references": ["b"]}],
         task="dialogsum",
         plan={"task": "dialogsum"},
         difficulty=None,
@@ -328,8 +330,8 @@ def test_shared_dataset_loader_validates_row_schema_after_integrity(tmp_path):
     shared = tmp_path / "shared"
     writer(
         shared,
-        [{"text": "train", "answer": "a", "label": "generation"}],
-        [{"text": "test", "answer": "b", "label": "generation"}],
+        [{"text": "train", "answer": "a", "references": ["a"]}],
+        [{"text": "test", "answer": "b", "references": ["b"]}],
         task="dialogsum",
         plan={"task": "dialogsum"},
         difficulty=None,
@@ -365,18 +367,20 @@ def test_shared_dataset_writer_rejects_schema_and_normalized_overlap(tmp_path):
         writer(
             tmp_path / "bad-schema",
             [{"text": "train", "label": "generation"}],
-            [{"text": "test", "answer": "b", "label": "generation"}],
+            [{"text": "test", "answer": "b", "references": ["b"]}],
             task="dialogsum",
             plan={"task": "dialogsum"},
             difficulty=None,
             meta={},
         )
 
+    # Schema-complete rows, so the overlap check is the thing that fires rather than the schema
+    # check firing first and masking it.
     with pytest.raises(ValueError, match="normalized train/eval overlap"):
         writer(
             tmp_path / "overlap",
-            [{"text": " Same\n Dialogue ", "answer": "a", "label": "generation"}],
-            [{"text": "same dialogue", "answer": "b", "label": "generation"}],
+            [{"text": " Same\n Dialogue ", "answer": "a", "references": ["a"]}],
+            [{"text": "same dialogue", "answer": "b", "references": ["b"]}],
             task="dialogsum",
             plan={"task": "dialogsum"},
             difficulty=None,

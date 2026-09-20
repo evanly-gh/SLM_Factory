@@ -80,6 +80,31 @@ def _degenerate_raw(eval_set, spec) -> tuple[list[str], str]:
     return ["" for _ in rows], "always empty"
 
 
+# Tasks whose gold cannot score 1.0 against their own scorer, with the reason and the measured
+# ceiling. Every other task must reach 1.0, which the 0.999 default below keeps strict.
+#
+# THIS TABLE IS DANGEROUS AND IS DELIBERATELY SHORT. A floor below 1.0 is precisely how a real
+# scorer/gold mismatch hides. `calendar_json` passed self-consistency while 82% of its gold
+# encoded a year convention no model could infer — self-consistency cannot catch that — and a
+# lowered floor would conceal the reverse case too. An entry earns its place only by naming a
+# STRUCTURAL reason the gap cannot be closed, never a bug someone intends to fix.
+GOLD_SELF_CONSISTENCY_FLOOR = {
+    # ERRANT compares EDIT LISTS, not strings. The reference edits are the annotator's own
+    # segmentation, taken from the shipped M2 file; the hypothesis edits must be DERIVED from the
+    # corrected sentence by `errant_parallel`'s alignment rules. Where a human merged two adjacent
+    # corrections into one edit and the rules split them, the lists differ even though the
+    # sentences are identical — measured at F0.5 0.8934 on 120 dev sentences, with 23 false
+    # positives and 22 false negatives against 213 gold edits.
+    #
+    # Closing the gap would mean regenerating the REFERENCE side the same way, which does score
+    # 1.0 and is the wrong trade: it replaces the corpus's gold annotation with our scorer's
+    # opinion of it, and changes the number every published F0.5 is compared against. So the
+    # ceiling is accepted and recorded instead. A system at 0.75 is at ~84% of achievable here,
+    # not 75%.
+    "gec_bea19": 0.85,
+}
+
+
 def check_task(name: str, *, n_eval: int | None, verbose: bool) -> dict:
     from data.eval_set import EvalSet, build_eval_set
     from tasks import get_task
@@ -88,7 +113,7 @@ def check_task(name: str, *, n_eval: int | None, verbose: bool) -> dict:
     # The task's own cap, not a script-wide constant: BC5CDR ships 5,865 held-out rows and
     # RouterBench 7,267, and each task picked its own point on the variance/iteration-cost
     # trade-off. `--n-eval` overrides for a one-off.
-    n_eval = int(n_eval) if n_eval else spec.eval_cap
+    n_eval = int(n_eval) if n_eval else spec.select_cap
     result: dict = {"task": name, "family": spec.family, "metric": spec.metric_name,
                     "ok": True, "notes": []}
 
@@ -140,9 +165,15 @@ def check_task(name: str, *, n_eval: int | None, verbose: bool) -> dict:
         gold = spec.extract_predictions(gold_raw, eval_set)
         gold_score = spec.score(eval_set, gold)["f1"]
         result["gold_score"] = round(gold_score, 4)
-        if gold_score < 0.999:
-            fail("EVAL", f"gold-vs-gold scored {gold_score:.4f}, expected 1.0 — the eval set and "
-                         f"the scorer disagree about what a correct answer looks like")
+        floor = GOLD_SELF_CONSISTENCY_FLOOR.get(name, 0.999)
+        if gold_score < floor:
+            fail("EVAL", f"gold-vs-gold scored {gold_score:.4f}, expected at least {floor} — the "
+                         f"eval set and the scorer disagree about what a correct answer looks like")
+        elif floor < 0.999:
+            result["notes"].append(
+                f"EVAL: gold-vs-gold is {gold_score:.4f}, not 1.0, and that is EXPECTED for this "
+                f"task — see GOLD_SELF_CONSISTENCY_FLOOR. Read scores against that ceiling."
+            )
 
         degenerate_raw, how = _degenerate_raw(eval_set, spec)
         degen_score = spec.score(eval_set, spec.extract_predictions(degenerate_raw, eval_set))["f1"]
@@ -240,10 +271,10 @@ def main() -> int:
 
     ap = argparse.ArgumentParser()
     ap.add_argument("--task", nargs="*", choices=tasks.task_names(), default=tasks.task_names())
-    # Defaults to each task's own `eval_cap`, so the preflight sees the same eval set the pipeline
+    # Defaults to each task's own `select_cap`, so the preflight sees the same eval set the pipeline
     # would build. A single number here would misreport every task whose cap is not that number.
     ap.add_argument("--n-eval", type=int, default=None,
-                    help="eval rows per condition; default is each task's own TaskSpec.eval_cap")
+                    help="eval rows per condition; default is each task's own TaskSpec.select_cap")
     ap.add_argument("-v", "--verbose", action="store_true")
     args = ap.parse_args()
 

@@ -22,7 +22,7 @@ SPEC = TaskSpec(
     load=_load,
     required_fields=("text", "label"),
     initial_train_cap=5000,
-    eval_cap=1000,
+    select_cap=1000,
     # 151 classes against an 800-row eval set: without round-robin sampling some classes would be
     # absent entirely and macro-F1 would average over whichever ones happened to be drawn.
     eval_sampling="label_balanced",
@@ -31,6 +31,7 @@ SPEC = TaskSpec(
     # intent (`accept_reservations`, `transfer`, `oos`), so naming the label already tells the
     # teacher what the class means; a gloss for 151 classes would be prompt noise.
     label_definitions={},
+    entity_type_vocabulary=(),  # extracts no spans
     verifier_notes="",
     quality_controls=(
         qc.require_fields("text", "label"),
@@ -52,6 +53,13 @@ SPEC = TaskSpec(
     needs_judge=False,
     judge_overlap=False,
     attach_reasoning=True,
+
+    # Selection and reporting coincide: 151 classes, but `eval_sampling="label_balanced"`
+    # round-robins across every one of them, so macro-F1 has support in each class at selection
+    # size and needs no micro stand-in.
+    report_load=None,
+    report_score=scorer.score_macro_f1,
+    report_metric_name="macro_f1",
 
     build_training_turn=classification_turn,
 

@@ -265,8 +265,15 @@ def mining_available_for_state(state: Mapping[str, Any]) -> bool:
     Until then mining is offered, because a source with rows left is free to re-read and a
     discovery round that has not yet been tried might find something.
     """
+    from agent.ablations import mining_disallowed
     from agent.run_health import MINING_RETIRED_KEY
 
+    # ABLATION 4 first, ahead of every other consideration: the arm exists to hold the curriculum
+    # at its starved size, and a run that mined its way back to thousands of real rows would be
+    # measuring nothing. Checked before run health so the reason reported is the operator's, not a
+    # retirement that happens to coincide.
+    if mining_disallowed():
+        return False
     if state.get(MINING_RETIRED_KEY):
         return False
     if unexhausted_sources(state):

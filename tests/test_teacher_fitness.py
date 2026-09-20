@@ -1,4 +1,4 @@
-"""The gate that decides whether a teacher may write training data for a task at all.
+"""The single teacher measurement: one 5-shot pass over the full eval set, two consumers.
 
 WHY THIS FILE EXISTS
     `surgical_synthesis` used to be offered on every task at every score, and the only evidence
@@ -8,7 +8,12 @@ WHY THIS FILE EXISTS
     `agent/teacher_fitness.py` measures the teacher the way synthesis actually prompts it and
     refuses synthetic data for the whole run when it cannot clear `MIN_ACCURACY`.
 
-    Three properties are load-bearing and each has been a bug somewhere in this pipeline:
+    That verdict now ALSO sets the run's accuracy goal (see `tests/test_qwen_baseline_goal.py`),
+    which raises the stakes on three things this file pins: the measurement covers the whole eval
+    set rather than a 200-row subsample, it reports format validity beside the score, and a
+    wholesale generation failure yields "unmeasured" rather than a plausible-looking 0.0000.
+
+    Three further properties are load-bearing and each has been a bug somewhere in this pipeline:
 
       the direction of the default   An unmeasured teacher is REFUSED, not allowed. `state.get(...)`
                                      defaulting to True would mean a run that skipped the gate
@@ -166,18 +171,35 @@ def test_an_empty_eval_set_is_refused_rather_than_scored():
     assert verdict["synthesis_allowed"] is False
 
 
-def test_only_the_first_n_rows_are_scored():
-    """The full set is unnecessary for a go/no-go decision and costs teacher calls that are better
-    spent generating."""
+def test_the_whole_eval_set_is_scored_by_default():
+    """The default is the FULL set, because the verdict also sets the run's accuracy goal.
+
+    It used to be a 200-row subsample, which was a defensible cost compromise for a go/no-go
+    decision and is not one for a convergence target: the student is scored on all of E, so a goal
+    calibrated on a fifth of it carries an error bar wider than the score differences the run is
+    trying to detect.
+    """
+    prompts: list[str] = []
+    verdict = measure_teacher_fitness(
+        SPEC, _eval_set(), TRAIN_ROWS, generate_fn=_perfect_teacher(prompts),
+        log=lambda *_: None,
+    )
+    assert verdict["n"] == len(EVAL_ROWS)
+    # ONE pass, not two: the second zero-shot pass was removed once nothing consumed it.
+    assert len(prompts) == len(EVAL_ROWS)
+    assert all("### Solved example" in p for p in prompts)
+
+
+def test_n_rows_can_still_subsample_for_a_cheap_bring_up_run():
+    """The cap survives as an explicit opt-in, so a new task can be brought up without paying for
+    a full-eval measurement against a teacher that may not work on it yet."""
     prompts: list[str] = []
     verdict = measure_teacher_fitness(
         SPEC, _eval_set(), TRAIN_ROWS, generate_fn=_perfect_teacher(prompts),
         n_rows=6, log=lambda *_: None,
     )
     assert verdict["n"] == 6
-    # Two passes of 6: the gate measures k-shot AND zero-shot and gates on the better (B320).
-    assert len(prompts) == 12
-    assert sum(1 for p in prompts if "### Solved example" in p) == 6
+    assert len(prompts) == 6
 
 
 # --------------------------------------------------------------------------
@@ -196,9 +218,7 @@ def test_demonstrations_are_drawn_from_train_and_never_from_the_eval_set():
         log=lambda *_: None,
     )
 
-    # Only the few-shot pass carries demonstrations; the zero-shot pass is measured alongside it and
-    # has none to leak (B320).
-    assert len(prompts) == 2 * len(EVAL_ROWS)
+    assert len(prompts) == len(EVAL_ROWS)
     few_shot = [p for p in prompts if "### Solved example" in p]
     assert len(few_shot) == len(EVAL_ROWS)
     train_texts = {row["text"] for row in TRAIN_ROWS}
@@ -273,15 +293,15 @@ def test_each_demonstration_is_fenced_and_the_real_question_is_marked():
         assert "reference instant" in prompt
 
 
-def test_the_gate_reads_the_k_shot_number_because_that_is_what_synthesis_sends():
-    """The gate authorises SYNTHESIS, and synthesis prompts k-shot.
+def test_only_the_k_shot_prompt_is_measured_because_that_is_what_synthesis_sends():
+    """One measurement, in the shape synthesis actually uses.
 
-    It used to read the BEST of the zero-shot and k-shot measurements. That is a defensible answer
-    to "can this teacher do this task" and the wrong answer to the question the gate exists to ask:
-    a teacher authorised on a zero-shot score it will never be asked to reproduce is authorised on
-    the wrong evidence. Both numbers are still measured and both are still logged, so the B320
-    comparison — demonstrations making a teacher look worse is a prompt-assembly smell, not an
-    incapable model — stays visible; it just no longer silently decides the gate.
+    The gate authorises SYNTHESIS and synthesis prompts k-shot, so a teacher authorised on a
+    zero-shot score it will never be asked to reproduce is authorised on the wrong evidence. That
+    reading was already fixed; what this pins is that the second, zero-shot pass is no longer TAKEN
+    either. It survived as commentary after nothing consumed it, doubling the cost of a
+    measurement that now also sets the run's accuracy goal. The B320 comparison it provided lives
+    in `scripts/probe_teacher_fewshot.py`, which exists for exactly that.
     """
     def _teacher(prompt, *args, **kwargs):
         # Deliberately incompetent WITH demonstrations, perfect without them.
@@ -292,15 +312,92 @@ def test_the_gate_reads_the_k_shot_number_because_that_is_what_synthesis_sends()
                 return row["label"]
         return ""
 
-    logs: list[str] = []
+    prompts: list[str] = []
+
+    def _recording(prompt, *args, **kwargs):
+        prompts.append(prompt)
+        return _teacher(prompt, *args, **kwargs)
+
     verdict = measure_teacher_fitness(
-        SPEC, _eval_set(), TRAIN_ROWS, generate_fn=_teacher, log=logs.append,
+        SPEC, _eval_set(), TRAIN_ROWS, generate_fn=_recording, log=lambda *_: None,
     )
     assert verdict["shots"] == FITNESS_SHOTS, "the gate must read the shots synthesis sends"
     assert verdict["synthesis_allowed"] is False, "the k-shot teacher is incompetent here"
-    assert verdict["shots_measured"] == [0, FITNESS_SHOTS], "both are still measured"
-    # And the disagreement must be reported rather than swallowed, or the next reader repeats B320.
-    assert any("HIGHER zero-shot" in line and "B320" in line for line in logs)
+    assert len(prompts) == len(EVAL_ROWS), "the zero-shot pass must not be paid for"
+    assert all("### Solved example" in p for p in prompts)
+
+
+def test_the_verdict_reports_format_validity_beside_the_score():
+    """They fail differently and are fixed differently, so neither may be read alone.
+
+    A low score at format_valid 1.0 is a capability ceiling; a low format_valid is a broken output
+    contract that bounds the score no matter how capable the model is. Reporting only the first is
+    what let B290 read as "fine-tuning does not help this task" for two whole runs — and this
+    number now sets the accuracy goal as well as the synthesis gate, so a goal depressed by a
+    formatting failure has to be visible as one.
+    """
+    logs: list[str] = []
+    verdict = measure_teacher_fitness(
+        SPEC, _eval_set(), TRAIN_ROWS, generate_fn=_perfect_teacher(), log=logs.append,
+    )
+    assert isinstance(verdict["format_valid"], float)
+    assert any("format_valid" in line for line in logs)
+
+
+def test_the_verdict_names_the_teacher_it_measured():
+    """0.87 from Qwen3.6 and 0.87 from deepseek-v4-flash are different claims, and the verdict now
+    sets the run's accuracy goal, so the goal is only interpretable with the model named."""
+    verdict = measure_teacher_fitness(
+        SPEC, _eval_set(), TRAIN_ROWS, generate_fn=_perfect_teacher(), log=lambda *_: None,
+    )
+    import config.config as config
+
+    assert verdict["model"] == config.SYNTH_MODEL
+
+
+def test_a_teacher_that_fails_most_rows_is_unmeasured_rather_than_scored_zero():
+    """B313: an endpoint that errors on every row produces a clean-looking 0.0000.
+
+    A failed generation scores as an empty prediction, so a broken harness is indistinguishable
+    from an incapable teacher — and on run 38661753 all 1,000 rows failed, the baseline read
+    0.0000, and the accuracy goal was quietly floored at 0.80 on the strength of it. The
+    failure-rate guard used to live in `eval/endpoint_eval`, which protected the goal; that path no
+    longer runs, so the guard moved here with the measurement.
+    """
+    def _broken(prompt, *args, **kwargs):
+        raise RuntimeError("'str' object is not callable")
+
+    logs: list[str] = []
+    verdict = measure_teacher_fitness(
+        SPEC, _eval_set(), TRAIN_ROWS, generate_fn=_broken, log=logs.append,
+    )
+    assert verdict["status"] == "unmeasured"
+    assert verdict["score"] is None, "a harness failure must not be reported as a score of zero"
+    assert verdict["synthesis_allowed"] is False
+    assert "generation failed" in verdict["reason"]
+    assert any("describe the harness rather than the model" in line for line in logs)
+
+
+def test_a_few_failed_rows_still_produce_a_measurement():
+    """Zero tolerance would be wrong: a handful of refusals or truncations is normal, and the
+    surviving rows still measure something. The guard is for wholesale failure, not for noise."""
+    state = {"n": 0}
+
+    def _flaky(prompt, *args, **kwargs):
+        state["n"] += 1
+        if state["n"] % 10 == 0:
+            raise RuntimeError("transient")
+        for row in EVAL_ROWS:
+            if row["text"] in prompt:
+                return row["label"]
+        return ""
+
+    logs: list[str] = []
+    verdict = measure_teacher_fitness(
+        SPEC, _eval_set(), TRAIN_ROWS, generate_fn=_flaky, log=logs.append,
+    )
+    assert verdict["status"] == "measured"
+    assert any("failed to generate and scored as empty" in line for line in logs)
 
 
 def test_no_train_rows_measures_zero_shot_and_says_so():
@@ -411,21 +508,23 @@ def test_a_demonstration_block_too_large_for_the_context_is_skipped():
     assert "SLM_SYNTH_SHOTS" in joined
 
 
-def test_an_oversized_prefix_leaves_the_zero_shot_measurement_intact():
-    """Skipping k-shot must still produce a verdict from the 0-shot pass rather than no verdict.
+def test_an_oversized_prefix_degrades_to_zero_shot_rather_than_to_no_verdict():
+    """A task whose rows crowd out the demonstrations still gets a decision.
 
-    The gate's contract is that it always returns a decision; a task whose rows are too large for
-    demonstrations is exactly the case where falling through to "unmeasured" — which REFUSES
-    synthesis — would be the wrong answer for the wrong reason.
+    The gate's contract is that it always returns one; falling through to "unmeasured" — which
+    REFUSES synthesis and, now, also aborts the run for want of an accuracy goal — would be the
+    wrong answer for the wrong reason. The shot count RECORDED must be the one actually sent, so a
+    reader can tell "this teacher is weak" from "this task left no room to show it the format".
     """
     huge_train = tuple(
         {"text": "train row " + "padding " * 20000, "label": "route"} for _ in range(5)
     )
+    prompts: list[str] = []
     verdict = measure_teacher_fitness(
         SPEC, _eval_set(), huge_train,
-        generate_fn=_perfect_teacher(), log=lambda *_: None,
+        generate_fn=_perfect_teacher(prompts), log=lambda *_: None,
     )
     assert verdict["status"] == "measured"
-    # Only the zero-shot pass ran, so that is the one the verdict reports.
     assert verdict["shots"] == 0
-    assert verdict["shots_measured"] == [0]
+    assert verdict["shots_requested"] == FITNESS_SHOTS
+    assert not any("### Solved example" in p for p in prompts)

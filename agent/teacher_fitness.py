@@ -1,28 +1,40 @@
-"""Is the teacher good enough to generate training data for THIS task?
+"""THE teacher measurement: one 5-shot pass over the full held-out eval set, two consumers.
 
-WHY THIS EXISTS
-    Synthetic data is only worth having if the model writing it can do the task. Until now nothing
-    checked: `surgical_synthesis` was offered on every task at every score, and the only evidence
-    anyone had about teacher competence was its ZERO-SHOT score from
-    `eval/endpoint_eval.measure_endpoint_baseline`. That number is not the right input, twice over:
+WHAT IT ANSWERS
+    1. Is the teacher good enough to generate training data for this task? (the synthesis gate)
+    2. What accuracy must the student beat? (the run's stop_threshold, via `agent/threshold.py`)
 
-      * it is measured zero-shot, so on a format-bound task it mostly reports whether the teacher
-        guessed our output contract. BC5CDR measures 0.1131 zero-shot and 0.7190 with five
-        demonstrations — a 6.4x difference that says nothing changed about the teacher's competence,
-        only about what it had been told (B276);
-      * it was never consulted before spending the teacher's budget anyway.
+    Those are two readings of ONE number, so they are measured once. They did not used to be.
+    `measure_teacher_fitness` scored 200 rows five-shot AND zero-shot for the gate, while
+    `eval/endpoint_eval.measure_endpoint_baseline` separately scored the full eval set ZERO-shot for
+    the goal — 1,400 teacher calls producing two numbers that disagreed with each other by
+    construction, because they were different prompts over different samples. The goal was set by
+    the one nothing else in the pipeline ever sends.
 
-    So the gate measures the teacher the way synthesis actually prompts it — FIVE-SHOT, through the
-    task's own scorer — and if it cannot clear `MIN_ACCURACY` on the task's own held-out eval set,
-    synthetic data is refused for the rest of the run. A teacher that gets a task right less than
-    four times in five is not a source of training targets for it; it is a source of labelled noise,
-    and the project's best measured result came from a gold-only curriculum.
+WHY FIVE-SHOT
+    Because that is how synthesis prompts the teacher. A zero-shot number on a format-bound task
+    mostly reports whether the teacher guessed our output contract: BC5CDR measures 0.1131
+    zero-shot and 0.7190 with five demonstrations — a 6.4x difference that says nothing changed
+    about the teacher's competence, only about what it had been told (B276). Gating synthesis on a
+    prompt shape synthesis never uses is authorising on the wrong evidence; calibrating the run's
+    accuracy goal against it sets the bar in the wrong place for the same reason.
+
+    A task whose rows are too large for five demonstrations to fit degrades to zero-shot rather
+    than sending requests that cannot be served (see `_prefix_fits`), and the shot count actually
+    used is recorded on the verdict so a reader can tell which happened.
+
+WHY THE FULL EVAL SET
+    It is the set the student is scored on, so the teacher's number and the student's number are
+    finally the same measurement on the same rows — which is the only way "the student matched the
+    teacher" means anything. The old 200-row subsample was a cost compromise that no longer buys
+    much: at the 1,000-row `select_cap` the standard error on a proportion is about 1.5 points, and
+    the extra 800 calls cost cents even on the paid API teacher.
 
 WHAT IT IS NOT
     Not a substitute for per-row verification. A teacher that clears the gate still has every
-    generated row checked — programmatically where an exact check exists, by the teacher itself
-    otherwise. This gate answers a coarser question that has to be asked first: is generating rows
-    for this task a sensible thing to spend calls on at all.
+    generated row checked programmatically where an exact check exists. This gate answers a coarser
+    question that has to be asked first: is generating rows for this task a sensible thing to spend
+    calls on at all.
 
 CONTAMINATION
     Demonstrations are drawn from TRAIN only, never from the eval set, so measuring here cannot leak
@@ -68,20 +80,115 @@ BYPASS = str(os.environ.get("SLM_TEACHER_SYNTH_BYPASS", "0")).strip().lower() in
 # measures a different prompt than the one it is authorising — see data/curriculum.SYNTH_SHOTS.
 FITNESS_SHOTS = int(os.environ.get("SLM_SYNTH_SHOTS", "5"))
 
-# Eval rows scored. The full set is unnecessary for a go/no-go decision and costs teacher calls that
-# are better spent generating; 200 rows put the standard error on a proportion near 3 points, which
-# is far tighter than the margin this decision turns on.
-FITNESS_EVAL_ROWS = int(os.environ.get("SLM_TEACHER_FITNESS_ROWS", "200"))
+# Eval rows scored. 0 (the default) means THE WHOLE EVAL SET — the same rows the student is scored
+# on, so the two numbers are comparable and "the student matched the teacher" is a claim about one
+# measurement rather than two.
+#
+# This used to default to 200 as a cost compromise, back when the verdict fed only the go/no-go
+# synthesis gate. It now also sets the run's accuracy goal, and a goal calibrated on a fifth of the
+# eval set is a goal with a wider error bar than the differences the run is trying to detect. Set a
+# positive value to subsample during bring-up on a new task; leave it at 0 for a results run.
+FITNESS_EVAL_ROWS = int(os.environ.get("SLM_TEACHER_FITNESS_ROWS", "0"))
+
+# Above this share of failed generations the measurement is discarded rather than scored — see the
+# B313 note at the guard itself. Kept numerically identical to the
+# `eval.endpoint_eval.MAX_GENERATION_FAILURE_RATE` this replaces, so the protection the accuracy
+# goal used to have is the protection it still has.
+MAX_GENERATION_FAILURE_RATE = 0.25
+
+# Output tokens the TEACHER is given when it is a hosted API model, as a floor under the task's own
+# eval reserve.
+#
+# WHY THE STUDENT'S RESERVE IS THE WRONG BUDGET FOR A REASONING TEACHER
+#     `TaskSpec.max_new_tokens` is how much room the STUDENT gets to answer — 256 on xlam_bfcl,
+#     sized for a small non-reasoning model emitting a JSON array and nothing else. Measuring the
+#     teacher under the same number looks like the fair comparison, and for a non-reasoning teacher
+#     it is: the local Qwen is rendered with thinking disabled, so every token it spends is answer.
+#
+#     A reasoning model spends completion tokens on its own reasoning FIRST, and those count against
+#     the same limit. On run 39361189 `deepseek-v4-flash` came back with format_valid=0.7630 — a
+#     quarter of its replies unparseable — and the pipeline's own warning said its score was
+#     "bounded by a formatting failure rather than by competence". Probed directly on 24 real xlam
+#     eval prompts, 3 of 24 hit `finish_reason=length` at 256 tokens against 1 of 24 at 2048, with
+#     mean completion rising 140 -> 252: the budget was truncating answers mid-JSON.
+#
+#     That score is not cosmetic. It gates synthetic data AND calibrates the run's accuracy goal, so
+#     a teacher truncated into looking incompetent lowers the bar the student is then held to.
+#
+# SCOPED TO API MODE ON PURPOSE. Applying it locally would change every teacher measurement this
+# project has recorded, for a teacher that does not reason and therefore was never truncated. The
+# floor only ever RAISES the reserve, so a task already asking for more keeps its own number.
+TEACHER_API_OUTPUT_RESERVE = int(
+    os.environ.get("SLM_TEACHER_API_OUTPUT_RESERVE", "2048")
+)
 
 
-def _apply_bypass(verdict: dict, spec, *, log=print) -> dict:
-    """Stamp the operator override onto a verdict, loudly, and return it.
+def _teacher_output_reserve(spec) -> int:
+    """Output tokens for one teacher call during the fitness measurement.
 
-    Called at every exit from `measure_teacher_fitness` so there is no path on which the flag is set
+    Reads `SLM_SYNTH_API_MODE` from the environment rather than importing `config.config`, which
+    raises on any unset API key — the same trap that once made `token_budget`'s context clamp
+    silently inactive whenever an unrelated credential was missing.
+    """
+    from eval.harness import eval_output_token_reserve
+
+    reserve = eval_output_token_reserve(spec.name)
+    if os.environ.get("SLM_SYNTH_API_MODE", "0") != "1":
+        return reserve
+    return max(reserve, TEACHER_API_OUTPUT_RESERVE)
+
+
+def _measurement_concurrency() -> int:
+    """In-flight requests while measuring, matched to the teacher's configured fan-out.
+
+    The measurement now covers the whole eval set rather than a 200-row subsample, so the old
+    hardcoded 16 workers turned a five-minute pass into a twenty-five-minute one on a server
+    already provisioned for `SLM_SYNTH_CONCURRENCY` (48 on the two-GPU profile). It is the same
+    endpoint under the same budget as synthesis, so it should use the same number.
+    """
+    try:
+        return max(1, int(os.environ.get("SLM_SYNTH_CONCURRENCY", "16")))
+    except (TypeError, ValueError):
+        return 16
+
+
+def _apply_operator_overrides(verdict: dict, spec, *, log=print) -> dict:
+    """Stamp any operator override onto a verdict, loudly, and return it.
+
+    Called at every exit from `measure_teacher_fitness` so there is no path on which a flag is set
     and quietly ignored — including the unmeasured ones, which is the point: an unreachable endpoint
     normally refuses synthesis, and during a bring-up run that is exactly the refusal an operator
     means to override.
+
+    The two overrides pull in opposite directions and REFUSAL WINS, checked first and returning
+    immediately. `SLM_SYNTH_DISALLOW` is the ablation asking what the pipeline achieves with no
+    synthetic data; letting `SLM_TEACHER_SYNTH_BYPASS` — which the curated launchers all set, to
+    protect against a teacher drifting below the gate mid-experiment — hand synthesis back would
+    make the ablation silently unanswerable.
     """
+    # Imported here, as in `synthesis_allowed` below, because `agent.ablations` reaches
+    # `agent.checkpoint` for its atomic JSONL writer and this module is on that import path.
+    from agent.ablations import synthesis_disallowed
+
+    if synthesis_disallowed():
+        verdict["synthesis_allowed"] = False
+        verdict["disallowed_by_operator"] = True
+        score = verdict.get("score")
+        measured = f"{score:.4f}" if isinstance(score, (int, float)) else "unmeasured"
+        log(
+            f"      [teacher] ⚠ SLM_SYNTH_DISALLOW=1 — synthetic data is REFUSED for this run by "
+            f"operator override, not by the gate. {spec.name}'s teacher measured {measured} "
+            f"against a {MIN_ACCURACY:.2f} gate"
+            + (
+                " and WOULD have been allowed to generate"
+                if isinstance(score, (int, float)) and score >= MIN_ACCURACY
+                else ""
+            )
+            + ". surgical_synthesis is off the menu for the whole run; mine_new_real and "
+            "hyperparameter interventions are unaffected. This is the no-synthetic-data ablation: "
+            "whatever accuracy this run reaches was reached without a single generated row."
+        )
+        return verdict
     if not BYPASS or verdict.get("synthesis_allowed"):
         return verdict
     verdict["synthesis_allowed"] = True
@@ -248,6 +355,20 @@ def _demo_block(demos: list[dict], spec, ctx) -> str:
     return "\n\n".join(parts)
 
 
+def _teacher_identity() -> tuple[str, str]:
+    """The model and endpoint the measurement was taken against, for the audit trail.
+
+    Named on the verdict because the verdict now sets the run's accuracy goal, and a goal is only
+    interpretable if the reader knows which teacher set it — a 0.87 from Qwen3.6-35B and a 0.87
+    from deepseek-v4-flash are not the same claim.
+    """
+    try:
+        from config.config import SYNTH_ENDPOINT, SYNTH_MODEL
+    except Exception:  # noqa: BLE001 — config may be unimportable in a bare unit test
+        return "", ""
+    return str(SYNTH_MODEL or ""), str(SYNTH_ENDPOINT or "")
+
+
 def measure_teacher_fitness(
     spec,
     eval_set,
@@ -259,24 +380,34 @@ def measure_teacher_fitness(
     seed: int = 20260819,
     log=print,
 ) -> dict:
-    """Score the teacher `shots`-shot on this task's own eval set.
+    """Score the teacher `shots`-shot on this task's full held-out eval set.
+
+    ONE measurement with TWO consumers: the synthesis gate reads `synthesis_allowed`, and
+    `agent/nodes/cold_start/eval_setup` reads `score` to calibrate the run's accuracy goal. Both
+    therefore see the same prompt shape over the same rows, which they did not before.
 
     Returns a verdict dict — always, never raises. An unreachable endpoint yields
     ``status="unmeasured"``, and an unmeasured teacher is NOT trusted: synthesis is refused, because
     "we could not check" is not evidence of fitness. That is the conservative direction, and it is
-    also the honest one — the alternative silently authorises a teacher nobody measured.
+    also the honest one — the alternative silently authorises a teacher nobody measured. Goal
+    calibration treats the same verdict as fatal, because a run with no measured reference has no
+    honest target to converge against.
     """
     from data.eval_set import EvalSet
 
+    model, endpoint = _teacher_identity()
     verdict = {
         "status": "unmeasured",
         "shots": shots,
+        "shots_requested": shots,
         "score": None,
         "format_valid": None,
         "n": 0,
         "threshold": MIN_ACCURACY,
         "synthesis_allowed": False,
         "metric": spec.metric_name,
+        "model": model,
+        "endpoint": endpoint,
     }
     if generate_fn is None:
         from data.synth_client import get_generate_fn
@@ -286,19 +417,19 @@ def measure_teacher_fitness(
         log("      [teacher] endpoint unreachable — teacher fitness UNMEASURED, so synthetic data "
             "is refused for this run. A teacher nobody checked is not evidence of a fit teacher.")
         verdict["reason"] = "synthesis endpoint unreachable"
-        return _apply_bypass(verdict, spec, log=log)
+        return _apply_operator_overrides(verdict, spec, log=log)
 
     rows = list(getattr(eval_set, "all", []) or [])
     if not rows:
         verdict["reason"] = "eval set is empty"
-        return _apply_bypass(verdict, spec, log=log)
+        return _apply_operator_overrides(verdict, spec, log=log)
     rng = random.Random(seed)
-    scored_rows = rows[:max(1, n_rows)]
+    # n_rows <= 0 means the whole set, which is the default and what a results run wants: the
+    # teacher's score is then measured on exactly the rows the student is measured on.
+    scored_rows = rows if n_rows <= 0 else rows[:n_rows]
     probe_set = EvalSet(all=scored_rows, task=spec.name)
 
-    from eval.harness import eval_output_token_reserve
-
-    max_tokens = eval_output_token_reserve(spec.name)
+    max_tokens = _teacher_output_reserve(spec)
     # Built BEFORE the demonstration block, because whether that block fits depends on the longest
     # prompt it has to sit beside.
     base_prompts = spec.build_prompts(probe_set)
@@ -306,6 +437,7 @@ def measure_teacher_fitness(
     pool = [row for row in (train_rows or []) if isinstance(row, dict)]
     ctx = _training_context(pool or scored_rows, spec)
     prefix = ""
+    n_demos = 0
     if shots and pool:
         from config.config import SYNTH_MAX_MODEL_LEN
 
@@ -315,88 +447,151 @@ def measure_teacher_fitness(
         ) - longest
         demos = fit_demonstrations(pool, shots, budget, rng=rng)
         prefix = _demo_block(demos, spec, ctx) + "\n\n" + _QUESTION_HEADER + "\n" if demos else ""
+        n_demos = len(demos) if prefix else 0
         if len(demos) < shots:
             log(f"      [teacher] only {len(demos)} of {shots} demonstration(s) fit beside the "
                 f"longest {longest}-char prompt in the teacher's {SYNTH_MAX_MODEL_LEN}-token "
                 f"context; showing what fits rather than sending a request that cannot be served")
         if prefix and not _prefix_fits(prefix, spec, longest, log=log):
             prefix = ""
+            n_demos = 0
     elif shots:
         log("      [teacher] no train rows to draw demonstrations from — measuring zero-shot, "
             "which understates a format-bound task (B276)")
 
-    log(f"      [teacher] measuring fitness: {len(base_prompts)} eval row(s), "
-        f"{shots if prefix else 0}-shot AND zero-shot, metric {spec.metric_name}, "
-        f"gate {MIN_ACCURACY:.2f}")
+    # The shots actually SENT, not the shots requested. They differ whenever a task's rows are too
+    # large for the full block to fit, and recording the request would describe a prompt that was
+    # never issued — which is the difference between "this teacher is weak" and "this task's rows
+    # do not leave room for demonstrations" (B276/B320).
+    used_shots = n_demos
+    verdict["shots"] = used_shots
+    log(f"      [teacher] measuring {model or 'teacher'} on the FULL eval set: "
+        f"{len(base_prompts)} row(s), {used_shots}-shot, metric {spec.metric_name}. "
+        f"This one number both gates synthetic data (gate {MIN_ACCURACY:.2f}) and calibrates the "
+        f"run's accuracy goal.")
+
+    from collections import Counter
+    from concurrent.futures import ThreadPoolExecutor
+
+    failures: list[str] = []
 
     def _one(prompt: str) -> str:
         try:
             return generate_fn(prompt, temperature=0.0, max_tokens=max_tokens)
         except Exception as error:  # noqa: BLE001 — one bad row must not abort the measurement
-            log(f"      [teacher] generation failed on one row: {type(error).__name__}: {error}")
+            # COUNTED, not printed. This runs once per eval row and the set is now the full
+            # thousand, so a broken endpoint used to mean a thousand identical stack-trace lines
+            # burying the summary that explains them. The tally is reported once, below.
+            failures.append(f"{type(error).__name__}: {error}"[:160])
             return ""
-
-    from concurrent.futures import ThreadPoolExecutor
 
     def _measure(prompt_prefix: str) -> dict:
         prompts = [prompt_prefix + prompt for prompt in base_prompts]
-        workers = max(1, min(16, len(prompts)))
+        workers = max(1, min(_measurement_concurrency(), len(prompts)))
         with ThreadPoolExecutor(max_workers=workers) as pool_exec:
             raw = list(pool_exec.map(_one, prompts))
         return spec.score(probe_set, spec.extract_predictions(raw, probe_set))
 
-    # BOTH prompting schemes, and the gate reads the better one.
+    # ONE prompting scheme: the one synthesis actually sends.
     #
-    # The gate answers "can this teacher do this task", and the honest answer is the best measurement
-    # available rather than one arbitrary prompt shape. Measuring only k-shot let a prompt-assembly
-    # defect masquerade as an incapable teacher and refuse synthetic data on both tasks (B320); a
-    # future one would do the same. `best_shots` records which won, so synthesis can prompt the way
-    # the authorising measurement was taken instead of contradicting it.
+    # This used to measure k-shot AND zero-shot and report both, a habit from when the verdict was
+    # read best-of. That reading was removed once it became clear the gate authorises SYNTHESIS and
+    # synthesis prompts k-shot, so a teacher authorised on a zero-shot score it will never be asked
+    # to reproduce is authorised on the wrong evidence. The second pass then survived purely as
+    # commentary — it doubled the cost of the measurement to print a line nothing consumed — and it
+    # became indefensible once the same verdict started setting the run's accuracy goal too.
+    #
+    # The diagnostic it used to provide (B320: demonstrations making a teacher LOOK worse is the
+    # signature of a prompt-assembly defect, not an incapable model) is still reachable on demand
+    # through `scripts/probe_teacher_fewshot.py`, which exists for exactly that comparison.
     try:
-        measurements = {shots: _measure(prefix)} if prefix else {}
-        measurements[0] = _measure("")
+        result = _measure(prefix)
     except Exception as error:  # noqa: BLE001 — an unmeasurable teacher is refused, not fatal
         log(f"      [teacher] fitness measurement FAILED ({type(error).__name__}: {error}); "
             "synthetic data is refused for this run")
         verdict["reason"] = f"{type(error).__name__}: {error}"
-        return _apply_bypass(verdict, spec, log=log)
+        return _apply_operator_overrides(verdict, spec, log=log)
 
-    for used_shots, result in sorted(measurements.items()):
-        log(f"      [teacher]   {used_shots}-shot: {result.get('metric', spec.metric_name)}="
-            f"{float(result.get('f1', 0.0)):.4f} "
-            f"(format_valid={float(result.get('format_valid', 1.0)):.4f})")
-    # THE GATE READS THE k-SHOT NUMBER, because that is the prompt synthesis actually sends.
+    # TOO MANY FAILED ROWS MEANS THERE IS NO MEASUREMENT (B313).
     #
-    # It used to read the BEST of the two, which was a defensible reading of "can this teacher do the
-    # task" and the wrong reading of the question the gate exists to answer. The gate authorises
-    # SYNTHESIS, synthesis prompts k-shot, so the number that decides it must be the k-shot one — a
-    # teacher authorised on a zero-shot score it will never be asked to reproduce is authorised on
-    # the wrong evidence. Both are still measured and both are still reported, so the comparison
-    # that motivated best-of (B320: demonstrations making a teacher look worse is a prompt-assembly
-    # smell) stays visible in the log.
-    gate_shots = shots if shots in measurements else 0
-    result = measurements[gate_shots]
-    if len(measurements) > 1 and float(measurements[0].get("f1", 0.0)) > float(result.get("f1", 0.0)):
-        log(f"      [teacher]   NOTE: this teacher scores HIGHER zero-shot "
-            f"({float(measurements[0].get('f1', 0.0)):.4f}) than {gate_shots}-shot "
-            f"({float(result.get('f1', 0.0)):.4f}). The gate still uses the {gate_shots}-shot number "
-            f"because that is what synthesis sends, but demonstrations making a teacher worse is the "
-            f"signature of a prompt-assembly defect — see B320 before assuming the model is at fault.")
-    best_shots = gate_shots
+    # A failed generation scores as an empty prediction, so an endpoint that errors on every row
+    # produces a clean-looking 0.0000 that is indistinguishable from a genuinely incapable teacher.
+    # On run 38661753 all 1,000 rows failed with `'str' object is not callable`, the baseline read
+    # 0.0000, and the accuracy goal was quietly floored at 0.80 on the strength of it. This guard
+    # came from `eval/endpoint_eval`, whose failure-rate check used to protect the goal; that path
+    # no longer runs, so the check moves here with it.
+    #
+    # Not zero-tolerance: a few refusals or truncations are normal and the surviving rows still
+    # measure something. Well under half, because a teacher that cannot answer most of the set is
+    # not being measured either.
+    if base_prompts and len(failures) / len(base_prompts) > MAX_GENERATION_FAILURE_RATE:
+        common = Counter(failures).most_common(3)
+        reason = (
+            f"generation failed on {len(failures)} of {len(base_prompts)} eval row(s) "
+            f"({len(failures) / len(base_prompts):.0%}); most common: "
+            + "; ".join(f"{message} (x{count})" for message, count in common)
+        )
+        log(f"      [teacher] {reason}")
+        log("      [teacher] that score would describe the harness rather than the model, so the "
+            "teacher is UNMEASURED: synthetic data is refused and the accuracy goal has no "
+            "calibrated reference.")
+        verdict["reason"] = reason
+        return _apply_operator_overrides(verdict, spec, log=log)
+    if failures:
+        common = Counter(failures).most_common(3)
+        log(f"      [teacher] {len(failures)} of {len(base_prompts)} row(s) failed to generate and "
+            f"scored as empty; most common: "
+            + "; ".join(f"{message} (x{count})" for message, count in common))
 
     score = float(result.get("f1", 0.0))
+    format_valid = float(result.get("format_valid", 1.0))
     verdict.update({
         "status": "measured",
         "score": score,
-        "format_valid": float(result.get("format_valid", 1.0)),
+        "format_valid": format_valid,
         "n": len(base_prompts),
-        "shots": best_shots,
-        "shots_measured": sorted(measurements),
+        "shots": used_shots,
         "synthesis_allowed": score >= MIN_ACCURACY,
         "metric": result.get("metric", spec.metric_name),
     })
+    # FORMAT VALIDITY BESIDE THE SCORE, ALWAYS. They fail differently and are fixed differently: a
+    # low score with format_valid near 1.0 is a capability limit, while a low format_valid is a
+    # prompt or output-contract problem that caps the score no matter how capable the model is.
+    # Reporting only the first is what let B290 read as "fine-tuning does not help this task".
+    log(f"      [teacher]   {used_shots}-shot on {len(base_prompts)} row(s): "
+        f"{verdict['metric']}={score:.4f}  format_valid={format_valid:.4f}")
+    if format_valid < 0.95:
+        log(f"      [teacher]   ⚠ format_valid {format_valid:.4f} — {1 - format_valid:.0%} of the "
+            f"teacher's replies did not parse as this task's output contract, so its "
+            f"{verdict['metric']} is bounded by a formatting failure rather than by competence. "
+            f"Both the synthesis gate and the run's accuracy goal are being set from this number.")
     log_fitness(verdict, spec, log=log)
-    return _apply_bypass(verdict, spec, log=log)
+    return _apply_operator_overrides(verdict, spec, log=log)
+
+
+def format_fitness_measurement(verdict: dict | None) -> str:
+    """One line naming WHAT was measured, HOW, and how well — including format validity.
+
+    Shared by the fitness log, the accuracy-goal provenance and the end-of-run report so all three
+    describe the measurement identically. They previously each rendered their own subset of these
+    fields, which is how a run could report a `threshold 0.8000` beside a teacher that had scored
+    0.0999 without the two lines ever contradicting each other on the page.
+    """
+    if not isinstance(verdict, dict) or verdict.get("status") != "measured":
+        reason = (verdict or {}).get("reason") or "no reason recorded"
+        return f"UNMEASURED ({reason})"
+    model = verdict.get("model") or "teacher"
+    score = float(verdict.get("score") or 0.0)
+    format_valid = verdict.get("format_valid")
+    format_text = (
+        f"format_valid={float(format_valid):.4f}"
+        if isinstance(format_valid, (int, float))
+        else "format_valid=unmeasured"
+    )
+    return (
+        f"{model} {verdict.get('shots', 0)}-shot {verdict.get('metric', 'score')}={score:.4f} "
+        f"{format_text} on {verdict.get('n', 0)} eval row(s)"
+    )
 
 
 def log_fitness(verdict: dict, spec, *, log=print) -> None:
@@ -407,9 +602,8 @@ def log_fitness(verdict: dict, spec, *, log=print) -> None:
         return
     score = verdict["score"]
     allowed = verdict["synthesis_allowed"]
-    log(f"      [teacher] {spec.name}: teacher scores {verdict['metric']}={score:.4f} "
-        f"(format_valid={verdict['format_valid']:.4f}) {verdict['shots']}-shot on "
-        f"{verdict['n']} eval row(s), against a {verdict['threshold']:.2f} gate")
+    log(f"      [teacher] {spec.name}: {format_fitness_measurement(verdict)}, "
+        f"against a {verdict['threshold']:.2f} gate")
     if allowed:
         log("      [teacher] → synthetic data is ALLOWED for this run. Every generated row is "
             "still verified individually.")
@@ -430,10 +624,21 @@ def synthesis_allowed(state) -> bool:
     somehow skipped the gate silently regained synthesis, which is the failure mode the gate exists
     to prevent.
 
+    `SLM_SYNTH_DISALLOW` is checked FIRST, ahead of both the verdict and `BYPASS`, because it is an
+    operator refusal rather than a measurement: the ablation it serves asks what the pipeline
+    achieves with no synthetic data at all, and a teacher that happens to clear the 0.80 gate must
+    not be able to answer that question with synthesized rows. It is deliberately the only input
+    that can force the answer to False — the gate itself is still measured and still reported, so
+    the run says what the teacher COULD have done alongside the fact that it was not asked to.
+
     `BYPASS` is honoured here as well as on the verdict, so the override holds even on a run that
     never reached the gate at all — a resumed checkpoint written before the flag was set, for one.
     Reading the flag in both places means the answer cannot depend on which of them ran.
     """
+    from agent.ablations import synthesis_disallowed
+
+    if synthesis_disallowed():
+        return False
     verdict = state.get("teacher_fitness")
     if not isinstance(verdict, dict):
         return BYPASS

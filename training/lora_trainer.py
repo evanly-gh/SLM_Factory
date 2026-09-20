@@ -422,6 +422,13 @@ def _build_completion_only_rows(
     return rows
 
 
+def _adapter_seed() -> int:
+    """Seed for the LoRA initialisation, read at call time so tests can vary it."""
+    from training.determinism import configured_seed
+
+    return configured_seed()
+
+
 def _load_training_model(
     config: "TrainingConfig",
     max_seq_length: int,
@@ -464,6 +471,10 @@ def _load_training_model(
                 r=config.lora_rank,
                 lora_alpha=config.lora_alpha,
                 lora_dropout=config.lora_dropout,
+                # Unsloth defaults this to 3407 and seeds itself with it. Passing the run's seed
+                # explicitly keeps the adapter's initialisation tied to SLM_SEED instead of to a
+                # constant inside a dependency.
+                random_state=_adapter_seed(),
                 target_modules=[
                     "q_proj",
                     "k_proj",
@@ -967,7 +978,14 @@ def _run_unsloth_training(
     """
     import torch
     from agent.logging_setup import quiet_ml_logging
+    from training.determinism import configured_seed, enable_determinism
     quiet_ml_logging()
+
+    # Idempotent: the cuda worker already applied this, but training is also reachable in-process
+    # when isolation is off, and a fine-tune that is reproducible only under one entry point is
+    # not reproducible.
+    enable_determinism(label="train")
+    _run_seed = configured_seed()
 
     max_seq_length = _configured_max_seq_length(config.task)
     _ensure_model_cached(config.base_model)
@@ -1070,6 +1088,11 @@ def _run_unsloth_training(
             # The dataset is pre-tokenized with an explicit completion_mask and
             # a custom collator that writes -100 over every prompt token.
             completion_only_loss=True,
+            # Stated rather than inherited. HuggingFace defaults `seed` to 42 and leaves
+            # `data_seed` unset, so the shuffle order was reproducible only by accident of a
+            # library default that a version bump is free to change.
+            seed=_run_seed,
+            data_seed=_run_seed,
         )
         if with_eval:
             # Evaluate + checkpoint periodically; keep the best-val model. weight_decay +

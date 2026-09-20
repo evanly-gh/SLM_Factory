@@ -132,6 +132,24 @@ class CapabilityMeasurement:
     mode: str | None
     protocol: str | None
     source: str
+    # PUBLISHED means the number comes from the model's own card, its paper, or a public
+    # leaderboard. It is the only kind of evidence allowed to steer model selection.
+    #
+    # WHY THIS FIELD EXISTS (2026-08-30)
+    #     The sub-billion entries used to carry OUR OWN scores on the benchmarks this pipeline
+    #     evaluates — `ner_bc5cdr span_f1` and `xlam_bfcl ast_arg_match`, from probe
+    #     38765131/38765655 — and those were injected into the selection prompt. On a
+    #     `calendar_json` run the orchestrator justified its pick by quoting our xlam number.
+    #     That is the benchmark answering its own question: offline measurement on the exact
+    #     eval sets the run is about to be scored on, fed back in as a hint. The published
+    #     figures below describe general capability instead, which is what a practitioner
+    #     choosing a model would actually have.
+    #
+    #     Kept as a flag rather than enforced by deleting the branch, because a genuinely
+    #     non-published measurement (a hardware timing, say) is still legitimate — it just must
+    #     declare itself so the prompt can label it, and so a task score cannot be added back
+    #     silently by someone matching the surrounding style.
+    published: bool = True
 
     @property
     def comparison_key(self) -> tuple[str, str | None, str | None]:
@@ -289,7 +307,21 @@ _QWEN35_4B_UNSPECIFIED_PROTOCOL = "qwen3.5-4b-card-table-mode-unspecified"
 # Our own end-to-end measurement, not a published benchmark. Named distinctly so a reader — or the
 # orchestrator prompt — cannot mistake a task score of ours for an MMLU-family number off a model
 # card. The two are not comparable and the protocol string is what says so.
-_OURS_PROBE_PROTOCOL = "slm-factory-probe-38765131/38765655-lora-fixed-recipe-300-eval-rows"
+# Retired 2026-08-30 along with the task scores it labelled. Kept as a named constant only so
+# that `git log -S` on it leads a future reader to this note rather than to a bare deletion:
+# the sub-billion entries used to carry our own `ner_bc5cdr` and `xlam_bfcl` results from probe
+# 38765131/38765655, and those are the exact benchmarks a run is scored on. Selecting a model
+# using them is the experiment marking its own homework.
+_RETIRED_OURS_PROBE_PROTOCOL = (
+    "slm-factory-probe-38765131/38765655-lora-fixed-recipe-300-eval-rows"
+)
+
+# Published-source protocol identifiers. Two different suites, deliberately named apart: the
+# SmolLM2 card runs lighteval zero-shot unless a row says otherwise, the Gemma 3 card does not
+# publish its harness. A score from one is not rank-comparable with a score from the other even
+# when the metric name matches, which is what `comparison_key` enforces.
+_SMOLLM2_CARD_PROTOCOL = "SmolLM2 model card / arXiv:2502.02737, lighteval"
+_GEMMA3_CARD_PROTOCOL = "Gemma 3 model card / arXiv:2503.19786, harness not stated"
 
 
 _MEASURED_METRICS_PATH = os.path.join(
@@ -449,120 +481,206 @@ ANDROID_POOL: list[ModelSpec] = [
     ),
 
     # ── SmolLM2-360M-Instruct (text) — Tier 0 seed ────────────────────────
-    # The strongest of the sub-billion three and the only one usable on BOTH measured
-    # tasks. On ner_bc5cdr it scores 0.7339 fine-tuned against the Qwen3.6-35B teacher's
-    # 0.7190 at five-shot — a model ~97x smaller beating the teacher — and it is the only
-    # candidate that loses NOTHING to Q4_K_M (0.7339 bf16 == 0.7339 quantized, and
-    # 0.4500 == 0.4500 on xlam_bfcl).
-    #
-    # The metrics below are OUR measurements on OUR eval sets, not published benchmarks,
-    # and are labelled as such: `metric` names the task, `protocol` names the run. They
-    # are not comparable to the MMLU-Pro / MMLU-Redux values on the Qwen seeds, which is
-    # precisely why they do not borrow those names.
+    # Published figures only, from the model card's own instruct-model table (lighteval,
+    # zero-shot unless the mode says otherwise). Its profile is "broad small-model
+    # competence": it leads the sub-billion three on commonsense and multi-step reasoning
+    # (HellaSwag 52.1, ARC 43.7, BBH 27.3) and on general knowledge (MMLU cloze 32.8),
+    # while gemma-3-270m-it beats it on instruction following.
     ModelSpec(
         model_id="HuggingFaceTB/SmolLM2-360M-Instruct",
         size_mb=258,
         tier=0,
         capability_measurements=(
             CapabilityMeasurement(
-                metric="ner_bc5cdr span_f1 (fine-tuned, ours)",
-                value=0.7339,
+                metric="MMLU",
+                value=0.328,
                 artifact="HuggingFaceTB/SmolLM2-360M-Instruct",
-                mode="LoRA r=16 a=32 lr=2e-4 ep=3 on 3000 gold rows",
-                protocol=_OURS_PROBE_PROTOCOL,
+                mode="cloze, zero-shot",
+                protocol=_SMOLLM2_CARD_PROTOCOL,
                 source="https://huggingface.co/HuggingFaceTB/SmolLM2-360M-Instruct",
             ),
             CapabilityMeasurement(
-                metric="xlam_bfcl ast_arg_match (fine-tuned, ours)",
-                value=0.4500,
+                metric="GSM8K",
+                value=0.0743,
                 artifact="HuggingFaceTB/SmolLM2-360M-Instruct",
-                mode="LoRA r=16 a=32 lr=2e-4 ep=3 on 3000 gold rows",
-                protocol=_OURS_PROBE_PROTOCOL,
+                mode="5-shot",
+                protocol=_SMOLLM2_CARD_PROTOCOL,
+                source="https://huggingface.co/HuggingFaceTB/SmolLM2-360M-Instruct",
+            ),
+            CapabilityMeasurement(
+                metric="IFEval",
+                value=0.410,
+                artifact="HuggingFaceTB/SmolLM2-360M-Instruct",
+                mode="average of prompt/instruction accuracy",
+                protocol=_SMOLLM2_CARD_PROTOCOL,
+                source="https://huggingface.co/HuggingFaceTB/SmolLM2-360M-Instruct",
+            ),
+            CapabilityMeasurement(
+                metric="BBH",
+                value=0.273,
+                artifact="HuggingFaceTB/SmolLM2-360M-Instruct",
+                mode="3-shot",
+                protocol=_SMOLLM2_CARD_PROTOCOL,
+                source="https://huggingface.co/HuggingFaceTB/SmolLM2-360M-Instruct",
+            ),
+            CapabilityMeasurement(
+                metric="ARC (average of easy/challenge)",
+                value=0.437,
+                artifact="HuggingFaceTB/SmolLM2-360M-Instruct",
+                mode="zero-shot",
+                protocol=_SMOLLM2_CARD_PROTOCOL,
+                source="https://huggingface.co/HuggingFaceTB/SmolLM2-360M-Instruct",
+            ),
+            CapabilityMeasurement(
+                metric="HellaSwag",
+                value=0.521,
+                artifact="HuggingFaceTB/SmolLM2-360M-Instruct",
+                mode="zero-shot",
+                protocol=_SMOLLM2_CARD_PROTOCOL,
                 source="https://huggingface.co/HuggingFaceTB/SmolLM2-360M-Instruct",
             ),
         ),
         notes=(
             "SmolLM2-360M-Instruct; text-only; LlamaForCausalLM; ~315M non-embedding "
-            "(49k vocab). Lossless under Q4_K_M on both measured tasks. Best sub-billion "
-            "candidate; prefer over gemma-3-270m-it when the task needs composition."
+            "(49k vocab). Trained on 4T tokens, SFT + DPO. Card highlights instruction "
+            "following, knowledge and reasoning over SmolLM1. Strongest reasoning and "
+            "knowledge scores of the sub-billion three."
         ),
     ),
 
     # ── gemma-3-270m-it (text) — Tier 0 seed ──────────────────────────────
-    # Task-dependent, and the pool cannot see why. 63% of its parameters are a 262k-token
-    # embedding table, leaving only ~102M of transformer. That buys unusually good
-    # rare-token extraction — 0.6529 quantized on BC5CDR, ahead of SmolLM2-135M's 0.5476
-    # on comparable transformer capacity — and costs compositional work: 0.1000 on
-    # xlam_bfcl against SmolLM2-360M's 0.4500.
+    # Published figures only, from the Gemma 3 card's own "Gemma 3 270M" table. Its profile
+    # is the mirror image of SmolLM2-360M: markedly BETTER at instruction following
+    # (IFEval 51.2 vs 41.0) and weaker on commonsense and reasoning (HellaSwag 37.7 vs
+    # 52.1, ARC-c 28.2, BBH 26.7 vs 27.3). Google positions the 270M as a fine-tuning base
+    # rather than a general assistant, and its card reports no MMLU or GSM8K row at all.
     #
-    # It is also the smallest of the three on disk, so `select_smallest` reaches it FIRST.
-    # On a structured-output task that is the wrong pick by 0.35. Left in the pool because
-    # the extraction result is real and the escalation loop can climb out of a bad start;
-    # flagged here because the ordering key cannot express the trade.
+    # Architecturally unusual and worth stating because size cannot express it: 168M of its
+    # 270M parameters are a 262k-token embedding table, leaving only ~102M of transformer
+    # against SmolLM2-360M's ~315M. It is also the smallest of the three on disk, so
+    # `select_smallest` reaches it FIRST.
     ModelSpec(
         model_id="google/gemma-3-270m-it",
         size_mb=241,
         tier=0,
         capability_measurements=(
             CapabilityMeasurement(
-                metric="ner_bc5cdr span_f1 (fine-tuned, ours)",
-                value=0.6926,
+                metric="IFEval",
+                value=0.512,
                 artifact="google/gemma-3-270m-it",
-                mode="LoRA r=16 a=32 lr=2e-4 ep=3 on 3000 gold rows",
-                protocol=_OURS_PROBE_PROTOCOL,
+                mode="zero-shot",
+                protocol=_GEMMA3_CARD_PROTOCOL,
                 source="https://huggingface.co/google/gemma-3-270m-it",
             ),
             CapabilityMeasurement(
-                metric="xlam_bfcl ast_arg_match (fine-tuned, ours)",
-                value=0.0567,
+                metric="BBH",
+                value=0.267,
                 artifact="google/gemma-3-270m-it",
-                mode="LoRA r=16 a=32 lr=2e-4 ep=3 on 3000 gold rows",
-                protocol=_OURS_PROBE_PROTOCOL,
+                mode="few-shot",
+                protocol=_GEMMA3_CARD_PROTOCOL,
+                source="https://huggingface.co/google/gemma-3-270m-it",
+            ),
+            CapabilityMeasurement(
+                metric="ARC-c",
+                value=0.282,
+                artifact="google/gemma-3-270m-it",
+                mode="zero-shot",
+                protocol=_GEMMA3_CARD_PROTOCOL,
+                source="https://huggingface.co/google/gemma-3-270m-it",
+            ),
+            CapabilityMeasurement(
+                metric="HellaSwag",
+                value=0.377,
+                artifact="google/gemma-3-270m-it",
+                mode="zero-shot",
+                protocol=_GEMMA3_CARD_PROTOCOL,
+                source="https://huggingface.co/google/gemma-3-270m-it",
+            ),
+            CapabilityMeasurement(
+                metric="WinoGrande",
+                value=0.523,
+                artifact="google/gemma-3-270m-it",
+                mode="zero-shot",
+                protocol=_GEMMA3_CARD_PROTOCOL,
                 source="https://huggingface.co/google/gemma-3-270m-it",
             ),
         ),
         notes=(
             "gemma-3-270m-it; text-only; Gemma3ForCausalLM; ~102M non-embedding + 168M "
-            "embedding (262k vocab). Strong on rare-token extraction, near-floor on "
-            "function calling. Smallest on disk of the sub-billion three."
+            "embedding (262k vocab), 32K context, 6T pretraining tokens. Best IFEval of "
+            "the sub-billion three; weakest on commonsense/reasoning. No MMLU or GSM8K "
+            "row on its card. Smallest on disk of the three."
         ),
     ),
 
     # ── SmolLM2-135M-Instruct (text) — Tier 0 seed ────────────────────────
-    # The floor: 101 MB at Q4_K_M, 4.6x below Qwen3-0.6B's 462 MB and the smallest
-    # artifact this project has produced. Still learns the BC5CDR contract (0.5476
-    # quantized) and is not at floor on xlam_bfcl (0.1867), which is the useful surprise —
-    # it beats gemma-3-270m-it on function calling despite being half the total size,
-    # because its ~107M of transformer is comparable and it spends nothing on vocabulary.
+    # The pool floor: 101 MB at Q4_K_M, 4.6x below Qwen3-0.6B's 462 MB. Published figures
+    # from the same card table as the 360M, so the two ARE directly comparable to each
+    # other: the 135M is uniformly below its larger sibling except on BBH, where the two
+    # are level (28.2 vs 27.3) — both close enough to the ~25% random baseline of a
+    # multiple-choice suite that neither should be read as reasoning ability.
     #
-    # It loses the most to quantization of the three (-0.06 on BC5CDR, -0.04 on xlam):
-    # at 100 MB there is little redundancy left to discard.
+    # MT-Bench is deliberately omitted. The card reports 19.8 for this model and 3.66 for
+    # the 360M, which cannot both be on the 0-10 MT-Bench scale; rather than guess which is
+    # mis-scaled, neither is carried.
     ModelSpec(
         model_id="HuggingFaceTB/SmolLM2-135M-Instruct",
         size_mb=101,
         tier=0,
         capability_measurements=(
             CapabilityMeasurement(
-                metric="ner_bc5cdr span_f1 (fine-tuned, ours)",
-                value=0.6107,
+                metric="MMLU",
+                value=0.293,
                 artifact="HuggingFaceTB/SmolLM2-135M-Instruct",
-                mode="LoRA r=16 a=32 lr=2e-4 ep=3 on 3000 gold rows",
-                protocol=_OURS_PROBE_PROTOCOL,
+                mode="cloze, zero-shot",
+                protocol=_SMOLLM2_CARD_PROTOCOL,
                 source="https://huggingface.co/HuggingFaceTB/SmolLM2-135M-Instruct",
             ),
             CapabilityMeasurement(
-                metric="xlam_bfcl ast_arg_match (fine-tuned, ours)",
-                value=0.2300,
+                metric="GSM8K",
+                value=0.014,
                 artifact="HuggingFaceTB/SmolLM2-135M-Instruct",
-                mode="LoRA r=16 a=32 lr=2e-4 ep=3 on 3000 gold rows",
-                protocol=_OURS_PROBE_PROTOCOL,
+                mode="5-shot",
+                protocol=_SMOLLM2_CARD_PROTOCOL,
+                source="https://huggingface.co/HuggingFaceTB/SmolLM2-135M-Instruct",
+            ),
+            CapabilityMeasurement(
+                metric="IFEval",
+                value=0.299,
+                artifact="HuggingFaceTB/SmolLM2-135M-Instruct",
+                mode="average of prompt/instruction accuracy",
+                protocol=_SMOLLM2_CARD_PROTOCOL,
+                source="https://huggingface.co/HuggingFaceTB/SmolLM2-135M-Instruct",
+            ),
+            CapabilityMeasurement(
+                metric="BBH",
+                value=0.282,
+                artifact="HuggingFaceTB/SmolLM2-135M-Instruct",
+                mode="3-shot",
+                protocol=_SMOLLM2_CARD_PROTOCOL,
+                source="https://huggingface.co/HuggingFaceTB/SmolLM2-135M-Instruct",
+            ),
+            CapabilityMeasurement(
+                metric="ARC (average of easy/challenge)",
+                value=0.373,
+                artifact="HuggingFaceTB/SmolLM2-135M-Instruct",
+                mode="zero-shot",
+                protocol=_SMOLLM2_CARD_PROTOCOL,
+                source="https://huggingface.co/HuggingFaceTB/SmolLM2-135M-Instruct",
+            ),
+            CapabilityMeasurement(
+                metric="HellaSwag",
+                value=0.409,
+                artifact="HuggingFaceTB/SmolLM2-135M-Instruct",
+                mode="zero-shot",
+                protocol=_SMOLLM2_CARD_PROTOCOL,
                 source="https://huggingface.co/HuggingFaceTB/SmolLM2-135M-Instruct",
             ),
         ),
         notes=(
             "SmolLM2-135M-Instruct; text-only; LlamaForCausalLM; ~107M non-embedding "
-            "(49k vocab). The pool floor at 101 MB Q4_K_M. Most quantization-sensitive "
-            "of the three."
+            "(49k vocab). Trained on 2T tokens, SFT + DPO. The pool floor at 101 MB "
+            "Q4_K_M. Uniformly below SmolLM2-360M-Instruct on published benchmarks."
         ),
     ),
 
@@ -590,6 +708,22 @@ ANDROID_POOL: list[ModelSpec] = [
                 mode="non-thinking",
                 protocol=_QWEN35_SMALL_NONTHINKING_PROTOCOL,
                 source="https://huggingface.co/Qwen/Qwen3.5-0.8B",
+            ),
+            CapabilityMeasurement(
+                metric="IFEval",
+                value=0.682,
+                artifact="Qwen/Qwen3-1.7B",
+                mode="non-thinking",
+                protocol=_QWEN35_SMALL_NONTHINKING_PROTOCOL,
+                source="https://huggingface.co/Qwen/Qwen3.5-2B",
+            ),
+            CapabilityMeasurement(
+                metric="SuperGPQA",
+                value=0.21,
+                artifact="Qwen/Qwen3-1.7B",
+                mode="non-thinking",
+                protocol=_QWEN35_SMALL_NONTHINKING_PROTOCOL,
+                source="https://huggingface.co/Qwen/Qwen3.5-2B",
             ),
         ),
         notes="Qwen3-1.7B (official); text-only; Q4/Q8/BF16 variants span peak-RAM tiers 1–3",
@@ -619,6 +753,22 @@ ANDROID_POOL: list[ModelSpec] = [
                 protocol=_QWEN35_SMALL_NONTHINKING_PROTOCOL,
                 source="https://huggingface.co/Qwen/Qwen3-4B-Instruct-2507",
             ),
+            CapabilityMeasurement(
+                metric="IFEval",
+                value=0.834,
+                artifact="Qwen/Qwen3-4B-Instruct-2507",
+                mode="non-thinking",
+                protocol=_QWEN35_SMALL_NONTHINKING_PROTOCOL,
+                source="https://huggingface.co/Qwen/Qwen3.5-2B",
+            ),
+            CapabilityMeasurement(
+                metric="SuperGPQA",
+                value=0.428,
+                artifact="Qwen/Qwen3-4B-Instruct-2507",
+                mode="non-thinking",
+                protocol=_QWEN35_SMALL_NONTHINKING_PROTOCOL,
+                source="https://huggingface.co/Qwen/Qwen3.5-2B",
+            ),
         ),
         notes="Qwen3-4B-Instruct-2507 (official); text-only; NON-thinking (direct answers); 256K context",
     ),
@@ -647,6 +797,22 @@ ANDROID_POOL: list[ModelSpec] = [
                 protocol=_QWEN35_SMALL_NONTHINKING_PROTOCOL,
                 source="https://huggingface.co/Qwen/Qwen3.5-0.8B",
             ),
+            CapabilityMeasurement(
+                metric="IFEval",
+                value=0.521,
+                artifact="Qwen/Qwen3.5-0.8B",
+                mode="non-thinking",
+                protocol=_QWEN35_SMALL_NONTHINKING_PROTOCOL,
+                source="https://huggingface.co/Qwen/Qwen3.5-2B",
+            ),
+            CapabilityMeasurement(
+                metric="SuperGPQA",
+                value=0.169,
+                artifact="Qwen/Qwen3.5-0.8B",
+                mode="non-thinking",
+                protocol=_QWEN35_SMALL_NONTHINKING_PROTOCOL,
+                source="https://huggingface.co/Qwen/Qwen3.5-2B",
+            ),
         ),
         notes="Qwen3.5-0.8B (official, multimodal); text-only LoRA via FastVisionModel; 262K context",
         multimodal=True,
@@ -674,6 +840,22 @@ ANDROID_POOL: list[ModelSpec] = [
                 protocol=_QWEN35_SMALL_NONTHINKING_PROTOCOL,
                 source="https://huggingface.co/Qwen/Qwen3.5-2B",
             ),
+            CapabilityMeasurement(
+                metric="IFEval",
+                value=0.612,
+                artifact="Qwen/Qwen3.5-2B",
+                mode="non-thinking",
+                protocol=_QWEN35_SMALL_NONTHINKING_PROTOCOL,
+                source="https://huggingface.co/Qwen/Qwen3.5-2B",
+            ),
+            CapabilityMeasurement(
+                metric="SuperGPQA",
+                value=0.304,
+                artifact="Qwen/Qwen3.5-2B",
+                mode="non-thinking",
+                protocol=_QWEN35_SMALL_NONTHINKING_PROTOCOL,
+                source="https://huggingface.co/Qwen/Qwen3.5-2B",
+            ),
         ),
         notes="Qwen3.5-2B (official, multimodal); text-only LoRA via FastVisionModel; base repo (not -GGUF, B107); 262K context",
         multimodal=True,
@@ -696,6 +878,22 @@ ANDROID_POOL: list[ModelSpec] = [
             CapabilityMeasurement(
                 metric="MMLU-Redux",
                 value=0.888,
+                artifact="Qwen/Qwen3.5-4B",
+                mode=None,
+                protocol=_QWEN35_4B_UNSPECIFIED_PROTOCOL,
+                source="https://huggingface.co/Qwen/Qwen3.5-4B",
+            ),
+            CapabilityMeasurement(
+                metric="IFEval",
+                value=0.898,
+                artifact="Qwen/Qwen3.5-4B",
+                mode=None,
+                protocol=_QWEN35_4B_UNSPECIFIED_PROTOCOL,
+                source="https://huggingface.co/Qwen/Qwen3.5-4B",
+            ),
+            CapabilityMeasurement(
+                metric="SuperGPQA",
+                value=0.529,
                 artifact="Qwen/Qwen3.5-4B",
                 mode=None,
                 protocol=_QWEN35_4B_UNSPECIFIED_PROTOCOL,
@@ -743,27 +941,43 @@ def format_capability_metrics(model: ModelSpec) -> str:
         render(model.measurement("MMLU-Redux"), "MMLU-Redux"),
     ]
 
-    # Anything measured that ISN'T one of the three named benchmarks above — in practice our own
-    # end-to-end task scores on the sub-billion entries. Without this the three standard renders all
-    # say "not reported" for those models and the prompt presents them as wholly unmeasured, which
-    # is the precise asymmetry the 08-21 review found pushing every choice upward: an unmeasured
-    # model reads as worse than a measured one even when the measurement does not describe the task.
-    #
-    # These are strictly BETTER evidence than MMLU here — they are this pipeline's own metric on
-    # this pipeline's own eval set — so hiding them because they do not match a hardcoded name was
-    # backwards. They are rendered last, and their `protocol` string identifies them as ours so the
-    # orchestrator cannot mistake one for a published benchmark.
+    # PUBLISHED benchmarks beyond the three named above — reasoning, instruction following and
+    # general knowledge from the model's own card or paper. Rendered because the three standard
+    # rows are `not reported` for most sub-billion entries, and a model with no numbers at all
+    # reads as worse than a measured one; that asymmetry is what the 08-21 review found pushing
+    # every choice upward. Each carries its own metric name, mode and protocol, because IFEval,
+    # BBH and ARC are no more comparable to each other than MMLU is to MMLU-Pro.
     standard = {"GSM8K", "MMLU-Pro", "MMLU", "MMLU-Redux"}
-    own = [item for item in model.capability_measurements if item.metric not in standard]
-    if own:
+    extra = [
+        item for item in model.capability_measurements
+        if item.metric not in standard and item.published
+    ]
+    if extra:
         parts.append(
-            "measured by us on our own eval sets (NOT a published benchmark, not comparable "
-            "to the rows above): "
+            "other PUBLISHED benchmarks (each a distinct evaluation; compare only like with "
+            "like): "
+            + "; ".join(
+                f"{item.metric}: {item.value * 100:.1f} "
+                f"[artifact={item.artifact}; mode={item.mode or 'not specified'}; "
+                f"protocol={item.protocol or 'not specified'}; source={item.source}]"
+                for item in extra
+            )
+        )
+
+    # NOT published — measured by us. No pool entry carries one today: the task scores that used
+    # to live here were removed on 2026-08-30 because scoring a model offline on the very eval set
+    # the run is about to use, then feeding it back as a selection hint, decides the experiment in
+    # advance. The branch remains so that any future non-published number is labelled rather than
+    # silently presented as a benchmark.
+    ours = [item for item in model.capability_measurements if not item.published]
+    if ours:
+        parts.append(
+            "measured by us, NOT a published benchmark and NOT comparable to the rows above: "
             + "; ".join(
                 f"{item.metric}: {item.value * 100:.1f} "
                 f"[artifact={item.artifact}; mode={item.mode or 'not specified'}; "
                 f"protocol={item.protocol or 'not specified'}]"
-                for item in own
+                for item in ours
             )
         )
     return "; ".join(parts)

@@ -13,16 +13,20 @@ The generation family had two prompt defects, both visible in slm-dialogsum-sams
 Fixed by one shared builder both sides call, with the instruction carried on the rows. See B250.
 """
 from data.eval_set import EvalSet
-from data.loaders.dialogsum_samsum import (
+from data.loaders.dialogsum import (
     SUMMARIZATION_INSTRUCTION,
     convert_dialogsum_rows,
 )
 from eval.scorers.generation import (
     DEFAULT_GENERATION_INSTRUCTION,
     build_generation_prompt,
-    build_prompts,
     resolve_generation_instruction,
 )
+# `dialogsum` moved off the judge and onto multi-reference ROUGE on 2026-09-06, so its prompt now
+# lives in `eval.scorers.summarization`. The B250 lessons this file guards are unchanged and still
+# apply: ONE builder both sides call, and the instruction carried on the rows. What moved is which
+# module owns them.
+from eval.scorers.summarization import build_prompts, resolve_instruction
 from tasks._builders import TrainingContext
 from training.lora_trainer import _training_turn
 
@@ -35,7 +39,7 @@ def _ctx(rows):
     `dialogsum` has no closed label space, so there is no class vocabulary to pass — the trainer
     reads that off the spec rather than being told.
     """
-    return TrainingContext(labels=(), instruction=resolve_generation_instruction(rows))
+    return TrainingContext(labels=(), instruction=resolve_instruction(rows))
 
 
 class TestTrainEvalParity:
@@ -59,7 +63,7 @@ class TestTrainEvalParity:
         DATASET keeps the set consistent.
         """
         rows = convert_dialogsum_rows(_RAW) + [
-            {"text": "A: hi\nB: hello", "answer": "They greet.", "label": "generation"}
+            {"text": "A: hi\nB: hello", "answer": "They greet.", "references": ["They greet."]}
         ]
         ctx = _ctx(rows)
         prompts = [_training_turn(row, "dialogsum", ctx)[0] for row in rows]

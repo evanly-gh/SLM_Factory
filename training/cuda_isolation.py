@@ -148,19 +148,26 @@ def merge_and_quantize(
     merged_output_dir: str,
     gguf_output_dir: str,
     quant: str,
+    backend: str | None = None,
 ) -> str:
-    """Merge an adapter and quantize it, outside the parent process when enabled."""
+    """Merge an adapter and quantize it, outside the parent process when enabled.
+
+    `gguf_output_dir` keeps its name because out-of-loop callers pass it positionally; it is the
+    output directory for whichever backend `backend` selects (default: the run's, i.e. llama.cpp
+    unless SLM_QUANT_BACKEND says otherwise).
+    """
     payload = {
         "checkpoint_path": checkpoint_path,
         "merged_output_dir": merged_output_dir,
         "gguf_output_dir": gguf_output_dir,
         "quant": quant,
+        "backend": backend,
     }
     if isolation_enabled():
         return run_isolated("merge_quantize", payload)
 
     from training.lora_trainer import merge_for_quantization
-    from training.quantize import quantize_from_model_spec
+    from training.quant_backend import quantize_from_model_spec
 
     merged = merge_for_quantization(checkpoint_path, merged_output_dir)
-    return quantize_from_model_spec(merged, gguf_output_dir, quant)
+    return quantize_from_model_spec(merged, gguf_output_dir, quant, backend)

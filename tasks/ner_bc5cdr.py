@@ -47,11 +47,12 @@ SPEC = TaskSpec(
     load=_load,
     required_fields=("text", "entities"),
     initial_train_cap=5000,
-    eval_cap=1000,
+    select_cap=1000,
     eval_sampling="shuffled",
     # `entities` is the target, not `label`; there is no class vocabulary to pin.
     closed_label_space=False,
     label_definitions={},
+    entity_type_vocabulary=("Chemical", "Disease"),
     # The teacher rejected 25 of 25 generated rows on run 38832588 — twice running, which is what
     # stopped the run — with reasons like "Output format is invalid; must be a JSON object with
     # 'text' and 'entities' fields". Every one of those rows had just passed `verify_ner_row`
@@ -88,6 +89,14 @@ SPEC = TaskSpec(
     needs_judge=False,
     judge_overlap=False,
     attach_reasoning=True,
+
+    # Selection and reporting coincide: two entity types, both with thousands of spans, so micro
+    # span-F1 is stable at selection size and is what the BC5CDR literature reports. Contrast
+    # `multiconer`, where 33 classes and a 0.18%-of-entities tail force micro for selection and
+    # macro for the headline.
+    report_load=None,
+    report_score=scorer.score,
+    report_metric_name="span_f1",
 
     build_training_turn=ner_turn,
 

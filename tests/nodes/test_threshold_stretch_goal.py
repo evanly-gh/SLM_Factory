@@ -241,8 +241,47 @@ def test_cheap_mode_makes_no_call(monkeypatch):
 # Decision validation
 # --------------------------------------------------------------------------
 
-def test_decline_parses_to_none():
-    assert _validate_threshold_raise({"raise_goal": False, "reason": "barely cleared"}) is None
+def test_a_decline_keeps_the_orchestrators_reason():
+    """A decline used to parse to a bare None, throwing the reason away.
+
+    The prompt asks for a `reason` on BOTH branches, so the model explained itself every time and
+    the code discarded it. That is the decision that ENDS a converged run: on the 2026-09-05
+    ablation arms the logs read "asking the orchestrator whether to raise it" followed immediately
+    by "TERMINATE", and why two runs stopped at 0.8035/0.8041 while the baseline pushed to 0.85 had
+    to be inferred from score margins after the fact.
+    """
+    decision = _validate_threshold_raise(
+        {"raise_goal": False, "reason": "barely cleared"}
+    )
+    assert decision == {"raise_goal": False, "reason": "barely cleared"}
+
+
+def test_a_decline_without_a_reason_is_still_a_decline():
+    """A raise REQUIRES a reason; a decline must not be rejected for lacking one.
+
+    Declining is always the safe outcome, so a model that omits the field must not turn into a
+    ValueError that the caller then logs as an invalid decision.
+    """
+    assert _validate_threshold_raise({"raise_goal": False}) == {
+        "raise_goal": False,
+        "reason": "no reason given",
+    }
+
+
+def test_the_decline_reason_reaches_the_log(raising_enabled, capsys):
+    """End to end: the reason the run stopped is printed, with the margin that motivated it."""
+    state = _state(score=0.8041, threshold=0.8000, iteration=1)
+    with patch(
+        "agent.nodes.iterate._llm_threshold_raise",
+        return_value={"raise_goal": False, "reason": "only +0.004 over the goal on one iteration"},
+    ):
+        assert _maybe_raise_threshold(state, 0.8041, "m") is False
+    out = capsys.readouterr().out
+    assert "Stretch goal DECLINED by the orchestrator" in out
+    assert "only +0.004 over the goal on one iteration" in out
+    # The margin is in the line too, since it is what the policy turns on.
+    assert "+0.0041" in out
+    assert state["stop_threshold"] == 0.8000, "a decline must not move the goal"
 
 
 def test_raise_requires_a_reason():
@@ -310,8 +349,46 @@ def test_provenance_credits_the_teacher_when_it_set_the_goal():
         "source": "qwen_baseline", "floor": 0.8, "floored": False,
         "measured_qwen": 0.87, "measured_metric": "ast_arg_match",
     })
-    assert "teacher's own zero-shot 0.8700" in text
+    assert "measured teacher" in text
+    assert "0.8700" in text and "ast_arg_match" in text
     assert "OVERRODE" not in text
+
+
+def test_provenance_names_the_model_shots_and_format_validity_when_recorded():
+    """The goal is only interpretable if the reader knows WHICH teacher set it and HOW.
+
+    0.87 from a local Qwen3.6 and 0.87 from deepseek-v4-flash are different claims, and 0.87 at
+    format_valid 0.62 is a different claim again — the teacher was bounded by a broken output
+    contract rather than by competence, so the goal it set is an artefact of that. All three used
+    to be unreportable: the line hardcoded "Qwen-3.6 zero-shot" no matter what ran.
+    """
+    text = describe_threshold_provenance({
+        "source": "qwen_baseline", "floor": 0.8, "floored": False,
+        "measured_qwen": 0.87, "measured_metric": "ast_arg_match",
+        "measured_model": "deepseek-v4-flash", "measured_shots": 5,
+        "measured_format_valid": 0.9930, "measured_n": 1000,
+    })
+    assert "deepseek-v4-flash" in text
+    assert "5-shot" in text
+    assert "format_valid=0.9930" in text
+    assert "1000 eval row(s)" in text
+    assert "zero-shot" not in text
+
+
+def test_provenance_stays_silent_about_fields_an_old_checkpoint_never_stored():
+    """A resumed pre-revamp checkpoint has no model, shot count or format_valid recorded.
+
+    Degrading to silence is the only safe option: rendering a default would invent the very
+    provenance this line exists to report, and "5-shot" printed for a measurement that was in fact
+    zero-shot is worse than saying nothing.
+    """
+    text = describe_threshold_provenance({
+        "source": "qwen_baseline", "floor": 0.8, "floored": False,
+        "measured_qwen": 0.87, "measured_metric": "ast_arg_match",
+    })
+    assert "-shot" not in text
+    assert "format_valid" not in text
+    assert "eval row(s)" not in text
 
 
 def test_provenance_handles_missing_calibration():

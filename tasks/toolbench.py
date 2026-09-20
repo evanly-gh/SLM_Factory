@@ -92,10 +92,11 @@ SPEC = TaskSpec(
     # present on both splits.
     required_fields=("text", "query"),
     initial_train_cap=5000,
-    eval_cap=1000,
+    select_cap=1000,
     eval_sampling="shuffled",
     closed_label_space=False,
     label_definitions={},
+    entity_type_vocabulary=(),  # extracts no spans
     verifier_notes="",
     quality_controls=(
         qc.require_fields("text", "query", "answer", "tools"),
@@ -133,6 +134,13 @@ SPEC = TaskSpec(
     # already recorded whole on the failure record by the scorer. The generic attacher would find
     # nothing and add nothing.
     attach_reasoning=False,
+
+    # Selection and reporting coincide: pass rate IS the published ToolEval number. Worth noting
+    # this is also the suite's most expensive eval, which is precisely why the report pass is a
+    # separate once-per-run script rather than a bigger in-loop draw.
+    report_load=None,
+    report_score=scorer.score,
+    report_metric_name="tooleval_pass_rate",
 
     build_training_turn=toolbench_turn,
 
