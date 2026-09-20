@@ -192,9 +192,16 @@ def format_downward_probe_history(history: dict | None) -> list[str]:
         trajectory = " → ".join(
             f"{score:.3f}" for score in origin.get("scores") or []
         ) or "(none)"
+        # Same None-unsafe `.get(key, default)` shape that broke three run reports on 2026-09-05:
+        # the default does not fire when the key is present holding None, and a probe origin whose
+        # attempt never produced a measurement carries exactly that.
+        _origin_score = origin.get("score")
+        _origin_score_text = (
+            f"{_origin_score:.4f}" if isinstance(_origin_score, (int, float)) else "n/a"
+        )
         lines.append(
             f"    origin={origin.get('selector', '?')} "
-            f"score={origin.get('score', 0.0):.4f} "
+            f"score={_origin_score_text} "
             f"weights={origin.get('weights_ref') or 'n/a'} "
             f"trajectory={trajectory} "
             f"dag_nodes={len(origin.get('dag') or [])}"

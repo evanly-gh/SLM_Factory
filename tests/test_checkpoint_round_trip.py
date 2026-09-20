@@ -403,3 +403,172 @@ def test_an_atomic_jsonl_write_leaves_one_row_per_line(tmp_path):
     atomic_write_jsonl(path, [{"text": "a"}, {"text": "b"}])
     lines = [json.loads(line) for line in path.read_text().splitlines() if line.strip()]
     assert lines == [{"text": "a"}, {"text": "b"}]
+
+
+# ── Adding a fingerprint key must not brick runs already in flight ───────────────────────────
+#
+# clinc150 run 40105479 died on an infrastructure error at 1d13h and then could NOT be resumed,
+# because SLM_ABLATION_TRAIN_CAP and SLM_ABLATION_DISALLOW_MINING had been ADDED to the resume
+# fingerprint while it was running. Its manifest had no entry for either, the live snapshot had
+# both at their defaults, and the guard read `stored=None, expected='0'` as somebody changing the
+# configuration mid-run. Absence and default say the same thing about that run — the switch was off
+# then because it did not exist, and it is off now — so the guard has to forgive exactly that case
+# and no more.
+
+
+def _manifest_fixture(tmp_path, stored_config, compatibility):
+    from agent.checkpoint import create_run_manifest
+
+    return create_run_manifest(
+        tmp_path / "run-manifest.json",
+        run_dir=tmp_path,
+        description="a task",
+        force_model="",
+        mode="cold_start",
+        compatibility=compatibility,
+        effective_config=stored_config,
+    )
+
+
+def _compat_for(config):
+    from agent.checkpoint import _canonical_hash
+
+    return {
+        "mode": "cold_start",
+        "pool_fingerprint": "pool",
+        "topology_fingerprint": "topology",
+        "config_fingerprint": _canonical_hash(config),
+    }
+
+
+def test_manifest_written_before_a_key_existed_still_resumes(tmp_path):
+    """The key is absent from the manifest and switched off now: same run, so resume is allowed."""
+    from agent.checkpoint import load_run_manifest
+
+    stored = {"mode": "cold_start", "SLM_STAGNATION_WINDOW": "15"}
+    _manifest_fixture(tmp_path, stored, _compat_for(stored))
+
+    # The live snapshot gained the ablation-4 pair, both at their declared defaults.
+    current = dict(stored, SLM_ABLATION_TRAIN_CAP="", SLM_ABLATION_DISALLOW_MINING="0")
+    payload = load_run_manifest(
+        tmp_path / "run-manifest.json",
+        expected_description="a task",
+        expected_force_model="",
+        expected_mode="cold_start",
+        expected_compatibility=_compat_for(current),
+        expected_effective_config=current,
+    )
+    assert payload["effective_config"] == stored
+
+
+def test_a_new_key_that_is_switched_on_still_blocks_resume(tmp_path):
+    """The whole point of fingerprinting the cap: a full-data run must not resume into a capped one."""
+    import pytest
+
+    from agent.checkpoint import CheckpointCompatibilityError, load_run_manifest
+
+    stored = {"mode": "cold_start", "SLM_STAGNATION_WINDOW": "15"}
+    _manifest_fixture(tmp_path, stored, _compat_for(stored))
+
+    current = dict(stored, SLM_ABLATION_TRAIN_CAP="151")
+    with pytest.raises(CheckpointCompatibilityError, match="SLM_ABLATION_TRAIN_CAP"):
+        load_run_manifest(
+            tmp_path / "run-manifest.json",
+            expected_description="a task",
+            expected_force_model="",
+            expected_mode="cold_start",
+            expected_compatibility=_compat_for(current),
+            expected_effective_config=current,
+        )
+
+
+def test_a_key_present_in_both_but_changed_still_blocks_resume(tmp_path):
+    """Forgiveness is for keys that did not exist, not for keys whose value moved."""
+    import pytest
+
+    from agent.checkpoint import CheckpointCompatibilityError, load_run_manifest
+
+    stored = {"mode": "cold_start", "SLM_ABLATION_TRAIN_CAP": "100"}
+    _manifest_fixture(tmp_path, stored, _compat_for(stored))
+
+    current = {"mode": "cold_start", "SLM_ABLATION_TRAIN_CAP": "151"}
+    with pytest.raises(CheckpointCompatibilityError, match="SLM_ABLATION_TRAIN_CAP"):
+        load_run_manifest(
+            tmp_path / "run-manifest.json",
+            expected_description="a task",
+            expected_force_model="",
+            expected_mode="cold_start",
+            expected_compatibility=_compat_for(current),
+            expected_effective_config=current,
+        )
+
+
+def test_switching_quantization_backend_blocks_resume(tmp_path):
+    """Every score in the checkpoint was measured through ONE runtime on ONE toolchain's artifact.
+
+    A resume that changed `SLM_QUANT_BACKEND` would go on comparing new MNN numbers against stored
+    llama.cpp ones — best_score, the stagnation window, the rollback comparisons — and call the
+    difference progress or regression. Measured, not hypothetical: the same weights score 0.7511
+    through llama.cpp/GGUF and 0.7367 through MNN.
+    """
+    import pytest
+
+    from agent.checkpoint import CheckpointCompatibilityError, load_run_manifest
+
+    stored = {"mode": "cold_start", "SLM_QUANT_BACKEND": "llama_cpp"}
+    _manifest_fixture(tmp_path, stored, _compat_for(stored))
+
+    current = {"mode": "cold_start", "SLM_QUANT_BACKEND": "mnn"}
+    with pytest.raises(CheckpointCompatibilityError, match="SLM_QUANT_BACKEND"):
+        load_run_manifest(
+            tmp_path / "run-manifest.json",
+            expected_description="a task",
+            expected_force_model="",
+            expected_mode="cold_start",
+            expected_compatibility=_compat_for(current),
+            expected_effective_config=current,
+        )
+
+
+def test_a_run_started_before_the_backend_flag_existed_still_resumes(tmp_path):
+    """Absent and default mean the same thing — otherwise adding the key bricks runs in flight.
+
+    This is the `_keys_added_since` contract that clinc150 run 40105479 was lost to when the
+    ablation keys were added mid-run.
+    """
+    from agent.checkpoint import load_run_manifest
+
+    stored = {"mode": "cold_start"}
+    _manifest_fixture(tmp_path, stored, _compat_for(stored))
+
+    current = {"mode": "cold_start", "SLM_QUANT_BACKEND": "llama_cpp"}
+    manifest = load_run_manifest(
+        tmp_path / "run-manifest.json",
+        expected_description="a task",
+        expected_force_model="",
+        expected_mode="cold_start",
+        expected_compatibility=_compat_for(current),
+        expected_effective_config=current,
+    )
+    assert manifest["compatibility"] == _compat_for(stored)
+
+
+def test_unknown_keys_are_not_forgiven(tmp_path):
+    """Only keys declared in `_RESUME_ENV_DEFAULTS` have a knowable 'off' value."""
+    import pytest
+
+    from agent.checkpoint import CheckpointCompatibilityError, load_run_manifest
+
+    stored = {"mode": "cold_start"}
+    _manifest_fixture(tmp_path, stored, _compat_for(stored))
+
+    current = {"mode": "cold_start", "SLM_SOMETHING_NOBODY_DECLARED": ""}
+    with pytest.raises(CheckpointCompatibilityError, match="SLM_SOMETHING_NOBODY_DECLARED"):
+        load_run_manifest(
+            tmp_path / "run-manifest.json",
+            expected_description="a task",
+            expected_force_model="",
+            expected_mode="cold_start",
+            expected_compatibility=_compat_for(current),
+            expected_effective_config=current,
+        )

@@ -34,6 +34,13 @@ L40S_BENCHMARK_SCRIPTS = {
     "run_sms_spam_l40s.slurm": "sms_spam",
     # Added 2026-08-24: ToolBench / ToolEval pass rate, reimplementing arXiv:2512.15943.
     "run_toolbench_l40s.slurm": "toolbench",
+    # The on-device SFT suite, added 2026-09-06. Each covers a capability the eight above did not:
+    # nested structured prediction under a published low-resource protocol, a 33-class label space,
+    # and pure text-to-text generation scored on edits rather than on strings.
+    "run_topv2_l40s.slurm": "topv2",
+    "run_multiconer_l40s.slurm": "multiconer",
+    "run_gec_bea19_l40s.slurm": "gec_bea19",
+    "run_goemotions_l40s.slurm": "goemotions",
 }
 
 L40S_TASK_SCRIPTS = tuple(L40S_BENCHMARK_SCRIPTS)
@@ -54,6 +61,26 @@ CKPT_BENCHMARK_SCRIPTS = {
     "run_sms_spam_ckpt.slurm": "sms_spam",
     "run_clinc150_ckpt.slurm": "clinc150",
     "run_ner_bc5cdr_ckpt.slurm": "ner_bc5cdr",
+    # THE ON-DEVICE SFT SUITE, added 2026-09-06 as SMOKE-TEST launchers rather than as members of
+    # the cheap-task rule above.
+    #
+    # The rule this family was founded on — only tasks that train in minutes, so a preemption
+    # costs minutes — is a rule about RESULTS runs, and `toolbench` is still excluded by it at ~93
+    # minutes a training step. These five are here for a different reason: their first-ever
+    # executions had to be shaken out, and `gpu-l40s` could not start a seven-day job until after
+    # the Sept 8-9 maintenance window, so a first run there would have surfaced its first bug two
+    # days later. The first two smoke tests found two real scorer bugs (39707195 ERRANT
+    # tokenization; 39707196 prose harvested as a 20-label prediction), which settled the
+    # argument. For a smoke test preemption barely matters — the question is answered in the first
+    # iteration.
+    #
+    # Results still come from the `_l40s` family. The `-ckpt` job name is what keeps the two apart
+    # in logs/slurm/, and it is asserted below.
+    "run_topv2_ckpt.slurm": "topv2",
+    "run_multiconer_ckpt.slurm": "multiconer",
+    "run_gec_bea19_ckpt.slurm": "gec_bea19",
+    "run_goemotions_ckpt.slurm": "goemotions",
+    "run_dialogsum_ckpt.slurm": "dialogsum",
 }
 
 # The overnight-campaign scripts on the shared CSE account (2026-08-13). Same pipeline body and
@@ -77,6 +104,217 @@ CSE_BENCHMARK_SCRIPTS = {
     # ~2,295 judge calls per pass), so the 24h box matters more here than elsewhere — the judge
     # cache surviving a requeue is what makes it workable.
     "run_toolbench_cse.slurm": "toolbench",
+    # The on-device SFT suite's CSE twins, added 2026-09-06, for the reason this whole family
+    # exists: the dedicated quota is 10 GPUs for the group and is routinely saturated, so a task
+    # that can only run on one account is a task that does not run.
+    # Added 2026-09-06 alongside the DialogSum rework: the task changed metric, source and
+    # scoring path, so its single launcher was rewritten and finally given the twin every other
+    # curated task has.
+    "run_dialogsum_cse.slurm": "dialogsum",
+    "run_topv2_cse.slurm": "topv2",
+    "run_multiconer_cse.slurm": "multiconer",
+    "run_gec_bea19_cse.slurm": "gec_bea19",
+    "run_goemotions_cse.slurm": "goemotions",
+}
+
+# The ABLATION family (2026-09-03). Full-length results runs on the dedicated account, each one a
+# byte-for-byte copy of a baseline launcher with ONE variable changed, so the pair answers a single
+# question. They are a separate family because they break the one-launcher-per-task invariant on
+# purpose: `ner_bc5cdr` has three of these plus its baseline, and that is the point — a control and
+# its arms are not four ways to run the same experiment.
+#
+# Each entry names the BASELINE it must otherwise match and the exact executable lines it is
+# allowed to differ by. `test_each_ablation_differs_from_its_baseline_by_one_declared_knob`
+# enforces that literally, which is the invariant the whole suite rests on: an ablation that
+# drifted from its baseline in some second, unrecorded way measures nothing, and the drift would
+# be invisible in a 2,000-line run log. The three settings that recur are documented in the
+# scripts' own headers; in brief, SLM_STOP_THRESHOLD pins the goal so a teacher swap cannot also
+# move the bar, and the `unset` lines defend against sbatch exporting the submitting shell's
+# environment (which is how runs 38832588, 39294409 and 39361648 all became configurations nobody
+# had written down).
+# THE ACCOUNT SPLIT IS A COMPUTE DECISION, NOT A SCIENTIFIC ONE. The xLAM arm runs on the
+# dedicated account; the three NER arms run on CSE because the dedicated quota is 10 GPUs for the
+# whole group and four concurrent arms would need seven of them. CSE caps the wall at 24h, so
+# those three cross it on the USR1 checkpoint-and-requeue contract exactly as the `_cse` family
+# does. Each arm is still compared against its `_l40s` baseline, which is correct: the `_cse` and
+# `_l40s` launchers for a task are identical in every executable line (the only differences are
+# #SBATCH directives), and the baseline NUMBERS being compared against — run 39311801 — came
+# from the `_l40s` launcher.
+ABLATION_SCRIPTS = {
+    # Ablation 1: does reusing the curriculum across tiers buy anything?
+    "run_ner_bc5cdr_ablation_reset_cse.slurm": {
+        "baseline": "run_ner_bc5cdr_l40s.slurm",
+        "added": ("export SLM_ABLATION_RESET_DATA_ON_ESCALATION=1",),
+        "removed": (),
+    },
+    # Ablation 2a/2b: does the teacher model change the quality of the synthetic data? The two
+    # swap the same pair of teachers in opposite directions.
+    "run_xlam_bfcl_ablation_qwen_teacher_l40s.slurm": {
+        "baseline": "run_xlam_bfcl_l40s.slurm",
+        "added": ("unset SLM_SYNTH_API_MODE", "export SLM_STOP_THRESHOLD=0.87"),
+        "removed": (),
+    },
+    "run_ner_bc5cdr_ablation_deepseek_teacher_cse.slurm": {
+        "baseline": "run_ner_bc5cdr_l40s.slurm",
+        "added": (
+            "export SLM_SYNTH_API_MODE=1",
+            "export SLM_SYNTH_API_MODEL=deepseek-v4-flash",
+            "export SLM_STOP_THRESHOLD=0.80",
+        ),
+        "removed": (),
+    },
+    # Ablation 3: does synthetic data help at all? The bypass has to GO, or the log would claim
+    # synthesis was refused by the operator and allowed by an override at the same time.
+    "run_ner_bc5cdr_ablation_nosynth_cse.slurm": {
+        "baseline": "run_ner_bc5cdr_l40s.slurm",
+        "added": ("export SLM_SYNTH_DISALLOW=1", "unset SLM_TEACHER_SYNTH_BYPASS"),
+        "removed": ("export SLM_TEACHER_SYNTH_BYPASS=1",),
+    },
+    # Ablation 4: what do the two tasks that CONVERGED reach if they are not allowed to stop?
+    #
+    # sms_spam and clinc150 are the only curated tasks whose runs ever met their goal — sms_spam in
+    # 7 iterations on a 360M model, clinc150 in 4 on a 0.6B — so neither ever escalated a tier, and
+    # the suite has no measurement of their ceiling. Pinning the goal at THRESHOLD_CEILING makes
+    # convergence unreachable, so these climb the ladder and stop on tier exhaustion or the 30-eval
+    # cap, the same terminal condition as the five tasks that never converged.
+    #
+    # The pin also sets `initial_stop_threshold` to 0.99, and that is the floor the orchestrator's
+    # threshold_adjustment clamps to. On the original sms_spam run the orchestrator raised the goal
+    # to 0.95, missed it four times, then lowered it to 0.92 — under the 0.944 already achieved —
+    # and converged. With floor == goal that is arithmetically impossible.
+    "run_sms_spam_ablation_nostop_l40s.slurm": {
+        "baseline": "run_sms_spam_l40s.slurm",
+        "added": (
+            "export SLM_STOP_THRESHOLD=0.99",
+            "export SLM_VERIFY_SYNTH=shadow",
+            "export SLM_TEACHER_SYNTH_BYPASS=1",
+        ),
+        "removed": (),
+    },
+    "run_clinc150_ablation_nostop_l40s.slurm": {
+        "baseline": "run_clinc150_l40s.slurm",
+        "added": (
+            "export SLM_STOP_THRESHOLD=0.99",
+            "export SLM_VERIFY_SYNTH=shadow",
+            "export SLM_TEACHER_SYNTH_BYPASS=1",
+        ),
+        "removed": (),
+    },
+    # Ablation 5, A/B PAIR: does synthetic data earn its keep when real data is SCARCE?
+    #
+    # Synthesis contributed +0.008 to +0.050 across the 09-2026 suite, against +0.075 to +0.174 for
+    # hyperparameter tuning. One explanation is that it never had room: those curricula were 5-31%
+    # synthetic. Starving the run to 100 real rows with mining off tests that directly. The two arms
+    # differ ONLY in whether synthesis is allowed, which is what makes their gap interpretable.
+    #
+    # sms_spam because the teacher must be able to do the task or the arm measures bad rows rather
+    # than scarcity: it is one of only three tasks clearing the 0.80 fitness gate (0.8662), it is
+    # binary so 100 rows is ~50 per class rather than clinc150's 0.66, and full-data fine-tuning
+    # moved it +0.7086 so there is headroom.
+    "run_sms_spam_ablation_scarce_nosynth_l40s.slurm": {
+        "baseline": "run_sms_spam_l40s.slurm",
+        "added": (
+            "export SLM_ABLATION_TRAIN_CAP=100",
+            "export SLM_ABLATION_DISALLOW_MINING=1",
+            "export SLM_STOP_THRESHOLD=0.99",
+            "export SLM_MIN_CURRICULUM_ROWS=50",
+            "export SLM_SYNTH_DISALLOW=1",
+        ),
+        "removed": (),
+    },
+    "run_sms_spam_ablation_scarce_synth_l40s.slurm": {
+        "baseline": "run_sms_spam_l40s.slurm",
+        "added": (
+            "export SLM_ABLATION_TRAIN_CAP=100",
+            "export SLM_ABLATION_DISALLOW_MINING=1",
+            "export SLM_STOP_THRESHOLD=0.99",
+            "export SLM_MIN_CURRICULUM_ROWS=50",
+            "export SLM_TEACHER_SYNTH_BYPASS=1",
+            "export SLM_VERIFY_SYNTH=shadow",
+        ),
+        "removed": (),
+    },
+    # Ablation 5 REPEATED ON CLINC150, same A/B question at the other end of the label space.
+    #
+    # The sms_spam pair answered the question twice over: +0.0189 between the runs' final scores and
+    # +0.2981 between the arms on the same 360M model, because arm A reached the ceiling by climbing
+    # to a 4B model rather than by adding data. sms_spam saturates near 0.96 and cannot separate them
+    # further. clinc150 has 151 classes under macro_f1 and a full-data best of only 0.8952, so there
+    # is room above the scarce arms for a difference to show.
+    #
+    # The cap is 151 and not 100 because clinc150 has exactly 151 labels and the loader draws the cap
+    # round-robin across them (`stratified_by_label`), so 151 is one example per intent — the
+    # scarcest configuration that still covers the label space. 100 would leave a third of the
+    # intents with zero rows in BOTH arms and confound the comparison with coverage.
+    #
+    # SLM_EARLY_STOPPING=0 is required by that choice, not a preference: the trainer's validation
+    # split is a random unstratified 12%, which at one row per class would strip 18 intents of their
+    # only training example and let synthesis take credit for repairing a holdout artifact.
+    "run_clinc150_ablation_scarce_nosynth_l40s.slurm": {
+        "baseline": "run_clinc150_l40s.slurm",
+        "added": (
+            "export SLM_ABLATION_TRAIN_CAP=151",
+            "export SLM_ABLATION_DISALLOW_MINING=1",
+            "export SLM_STOP_THRESHOLD=0.99",
+            "export SLM_MIN_CURRICULUM_ROWS=120",
+            "export SLM_EARLY_STOPPING=0",
+            "export SLM_SYNTH_DISALLOW=1",
+        ),
+        "removed": (),
+    },
+    "run_clinc150_ablation_scarce_synth_l40s.slurm": {
+        "baseline": "run_clinc150_l40s.slurm",
+        "added": (
+            "export SLM_ABLATION_TRAIN_CAP=151",
+            "export SLM_ABLATION_DISALLOW_MINING=1",
+            "export SLM_STOP_THRESHOLD=0.99",
+            "export SLM_MIN_CURRICULUM_ROWS=120",
+            "export SLM_EARLY_STOPPING=0",
+            "export SLM_TEACHER_SYNTH_BYPASS=1",
+            "export SLM_VERIFY_SYNTH=shadow",
+        ),
+        "removed": (),
+    },
+    # Ablation 5, THIRD PAIR: the same question on the task where the small tier fails at the
+    # output contract rather than at the content.
+    #
+    # xlam's tier-1 gemma-3-270m scored 0.0460 with format validity 0.3730, while its 4B tiers
+    # already sit near 0.85 zero-shot. If synthetic rows cannot rescue a model whose outputs do not
+    # parse, "synthesis substitutes for one to two tiers of scale" is narrower than 09-17 states.
+    #
+    # The cap is 100 as on sms_spam rather than a coverage-derived number: tools are supplied in the
+    # prompt and even the full 4,954-row anchor shares only 23 of the eval set's 823 tools, so there
+    # is no per-class floor to respect and the shared cap makes the three pairs comparable.
+    #
+    # `unset SLM_SYNTH_API_MODE` is load-bearing rather than cosmetic. The committed xlam launcher is
+    # already the local-Qwen configuration; run 39361648 became a DeepSeek run only because the
+    # variable was exported in the submitting shell, and sbatch forwards that environment by default.
+    # Qwen measures 0.8660 zero-shot here against DeepSeek's 0.8700 and, unlike the API, honours a
+    # generation seed — which is what makes arm B's curriculum reproducible.
+    "run_xlam_bfcl_ablation_scarce_nosynth_l40s.slurm": {
+        "baseline": "run_xlam_bfcl_l40s.slurm",
+        "added": (
+            "export SLM_ABLATION_TRAIN_CAP=100",
+            "export SLM_ABLATION_DISALLOW_MINING=1",
+            "unset SLM_SYNTH_API_MODE",
+            "export SLM_STOP_THRESHOLD=0.99",
+            "export SLM_MIN_CURRICULUM_ROWS=50",
+            "export SLM_SYNTH_DISALLOW=1",
+        ),
+        "removed": ("export SLM_TEACHER_SYNTH_BYPASS=1",),
+    },
+    "run_xlam_bfcl_ablation_scarce_synth_l40s.slurm": {
+        "baseline": "run_xlam_bfcl_l40s.slurm",
+        "added": (
+            "export SLM_ABLATION_TRAIN_CAP=100",
+            "export SLM_ABLATION_DISALLOW_MINING=1",
+            "unset SLM_SYNTH_API_MODE",
+            "export SLM_STOP_THRESHOLD=0.99",
+            "export SLM_MIN_CURRICULUM_ROWS=50",
+            "export SLM_VERIFY_SYNTH=shadow",
+        ),
+        "removed": ("export SLM_VERIFY_SYNTH=0",),
+    },
 }
 
 # Measurement scripts that are NOT pipeline runs. They stand up a model and record numbers, without
@@ -98,11 +336,32 @@ PROBE_SCRIPTS = {
     # probe itself because it is resumable by design: retraining six models to recover one column
     # would cost hours, and the checkpoints are on disk.
     "run_small_model_quant_pass.slurm",
+    # The on-device SFT suite's harness audit (2026-09-08). Added because the five suite runs
+    # cannot execute at all right now — they die at their first orchestrator decision on an
+    # Anthropic credit-balance error — while the questions that gate restarting them (is the
+    # baseline scored correctly, is it truncation-limited, does each bespoke harness work on a
+    # real model) need no orchestrator. `scripts/probe_small_models.py` makes zero Claude calls.
+    "run_suite_harness_probe.slurm",
+    # The synthesis half of the same audit (2026-09-08). Two of the six failure modes live inside
+    # the synthesis path, which needs the local teacher but no orchestrator, so it can be measured
+    # while the agent runs are blocked. TWO GPUs, because the vLLM teacher needs one of its own.
+    "run_synthesis_audit_probe.slurm",
     # Does the vLLM eval backend score the same as the in-process path (2026-08-27)? A probe rather
     # than a verification run: it runs no agent loop and no teacher, just the two inference backends
     # over identical rows, so it asks for ONE GPU — a like-for-like comparison of two engines wants
     # them on the same card anyway. See eval/student_server.py.
     "verify_eval_backend.slurm",
+    # Does the MNN quantization backend score the same as llama.cpp on the same weights
+    # (2026-09-17)? The same shape as the line above and a probe for the same reasons: no agent
+    # loop, no teacher, no orchestrator call, two backends over identical rows. ONE GPU, which is
+    # all either arm needs — the GGUF arm offloads its layers to it and the MNN arm now runs its
+    # CUDA backend on it. See training/quant_backend.py.
+    "verify_mnn_backend.slurm",
+    # Does the MNN backend work for every tier at every precision (2026-09-18)? 9 pool models x
+    # {Q4_K_M, Q8_0, FP16} x {cuda, cpu}, exported and scored on identical clinc150 rows. A probe:
+    # it runs no agent loop and makes no orchestrator call, and ONE GPU is the whole requirement.
+    # Long (20h) because it pays 27 MNN exports, which is why it is time-boxed and not requeued.
+    "verify_mnn_matrix.slurm",
 }
 
 # Bounded verification runs. These DO run the full agent loop, so they are not probes, but they are
@@ -121,6 +380,13 @@ VERIFICATION_SCRIPTS = {
     # broken harness.
     "run_toolbench_smollm2_verify.slurm",
     "run_toolbench_gemma_verify.slurm",
+    # The MNN quantization backend inside the full loop (2026-09-17). A verification run rather
+    # than a probe because it DOES run the agent loop — that is the whole point, since the routing
+    # it checks (baseline, per-iteration build, cache, reaper, escalation) only exists there — and
+    # it is bounded by SLM_MAX_EVALS_BEFORE_ESCALATION and SLM_MAX_WALLCLOCK_S rather than by a
+    # results run's budget. Accuracy is not the deliverable; `verify_mnn_backend.slurm` measures
+    # that against llama.cpp on fixed weights.
+    "run_clinc150_mnn_verify.slurm",
     # CSE twins, for the same reason the benchmark launchers have two accounts: whichever quota
     # frees first. The dedicated account is capped at 10 GPUs shared across the whole group and was
     # fully consumed by other users when these runs were launched, so a run that can only ever sit on
@@ -227,9 +493,105 @@ def test_l40s_benchmark_scripts_cover_exactly_the_registry():
     """
     import tasks
 
-    on_disk = {p.name for p in PIPELINE_DIR.glob("run_*_l40s.slurm")}
+    # ABLATION_SCRIPTS is subtracted rather than renamed out of the glob's way. The invariant here
+    # is "one BASELINE launcher per task", and an ablation arm is not a second baseline — but it is
+    # still a weeklong 2x-L40S run on the same account and it should keep the family's filename
+    # shape. Subtracting an explicit registry keeps the real guarantee intact: a launcher that
+    # nobody has accounted for still fails, because it appears in neither set.
+    on_disk = {p.name for p in PIPELINE_DIR.glob("run_*_l40s.slurm")} - set(ABLATION_SCRIPTS)
     assert on_disk == set(L40S_BENCHMARK_SCRIPTS)
     assert set(L40S_BENCHMARK_SCRIPTS.values()) == set(tasks.TASKS)
+
+
+def _effective_lines(source: str) -> list[str]:
+    """The lines that DO something: comments and blank lines stripped.
+
+    Ablation headers are long by design — they have to state the baseline, the variable and what
+    either outcome would mean — so comparing raw text would drown the one thing worth comparing.
+    """
+    return [
+        line.strip()
+        for line in source.splitlines()
+        if line.strip() and not line.strip().startswith("#")
+    ]
+
+
+def test_each_ablation_differs_from_its_baseline_by_one_declared_knob():
+    """An ablation arm and its baseline must differ ONLY by the lines its registry entry names.
+
+    This is the invariant the ablation suite rests on. Each arm exists to answer one question by
+    changing one thing, and any second difference — a stray export, a threshold left over from
+    copying the wrong file, a `SLM_VERIFY_SYNTH` that drifted when the baseline was edited and the
+    arm was not — silently turns a controlled comparison into two unrelated runs. It would not
+    show up as a failure either: both jobs would complete, produce plausible numbers, and the
+    writeup would attribute the difference to the wrong cause.
+
+    It also catches the reverse drift, which is the likelier one over time: a fix applied to
+    `run_ner_bc5cdr_l40s.slurm` and not to the three arms copied from it. That already happened
+    once between the `_l40s` and `_cse` families and is what
+    `test_a_task_is_configured_identically_on_all_accounts` exists for; this is the same guarantee
+    for the ablation family.
+    """
+    for filename, entry in sorted(ABLATION_SCRIPTS.items()):
+        baseline = _effective_lines(
+            (PIPELINE_DIR / entry["baseline"]).read_text(encoding="utf-8")
+        )
+        arm = _effective_lines((PIPELINE_DIR / filename).read_text(encoding="utf-8"))
+        added = [line for line in arm if line not in baseline]
+        removed = [line for line in baseline if line not in arm]
+        assert added == list(entry["added"]), (
+            f"{filename} adds {added!r} but its registry entry declares "
+            f"{list(entry['added'])!r}. Either the script changed a second variable or the "
+            f"registry is out of date; both make the comparison against {entry['baseline']} "
+            f"meaningless."
+        )
+        assert removed == list(entry["removed"]), (
+            f"{filename} drops {removed!r} from {entry['baseline']} but declares "
+            f"{list(entry['removed'])!r}. A setting silently missing from an arm is the same "
+            f"problem as an extra one."
+        )
+
+
+def test_every_ablation_names_a_real_task_and_an_existing_baseline():
+    """A typo'd baseline or task key must fail here, not hours into an allocated job."""
+    import tasks
+
+    for filename, entry in sorted(ABLATION_SCRIPTS.items()):
+        assert (PIPELINE_DIR / entry["baseline"]).exists(), filename
+        assert entry["baseline"] in L40S_BENCHMARK_SCRIPTS, (
+            f"{filename} must be compared against a curated weeklong launcher, not "
+            f"{entry['baseline']}"
+        )
+        source = (PIPELINE_DIR / filename).read_text(encoding="utf-8")
+        match = re.search(r"export SLM_BENCHMARK_TASK=(\S+)", source)
+        assert match is not None, f"{filename} must pin its loader with SLM_BENCHMARK_TASK"
+        assert match.group(1) in tasks.TASKS, f"{filename}: unknown task {match.group(1)}"
+        # The arm and its baseline must be measuring the same thing.
+        assert match.group(1) == L40S_BENCHMARK_SCRIPTS[entry["baseline"]], filename
+
+
+def test_every_ablation_switch_is_read_by_the_code():
+    """A flag no code reads is a run that quietly reproduces its baseline.
+
+    The two ablation env vars are declared in `agent/ablations.py` and nowhere else. If a script
+    is copied and its flag misspelled, nothing raises — the run just carries the dataset forward
+    or generates rows as usual, and eight hours of L40S time produce a duplicate of the control.
+    """
+    ablations = (REPO_ROOT / "agent" / "ablations.py").read_text(encoding="utf-8")
+    checkpoint = (REPO_ROOT / "agent" / "checkpoint.py").read_text(encoding="utf-8")
+    switches = {"SLM_ABLATION_RESET_DATA_ON_ESCALATION", "SLM_SYNTH_DISALLOW"}
+    for filename in sorted(ABLATION_SCRIPTS):
+        source = (PIPELINE_DIR / filename).read_text(encoding="utf-8")
+        for switch in switches:
+            if f"export {switch}=" in source:
+                assert f'"{switch}"' in ablations, (
+                    f"{filename} exports {switch} but agent/ablations.py does not read it"
+                )
+                # In the resume fingerprint, so a requeue cannot continue the run without it.
+                assert f'"{switch}": "0"' in checkpoint, (
+                    f"{switch} must be in agent/checkpoint.py's env_defaults, or a requeued "
+                    f"ablation silently finishes as its own baseline"
+                )
 
 
 def test_l40s_benchmark_scripts_use_2xl40s_on_int_sys_with_requeue_contract():
@@ -302,14 +664,16 @@ def test_a_task_is_configured_identically_on_all_accounts():
 def test_cse_scripts_match_the_registry_and_use_the_24h_requeue_contract():
     import tasks
 
-    # Verification launchers and probes are excluded by name, not by pattern: this invariant is
-    # about the per-task CSE launchers being one-to-one with their registry key, and neither a
-    # bounded verification run nor a measurement probe that happens to sit on the CSE account is
-    # one of those.
+    # Verification launchers, probes and ablation arms are excluded by name, not by pattern: this
+    # invariant is about the per-task CSE launchers being one-to-one with their registry key, and
+    # none of those three is one of those. An ablation arm is deliberately a SECOND launcher for a
+    # task that already has one — `ner_bc5cdr` has three of them here — and its own allocation
+    # rules are checked in `test_every_slurm_script_runs_on_a_sanctioned_l40s_allocation`.
     on_disk = (
         {p.name for p in PIPELINE_DIR.glob("run_*_cse.slurm")}
         - VERIFICATION_SCRIPTS
         - PROBE_SCRIPTS
+        - set(ABLATION_SCRIPTS)
     )
     assert on_disk == set(CSE_BENCHMARK_SCRIPTS)
 
@@ -362,6 +726,33 @@ def test_shared_l40s_body_exercises_agent_discovery_before_local_fallback():
     assert "SLM_AGENT_FIRST_DATASET_DISCOVERY=1" in source
     assert "cost-observability" in source
     assert "local fallback" in source
+
+
+def test_the_shared_body_locates_the_report_metric_venvs_so_no_launcher_holds_a_path():
+    """`gec_bea19` scores through the real ERRANT CLI and `dialogsum`'s report metric adds
+    BERTScore. Neither can live in `.venv_gpu` — errant requires spacy<4 and bert-score predates
+    transformers 5.x — so both run behind a process boundary, located by an env var.
+
+    Defaulted in the SHARED body rather than exported per launcher, for the reason the whole
+    both-accounts invariant exists: a path set in one launcher and not its twin is a task that
+    scores differently depending on which account had a free GPU. Defaulted with `:-` so an
+    operator override still wins.
+    """
+    source = (PIPELINE_DIR / "_l40s_task_body.sh").read_text(encoding="utf-8")
+
+    assert 'export ERRANT_VENV="${ERRANT_VENV:-$PROJ/.venv_errant}"' in source
+    assert 'export METRICS_VENV="${METRICS_VENV:-$PROJ/.venv_metrics}"' in source
+    # Set before the pipeline runs, or the scorer reads an unset variable and falls back to a
+    # relative path that only resolves because the body happened to `cd` first.
+    assert source.index("export ERRANT_VENV=") < source.index("python tests/pipeline/run.py")
+
+
+def test_the_metric_scorers_hold_no_absolute_cluster_path():
+    """The other half of the indirection. A literal `/mmfs1/...` in a scorer would work on this
+    cluster and nowhere else, and would silently ignore the env var the body sets."""
+    for module in ("eval/scorers/gec.py", "eval/scorers/summarization.py"):
+        source = (REPO_ROOT / module).read_text(encoding="utf-8")
+        assert "/mmfs1/" not in source, f"{module} hardcodes a cluster path"
 
 
 def test_shared_l40s_body_sets_a_context_ceiling_and_leaves_the_reserve_to_the_task():
@@ -665,7 +1056,8 @@ def test_every_slurm_script_runs_on_a_sanctioned_l40s_allocation():
         for path in (REPO_ROOT / directory).glob("**/*.slurm")
     )
     accounted = (set(L40S_TASK_SCRIPTS) | set(CSE_BENCHMARK_SCRIPTS)
-                 | set(CKPT_BENCHMARK_SCRIPTS) | PROBE_SCRIPTS | VERIFICATION_SCRIPTS)
+                 | set(CKPT_BENCHMARK_SCRIPTS) | set(ABLATION_SCRIPTS)
+                 | PROBE_SCRIPTS | VERIFICATION_SCRIPTS)
     assert {p.name for p in scripts} == accounted
     for path in scripts:
         source = path.read_text(encoding="utf-8")
@@ -711,6 +1103,41 @@ def test_every_slurm_script_runs_on_a_sanctioned_l40s_allocation():
             assert directives["time"] < "24:00:00", (
                 f"{path.name} is a probe and must request less than a full pipeline day"
             )
+            continue
+        if path.name in ABLATION_SCRIPTS:
+            # A weeklong results run, so it keeps the requeue contract and the seven-day wall that
+            # the baseline it is compared against has. What it does NOT inherit is the two-GPU
+            # requirement: the second card exists solely to hold the vLLM teacher, and the
+            # DeepSeek-teacher arm launches no server, so pinning it to two would reserve an idle
+            # L40S for hours on a shared queue. One GPU is allowed here and ONLY here among
+            # full-length runs, and only because the api-teacher profile in _l40s_task_body.sh
+            # hands the whole allocation to training.
+            assert directives["gres"] in {"gpu:l40s:1", "gpu:l40s:2"}, path.name
+            if directives["gres"] == "gpu:l40s:1":
+                assert "export SLM_SYNTH_API_MODE=1" in source, (
+                    f"{path.name}: one GPU is only sound with an API teacher; a local vLLM teacher "
+                    "needs a card of its own and the run would contend with training for it"
+                )
+            # Wall follows the ACCOUNT, as it does for every other family: CSE rejects a weeklong
+            # request at submit time, and a 24h request on the dedicated account throws away six
+            # days for nothing. An arm on CSE therefore has to cross the 24h boundary on the USR1
+            # checkpoint-and-requeue contract, which is why --requeue is asserted for both.
+            assert directives["time"] == (
+                "24:00:00" if directives["account"].endswith("-cse") else "7-00:00:00"
+            ), path.name
+            assert "--requeue" in source, path.name
+            assert "#SBATCH --signal=B:USR1@7200" in source, (
+                f"{path.name}: without the USR1 notice a requeue is an uncheckpointed kill, and on "
+                f"CSE the 24h wall makes that a certainty rather than a risk"
+            )
+            # The same labelling rule the ckpt family lives under, for the same reason: these land
+            # in logs/slurm/ beside their baselines, and an arm mistaken for a control is a wrong
+            # number in the writeup rather than a crash.
+            assert "ablation" in directives["job-name"], (
+                f"{path.name}: the job name must carry 'ablation' so an arm is never mistaken for "
+                "the baseline it is being compared against"
+            )
+            assert "/logs/slurm/" in directives["output"], path.name
             continue
         assert directives["gres"] == "gpu:l40s:2", path.name
         if path.name in VERIFICATION_SCRIPTS:

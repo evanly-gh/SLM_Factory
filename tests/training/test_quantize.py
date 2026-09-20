@@ -1,5 +1,6 @@
 # tests/training/test_quantize.py
 import json
+import subprocess
 import sys
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
@@ -125,3 +126,83 @@ def test_validated_cache_hit_requires_matching_size_and_hash(tmp_path):
 
     gguf_path.write_bytes(b"tampered-gguf")
     assert quantize_module.validated_gguf_cache_hit(str(gguf_path)) is False
+
+
+# ── GGUF conversion timeouts: clinc150 run 40105479 ──────────────────────────────────────────
+#
+# That run died at 1d13h, on tier-5 iteration 17, because convert_hf_to_gguf.py exceeded a flat
+# 600s ceiling on a merged 4B checkpoint. The same conversion had succeeded sixteen times earlier
+# in the same run; what changed was that two other runs were converting their own checkpoints on
+# the same Lustre scratch. Three separate defects turned that into a lost run, and each is pinned
+# below: the ceiling did not scale with the bytes being read, a transient timeout was fatal, and
+# the error text blamed missing tooling for what was a wall-clock problem.
+
+
+def test_timeout_scales_with_source_size(monkeypatch):
+    monkeypatch.delenv("SLM_QUANT_TIMEOUT_S", raising=False)
+    monkeypatch.setattr(quantize_module, "_QUANT_TIMEOUT_OVERRIDE_S", None)
+    monkeypatch.setattr(quantize_module, "_QUANT_TIMEOUT_S_PER_GB", 240)
+
+    # A 360M merge stays on the floor; a merged 4B (~15GB of bf16) gets room to finish.
+    assert quantize_module._subprocess_timeout_s(700.0) == 600
+    assert quantize_module._subprocess_timeout_s(15_000.0) > 600
+    assert quantize_module._subprocess_timeout_s(15_000.0) == int((15_000 / 1024) * 240)
+
+
+def test_explicit_timeout_override_is_used_verbatim(monkeypatch):
+    """SLM_QUANT_TIMEOUT_S is an operator's ceiling, so scaling must not silently override it."""
+    monkeypatch.setattr(quantize_module, "_QUANT_TIMEOUT_OVERRIDE_S", "900")
+    assert quantize_module._subprocess_timeout_s(15_000.0) == 900
+    assert quantize_module._subprocess_timeout_s(1.0) == 900
+
+
+def test_timeout_is_retried_once_at_double_the_ceiling(tmp_path):
+    partial = tmp_path / "model-f16.gguf"
+    partial.write_bytes(b"truncated")
+    calls = []
+
+    def fake_run(cmd, **kw):
+        calls.append(kw["timeout"])
+        if len(calls) == 1:
+            raise subprocess.TimeoutExpired(cmd, kw["timeout"])
+        return SimpleNamespace(returncode=0)
+
+    with patch("training.quantize.subprocess.run", side_effect=fake_run):
+        err = quantize_module._run_quant_tool(
+            ["/bin/convert_hf_to_gguf.py", "src"], 600, partial_output=str(partial)
+        )
+
+    assert err is None
+    assert calls == [600, 1200]
+    # The killed attempt left a truncated GGUF; retrying over it would quantize rubble.
+    assert not partial.exists()
+
+
+def test_two_timeouts_report_wall_clock_not_missing_tools():
+    def always_timeout(cmd, **kw):
+        raise subprocess.TimeoutExpired(cmd, kw["timeout"])
+
+    with patch("training.quantize.subprocess.run", side_effect=always_timeout):
+        err = quantize_module._run_quant_tool(["/bin/convert_hf_to_gguf.py", "src"], 600)
+
+    assert "timed out twice" in err
+    assert "600s then 1200s" in err
+    assert "SLM_QUANT_TIMEOUT_S" in err
+    # The original message said "Install llama.cpp tools." on a timeout, which is what made this
+    # failure look like a broken environment instead of a busy filesystem.
+    assert "Install llama.cpp tools" not in err
+
+
+def test_tool_rejecting_the_input_is_not_retried():
+    """A CalledProcessError means the tool ran and said no. Retrying just burns the ceiling again."""
+    calls = []
+
+    def fake_run(cmd, **kw):
+        calls.append(kw["timeout"])
+        raise subprocess.CalledProcessError(1, cmd, stderr="unsupported architecture")
+
+    with patch("training.quantize.subprocess.run", side_effect=fake_run):
+        err = quantize_module._run_quant_tool(["/bin/convert_hf_to_gguf.py", "src"], 600)
+
+    assert len(calls) == 1
+    assert "unsupported architecture" in err

@@ -11,7 +11,7 @@ def test_interpolation_probe_uses_isolation_aware_train_wrapper():
     source = inspect.getsource(interpolation._probe_model)
     assert "run_lora_training" not in source
     assert "slm_train" in source
-    assert "_build_gguf_for_eval" in source
+    assert "_build_quant_artifact_for_eval" in source
 
 
 def test_downward_probe_uses_isolation_aware_gpu_wrappers():
@@ -21,7 +21,7 @@ def test_downward_probe_uses_isolation_aware_gpu_wrappers():
     assert "run_lora_training" not in source
     assert "merge_for_quantization" not in source
     assert "slm_train" in source
-    assert "_build_gguf_for_eval" in source
+    assert "_build_quant_artifact_for_eval" in source
 
 
 def test_pipeline_final_verification_uses_isolated_merge_quantize():

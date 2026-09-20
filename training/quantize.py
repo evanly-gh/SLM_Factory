@@ -28,11 +28,30 @@ from config.android_pool import (
 # measurement is only ever valid for the silicon it was taken on.
 DEFAULT_PROFILE_CHIP = os.environ.get("SLM_PROFILE_CHIP", "host_cpu")
 
-# convert_hf_to_gguf / llama-quantize wall-clock ceiling. 600s is fine for a merged
-# checkpoint on local scratch, but converting a large BASE snapshot straight out of the
-# shared HF cache on Lustre reads ~9GB over the network filesystem and blows past it
-# (observed on Qwen3.5-4B). Override with SLM_QUANT_TIMEOUT_S for big/remote sources.
-_QUANT_SUBPROCESS_TIMEOUT_S = int(os.environ.get("SLM_QUANT_TIMEOUT_S", "600"))
+# convert_hf_to_gguf / llama-quantize wall-clock ceiling. A FLAT 600s ceiling is what killed
+# clinc150 run 40105479 at 1d13h: the same merged-4B → Q8_0 conversion had already succeeded 16
+# times in that run and timed out on the 17th, while two more jobs were converting their own
+# checkpoints on the same Lustre scratch. 600s is right for a 360M merge and marginal for a 4B
+# one, which writes ~8GB of f16, so the ceiling now scales with the size of what is being read.
+#
+# SLM_QUANT_TIMEOUT_S still means what it always meant — an explicit ceiling, used verbatim and
+# unscaled — so an operator who sets it keeps full control.
+_QUANT_TIMEOUT_FLOOR_S = 600
+_QUANT_TIMEOUT_S_PER_GB = int(os.environ.get("SLM_QUANT_TIMEOUT_S_PER_GB", "240"))
+_QUANT_TIMEOUT_OVERRIDE_S = os.environ.get("SLM_QUANT_TIMEOUT_S")
+
+
+def _subprocess_timeout_s(source_size_mb: float) -> int:
+    """Wall-clock ceiling for one llama.cpp subprocess over a source of ``source_size_mb``.
+
+    Scaling on size rather than on the model name keeps this honest for the cases that actually
+    differ: a 16-bit merge of a 4B model and a Q4 base snapshot of a 360M one are two orders of
+    magnitude apart in bytes read, and the wall clock follows the bytes, not the parameter count.
+    """
+    if _QUANT_TIMEOUT_OVERRIDE_S:
+        return int(_QUANT_TIMEOUT_OVERRIDE_S)
+    scaled = (source_size_mb / 1024.0) * _QUANT_TIMEOUT_S_PER_GB
+    return max(_QUANT_TIMEOUT_FLOOR_S, int(scaled))
 
 
 class QuantizationInfrastructureError(RuntimeError):
@@ -311,6 +330,66 @@ def _file_size_mb(path: str) -> float:
     return os.path.getsize(path) / (1024 * 1024)
 
 
+def _run_quant_tool(
+    cmd: list[str],
+    timeout_s: int,
+    *,
+    partial_output: str | None = None,
+    cwd: str | None = None,
+):
+    """Run one quantization-toolchain subprocess, retrying ONCE at double the ceiling on timeout.
+
+    A timeout here is a statement about the filesystem, not about the model: the conversion that
+    ended run 40105479 had succeeded sixteen times already that run and failed the seventeenth
+    under contention from two concurrent runs. A `CalledProcessError` is the opposite — the tool
+    ran and rejected the input — so it is NOT retried, because a second attempt would fail the
+    same way ten minutes later.
+
+    Returns ``None`` on success or an error string to put in `QuantizationResult.error`. A timed-out
+    attempt is killed mid-write, so ``partial_output`` is deleted before retrying and after giving
+    up: leaving a truncated GGUF behind is how a later run mistakes rubble for a warm cache hit.
+    ``partial_output`` may name a directory (MNN writes a model folder rather than one file), which
+    is removed whole for the same reason.
+
+    ``cwd`` is for a tool that can only run from its own source tree — MNN's `llmexport.py` imports
+    its `utils.*` package relatively, so it must be launched from the directory it lives in.
+    """
+    def _discard_partial():
+        if not partial_output or not os.path.exists(partial_output):
+            return
+        try:
+            if os.path.isdir(partial_output):
+                shutil.rmtree(partial_output, ignore_errors=True)
+            else:
+                os.remove(partial_output)
+        except OSError:
+            pass
+
+    for attempt, ceiling in enumerate((timeout_s, timeout_s * 2), start=1):
+        try:
+            subprocess.run(
+                cmd, shell=False, check=True, capture_output=True, text=True, timeout=ceiling,
+                cwd=cwd,
+            )
+            return None
+        except subprocess.TimeoutExpired:
+            _discard_partial()
+            if attempt == 1:
+                print(f"      [quantize] {os.path.basename(cmd[0])} exceeded {ceiling}s; "
+                      f"retrying once at {ceiling * 2}s (filesystem contention, not a bad model)")
+                continue
+            return (
+                f"{os.path.basename(cmd[0])} timed out twice ({timeout_s}s then {ceiling}s). "
+                f"The tool is installed and ran — this is wall clock, so raise it with "
+                f"SLM_QUANT_TIMEOUT_S or reduce concurrent runs on the same filesystem."
+            )
+        except (subprocess.CalledProcessError, FileNotFoundError) as e:
+            _discard_partial()
+            stderr = getattr(e, "stderr", "") or ""
+            return f"{os.path.basename(cmd[0])} failed: {e}. {stderr.strip()[-400:]}"
+    return None  # unreachable; the loop either returns or raises
+
+
 def quantize_checkpoint(
     checkpoint_path: str,
     output_dir: str,
@@ -344,17 +423,17 @@ def quantize_checkpoint(
             error="convert_hf_to_gguf not found. Clone llama.cpp and add it to PATH.",
         )
 
-    try:
-        subprocess.run(
-            [convert_script, checkpoint_path, "--outfile", f16_gguf, "--outtype", "f16"],
-            shell=False, check=True, capture_output=True, text=True,
-            timeout=_QUANT_SUBPROCESS_TIMEOUT_S,
-        )
-    except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as e:
+    timeout_s = _subprocess_timeout_s(original_size)
+    convert_error = _run_quant_tool(
+        [convert_script, checkpoint_path, "--outfile", f16_gguf, "--outtype", "f16"],
+        timeout_s,
+        partial_output=f16_gguf,
+    )
+    if convert_error:
         return QuantizationResult(
             gguf_path=None, original_size_mb=original_size, quantized_size_mb=0,
             compression_ratio=0, method=method, success=False,
-            error=f"GGUF conversion failed: {e}. Install llama.cpp tools.",
+            error=f"GGUF conversion failed: {convert_error}",
         )
 
     # Step 2: Quantize f16 → Q4_K_M
@@ -370,19 +449,20 @@ def quantize_checkpoint(
             error="llama-quantize not found; produced f16 GGUF only",
         )
 
-    try:
-        subprocess.run(
-            [quantize_bin, f16_gguf, q4_gguf, method.upper()],
-            check=True, capture_output=True, text=True,
-            timeout=_QUANT_SUBPROCESS_TIMEOUT_S,
-        )
-    except (subprocess.CalledProcessError, FileNotFoundError, subprocess.TimeoutExpired) as e:
+    # The f16 intermediate is what is read now, so the ceiling is sized on IT rather than on the
+    # source checkpoint — for a 4B model the f16 file is roughly half the bf16 directory.
+    quantize_error = _run_quant_tool(
+        [quantize_bin, f16_gguf, q4_gguf, method.upper()],
+        _subprocess_timeout_s(_file_size_mb(f16_gguf)),
+        partial_output=q4_gguf,
+    )
+    if quantize_error:
         return QuantizationResult(
             gguf_path=f16_gguf, original_size_mb=original_size,
             quantized_size_mb=_file_size_mb(f16_gguf),
             compression_ratio=original_size / max(_file_size_mb(f16_gguf), 0.1),
             method="f16", success=True,
-            error=f"Quantization to {method} failed ({e}); produced f16 GGUF only",
+            error=f"Quantization to {method} failed ({quantize_error}); produced f16 GGUF only",
         )
 
     q4_size = _file_size_mb(q4_gguf)

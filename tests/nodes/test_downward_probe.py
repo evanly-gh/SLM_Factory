@@ -87,7 +87,7 @@ def test_quantized_downward_probe_scores_exact_deployment_artifact():
             return_value=MagicMock(weights_ref="/probe/weights"),
         ),
         patch(
-            "agent.nodes.evaluate._build_gguf_for_eval",
+            "agent.nodes.evaluate._build_quant_artifact_for_eval",
             return_value="/probe/model-q4_k_m.gguf",
         ) as build,
         patch("agent.nodes.downward_probe.run_eval", return_value=result) as run_eval,
@@ -103,7 +103,7 @@ def test_quantized_downward_probe_scores_exact_deployment_artifact():
         "test/Candidate [Q4_K_M]",
     )
     assert run_eval.call_args.kwargs["quant"] == "Q4_K_M"
-    assert run_eval.call_args.kwargs["gguf_path"] == "/probe/model-q4_k_m.gguf"
+    assert run_eval.call_args.kwargs["quant_artifact"] == "/probe/model-q4_k_m.gguf"
 
 
 def test_downward_training_uses_stable_atomic_run_artifact(tmp_path, monkeypatch):

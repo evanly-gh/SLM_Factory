@@ -92,8 +92,14 @@ TASKS="${SLM_PROBE_TASKS:-ner_bc5cdr}"
 for TASK in $TASKS; do
     echo ""
     echo "############ probing $TASK ############"
-    .venv/bin/python scripts/probe_teacher_fewshot.py \
-        --task "$TASK" --shots 0 1 3 5 --corrupt-shots 5 --n "${SLM_PROBE_N:-200}"
+    # `.venv_gpu`, NOT `.venv`. The pipeline scores every run in `.venv_gpu`; the bare `.venv`
+    # is used nowhere else and is missing scorer dependencies, so this probe silently measured a
+    # different library set than the runs it is meant to be compared against — and on 2026-09-13 it
+    # crashed outright on dialogsum with `ModuleNotFoundError: rouge_score`.
+    .venv_gpu/bin/python scripts/probe_teacher_fewshot.py \
+        --task "$TASK" --shots ${SLM_PROBE_SHOTS:-0 1 3 5} \
+        ${SLM_PROBE_CORRUPT:+--corrupt-shots $SLM_PROBE_CORRUPT} --n "${SLM_PROBE_N:-200}" \
+        ${SLM_PROBE_SEED:+--seed $SLM_PROBE_SEED}
 done
 
 echo "=== probe complete ==="

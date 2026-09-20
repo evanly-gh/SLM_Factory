@@ -18,8 +18,10 @@ import random
 from collections import Counter
 from collections.abc import Callable
 
+from copy import deepcopy
+
 from agent.checkpoint import atomic_write_jsonl
-from agent.state import AgentState
+from agent.state import SKIPPED_NO_ROWS, AgentState
 from data.curriculum import (
     annotate_cot,
     apply_quality_controls,
@@ -683,15 +685,16 @@ def _annotate_generation_cot(
     if os.environ.get("SLM_CHEAP") == "1":
         _log(model_id, "  CHEAP MODE: skipping CoT annotation")
         return rows
-    from config.config import SYNTH_MODEL
+    from config.config import SYNTH_API_MODE, SYNTH_MODEL
     from data.synth_client import get_generate_fn, is_available
 
     logger = lambda message: _log(model_id, message)
     generate = get_generate_fn(log=logger) if is_available(log=logger) else None
     _log(
         model_id,
-        f"  CoT annotation: teacher=LOCAL {SYNTH_MODEL} "
-        f"({'available' if generate is not None else 'unavailable — skipping CoT'})",
+        f"  CoT annotation: teacher={'API' if SYNTH_API_MODE else 'LOCAL'} {SYNTH_MODEL} "
+        f"({'available' if generate is not None else 'unavailable — skipping CoT'})"
+        + ("  — one PAID call per row" if SYNTH_API_MODE else ""),
     )
     return annotate_cot(
         rows,
@@ -1261,6 +1264,17 @@ def curate_node(state: AgentState) -> AgentState:
         "strategy": (plan or {}).get("strategy", "initial_gold"),
         "sources": source_usage,
     }]
+
+    # SEED SNAPSHOT for the reset ablation. A no-op unless
+    # SLM_ABLATION_RESET_DATA_ON_ESCALATION=1, and only ever taken on the FIRST build. It sits
+    # here, after `last_curation`, rather than beside the artifact write above, because the
+    # snapshot keeps the seed's composition record too — and that is the thing a later reset
+    # restores so the curriculum it republishes is described honestly instead of as zero rows.
+    if initial:
+        from agent.ablations import capture_seed_snapshot
+
+        capture_seed_snapshot(state, path, log=lambda m: _log(model_id, m))
+
     _log_dataset_report(model_id, dataset, task=task, provenance=dict(provenance))
     _log(
         model_id,
@@ -1302,4 +1316,59 @@ def curate_node(state: AgentState) -> AgentState:
         ),
         log=lambda message: _log(model_id, message),
     )
+
+    # A REBUILD THAT ADDED NOTHING SKIPS TRAIN AND EVALUATE.
+    #
+    # Reached only after `observe_iteration` above, so every health counter has already been
+    # incremented and any fatal pattern has already raised: mining still retires after 2 empty
+    # rounds, synthesis still stops the run after 3, and the generic empty-rebuild budget of 4 is
+    # untouched. The skip changes what happens on a SURVIVING empty rebuild, not whether one counts.
+    #
+    # `initial` is excluded because the first curriculum load adds every row it has and there is
+    # nothing yet to train on twice. A plan that could not run at all (`plan is None`) is included:
+    # it is the same wasted cycle by a different route.
+    if not initial and n_added <= 0:
+        state["iteration"] = int(state.get("iteration", 0) or 0) + 1
+        _record_skipped_iteration(state, model_id=model_id, plan=plan, curriculum=len(dataset))
+        _log(
+            model_id,
+            f"  ⏭  SKIPPING train+eval for iteration {state['iteration']}: the rebuild added 0 "
+            f"rows, so the curriculum is byte-identical to the last one that was trained. "
+            f"Returning to iterate for a different intervention.",
+        )
+        state["next_action"] = "iterate"
     return state
+
+
+def _record_skipped_iteration(state: AgentState, *, model_id: str, plan, curriculum: int) -> None:
+    """Put the skipped attempt in the DAG, marked, with NO score.
+
+    It has to be visible: the orchestrator is shown the DAG as its own history, and an attempt that
+    left no trace would be proposed again verbatim. But it must not carry a score, because there was
+    no evaluation — inventing one (carrying the previous iteration's forward, say) would put a
+    fabricated measurement into the trajectory the rollback and stagnation logic read.
+
+    `status` is what every score-based consumer keys on to leave it alone. `_dag_rows` skips it in
+    the attribution table, and `agent.nodes.iterate` skips it when measuring stagnation: a turn that
+    produced no measurement is not evidence that the model has stopped improving.
+    """
+    dag = list(state.get("dag") or [])
+    selected = state.get("selected_model")
+    dag.append({
+        "iteration": int(state.get("iteration", 0) or 0),
+        "status": SKIPPED_NO_ROWS,
+        "score": None,
+        "pruned": False,
+        "intervention": "data_rebuild",
+        "model": getattr(selected, "selector", None) or model_id,
+        "selector": getattr(selected, "selector", None),
+        "tier": getattr(selected, "tier", None),
+        "hypothesis": state.get("last_hypothesis", ""),
+        "pi": {"D": {
+            "version": state.get("dataset_version"),
+            "path": state.get("current_dataset_path"),
+            "plan": deepcopy(plan),
+            "composition": {"total_examples": curriculum},
+        }},
+    })
+    state["dag"] = dag

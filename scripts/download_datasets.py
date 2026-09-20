@@ -46,6 +46,8 @@ from data.loaders.dataset_integrity import (  # noqa: E402
 
 SCHEMA_VERSION = 2
 _BC5CDR_TAG_NAMES = ["O", "B-Chemical", "B-Disease", "I-Disease", "I-Chemical"]
+# The original DialogSum release. See the `dialogsum` catalog entry for why this is not a Hub id.
+DIALOGSUM_RAW_BASE = "https://raw.githubusercontent.com/cylnlp/dialogsum/main/DialogSum_Data"
 
 
 def _hf_source(
@@ -107,18 +109,32 @@ _DATASETS = [
         "sources": [_hf_source("openai/gsm8k", config="main")],
     },
     {
-        "name": "samsum",
-        # SAMSum is one of the two corpora behind the `dialogsum` task; its live loader
-        # concatenates DialogSum and SAMSum. This bundle is therefore a PARTIAL offline copy of
-        # that task's data — enough to run without network access, not a replacement for the
-        # loader's merged split.
+        "name": "dialogsum",
+        # REPLACED THE `samsum` BUNDLE ON 2026-09-06. SAMSum is no longer part of this task: it is
+        # single-reference, so rows from it cannot be scored under the multi-reference ROUGE the
+        # reworked task uses, and the old bundle was a partial offline copy of a merged split that
+        # no longer exists.
         "task": "dialogsum",
-        "converter": "samsum",
-        "row_schema": {"required": ["text", "answer", "label"], "optional": ["_instruction"]},
-        # The bare `samsum` alias was withdrawn from the Hub and now raises
-        # DatasetNotFoundError (B249); this mirror carries the same dialogue/summary columns
-        # and the same split sizes.
-        "sources": [_hf_source("knkarthick/samsum")],
+        "converter": "dialogsum",
+        "row_schema": {
+            "required": ["text", "answer", "references"],
+            "optional": ["topic", "_instruction"],
+        },
+        # NOT a Hub mirror. The three human test summaries are the whole premise of this task and
+        # no Hub copy carries them — `knkarthick/dialogsum`'s test.csv flattens them into 1,500
+        # single-summary rows. So this reads the original release's JSONL directly, through the
+        # catalog's `json` loader.
+        "sources": [{
+            "id": "cylnlp/dialogsum",
+            "config": None,
+            "loader": "json",
+            "splits": {"train": "train", "test": "test"},
+            "data_files": {
+                "train": f"{DIALOGSUM_RAW_BASE}/dialogsum.train.jsonl",
+                "test": f"{DIALOGSUM_RAW_BASE}/dialogsum.test.jsonl",
+            },
+            "url": "https://github.com/cylnlp/dialogsum",
+        }],
     },
 ]
 DATASETS_BY_NAME = {spec["name"]: spec for spec in _DATASETS}
@@ -205,12 +221,15 @@ def _convert_gsm8k(ds) -> tuple[list[dict], list[str]]:
     return rows, sorted({str(row["label"]) for row in rows})
 
 
-def _convert_samsum(ds) -> tuple[list[dict], list[str]]:
-    """Shape raw SAMSum through the live loader's own converter, for the same reason as GSM8K."""
-    from data.loaders.dialogsum_samsum import convert_samsum_rows
+def _convert_dialogsum(ds) -> tuple[list[dict], list[str]]:
+    """Shape the raw release through the live loader's own converter, for the same reason as GSM8K.
 
-    rows = convert_samsum_rows(ds)
-    return rows, sorted({str(row["label"]) for row in rows})
+    No label vocabulary: summarization has no classes, so the second element is empty rather than
+    a synthetic `"generation"` placeholder like the removed SAMSum bundle carried.
+    """
+    from data.loaders.dialogsum import convert_dialogsum_rows
+
+    return convert_dialogsum_rows(ds), []
 
 
 def _convert(ds, spec: dict, source: dict | None = None) -> tuple[list[dict], list[str]]:
@@ -220,8 +239,8 @@ def _convert(ds, spec: dict, source: dict | None = None) -> tuple[list[dict], li
         return _convert_bc5cdr(ds, source)
     if converter == "gsm8k":
         return _convert_gsm8k(ds)
-    if converter == "samsum":
-        return _convert_samsum(ds)
+    if converter == "dialogsum":
+        return _convert_dialogsum(ds)
     raise ValueError(f"unknown converter {converter!r}")
 
 

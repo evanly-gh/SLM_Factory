@@ -106,17 +106,117 @@ FIXTURES: dict[str, dict] = {
                        "No answer is possible here."],
         "wrong_but_readable": ["#### 999", "#### 999"],
     },
+    # THREE references per row, which is the whole premise of this task and the reason it was
+    # reworked off the LLM judge on 2026-09-06. `perfect` matches the SECOND reference of each
+    # row, not the first, so the fixture actually exercises max-over-references: against
+    # reference 1 alone these predictions would score poorly.
+    #
+    # `unreadable` is a transcript TURN LABEL (`#Person1#:`), not an empty string. That is the
+    # real format failure for this task — the B250 continuation — and note the reference summaries
+    # themselves mention `#Person1#` without a colon, which is legitimate output.
     "dialogsum": {
         "rows": [
             {"text": "#Person1#: Hi. #Person2#: Hello, are we still on for lunch?",
-             "answer": "Two people confirm a lunch plan."},
+             "answer": "Two people confirm a lunch plan.",
+             "references": ["Two people confirm a lunch plan.",
+                            "#Person1# and #Person2# agree to meet for lunch.",
+                            "A lunch arrangement is confirmed between two colleagues."]},
             {"text": "#Person1#: The report is late. #Person2#: I'll send it tonight.",
-             "answer": "One person promises to send a late report tonight."},
+             "answer": "One person promises to send a late report tonight.",
+             "references": ["One person promises to send a late report tonight.",
+                            "#Person2# will send the overdue report this evening.",
+                            "The late report is promised for tonight."]},
         ],
-        "perfect": ["Two people confirm a lunch plan.",
-                    "One person promises to send a late report tonight."],
-        "unreadable": ["", "   "],
+        "perfect": ["#Person1# and #Person2# agree to meet for lunch.",
+                    "#Person2# will send the overdue report this evening."],
+        "unreadable": ["#Person1#: How about you? #Person2#: Nah.",
+                       "#Person1#: Sure, tell me more."],
         "wrong_but_readable": ["A recipe for bread.", "An unrelated weather forecast."],
+    },
+    # The parse string is carried VERBATIM, so `perfect` is the gold. `unreadable` is prose with
+    # no bracketed tree; `wrong_but_readable` is a well-formed tree with the wrong intent, which
+    # must land in a different failure category from the unparseable one.
+    "topv2": {
+        "rows": [
+            {"text": "set alarm for 6 am",
+             "answer": "[IN:CREATE_ALARM set alarm [SL:DATE_TIME for 6 am ] ]",
+             "domain": "reminder"},
+            {"text": "will it rain tomorrow",
+             "answer": "[IN:GET_WEATHER will it rain [SL:DATE_TIME tomorrow ] ]",
+             "domain": "weather"},
+        ],
+        "perfect": ["[IN:CREATE_ALARM set alarm [SL:DATE_TIME for 6 am ] ]",
+                    "[IN:GET_WEATHER will it rain [SL:DATE_TIME tomorrow ] ]"],
+        "unreadable": ["I am not able to parse that command.",
+                       "That request cannot be represented."],
+        "wrong_but_readable": ["[IN:CREATE_REMINDER set alarm [SL:TODO for 6 am ] ]"] * 2,
+    },
+    # Fine-grained types from the 33-class taxonomy. `wrong_but_readable` names a type OUTSIDE the
+    # taxonomy on purpose — a label-space error is the dominant and most actionable failure here,
+    # and it has to be distinguishable from unparseable output.
+    "multiconer": {
+        "rows": [
+            {"text": "robert gottschalk founded panavision",
+             "entities": [{"text": "robert gottschalk", "type": "OtherPER"},
+                          {"text": "panavision", "type": "ORG"}]},
+            {"text": "aspirin treats gastritis",
+             "entities": [{"text": "aspirin", "type": "Medication/Vaccine"},
+                          {"text": "gastritis", "type": "Disease"}]},
+        ],
+        "perfect": [
+            json.dumps([{"text": "robert gottschalk", "type": "OtherPER"},
+                        {"text": "panavision", "type": "ORG"}]),
+            json.dumps([{"text": "aspirin", "type": "Medication/Vaccine"},
+                        {"text": "gastritis", "type": "Disease"}]),
+        ],
+        "unreadable": ["I could not find any named entities in the text.",
+                       "There are no entities."],
+        "wrong_but_readable": [json.dumps([{"text": "panavision", "type": "PERSON"}])] * 2,
+    },
+    # The `m2` blocks here are ERRANT-GENERATED, not hand-annotated, and that is deliberate:
+    # feeding the real corpus's gold correction back in as the hypothesis scores F0.5 0.8934
+    # rather than 1.0, because the reference edits are a human's segmentation while the hypothesis
+    # edits are derived by ERRANT's alignment rules. This fixture tests the plumbing, so its
+    # reference is machine-generated and the oracle really does reach 1.0.
+    #
+    # `unreadable` is a genuinely multi-line reply: ERRANT aligns file lines positionally, so an
+    # extra line of prose shifts every subsequent sentence and is a FORMAT failure, not a wrong
+    # correction.
+    "gec_bea19": {
+        "rows": [
+            {"text": "I has went to the store yesterday .",
+             "answer": "I went to the store yesterday .",
+             "cefr": "A",
+             "m2": "S I has went to the store yesterday .\n"
+                   "A 1 2|||U:VERB:TENSE||||||REQUIRED|||-NONE-|||0"},
+            {"text": "She are very happy today .",
+             "answer": "She is very happy today .",
+             "cefr": "B",
+             "m2": "S She are very happy today .\n"
+                   "A 1 2|||R:VERB:SVA|||is|||REQUIRED|||-NONE-|||0"},
+        ],
+        "perfect": ["I went to the store yesterday .", "She is very happy today ."],
+        "unreadable": ["I went to the store yesterday .\nHope that helps!",
+                       "She is very happy today .\nLet me know if you need more."],
+        "wrong_but_readable": ["I has went to the store yesterday .",
+                               "She are very happy today ."],
+    },
+    # Multi-label, so `perfect` is the comma-joined gold. `unreadable` names nothing in the
+    # 28-label vocabulary, which for this task is unreadable rather than a considered prediction
+    # of "no emotion" — `neutral` is the explicit escape and every gold row has a label.
+    #
+    # Both rows are Ekman-`joy` and Ekman-`anger` respectively, so the SELECTION metric
+    # (Ekman-7 macro-F1) is well defined over them and a perfect answer reaches 1.0.
+    "goemotions": {
+        "rows": [
+            {"text": "thank you so much, this made my day",
+             "labels": ["gratitude", "joy"], "label": "gratitude, joy"},
+            {"text": "this is the worst decision anyone has ever made",
+             "labels": ["anger"], "label": "anger"},
+        ],
+        "perfect": ["gratitude, joy", "anger"],
+        "unreadable": [CHATTY, CHATTY],
+        "wrong_but_readable": ["anger", "gratitude, joy"],
     },
     "xlam_bfcl": {
         "rows": [

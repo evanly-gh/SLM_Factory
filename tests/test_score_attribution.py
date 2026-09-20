@@ -501,3 +501,85 @@ def test_a_dag_present_but_scoreless_still_attributes_nothing_rather_than_zero()
     final, start, gained = _floats(_final_line(format_health_summary(state)))
     assert final == pytest.approx(0.70)
     assert final == pytest.approx(start + gained)
+
+
+class TestEveryTierIsReported:
+    """Escalation CLEARS `state["dag"]`, so a report reading it described a three-tier run as
+    though the last tier were the whole run.
+
+    Measured on `slm-calendar-json-l40s-39294409`: nineteen tier-1 iterations and six tier-2
+    iterations were absent from the attribution table, which showed only tier 3. The per-tier
+    "DAG Traversal" section printed all three correctly the whole time, because it reads
+    `build_run_progression`; these tests pin the attribution table to the same source.
+    """
+
+    @staticmethod
+    def _multi_tier_state():
+        def node(iteration, score, selector, tier, strategy=None):
+            return {
+                "iteration": iteration, "score": score, "model": selector, "tier": tier,
+                "intervention": "data_rebuild" if strategy else "hyperparameter",
+                "pi": {"D": {"plan": {"strategy": strategy} if strategy else None}},
+            }
+
+        return {
+            "escalation_history": [
+                {"selector": "tierA", "tier": 1, "dag": [
+                    node(1, 0.10, "tierA", 1, "mine_new_real"),
+                    node(2, 0.20, "tierA", 1),
+                ]},
+                {"selector": "tierB", "tier": 2, "dag": [
+                    node(1, 0.50, "tierB", 2, "surgical_synthesis"),
+                ]},
+            ],
+            "selected_model": None,
+            "dag": [],
+            "run_health": {"history": [
+                {"iteration": 1, "selector": "tierA", "strategy": "mine_new_real",
+                 "rows_added": 900, "curriculum": [3000, 3900], "qc_removed": 0, "verify": [0, 0]},
+                {"iteration": 1, "selector": "tierB", "strategy": "surgical_synthesis",
+                 "rows_added": 173, "curriculum": [3900, 4073], "qc_removed": 2,
+                 "verify": [173, 180]},
+            ]},
+        }
+
+    def test_both_tiers_get_a_heading(self):
+        body = "\n".join(format_health_summary(self._multi_tier_state()))
+        assert "Tier 1: tierA" in body
+        assert "Tier 2: tierB" in body
+
+    def test_every_iteration_of_every_tier_appears(self):
+        rows = _dag_rows(self._multi_tier_state())
+        assert [(r["model"], r["iteration"]) for r in rows] == [
+            ("tierA", 1), ("tierA", 2), ("tierB", 1),
+        ]
+
+    def test_the_ledger_join_is_scoped_by_tier_not_iteration_alone(self):
+        """Both tiers have an iteration 1. Joining on iteration alone would give tier A the 173
+        synthetic rows that belong to tier B, or vice versa."""
+        rows = {(r["model"], r["iteration"]): r for r in _dag_rows(self._multi_tier_state())}
+        assert rows[("tierA", 1)]["rows_added"] == 900
+        assert rows[("tierA", 1)]["strategy"] == "mine_new_real"
+        assert rows[("tierB", 1)]["rows_added"] == 173
+        assert rows[("tierB", 1)]["strategy"] == "surgical_synthesis"
+
+    def test_an_untagged_ledger_entry_is_not_borrowed_across_tiers(self):
+        """Entries written before `selector` was recorded cannot be attributed to a tier. A blank
+        cell is honest; another tier's curriculum numbers are not."""
+        state = self._multi_tier_state()
+        for entry in state["run_health"]["history"]:
+            entry.pop("selector")
+        rows = {(r["model"], r["iteration"]): r for r in _dag_rows(state)}
+        assert rows[("tierA", 1)]["rows_added"] is None
+        assert rows[("tierB", 1)]["rows_added"] is None
+
+    def test_a_single_tier_run_still_uses_untagged_legacy_entries(self):
+        """The fallback must stay available where it cannot be ambiguous, so an in-flight resume
+        from an older checkpoint does not lose its curriculum columns."""
+        state = _state(
+            [_node(1, score=0.70, strategy="mine_new_real")],
+            [_ledger(1, "mine_new_real", rows_added=900, before=3000)],
+        )
+        for entry in state["run_health"]["history"]:
+            entry.pop("selector", None)
+        assert _dag_rows(state)[0]["rows_added"] == 900

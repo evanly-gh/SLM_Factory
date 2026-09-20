@@ -40,11 +40,15 @@ def build_prompts():
     scorer, and a hand-copied prefix is exactly what drifts (B250).
     """
     from data.eval_set import EvalSet
-    from data.loaders.dialogsum_samsum import SUMMARIZATION_INSTRUCTION
+    from data.loaders.dialogsum import SUMMARIZATION_INSTRUCTION
     from tasks import get_task
 
+    # `references` alongside `answer`: the reworked task grades against a reference LIST, and its
+    # `require_fields` step checks for it. Empty here because this diagnostic only asks whether
+    # the adapter changes the OUTPUT — nothing is scored.
     rows = [
-        {"text": dialogue, "answer": "", "_instruction": SUMMARIZATION_INSTRUCTION}
+        {"text": dialogue, "answer": "", "references": [],
+         "_instruction": SUMMARIZATION_INSTRUCTION}
         for dialogue in DIALOGUES
     ]
     return get_task(TASK).build_prompts(EvalSet(all=rows, task=TASK))

@@ -7,14 +7,15 @@ import re
 from collections import Counter
 
 from config.token_budget import output_budget, prompt_char_budget
+from data.synth_client import synth_source_label
 
 logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
 # CoT annotation (paper §2.3 quality control #5, §2.5)
-# The CoT teacher is the local Qwen3.6 synth model, supplied as ``generate_fn`` — and only
-# that model. There is no cloud CoT fallback.
+# The CoT teacher is the synth model, supplied as ``generate_fn`` — the local Qwen3.6, or
+# DeepSeek under SLM_SYNTH_API_MODE=1, and only that model. There is no Claude CoT fallback.
 # ---------------------------------------------------------------------------
 
 
@@ -397,7 +398,7 @@ def _demo_block(demos: list[dict], task_description: str) -> str:
 
 
 def _new_example_prompt(anchor: dict, task_description: str, demos: list[dict] | None = None,
-                        target_category: str = "") -> str:
+                        target_category: str = "", task_context: str = "") -> str:
     """Prompt to generate ONE new, correct example in the anchor's exact schema.
 
     Generation-family only, which is every task with `closed_label_space=False`: calendar_json,
@@ -411,6 +412,19 @@ def _new_example_prompt(anchor: dict, task_description: str, demos: list[dict] |
     the module by a comment.
 
     `demos` are SHOWN, not described. See SYNTH_SHOTS for why that matters (B276).
+
+    `task_context` is the SAME block the teacher gets when it verifies these rows, and it reached
+    the verifier long before it reached here. That asymmetry is what the 2026-09-09 topv2 audit
+    measured: the exact verifier rejected 62 of 98 generated rows, 33 of them for labels that do
+    not exist — `SL:TIME` 12 times where TOPv2 says `DATE_TIME`, `IN:SET_ALARM` 10 times where it
+    says `CREATE_ALARM`, `IN:SET_TIMER` 8 times where it says `CREATE_TIMER`. Every one is a
+    near-miss synonym of a real label, which is exactly what a generator produces when it has to
+    guess a closed vocabulary it was never shown. Holding a row to a convention while withholding
+    the convention is a yield cliff that reads like a model quality problem.
+
+    Five demonstrations cannot substitute. They exhibit at most a handful of the 166 names, and
+    `tools_rule` below is this same argument already accepted for xLAM's function names — the fix
+    there was to state the closed list rather than hope the schema implied it.
     """
     import json
 
@@ -426,12 +440,65 @@ def _new_example_prompt(anchor: dict, task_description: str, demos: list[dict] |
         f"that exercise exactly that difficulty.\n"
         if target_category else ""
     )
+    # THE TOOLS ARE FIXED. Stated explicitly because "EXACTLY this JSON schema (same keys, same
+    # value types)" below asks for the SHAPE, and a teacher reasonably reads that as licence to
+    # invent its own tool list — which is what it did on run 39361648, collapsing 3,230 generated
+    # calls onto 787 names with 45.8% of them in the top ten against gold's 6.1%.
+    #
+    # `_synthesize_new_correct` now overwrites `tools` with the anchor's after generation, so a call
+    # to anything else is rejected by the exact verifier. Saying so here is what turns that from a
+    # yield cliff into a constraint the teacher can actually satisfy.
+    tools_rule = ""
+    if anchor.get("tools"):
+        try:
+            names = [
+                (t.get("function") if isinstance(t.get("function"), dict) else t).get("name")
+                for t in anchor["tools"] if isinstance(t, dict)
+            ]
+            names = [n for n in names if n]
+        except Exception:  # noqa: BLE001 — a malformed tools list must not break generation
+            names = []
+        if names:
+            tools_rule = (
+                "\nThe `tools` list above is FIXED and will be restored verbatim after you answer. "
+                f"Your `answer` MUST call only these function(s): {', '.join(sorted(set(names)))}. "
+                "Do NOT invent a different function name, and do NOT change any tool's parameter "
+                "schema — a call to an undeclared function is rejected. Vary the REQUEST and the "
+                "ARGUMENT VALUES instead, which is where the useful diversity is.\n"
+            )
+    # ORDER IS LOAD-BEARING FOR PREFIX CACHING (2026-08-30).
+    #
+    # Both the local vLLM server and the DeepSeek API cache a request's PREFIX, and a cache entry is
+    # only usable by a later request that matches it from the very first token. So everything stable
+    # must come before anything that changes.
+    #
+    #   task_description  — authored once at cold start, identical for the whole run
+    #   shown (demos)     — `fit_demonstrations` is deterministic (shortest-first, no rng), so this
+    #                       is identical for every row drawn from the same anchor pool
+    #   rejection block   — the previous batch's verifier reasons, so it CHANGES between batches
+    #   anchor schema     — changes on every single row
+    #
+    # The rejection block used to sit second, ahead of the demonstrations. That put a per-batch
+    # string in front of ~1,800 tokens of stable demonstrations, so every new batch invalidated the
+    # demos too and the cacheable prefix collapsed to just the task description. Moving it after the
+    # demos lets the brief+demonstrations prefix survive across batches for the whole run.
+    #
+    # It also reads better where it now is: the rejections are instructions about the row being
+    # asked for, and they now sit immediately before the request rather than before the examples.
+    # Immediately after the brief and BEFORE the demos, which the ordering note above requires:
+    # `task_context` is built from the spec and the anchor pool, so it is identical for every row
+    # in the run and belongs in the cacheable prefix. Putting it after the demos would push a
+    # stable string behind them for no benefit; putting it after the rejection block would put it
+    # behind a per-batch one and invalidate the prefix on every batch.
+    context_block = f"{task_context.strip()}\n\n" if task_context.strip() else ""
     return (
         f"{task_description}\n\n"
-        f"{_rejection_feedback_block()}"
+        f"{context_block}"
         f"{shown}"
+        f"{_rejection_feedback_block()}"
         f"Generate ONE new, correct example in EXACTLY this JSON schema "
         f"(same keys, same value types): {json.dumps(schema, ensure_ascii=False)}."
+        f"{tools_rule}"
         f"{aimed}"
         "\nIt must be a genuinely new, diverse, and CORRECT instance — not a copy or a "
         "paraphrase of the reference, and never a wrong answer. Vary the SUBSTANCE, not just the "
@@ -552,12 +619,13 @@ def _task_context_block(spec, rows: list[dict] | None = None) -> str:
                     "against how the class is USED in the confirmed examples above, not against what "
                     "its name sounds like)"
                 )
-    entity_types = sorted({
-        str(entity.get("type"))
-        for row in (rows or []) if isinstance(row, dict)
-        for entity in (row.get("entities") or [])
-        if isinstance(entity, dict) and entity.get("type")
-    })
+    # The task's OWN taxonomy, never one inferred from the rows in front of the teacher. Sampling
+    # the shown rows is what this used to do, and it is only safe when every type is common enough
+    # to appear: BC5CDR has two and both always do, MultiCoNER has 33 and a 40-row sample holds 5.
+    # For MultiCoNER that made the sentence below a false statement about 28 real types, and on the
+    # 2026-09-09 audit the teacher acted on it, rejecting correctly-typed `OtherLOC` rows. A sample
+    # shows what a type space contains, never where it ends. See `TaskSpec.entity_type_vocabulary`.
+    entity_types = list(getattr(spec, "entity_type_vocabulary", ()) or ())
     if entity_types:
         parts.append(
             "Valid entity types for this task, and the only ones that may appear: "
@@ -708,19 +776,9 @@ def verify_generated_answers(
         _check, rows, label="answer verification", log=log,
         workers=_synth_concurrency(len(rows)),
     )
-    kept, rejected = [], []
-    for row, valid, reason in results:
-        (kept if valid else rejected).append((row, reason))
-    record_rejection_reasons([reason for _row, reason in rejected])
-    if log:
-        log(f"      [verify] teacher validated {len(kept)}/{len(rows)} generated answer(s); "
-            f"rejected {len(rejected)}")
-        for row, reason in rejected[:_VERIFY_LOG_LIMIT]:
-            text = " ".join(str(row.get("text") or "").split())[:70]
-            log(f"        REJECTED {text!r} — teacher: {reason}")
-        if len(rejected) > _VERIFY_LOG_LIMIT:
-            log(f"        ... and {len(rejected) - _VERIFY_LOG_LIMIT} more rejected")
-    return [row for row, _ in kept]
+    return _apply_verdicts(
+        rows, results, kind="answer", mode=_verify_synth_mode(), log=log,
+    )
 
 
 def _synthesize_new_correct(
@@ -732,6 +790,7 @@ def _synthesize_new_correct(
     verify_fn=None,
     log=None,
     target_category: str = "",
+    task_context: str = "",
 ) -> list[dict]:
     """Generate ``n`` new CORRECT in-distribution examples (never wrong-answer pairs).
 
@@ -768,7 +827,8 @@ def _synthesize_new_correct(
             _shot_warned["new_correct"] = True
             _warn_short_shots("new-correct generation", len(demos), log=log)
         prompt = _new_example_prompt(anchor, task_description, demos=demos,
-                                     target_category=target_category)
+                                     target_category=target_category,
+                                     task_context=task_context)
         try:
             raw = generate_fn(prompt, temperature=0.7,
                               max_tokens=_row_output_budget(anchor, prompt))
@@ -791,8 +851,35 @@ def _synthesize_new_correct(
         # "supply what you can, generate only what you must" principle that makes the
         # classification path safe. It also makes the row VERIFIABLE: a generated row with no
         # `tools` cannot be schema-checked at all.
+        #
+        # AUTHORITATIVE, not a fallback. This was `and pinned not in row`, so the anchor's tools
+        # were used only when the teacher omitted them — and the teacher almost never omits them,
+        # because the prompt hands it the anchor's whole JSON schema and asks for "EXACTLY this
+        # JSON schema (same keys)". So the teacher invented its own `tools`, called a function from
+        # that invented list, and `verify_function_call_row` passed it: the call IS declared, by the
+        # row's own fabricated schema. Self-consistent and off-distribution.
+        #
+        # Measured on run 39361648, that produced a corpus collapse. Gold draws 1,158 distinct
+        # function names over 2,536 calls with the top ten accounting for 6.1% of them; the
+        # generated rows managed 787 names over 3,230 calls with the top ten at 45.8% — 356
+        # `convert_currency`, 347 `get_crypto_price`, 302 `get_weather`. xLAM/BFCL is a long-tail
+        # benchmark whose whole question is whether a model can call an UNFAMILIAR API from a
+        # declared schema, so training on a handful of invented generic ones teaches a distribution
+        # the eval does not measure.
+        #
+        # It also produced contradictions. Two kept rows carried the identical request "What are
+        # the current prices of Bitcoin and Ethereum?" against the same invented `get_crypto_price`
+        # with INCOMPATIBLE arguments — `{"coin_id": "bitcoin"}` in one and `{"symbol": "BTC"}` in
+        # the other. Nothing could catch that, because each row was internally consistent with the
+        # schema it had invented for itself.
+        #
+        # Overwriting means a generated row must satisfy the anchor's REAL tool signature or be
+        # rejected by the exact verifier, and anchors are drawn round-robin across the curriculum —
+        # so the synthetic distribution inherits gold's diversity instead of the teacher's priors.
+        # Expect a lower keep rate in exchange: rows that ignore the anchor's schema now fail, and
+        # their reasons feed back into the next batch's prompt via `_RECENT_REJECTIONS`.
         for pinned in ("tools", "_instruction"):
-            if pinned in anchor and pinned not in row:
+            if pinned in anchor:
                 row[pinned] = anchor[pinned]
         # STAGE 1 — exact, programmatic check. Runs BEFORE any model-based verification, because it
         # is free, cannot be fooled, and a row it rejects should never cost a teacher call.
@@ -803,6 +890,10 @@ def _synthesize_new_correct(
                 note_rejected_row(row, reason)
             return None
         row["_source"] = "synth:generated"
+        # WHICH teacher wrote it, kept separate from `_source` (which records the synthesis KIND).
+        # Under API mode this is the only place a row records that it came from a model we do not
+        # own, and the audit archive copies every field, so it survives into the evidence file.
+        row["_teacher"] = synth_source_label()
         row["_provenance"] = "synthetic_positive"
         return row
 
@@ -814,22 +905,49 @@ def _synthesize_new_correct(
     # slm-dialogsum-samsum-cse-38186914 vLLM sat at "Running: 1 reqs" and 21% GPU utilisation
     # for hours while filling 2,678 rows, with no progress line to show it was alive (B252).
     #
-    # Over-request by the same 4x the old attempt budget allowed, so rejects still leave enough
-    # accepted rows to reach n, then trim.
-    max_attempts = max(1, n) * 4
-    planned = [anchors[i % len(anchors)] for i in range(min(max_attempts, max(n * 2, n + 32)))]
-    produced = _progress_map(
-        _one,
-        planned,
-        label="new-correct synthesis",
-        log=log,
-        workers=_synth_concurrency(len(planned)),
-    )
-    out = [row for row in produced if row is not None][:n]
+    # ASK FOR WHAT WE NEED, THEN TOP UP ONCE. Two rounds, never more.
+    #
+    # This used to fire `max(n * 2, n + 32)` attempts unconditionally and trim to n, so a batch of
+    # 175 rows cost 350 generations: 19 failed and 156 perfectly good rows were thrown away because
+    # the quota was already met. On a paid endpoint that is double the bill to insure against a
+    # failure rate that measured 5%.
+    #
+    # Round 1 asks for exactly n. Round 2 asks for exactly the shortfall, which is the number of
+    # rows that actually failed rather than a guess at how many might. If round 2 also comes up
+    # short the batch is delivered short — deliberately. A third round would be paying repeatedly
+    # for whatever is systematically broken, and `run_health` already watches for that: a batch
+    # that returns nothing counts toward MAX_CONSECUTIVE_EMPTY_SYNTHESIS.
+    #
+    # Anchor rotation CONTINUES across the two rounds rather than restarting, so the retry draws
+    # different anchors than the attempt it is replacing. Retrying the same anchor with the same
+    # prompt is the one thing least likely to produce a different outcome.
+    def _round(count: int, offset: int) -> list[dict]:
+        if count <= 0:
+            return []
+        batch = [anchors[(offset + i) % len(anchors)] for i in range(count)]
+        produced = _progress_map(
+            _one,
+            batch,
+            label="new-correct synthesis",
+            log=log,
+            workers=_synth_concurrency(len(batch)),
+        )
+        return [row for row in produced if row is not None]
+
+    out = _round(n, 0)
+    attempts = n
+    shortfall = n - len(out)
+    if shortfall > 0:
+        if log:
+            log(f"      [synth] {shortfall} of {n} generation(s) produced no usable row; "
+                f"retrying exactly that many once")
+        out.extend(_round(shortfall, n))
+        attempts += shortfall
+        out = out[:n]
     if log:
         shots = f"{SYNTH_SHOTS}-shot" if SYNTH_SHOTS else "zero-shot"
         log(f"      [synth] new-correct ({shots}): {len(out)}/{n} kept "
-            f"({len(planned)} attempts)")
+            f"({attempts} attempts)")
         # Reported BEFORE the verifier breakdown and separately from it, because they answer a
         # different question. A row counted here never reached the verifier at all, so reading these
         # as rejections points the fix at the generator prompt when the cause may be the output
@@ -861,9 +979,127 @@ def _synthesize_new_correct(
 _VERIFY_LOG_LIMIT = int(os.environ.get("SLM_VERIFY_LOG_LIMIT", "10"))
 
 
-def _verify_synth_enabled() -> bool:
-    """Teacher label-verification of generated rows. On by default; set 0 to skip the pass."""
-    return os.environ.get("SLM_VERIFY_SYNTH", "1") == "1"
+# Announced once per process, not once per batch: `synthesize_examples` is called once per targeted
+# failure category and a rebuild targets up to five of them, so a per-call notice would repeat the
+# same paragraph five times per rebuild.
+_VERIFY_DISABLED_ANNOUNCED = [False]
+
+
+VERIFY_MODE_OFF = "off"
+VERIFY_MODE_ENFORCE = "enforce"
+VERIFY_MODE_SHADOW = "shadow"
+
+
+def _verify_synth_mode(log=None) -> str:
+    """Whether the teacher re-reads its own generated rows, and whether its vote BINDS.
+
+    Three modes, because there are three genuinely different things to want:
+
+      `enforce`  run the pass and drop what it rejects. The default on the local teacher.
+      `off`      do not run it. The default in API mode, where it costs one paid call per row —
+                 about a quarter of synthesis spend on the measured runs — to ask a model whether
+                 it agrees with itself, which is the weakest signal in the pipeline.
+      `shadow`   RUN IT AND KEEP EVERY ROW ANYWAY, recording what it would have rejected and why.
+
+    WHY SHADOW EXISTS
+        `enforce` has been measured doing net harm. On run 38832588 the teacher rejected 25 of 25
+        `ner_bc5cdr` rows that `verify_ner_row` had just accepted, twice running, and that stopped
+        the run; on `calendar_json` it rejected 1,965 of 8,704 (22.6%) including "7pm start plus 60
+        mins is 8pm, not 20:00" — 8pm IS 20:00. So both tasks ship with it off, and the note in
+        their launchers says the pass should be re-measured once `verifier_notes` exists to tell
+        the teacher the conventions it was missing.
+
+        Turning it back on to find out is the expensive way to ask: a false-rejection cascade does
+        not just discard good rows, it can end a multi-day run. Shadow mode is the cheap way. The
+        rejection rate and the reasons are exactly the measurement, and the trajectory is
+        unaffected because nothing is dropped.
+
+    SHADOW MUST NOT FEED ITS REASONS BACK, and that is the subtle part. `record_rejection_reasons`
+    injects the last round's rejections into the NEXT generation prompt as mistakes not to repeat.
+    In shadow mode that would change what the teacher generates, so the pass would be altering the
+    run it is supposed to be passively measuring — and the measured rejection rate would be of a
+    trajectory that only exists because we were measuring it. The callers therefore skip the
+    feedback recorder in shadow mode.
+
+    `SLM_VERIFY_SYNTH` selects explicitly and always wins over the mode default: `1`/`enforce`,
+    `0`/`off`, or `shadow`.
+    """
+    configured = (os.environ.get("SLM_VERIFY_SYNTH") or "").strip().lower()
+    if configured:
+        if configured in ("shadow", "dry-run", "dryrun"):
+            return VERIFY_MODE_SHADOW
+        return VERIFY_MODE_ENFORCE if configured == "1" else VERIFY_MODE_OFF
+    try:
+        from config.config import SYNTH_API_MODE
+    except Exception:  # noqa: BLE001 — config may be unimportable in a bare unit test
+        return VERIFY_MODE_ENFORCE
+    if not SYNTH_API_MODE:
+        return VERIFY_MODE_ENFORCE
+    if log and not _VERIFY_DISABLED_ANNOUNCED[0]:
+        _VERIFY_DISABLED_ANNOUNCED[0] = True
+        log("      [verify] teacher self-check SKIPPED in API mode — it costs one paid call per "
+            "generated row to ask the teacher whether it agrees with itself. The exact "
+            "programmatic verifiers still run. Set SLM_VERIFY_SYNTH=1 to re-enable it.")
+    return VERIFY_MODE_OFF
+
+
+def _verify_synth_enabled(log=None) -> bool:
+    """True when the teacher pass RUNS at all, in either `enforce` or `shadow` mode."""
+    return _verify_synth_mode(log=log) != VERIFY_MODE_OFF
+
+
+def _apply_verdicts(rows: list[dict], results, *, kind: str, mode: str, log=None,
+                    describe=None) -> list[dict]:
+    """Keep or drop rows per the teacher's verdicts, or keep everything and just report.
+
+    One implementation for both the label and the answer pass, so the two cannot disagree about
+    what shadow mode means — which is the kind of drift that would make a measurement taken on one
+    task inapplicable to the other.
+    """
+    kept, rejected = [], []
+    for row, valid, reason in results:
+        (kept if valid else rejected).append((row, reason))
+
+    shadow = mode == VERIFY_MODE_SHADOW
+    if not shadow:
+        # Only in enforce mode. See `_verify_synth_mode`: feeding these back would make the
+        # shadow pass change the trajectory it is measuring.
+        record_rejection_reasons([reason for _row, reason in rejected])
+
+    if log:
+        total = len(rows)
+        if shadow:
+            share = (100.0 * len(rejected) / total) if total else 0.0
+            # `[verify:shadow]` is the grep handle for the measurement. Deliberately distinct from
+            # the enforce path's `[verify]` so a log cannot be misread as rows having been dropped.
+            log(f"      [verify:shadow] teacher would have rejected {len(rejected)}/{total} "
+                f"generated {kind}(s) ({share:.1f}%) — ALL {total} KEPT, nothing was dropped")
+        else:
+            log(f"      [verify] teacher validated {len(kept)}/{total} generated {kind}(s); "
+                f"rejected {len(rejected)}")
+        marker = "WOULD REJECT" if shadow else "REJECTED"
+        for row, reason in rejected[:_VERIFY_LOG_LIMIT]:
+            label = describe(row) if describe else ""
+            text = " ".join(str(row.get("text") or "").split())[:70]
+            log(f"        {marker} {label}{text!r} — teacher: {reason}")
+        if len(rejected) > _VERIFY_LOG_LIMIT:
+            # "rejected" / "would be rejected" rather than a bare "more": a rebuild can reject
+            # thousands of rows and this line is what a reader sees instead of all of them, so it
+            # has to say which of the two things happened on its own.
+            tail = "would be rejected" if shadow else "rejected"
+            log(f"        ... and {len(rejected) - _VERIFY_LOG_LIMIT} more {tail}")
+        if shadow and rejected:
+            # The reason HISTOGRAM is the actual deliverable. A list of 25 individually logged
+            # rejections does not answer "is this one systematic misunderstanding or 25 different
+            # ones", and that distinction decides whether `verifier_notes` can fix it.
+            counts: dict[str, int] = {}
+            for _row, reason in rejected:
+                key = " ".join(str(reason or "").split())[:60]
+                counts[key] = counts.get(key, 0) + 1
+            top = sorted(counts.items(), key=lambda item: -item[1])[:5]
+            log(f"      [verify:shadow] would-reject reasons by frequency: {dict(top)}")
+
+    return rows if shadow else [row for row, _ in kept]
 
 
 def _label_context_block(
@@ -984,22 +1220,10 @@ def verify_generated_labels(
     results = _progress_map(
         _check, rows, label="label verification", log=log, workers=workers
     )
-    kept, rejected = [], []
-    for row, valid, reason in results:
-        (kept if valid else rejected).append((row, reason))
-    record_rejection_reasons([reason for _row, reason in rejected])
-
-    if log:
-        log(
-            f"      [verify] teacher validated {len(kept)}/{len(rows)} generated row(s); "
-            f"rejected {len(rejected)}"
-        )
-        for row, reason in rejected[:_VERIFY_LOG_LIMIT]:
-            text = " ".join(str(row.get("text") or "").split())[:80]
-            log(f"        REJECTED [{row.get('label')}] {text!r} — teacher: {reason}")
-        if len(rejected) > _VERIFY_LOG_LIMIT:
-            log(f"        ... and {len(rejected) - _VERIFY_LOG_LIMIT} more rejected")
-    return [row for row, _ in kept]
+    return _apply_verdicts(
+        rows, results, kind="row", mode=_verify_synth_mode(), log=log,
+        describe=lambda row: f"[{row.get('label')}] ",
+    )
 
 
 def _synthesize_new_gold(
@@ -1119,6 +1343,7 @@ def _synthesize_new_gold(
             "text": text,
             "label": anchor.get("label"),
             "_source": "synth",
+            "_teacher": synth_source_label(),
             "_provenance": "synthetic_positive",
         }
 
@@ -1185,7 +1410,7 @@ def synthesize_examples(
             label_definitions=label_definitions,
             target_category=target_category,
         )
-        if rows and _verify_synth_enabled():
+        if rows and _verify_synth_enabled(log=log):
             rows = verify_generated_labels(
                 rows,
                 task_description=_describe(brief, spec),
@@ -1211,11 +1436,12 @@ def synthesize_examples(
         verify_fn=verify_fn if verify_fn is not None else spec.synth_verifier,
         log=log,
         target_category=target_category,
+        task_context=_task_context_block(spec, examples),
     )
     # Teacher answer-verification. The programmatic verifier above is exact but only checks FORM;
     # this asks whether the answer is actually right. Weaker than execution feedback, but the
     # alternative was keeping 100% of whatever the teacher produced (B269).
-    if rows and _verify_synth_enabled():
+    if rows and _verify_synth_enabled(log=log):
         rows = verify_generated_answers(
             rows,
             task_description=_describe(brief, spec),

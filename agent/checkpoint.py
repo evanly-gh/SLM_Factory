@@ -75,6 +75,89 @@ def graph_topology_fingerprint(mode: str) -> str:
     return _canonical_hash(graph_topology_descriptor(mode))
 
 
+# The resume-sensitive environment keys and the value each one has when it is NOT set. Hoisted
+# to module scope because `load_run_manifest` needs the defaults too: a manifest written before
+# a key was ADDED to this table has no entry for it, and telling that apart from a key that is
+# simply switched off requires knowing what 'off' looks like. Without that, clinc150 run
+# 40105479 could not be resumed after the ablation-4 keys were added mid-flight, because the
+# guard read stored=None against expected='0' as a configuration change.
+_RESUME_ENV_DEFAULTS: dict[str, str] = {
+    # These MUST match the module defaults in agent/nodes/iterate.py. They previously read
+    # "50" for both the window and the (now-deleted) stall counter while the code used 20,
+    # so the resume fingerprint recorded a value the run never actually used — masking real
+    # drift and inventing fake drift. SLM_MAX_STALL_EVALS was removed entirely on 2026-08-05.
+    "SLM_STAGNATION_WINDOW": "15",
+    "SLM_STAGNATION_MIN_DELTA": "0.02",
+    "SLM_MAX_EVALS_BEFORE_ESCALATION": "30",
+    "SLM_MAX_SEQ_LENGTH": "4096",
+    "SLM_EVAL_BATCH_SIZE": "",
+    "SLM_EVAL_MAX_NEW_TOKENS_CLASSIFICATION": "50",
+    "SLM_EVAL_MAX_NEW_TOKENS_NER": "512",
+    "SLM_EVAL_MAX_NEW_TOKENS_MATH": "512",
+    "SLM_EVAL_MAX_NEW_TOKENS_GENERATION": "512",
+    "SLM_EVAL_MAX_NEW_TOKENS_APPS": "1024",
+    "SLM_CODE_EVAL_TIMEOUT_S": "3.0",
+    "SLM_APPS_PROBLEM_TIMEOUT_S": "6.0",
+    "SLM_CURATION_LOG_PATH": "",
+    "SLM_AGENT_FIRST_DATASET_DISCOVERY": "0",
+    "SLM_REQUIRE_SYNTH": "1",
+    "SLM_SYNTH_WAIT_S": "2400",
+    # GPU placement/profile throughput settings are intentionally omitted:
+    # a resumed run may move between compatible GPU allocations.
+    "SLM_CUDA_ISOLATION": "0",
+    "SLM_EARLY_STOPPING": "1",
+    "SLM_VAL_FRACTION": "0.12",
+    "SLM_MIN_FOR_VAL": "60",
+    "SLM_EVAL_STEPS": "20",
+    "SLM_EARLY_STOP_PATIENCE": "3",
+    "SLM_GGUF_GPU_LAYERS": "-1",
+    "SLM_DIFFICULTY": "zeroshot",
+    "SLM_PROBE_EPOCHS": "3",
+    "SLM_PROBE_MAX_EXAMPLES": "300",
+    "SLM_CURRICULUM_SIZE": "",
+    "SLM_STOP_THRESHOLD": "",
+    # ABLATION SWITCHES. Resuming across either boundary must fail compatibility. Both change
+    # what the run IS rather than how fast it goes: the first rewinds the curriculum on every
+    # tier promotion, so a resume that turned it off would carry forward a dataset the
+    # experiment is defined by not carrying forward (and a resume that turned it ON would look
+    # for a seed snapshot the original run never took). The second withholds synthetic data,
+    # so a resume without it would finish an ablation with the very rows it exists to exclude.
+    # The literal strings, rather than an import from agent.ablations, keep this module free of
+    # a dependency on one that already imports it for `atomic_write_jsonl`.
+    "SLM_ABLATION_RESET_DATA_ON_ESCALATION": "0",
+    "SLM_SYNTH_DISALLOW": "0",
+    # The ablation-4 pair, for the same reason and more sharply. The cap decides how many real
+    # rows the run ever saw, and the mining refusal is the only thing stopping it reading its
+    # way back to thousands — so a resume that dropped either would finish a data-scarcity
+    # experiment on a curriculum that is no longer scarce, and the comparison against the other
+    # arm would be silently meaningless rather than visibly broken.
+    "SLM_ABLATION_DISALLOW_MINING": "0",
+    "SLM_ABLATION_TRAIN_CAP": "",
+    # Whether the API teacher reasons before answering. Resume-sensitive because it changes
+    # what the teacher IS: run 39562029 generated its rows with reasoning left on (the default
+    # before this was wired up) at ~7,100 output tokens per row, and a resume that switched it
+    # off would finish a curriculum whose halves came from measurably different teachers.
+    "SLM_SYNTH_API_THINKING": "disabled",
+    # Reproducibility. The seed drives the LoRA initialisation, the shuffle order and the
+    # teacher's generation seeds, so a resume that changed it would finish a run whose halves
+    # were drawn from two different streams. The mode is fingerprinted with it because a run
+    # segment that silently dropped to `off` would report numbers nobody can reproduce.
+    "SLM_SEED": "3407",
+    "SLM_DETERMINISM": "warn",
+    "SLM_DATA_DIR": "data_cache",
+    "SLM_SMOLCHAT_PACKAGE": "io.shubham0204.smollmandroid",
+    # WHICH on-device runtime the run quantizes for and scores through (config.QUANT_BACKEND).
+    # Resume-sensitive for the same reason SLM_SYNTH_API_MODE is: every score already in the
+    # checkpoint — best_score, the stagnation window, the rollback comparisons — was measured on
+    # an artifact built by one toolchain and decoded by one engine. A resume that switched
+    # backends would keep comparing new MNN numbers against old llama.cpp ones and call the
+    # difference progress or regression. Listed here rather than in `runtime_config_snapshot`'s
+    # `names` so that `_keys_added_since` can forgive a manifest written before the key existed
+    # while it is at its default, which is what keeps every run already in flight resumable.
+    "SLM_QUANT_BACKEND": "llama_cpp",
+}
+
+
 def runtime_config_snapshot(mode: str) -> dict[str, Any]:
     """Return resume-sensitive settings while excluding secrets and host endpoints."""
     import config.config as config
@@ -102,6 +185,13 @@ def runtime_config_snapshot(mode: str) -> dict[str, Any]:
         "CHEAP_MODE",
         "ORCHESTRATOR_1M",
         "ANTHROPIC_BETAS",
+        # Which teacher backend the run used. SYNTH_MODEL alone would already catch the switch,
+        # since the model name changes with it, but the resulting incompatibility error would name
+        # a model rather than the flag that chose it — and "SYNTH_MODEL differs" is a confusing
+        # thing to read when nobody edited a model name. Resuming across the boundary must fail:
+        # the curriculum's synthetic rows, the judged eval scores and the accuracy goal were all
+        # produced by the other teacher.
+        "SYNTH_API_MODE",
         "SYNTH_MODEL",
         "JUDGE_MODEL",
         "JUDGE_ALLOW_REMOTE",
@@ -132,44 +222,7 @@ def runtime_config_snapshot(mode: str) -> dict[str, Any]:
     snapshot["SLM_SHARED_DATASET_DIR"] = os.environ.get(
         "SLM_SHARED_DATASET_DIR", ""
     )
-    env_defaults = {
-        # These MUST match the module defaults in agent/nodes/iterate.py. They previously read
-        # "50" for both the window and the (now-deleted) stall counter while the code used 20,
-        # so the resume fingerprint recorded a value the run never actually used — masking real
-        # drift and inventing fake drift. SLM_MAX_STALL_EVALS was removed entirely on 2026-08-05.
-        "SLM_STAGNATION_WINDOW": "15",
-        "SLM_STAGNATION_MIN_DELTA": "0.02",
-        "SLM_MAX_EVALS_BEFORE_ESCALATION": "30",
-        "SLM_MAX_SEQ_LENGTH": "4096",
-        "SLM_EVAL_BATCH_SIZE": "",
-        "SLM_EVAL_MAX_NEW_TOKENS_CLASSIFICATION": "50",
-        "SLM_EVAL_MAX_NEW_TOKENS_NER": "512",
-        "SLM_EVAL_MAX_NEW_TOKENS_MATH": "512",
-        "SLM_EVAL_MAX_NEW_TOKENS_GENERATION": "512",
-        "SLM_EVAL_MAX_NEW_TOKENS_APPS": "1024",
-        "SLM_CODE_EVAL_TIMEOUT_S": "3.0",
-        "SLM_APPS_PROBLEM_TIMEOUT_S": "6.0",
-        "SLM_CURATION_LOG_PATH": "",
-        "SLM_AGENT_FIRST_DATASET_DISCOVERY": "0",
-        "SLM_REQUIRE_SYNTH": "1",
-        "SLM_SYNTH_WAIT_S": "2400",
-        # GPU placement/profile throughput settings are intentionally omitted:
-        # a resumed run may move between compatible GPU allocations.
-        "SLM_CUDA_ISOLATION": "0",
-        "SLM_EARLY_STOPPING": "1",
-        "SLM_VAL_FRACTION": "0.12",
-        "SLM_MIN_FOR_VAL": "60",
-        "SLM_EVAL_STEPS": "20",
-        "SLM_EARLY_STOP_PATIENCE": "3",
-        "SLM_GGUF_GPU_LAYERS": "-1",
-        "SLM_DIFFICULTY": "zeroshot",
-        "SLM_PROBE_EPOCHS": "3",
-        "SLM_PROBE_MAX_EXAMPLES": "300",
-        "SLM_CURRICULUM_SIZE": "",
-        "SLM_STOP_THRESHOLD": "",
-        "SLM_DATA_DIR": "data_cache",
-        "SLM_SMOLCHAT_PACKAGE": "io.shubham0204.smollmandroid",
-    }
+    env_defaults = _RESUME_ENV_DEFAULTS
     snapshot.update({
         name: os.environ.get(name, default)
         for name, default in env_defaults.items()
@@ -325,6 +378,9 @@ def load_run_manifest(
     # they must not import API-key-requiring runtime config merely to decide
     # whether checkpoint bytes are complete. The runner loads .env, constructs
     # the current snapshot, and passes it here for strict resume drift checks.
+    keys_added_since = _keys_added_since(
+        payload["effective_config"], expected_effective_config
+    )
     if expected_effective_config is not None:
         current_config = dict(expected_effective_config)
         drift = [
@@ -336,7 +392,8 @@ def load_run_manifest(
             for key in sorted(
                 set(payload["effective_config"]) | set(current_config)
             )
-            if payload["effective_config"].get(key) != current_config.get(key)
+            if key not in keys_added_since
+            and payload["effective_config"].get(key) != current_config.get(key)
         ]
         if drift:
             details = "; ".join(
@@ -347,9 +404,22 @@ def load_run_manifest(
                 f"run manifest effective config drift: {details}"
             )
     if expected_compatibility is not None:
+        expected_compat = dict(expected_compatibility)
+        if keys_added_since and expected_effective_config is not None:
+            # `config_fingerprint` hashes the WHOLE snapshot, so a key that did not exist when this
+            # manifest was written changes the hash even though it changes nothing about the run.
+            # Re-hash over the key set the manifest was actually written with; every key being
+            # dropped here is one this function just proved is switched off on both sides.
+            expected_compat["config_fingerprint"] = _canonical_hash(
+                {
+                    key: value
+                    for key, value in expected_effective_config.items()
+                    if key not in keys_added_since
+                }
+            )
         _validate_compatibility(
             payload["compatibility"],
-            expected_compatibility,
+            expected_compat,
         )
     return payload
 
@@ -1263,6 +1333,34 @@ def _read_checkpoint(path: str | os.PathLike) -> dict[str, Any]:
                 f"checkpoint is missing required field {key!r}"
             )
     return payload
+
+
+def _keys_added_since(
+    stored_config: Mapping[str, Any],
+    current_config: Mapping[str, Any] | None,
+) -> set[str]:
+    """Resume-fingerprint keys this manifest predates, and which are switched OFF right now.
+
+    Adding a key to `_RESUME_ENV_DEFAULTS` used to brick every run already in flight: the manifest
+    has no entry, the current snapshot has the key at its default, and a plain dict comparison reads
+    `None != '0'` as somebody having changed the configuration mid-run. clinc150 run 40105479 hit
+    exactly that after the ablation-4 cap and mining keys were added while it was running, and it
+    could not be resumed to finish the tier it died on.
+
+    Absence and default mean the same thing about the run — the switch was off then because it did
+    not exist, and it is off now — so those keys are forgiven. A key absent from the manifest whose
+    current value is NOT the default is still drift, and still fatal: resuming a full-data run into
+    a 151-row cap has to fail, which is the guarantee these keys were added for in the first place.
+    """
+    if current_config is None:
+        return set()
+    return {
+        key
+        for key, value in current_config.items()
+        if key not in stored_config
+        and key in _RESUME_ENV_DEFAULTS
+        and value == _RESUME_ENV_DEFAULTS[key]
+    }
 
 
 def _validate_compatibility(

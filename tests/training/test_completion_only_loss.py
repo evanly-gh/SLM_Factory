@@ -68,13 +68,17 @@ TASK_CASES = [
         '"CHEMICAL"',
     ),
     (
+        # `references` is what the turn builder reads since the 2026-09-06 rework. And the
+        # expected target is now the SUMMARY, not a reasoning block: the task sets
+        # `cot_annotation=False`, because a `<reasoning>` prefix would be scored as part of the
+        # summary by ROUGE.
         "dialogsum",
         {
             "text": "Summarize this.",
             "answer": "A short summary.",
-            "cot_reasoning": "Identify the key point.",
+            "references": ["A short summary."],
         },
-        "<reasoning>\nIdentify the key point.",
+        "A short summary.",
     ),
     (
         "gsm8k",

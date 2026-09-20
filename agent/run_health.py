@@ -21,6 +21,8 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass, field
 
+from agent.state import SKIPPED_NO_ROWS
+
 
 class RunHealthError(RuntimeError):
     """The run cannot make progress and should stop now rather than spend more GPU time."""
@@ -191,8 +193,16 @@ def observe_iteration(state, record: IterationRecord, *, log=print) -> None:
     sits directly under the numbers it is about.
     """
     health = RunHealth.from_state(state)
+    # The SELECTOR is recorded because `iteration` alone does not identify a turn: escalate_node
+    # resets it to 0 for each new tier, so tier 1 iteration 3 and tier 3 iteration 3 are two
+    # different turns with the same key. `_dag_rows` joins the ledger to the DAG on iteration, and
+    # without this the join silently attributed one tier's curriculum numbers to another's scores
+    # as soon as the report started covering every tier. Entries written before 2026-08-30 have no
+    # selector; the join falls back for those rather than guessing.
+    _selected = state.get("selected_model")
     health.history.append({
         "iteration": record.iteration,
+        "selector": getattr(_selected, "selector", None),
         "strategy": record.strategy,
         "rows_added": record.rows_added,
         "curriculum": [record.curriculum_before, record.curriculum_after],
@@ -358,24 +368,88 @@ def _diagnose_empty(record: IterationRecord) -> str:
     return "No sub-strategy was recorded for this rebuild."
 
 
+def _tier_dags(state) -> list[tuple[str | None, list]]:
+    """Every tier's DAG in order, not just the one still in `state["dag"]`.
+
+    WHY THIS IS NOT `state["dag"]`
+        `escalate_node` CLEARS the DAG on every promotion and stashes the finished tier in
+        `escalation_history`. So the live DAG holds only the last model, and a report reading it
+        described a three-tier run as though tier 3 were the whole run — nineteen tier-1
+        iterations and six tier-2 iterations simply absent from the attribution table.
+
+        `build_run_progression` is the existing answer to exactly this: the "DAG Traversal (all N
+        models)" section has always printed every tier because it reads that instead. This routes
+        the attribution table through the same source so the two sections cannot disagree.
+    """
+    try:
+        from agent.pipeline_status import build_run_progression
+
+        progression = build_run_progression(state, [])
+    except Exception:  # noqa: BLE001 — reporting must never take a run down
+        progression = []
+    if not progression:
+        model = state.get("selected_model")
+        return [(getattr(model, "selector", None), list(state.get("dag") or []))]
+    return [
+        (entry.get("selector"), list(entry.get("dag") or []))
+        for entry in progression
+    ]
+
+
 def _dag_rows(state) -> list[dict]:
-    """Per-iteration facts joined across the DAG and the curriculum ledger.
+    """Per-iteration facts joined across the DAG and the curriculum ledger, for EVERY tier.
 
     The two records answer different halves of the same question and neither is sufficient alone: the
     DAG knows the SCORE each attempt produced and whether it was kept, while `run_health.history`
     knows what the attempt did to the DATA. Joining them on iteration is what turns "the curriculum
     grew by 982 rows" into "the curriculum grew by 982 rows and that was worth +0.0190".
+
+    The join is scoped by SELECTOR as well as iteration, because iteration numbers restart at each
+    escalation and would otherwise collide across tiers.
     """
     health = RunHealth.from_state(state)
-    by_iteration = {int(entry.get("iteration", -1)): entry for entry in health.history}
+    # Ledger entries indexed by (selector, iteration) where the selector was recorded, and by
+    # iteration alone for entries written before that field existed. The fallback is only consulted
+    # for single-tier runs: on a multi-tier run an untagged entry cannot be attributed to a tier, and
+    # a blank cell is honest where a borrowed number is not.
+    by_key: dict[tuple[str | None, int], dict] = {}
+    legacy_by_iteration: dict[int, dict] = {}
+    for entry in health.history:
+        iteration = int(entry.get("iteration", -1))
+        selector = entry.get("selector")
+        if selector:
+            by_key[(str(selector), iteration)] = entry
+        else:
+            legacy_by_iteration[iteration] = entry
+
+    tier_dags = _tier_dags(state)
+    allow_legacy = len(tier_dags) <= 1
+
     rows = []
-    for node in (state.get("dag") or []):
+    for selector, dag in tier_dags:
+        rows.extend(_rows_for_dag(dag, selector, by_key, legacy_by_iteration, allow_legacy))
+    return rows
+
+
+def _rows_for_dag(
+    dag,
+    selector: str | None,
+    by_key: dict,
+    legacy_by_iteration: dict,
+    allow_legacy: bool,
+) -> list[dict]:
+    """The attribution rows for ONE tier's DAG."""
+    rows = []
+    for node in dag:
         if not isinstance(node, dict):
             continue
         iteration = int(node.get("iteration", 0) or 0)
+        ledger = by_key.get((str(selector), iteration)) if selector else None
+        if ledger is None and allow_legacy:
+            ledger = legacy_by_iteration.get(iteration)
+        ledger = ledger or {}
         pi_d = ((node.get("pi") or {}).get("D") or {})
         plan = pi_d.get("plan") or {}
-        ledger = by_iteration.get(iteration, {})
         # Cross-check the join rather than trusting it. The two records are written by different
         # nodes at different points in the turn, so if either side's notion of "iteration" shifts
         # again the mismatch shows up as a blank row instead of another iteration's numbers
@@ -398,8 +472,14 @@ def _dag_rows(state) -> list[dict]:
             "iteration": iteration,
             "strategy": strategy,
             "score": node.get("score"),
+            # Train+evaluate were skipped because the rebuild added no rows, so this attempt has no
+            # score by construction rather than by failure. Carried through so the table can say
+            # "skipped" instead of drawing a blank that reads like a missing measurement.
+            "skipped": node.get("status") == SKIPPED_NO_ROWS,
             "pruned": bool(node.get("pruned")),
-            "model": str(node.get("model") or node.get("selector") or ""),
+            # Fall back to the tier's own selector: a stashed DAG node does not always carry one,
+            # and a blank model name would collapse two tiers into a single unnamed heading.
+            "model": str(node.get("model") or node.get("selector") or selector or ""),
             "tier": node.get("tier"),
             "rows_added": ledger.get("rows_added"),
             "curriculum": ledger.get("curriculum"),
@@ -408,6 +488,18 @@ def _dag_rows(state) -> list[dict]:
             "total": (pi_d.get("composition") or {}).get("total_examples"),
         })
     return rows
+
+
+
+def _outcome_label(row: dict) -> str:
+    """What happened to this attempt, in the table's rightmost column.
+
+    A skipped iteration is neither kept nor rolled back — it was never trained, so there is no
+    checkpoint to keep or discard. Saying "rolled back" would claim an experiment ran and lost.
+    """
+    if row.get("skipped"):
+        return "⏭ skipped (added no rows)"
+    return "✗ rolled back" if row["pruned"] else "✓ kept"
 
 
 def _attribute(rows: list[dict]) -> tuple[list[dict], dict]:
@@ -435,10 +527,14 @@ def _attribute(rows: list[dict]) -> tuple[list[dict], dict]:
         score = float(score)
         if baseline is None:
             # The first scored iteration is the starting point, not a gain over anything.
+            # `start` is recorded on the slot for provenance — which strategy happened to run
+            # first — and NOT added to `gain`, so the strategy's own contribution stays separable
+            # from the accuracy the run began with. See the renderer.
             row["delta"] = None
             baseline = score
             slot["kept"] += 1
             slot["start"] = score
+            slot["start_iteration"] = row.get("iteration")
             continue
         row["delta"] = score - baseline
         if not row["pruned"]:
@@ -510,7 +606,7 @@ def format_health_summary(state) -> list[str]:
                 f"{(f'{kept_v}/{attempted_v}' if attempted_v else '—'):>9} "
                 f"{('—' if score is None else f'{float(score):.4f}'):>7} "
                 f"{('—' if delta is None else f'{delta:+.4f}'):>8}  "
-                f"{'✗ rolled back' if row['pruned'] else '✓ kept'}"
+                f"{_outcome_label(row)}"
             )
 
     lines.extend(_wasted_rebuild_lines(state))
@@ -521,14 +617,36 @@ def format_health_summary(state) -> list[str]:
     lines.append("")
     lines.append("  What each strategy actually bought (kept steps only — pruned attempts were "
                  "rolled back and contributed nothing):")
+    # THE STARTING POINT IS ITS OWN ROW, not folded into whichever strategy happened to run first.
+    #
+    # It used to be the same row: a strategy that both opened the run AND won later iterations
+    # printed only `0.8320  starting point (3/5 kept)`, and its actual gain — the number the table
+    # exists to report — was computed and then never shown. There was no way to read how much
+    # `mine_new_real` had bought, only that the run began at 0.8320 and that mining was involved.
+    start_slot = next((s for s in contributions.values() if "start" in s), None)
+    if start_slot is not None:
+        opener = next(name for name, s in contributions.items() if "start" in s)
+        where = start_slot.get("start_iteration")
+        lines.append(
+            f"    {'STARTING POINT':<22} {start_slot['start']:>8.4f}   "
+            f"first measured score"
+            + (f" (iteration {where}, {opener})" if where is not None else f" ({opener})")
+            + " — a baseline, not a gain"
+        )
     ordered = sorted(contributions.items(), key=lambda kv: -kv[1]["gain"])
     for strategy, slot in ordered:
+        # Every strategy now reports its GAIN, including the one that opened the run. Its kept count
+        # still includes the opening iteration, so that is said plainly rather than left to imply
+        # the gain was spread over more steps than it was.
+        note = ""
         if "start" in slot:
-            lines.append(f"    {strategy:<22} {slot['start']:>8.4f}   starting point "
-                         f"({slot['kept']}/{slot['attempts']} kept)")
-        else:
-            lines.append(f"    {strategy:<22} {slot['gain']:>+8.4f}   "
-                         f"{slot['kept']}/{slot['attempts']} attempt(s) kept")
+            note = (
+                ", 1 of which set the starting point above and so is worth 0 here"
+                if slot["kept"] > 1 else
+                " — the starting point only, no further gain"
+            )
+        lines.append(f"    {strategy:<22} {slot['gain']:>+8.4f}   "
+                     f"{slot['kept']}/{slot['attempts']} attempt(s) kept{note}")
     if final is not None and start is not None:
         gained = sum(s["gain"] for s in contributions.values())
         lines.append(f"    {'':<22} {'':>8}   ")

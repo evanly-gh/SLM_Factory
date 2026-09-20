@@ -10,6 +10,14 @@ import sys
 import time
 import traceback
 
+# Before ANY import that might pull in torch: a cuBLAS handle created without this variable in the
+# environment ignores it for the life of the process, and every training and eval op in the
+# pipeline runs inside this worker. `training.determinism` re-asserts the rest (seeds, cuDNN,
+# deterministic algorithms) once torch is actually loaded by a handler.
+from training.determinism import set_cublas_workspace_config
+
+set_cublas_workspace_config()
+
 
 def _write_response(path: str, response: dict) -> None:
     tmp = f"{path}.tmp"
@@ -62,14 +70,20 @@ def _dispatch(operation: str, payload: dict):
         from training.slm_helpers import infer_batch
 
         return infer_batch(**payload)
+    if operation == "infer_label_scores":
+        # The per-label logprob pass GoEmotions' macro AUPRC needs. Isolated for the same reason
+        # generation is: it holds a CUDA context, and the worker exiting is what destroys it.
+        from training.slm_helpers import infer_label_scores_batch
+
+        return infer_label_scores_batch(**payload)
     if operation == "eval":
         from eval.harness import run_eval
 
         return run_eval(**payload)
-    if operation == "build_gguf":
-        from agent.nodes.evaluate import _build_or_reuse_gguf
+    if operation == "build_quant_artifact":
+        from agent.nodes.evaluate import _build_or_reuse_quant_artifact
 
-        return _build_or_reuse_gguf(**payload)
+        return _build_or_reuse_quant_artifact(**payload)
     if operation == "merge_quantize":
         from training.cuda_isolation import merge_and_quantize
 
@@ -100,6 +114,13 @@ def main(argv: list[str] | None = None) -> int:
         request = pickle.load(f)
     operation = request["operation"]
     payload = request.get("payload") or {}
+
+    # Every training and eval op the pipeline runs arrives here, in a fresh process whose torch
+    # RNG would otherwise be seeded from OS entropy. Applied before dispatch so the handler's own
+    # imports and allocations happen under the pinned settings.
+    from training.determinism import enable_determinism
+
+    enable_determinism(label=f"cuda-worker[{operation}]")
     print(
         f"[cuda-worker] start op={operation} pid={os.getpid()} "
         f"CUDA_VISIBLE_DEVICES={os.environ.get('CUDA_VISIBLE_DEVICES', '<unset>')}",

@@ -73,43 +73,44 @@ def test_gguf_build_delegates_to_disposable_worker_when_enabled(monkeypatch):
     monkeypatch.setenv("SLM_CUDA_ISOLATION", "1")
     monkeypatch.delenv("SLM_CUDA_WORKER", raising=False)
     with patch("training.cuda_isolation.run_isolated", return_value="/gguf/model.gguf") as worker:
-        from agent.nodes.evaluate import _build_gguf_for_eval
+        from agent.nodes.evaluate import _build_quant_artifact_for_eval
 
-        result = _build_gguf_for_eval("/ckpt", "test/Model-1B", "Q4_K_M", "label")
+        result = _build_quant_artifact_for_eval("/ckpt", "test/Model-1B", "Q4_K_M", "label")
 
     assert result == "/gguf/model.gguf"
     worker.assert_called_once_with(
-        "build_gguf",
+        "build_quant_artifact",
         {
             "weights_ref": "/ckpt",
             "model_id": "test/Model-1B",
             "quant": "Q4_K_M",
             "mlabel": "label",
+            "backend": "llama_cpp",
         },
     )
 
 
 def test_gguf_build_failure_does_not_silently_score_bf16(monkeypatch):
     monkeypatch.delenv("SLM_CUDA_ISOLATION", raising=False)
-    with patch("agent.nodes.evaluate._build_or_reuse_gguf", return_value=None):
-        from agent.nodes.evaluate import _build_gguf_for_eval
+    with patch("agent.nodes.evaluate._build_or_reuse_quant_artifact", return_value=None):
+        from agent.nodes.evaluate import _build_quant_artifact_for_eval
 
-        with pytest.raises(RuntimeError, match="quantized GGUF"):
-            _build_gguf_for_eval("/ckpt", "test/Model-1B", "Q4_K_M", "label")
+        with pytest.raises(RuntimeError, match="llama.cpp/GGUF artifact"):
+            _build_quant_artifact_for_eval("/ckpt", "test/Model-1B", "Q4_K_M", "label")
 
 
 def test_gguf_build_reuses_exact_cached_weights_and_quant():
-    from agent.nodes.evaluate import _build_or_reuse_gguf
+    from agent.nodes.evaluate import _build_or_reuse_quant_artifact
 
     with (
         patch(
-            "agent.nodes.evaluate.validated_gguf_cache_hit",
+            "agent.nodes.evaluate.validated_cache_hit",
             return_value=True,
         ),
         patch("agent.nodes.evaluate.merge_for_quantization") as merge,
         patch("agent.nodes.evaluate.quantize_from_model_spec") as quantize,
     ):
-        result = _build_or_reuse_gguf(
+        result = _build_or_reuse_quant_artifact(
             "/same/weights",
             "test/Model-1B",
             "Q8_0",
@@ -125,13 +126,13 @@ def test_base_model_gguf_converts_pinned_snapshot_without_merge_or_deletion(
     monkeypatch,
     tmp_path,
 ):
-    from agent.nodes.evaluate import _build_or_reuse_gguf
+    from agent.nodes.evaluate import _build_or_reuse_quant_artifact
 
     monkeypatch.chdir(tmp_path)
     snapshot = "/shared/hf/hub/models--Qwen--Qwen3.5-2B/snapshots/abc123"
     with (
         patch(
-            "agent.nodes.evaluate.validated_gguf_cache_hit",
+            "agent.nodes.evaluate.validated_cache_hit",
             return_value=False,
         ),
         patch(
@@ -144,11 +145,11 @@ def test_base_model_gguf_converts_pinned_snapshot_without_merge_or_deletion(
             return_value="/gguf/base-q4_k_m.gguf",
         ) as quantize,
         patch(
-            "agent.nodes.evaluate.validate_and_record_gguf",
+            "agent.nodes.evaluate.validate_and_record",
         ) as validate,
         patch("agent.nodes.evaluate.shutil.rmtree") as rmtree,
     ):
-        result = _build_or_reuse_gguf(
+        result = _build_or_reuse_quant_artifact(
             "Qwen/Qwen3.5-2B",
             "Qwen/Qwen3.5-2B",
             "Q4_K_M",
@@ -161,7 +162,10 @@ def test_base_model_gguf_converts_pinned_snapshot_without_merge_or_deletion(
     assert quantize.call_args.args[0] == snapshot
     merge.assert_not_called()
     validate.assert_called_once_with(
-        "/gguf/base-q4_k_m.gguf", base_model="Qwen/Qwen3.5-2B"
+        "/gguf/base-q4_k_m.gguf",
+        base_model="Qwen/Qwen3.5-2B",
+        quant="Q4_K_M",
+        backend="llama_cpp",
     )
     rmtree.assert_not_called()
 
@@ -172,7 +176,7 @@ def test_unvalidated_missing_layer_cache_is_invalidated_and_rebuilt(
 ):
     import hashlib
 
-    from agent.nodes.evaluate import _build_or_reuse_gguf
+    from agent.nodes.evaluate import _build_or_reuse_quant_artifact
 
     monkeypatch.chdir(tmp_path)
     model_id = "Qwen/Qwen3.5-2B"
@@ -189,7 +193,7 @@ def test_unvalidated_missing_layer_cache_is_invalidated_and_rebuilt(
     cached.parent.mkdir(parents=True)
     cached.write_bytes(b"320 tensors; missing blk.24.attn_norm.weight")
 
-    def rebuild(_source, _output_dir, _quant):
+    def rebuild(_source, _output_dir, _quant, _backend=None):
         cached.write_bytes(b"335 tensors; complete")
         return str(cached.relative_to(tmp_path))
 
@@ -203,10 +207,10 @@ def test_unvalidated_missing_layer_cache_is_invalidated_and_rebuilt(
             side_effect=rebuild,
         ) as quantize,
         patch(
-            "agent.nodes.evaluate.validate_and_record_gguf",
+            "agent.nodes.evaluate.validate_and_record",
         ) as validate,
     ):
-        result = _build_or_reuse_gguf(
+        result = _build_or_reuse_quant_artifact(
             model_id,
             model_id,
             quant,
@@ -214,16 +218,18 @@ def test_unvalidated_missing_layer_cache_is_invalidated_and_rebuilt(
         )
 
     quantize.assert_called_once()
-    validate.assert_called_once_with(result, base_model=model_id)
+    validate.assert_called_once_with(
+        result, base_model=model_id, quant=quant, backend="llama_cpp"
+    )
     assert cached.read_bytes() == b"335 tensors; complete"
 
 
 def test_qwen35_gguf_build_merges_multimodal_adapter_before_exact_quant():
-    from agent.nodes.evaluate import _build_or_reuse_gguf
+    from agent.nodes.evaluate import _build_or_reuse_quant_artifact
 
     with (
         patch(
-            "agent.nodes.evaluate.validated_gguf_cache_hit",
+            "agent.nodes.evaluate.validated_cache_hit",
             return_value=False,
         ),
         patch(
@@ -235,10 +241,10 @@ def test_qwen35_gguf_build_merges_multimodal_adapter_before_exact_quant():
             return_value="/gguf/qwen35-q4_k_m.gguf",
         ) as quantize,
         patch(
-            "agent.nodes.evaluate.validate_and_record_gguf",
+            "agent.nodes.evaluate.validate_and_record",
         ) as validate,
     ):
-        result = _build_or_reuse_gguf(
+        result = _build_or_reuse_quant_artifact(
             "/adapters/qwen35",
             "Qwen/Qwen3.5-0.8B",
             "Q4_K_M",
@@ -251,13 +257,16 @@ def test_qwen35_gguf_build_merges_multimodal_adapter_before_exact_quant():
     assert quantize.call_args.args[0] == "/merged/qwen35"
     assert quantize.call_args.args[2] == "Q4_K_M"
     validate.assert_called_once_with(
-        "/gguf/qwen35-q4_k_m.gguf", base_model="Qwen/Qwen3.5-0.8B"
+        "/gguf/qwen35-q4_k_m.gguf",
+        base_model="Qwen/Qwen3.5-0.8B",
+        quant="Q4_K_M",
+        backend="llama_cpp",
     )
 
 
 @patch("agent.nodes.evaluate.config.QUANT_ACCURACY_EVAL", True)
 @patch("agent.nodes.evaluate.apply_iteration_policy", return_value={"band": "good", "intervention": "hyperparameter"})
-@patch("agent.nodes.evaluate._build_gguf_for_eval")
+@patch("agent.nodes.evaluate._build_quant_artifact_for_eval")
 @patch("agent.nodes.evaluate.run_eval")
 @patch("agent.nodes.evaluate.CurationLog")
 @patch("agent.nodes.evaluate.theoretical_hardware_profile", return_value={"size_mb": 700, "tier": 1})
@@ -288,7 +297,7 @@ def test_quantized_zero_shot_baseline_uses_selected_deployment_quant(
     )
     baseline_call = mock_eval.call_args_list[0]
     assert baseline_call.kwargs["quant"] == "Q4_K_M"
-    assert baseline_call.kwargs["gguf_path"] == "/gguf/base-q4.gguf"
+    assert baseline_call.kwargs["quant_artifact"] == "/gguf/base-q4.gguf"
     assert out["model_baselines"][0]["selector"] == "test/Model-1B@Q4_K_M"
     assert out["best_weights_ref"] == "test/Model-1B"
     assert out["dag"][-1]["pi"]["H"]["lora_rank"] is None
@@ -304,14 +313,20 @@ def test_quantized_zero_shot_baseline_uses_selected_deployment_quant(
 
 
 @patch("agent.nodes.evaluate.run_eval")
-def test_generation_baseline_reraises_local_judge_infrastructure_error(mock_eval):
+def test_a_judged_baseline_reraises_local_judge_infrastructure_error(mock_eval):
     from agent.nodes.evaluate import evaluate_node
     from eval.judge_client import JudgeInfrastructureError
 
     state = _make_state(quant=None)
     # A judge-scored task: `needs_judge` is on the spec, so a judge outage fails loudly on the
     # tasks that call the judge instead of scoring them zero.
-    state["task"] = "dialogsum"
+    #
+    # `toolbench` rather than `dialogsum`, which moved off the judge on 2026-09-06 and onto
+    # multi-reference ROUGE. ToolBench is now the only judged task, and it is the right one to
+    # exercise this on: its ToolEval pass rate is DEFINED as a majority vote of judged
+    # assessments, so for it the judge is not a proxy for a metric — it IS the metric, and an
+    # outage genuinely cannot be scored around.
+    state["task"] = "toolbench"
     state["iteration"] = 1
     mock_eval.side_effect = [
         JudgeInfrastructureError("local judge unavailable"),
@@ -324,7 +339,7 @@ def test_generation_baseline_reraises_local_judge_infrastructure_error(mock_eval
     assert mock_eval.call_count == 1
 
 
-@patch("agent.nodes.evaluate._build_gguf_for_eval")
+@patch("agent.nodes.evaluate._build_quant_artifact_for_eval")
 @patch("agent.nodes.evaluate.run_eval")
 def test_quantized_baseline_reraises_quantization_infrastructure_error(
     mock_eval,
@@ -386,7 +401,7 @@ def test_evaluate_node_uses_bf16_path_when_quant_none(mock_hw, mock_profile, moc
     # run_eval called without gguf_path (or None)
     mock_eval.assert_called_once()
     call_kwargs = mock_eval.call_args[1]
-    assert call_kwargs.get("gguf_path") is None
+    assert call_kwargs.get("quant_artifact") is None
     assert call_kwargs.get("quant") is None
     log_kwargs = mock_log.return_value.write_iteration.call_args.kwargs
     assert log_kwargs["total_examples"] == 12
@@ -462,7 +477,7 @@ def test_evaluate_normalizes_legacy_checkpoint_config_into_complete_dag_h(
 @patch("agent.nodes.evaluate.config.HW_ONDEVICE_BACKEND", "smolchat")
 @patch("agent.nodes.evaluate.apply_iteration_policy", return_value={"band": "good", "intervention": "hyperparameter"})
 @patch("agent.nodes.evaluate.quantize_from_model_spec", return_value="/gguf/model.gguf")
-@patch("agent.nodes.evaluate.validate_and_record_gguf")
+@patch("agent.nodes.evaluate.validate_and_record")
 @patch("agent.nodes.evaluate.merge_for_quantization", return_value="/merged/checkpoint")
 @patch("agent.nodes.evaluate.run_eval")
 @patch("agent.nodes.evaluate.CurationLog")
@@ -496,10 +511,13 @@ def test_evaluate_node_quantizes_and_uses_gguf_path_when_quant_set(
     mock_quantize.assert_called_once()
     assert mock_quantize.call_args[0][2] == "Q4_K_M"
     mock_validate.assert_called_once_with(
-        "/gguf/model.gguf", base_model="test/Model-1B"
+        "/gguf/model.gguf",
+        base_model="test/Model-1B",
+        quant="Q4_K_M",
+        backend="llama_cpp",
     )
     # run_eval called with gguf_path
     mock_eval.assert_called_once()
     call_kwargs = mock_eval.call_args[1]
-    assert call_kwargs.get("gguf_path") == "/gguf/model.gguf"
+    assert call_kwargs.get("quant_artifact") == "/gguf/model.gguf"
     assert call_kwargs.get("quant") == "Q4_K_M"

@@ -93,7 +93,10 @@ def _score(eval_set, weights_ref: str, base_model: str, gguf_path: str | None = 
         weights_ref,
         base_model,
         quant="Q4_K_M" if gguf_path else None,
-        gguf_path=gguf_path,
+        # This probe builds GGUFs specifically (see `_quantize`), so it names its backend rather
+        # than inheriting the run's: the artifact in hand is a GGUF whatever SLM_QUANT_BACKEND says.
+        quant_artifact=gguf_path,
+        quant_backend="llama_cpp",
     )
     return {
         "score": round(float(result.f1), 4),
@@ -105,7 +108,7 @@ def _score(eval_set, weights_ref: str, base_model: str, gguf_path: str | None = 
 def _quantize(checkpoint: str, base_model: str, workdir: str) -> tuple[str | None, dict]:
     """Merge the adapter, build a Q4_K_M GGUF, and load-validate it. Returns (path, report).
 
-    Same three calls `agent/nodes/evaluate._build_or_reuse_gguf` makes, in the same order, minus
+    Same three calls `agent/nodes/evaluate._build_or_reuse_quant_artifact` makes, in the same order, minus
     the cache. `validate_and_record_gguf` is the part that answers "can we quantize this" — it
     loads the file through llama-cpp-python, so a converter that emits a structurally broken
     artifact fails here rather than showing up as a mystery zero score.

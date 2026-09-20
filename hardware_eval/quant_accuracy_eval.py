@@ -4,14 +4,22 @@ Quantization ACCURACY comparison — score a trained checkpoint at Q4_K_M / Q8_0
 print an accuracy table. NO on-device / latency / power measurement (that's run_autobench).
 
 This answers "how much accuracy do I lose at each quantization?" on CPU, using the same
-honest path the pipeline uses: merge → quantize to GGUF (llama.cpp) → score the GGUF via
-llama-cpp-python with the model's chat template. bf16 is scored full-precision via Unsloth.
+honest path the pipeline uses: merge → quantize → score the quantized artifact through the
+engine that runs it on a phone. bf16 is scored full-precision via Unsloth.
+
+`--backend` picks which on-device runtime that means, exactly as `--quant-backend` does for a
+full pipeline run:
+  llama_cpp (default) : convert_hf_to_gguf + llama-quantize → a GGUF, scored with llama-cpp-python.
+  mnn                 : MNN's llmexport.py + MNNConvert → an MNN model directory, scored with
+                        pymnn. Q4_K_M means 4-bit and Q8_0 means 8-bit; there is no k-quant
+                        equivalent, so the comparison between backends is a bit-width comparison.
 
 Requirements:
-  1. llama.cpp tools on PATH: `convert_hf_to_gguf` (+ `.py`) and `llama-quantize`
-     (git clone https://github.com/ggml-org/llama.cpp && cmake --build ... ; add build/bin to PATH)
-  2. pip install llama-cpp-python   (CPU GGUF inference)
-  3. The pipeline venv for the bf16 path (unsloth) — only needed with --include-bf16.
+  1a. llama_cpp backend: llama.cpp tools on PATH — `convert_hf_to_gguf` (+ `.py`) and
+      `llama-quantize` — plus `llama-cpp-python`.
+  1b. mnn backend: `bash scripts/setup_mnn_env.sh` (builds MNNConvert, the exporter venv, and
+      pymnn with the LLM API).
+  2. The pipeline venv for the bf16 path (unsloth) — only needed with --include-bf16.
 
 Usage:
   # from a MERGED full-precision HF checkpoint + a run's eval_set.json
@@ -19,6 +27,11 @@ Usage:
       --checkpoint logs/runs/<ts>/artifacts/merged/<model>/<label>/iterN/merged \
       --eval-set  logs/runs/<ts>/artifacts/eval_set.json \
       --quants Q4_K_M,Q8_0 --include-bf16 --out /tmp/quant_cmp
+
+  # the same checkpoint through MNN instead
+  python hardware_eval/quant_accuracy_eval.py --backend mnn \
+      --checkpoint <merged checkpoint> --eval-set <run>/artifacts/eval_set.json \
+      --quants Q4_K_M --out /tmp/quant_cmp_mnn
 
   # from a LoRA adapter (+ base) — it merges first
   python hardware_eval/quant_accuracy_eval.py \
@@ -30,6 +43,7 @@ import argparse
 import json
 import os
 import sys
+import time
 
 PROJ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, PROJ)
@@ -48,6 +62,19 @@ def _load_eval_set(path: str, task_type_override: str | None):
     return EvalSet.from_serialized(payload), task_type
 
 
+def _truncate_eval_set(eval_set, n: int):
+    """The first `n` rows of an eval set, as an eval set.
+
+    Order-preserving rather than resampled: the rows were already sampled (label-balanced, for a
+    task like CLINC150) when the run built them, and re-sampling here with a different seed would
+    make two truncated runs incomparable for no gain.
+    """
+    from data.eval_set import EvalSet
+
+    print(f"[quant-eval] scoring the first {n} of {len(eval_set.all)} eval rows (--max-rows)")
+    return EvalSet(all=list(eval_set.all[:n]), task=eval_set.task)
+
+
 def main() -> int:
     p = argparse.ArgumentParser(description="Compare fine-tuned model accuracy across quantizations.")
     src = p.add_mutually_exclusive_group(required=True)
@@ -56,16 +83,33 @@ def main() -> int:
     p.add_argument("--base", default="", help="Base model id/path (required with --adapter).")
     p.add_argument("--eval-set", required=True, help="Path to a run's artifacts/eval_set.json.")
     p.add_argument("--task-type", default=None, help="Override task_type (else read from eval_set.json).")
-    p.add_argument("--quants", default="Q4_K_M,Q8_0", help="Comma list of GGUF quants to compare.")
+    p.add_argument("--quants", default="Q4_K_M,Q8_0", help="Comma list of quant variants to compare.")
+    p.add_argument("--backend", default=os.environ.get("SLM_QUANT_BACKEND", "llama_cpp"),
+                   choices=["llama_cpp", "mnn"],
+                   help="On-device runtime to quantize for and score through (default: llama_cpp).")
+    p.add_argument("--max-rows", type=int, default=0,
+                   help="Score only the first N eval rows. 0 (default) scores the whole set. For a "
+                        "CPU-decoded backend on a large eval set, this is the difference between a "
+                        "ten-minute check and an overnight one — a truncated set is a smaller "
+                        "measurement, not a different one, and the row count is recorded with it.")
     p.add_argument("--include-bf16", action="store_true", help="Also score full-precision (Unsloth).")
     p.add_argument("--out", required=True, help="Output dir for merged/GGUF artifacts.")
     p.add_argument("--report-dir", default=None,
                    help="Write results.json + report.md (with chart) here. Recommended: logs/quant_eval/<name>.")
     p.add_argument("--label", default="", help="Human label for the report header.")
     args = p.parse_args()
+    # Exported before anything reads it: `training/quant_backend.py` resolves the backend from the
+    # environment so that a CUDA worker spawned by run_eval inherits the same choice rather than
+    # defaulting back to llama.cpp inside a separate process.
+    os.environ["SLM_QUANT_BACKEND"] = args.backend
 
     from eval.harness import run_eval
-    from training.quantize import quantize_from_model_spec, _file_size_mb
+    from training.quant_backend import (
+        artifact_size_mb,
+        backend_label,
+        quantize_from_model_spec,
+        validate_and_record,
+    )
 
     checkpoint = args.checkpoint
     if args.adapter:
@@ -73,7 +117,14 @@ def main() -> int:
             p.error("--adapter requires --base")
         from training.lora_trainer import merge_for_quantization
         print(f"[quant-eval] merging {args.adapter} onto {args.base} ...")
-        checkpoint = merge_for_quantization(args.adapter, os.path.join(args.out, "_merged"))
+        # `base_model_id` pinned rather than inferred (B219): Unsloth rewrites the adapter's
+        # `base_model_name_or_path` to its own pre-quantized 4-bit mirror, and a 16-bit merge from
+        # that mirror is a unsloth_zoo NO-OP — it warns and writes nothing. `evaluate_node` has
+        # always passed it; this script did not, so the one path a human runs by hand was the one
+        # that could silently produce an empty merge.
+        checkpoint = merge_for_quantization(
+            args.adapter, os.path.join(args.out, "_merged"), base_model_id=args.base
+        )
     elif not os.path.isdir(checkpoint):
         # --checkpoint may name a bare HF model id (base-model sweep, no adapter). Resolve
         # it to the immutable local snapshot the converter can read.
@@ -83,24 +134,50 @@ def main() -> int:
         print(f"[quant-eval] snapshot: {checkpoint}")
 
     eval_set, task_type = _load_eval_set(args.eval_set, args.task_type)
+    if args.max_rows and args.max_rows < len(eval_set.all):
+        eval_set = _truncate_eval_set(eval_set, args.max_rows)
     base = args.base or checkpoint
-    print(f"[quant-eval] task_type={task_type}  eval_set={len(eval_set.all)} examples  checkpoint={checkpoint}")
+    print(f"[quant-eval] backend={backend_label(args.backend)}  task_type={task_type}  "
+          f"eval_set={len(eval_set.all)} examples  checkpoint={checkpoint}")
 
     rows = []  # (label, size_mb, f1)
     for quant in [q.strip() for q in args.quants.split(",") if q.strip()]:
         try:
-            gguf = quantize_from_model_spec(checkpoint, os.path.join(args.out, quant), quant)
-            size = round(_file_size_mb(gguf), 1)
-            res = run_eval(eval_set, checkpoint, base, quant=quant, gguf_path=gguf)
+            started = time.time()
+            artifact = quantize_from_model_spec(
+                checkpoint, os.path.join(args.out, quant), quant, args.backend
+            )
+            quantize_s = time.time() - started
+            size = round(artifact_size_mb(artifact, args.backend), 1)
+            # The same gate `evaluate_node` puts in front of every score: load the artifact in its
+            # real runtime, generation-smoke-test it, and write the content-hash sidecar. Added
+            # because this script claims to use "the same honest path the pipeline uses" and did
+            # not — it went straight from quantize to score, so the one check that catches a
+            # mislabelled MNN bit width (4-bit and 8-bit exports share all five filenames) was
+            # skipped exactly where a human is looking at the numbers by hand.
+            record = validate_and_record(
+                artifact, base_model=base, quant=quant, backend=args.backend
+            )
+            recorded_bits = record.get("quant_bit")
+            if recorded_bits is not None:
+                print(f"[quant-eval] {quant}: validated as {recorded_bits}-bit "
+                      f"(block {record.get('quant_block')})")
+            started = time.time()
+            res = run_eval(
+                eval_set, checkpoint, base, quant=quant,
+                quant_artifact=artifact, quant_backend=args.backend,
+            )
+            eval_s = time.time() - started
             rows.append((quant, size, res.f1))
-            print(f"[quant-eval] {quant}: F1={res.f1:.4f}  ({size} MB)")
+            print(f"[quant-eval] {quant}: F1={res.f1:.4f}  format_valid={res.format_valid:.4f}  "
+                  f"({size} MB, quantized in {quantize_s:.0f}s, scored in {eval_s:.0f}s)")
         except Exception as e:
             print(f"[quant-eval] {quant}: FAILED — {e}", file=sys.stderr)
             rows.append((quant, None, None))
 
     if args.include_bf16:
         try:
-            res = run_eval(eval_set, checkpoint, base, quant=None, gguf_path=None)
+            res = run_eval(eval_set, checkpoint, base, quant=None, quant_artifact=None)
             # bf16 has no GGUF, so measure the weight files in the checkpoint dir itself —
             # otherwise the size chart has a hole exactly where the baseline should be.
             bf16_mb = round(sum(
@@ -192,6 +269,10 @@ def _emit_report(rows, args, task_type, n_examples, checkpoint) -> None:
     payload = {
         "generated": datetime.datetime.now(datetime.timezone.utc).isoformat(),
         "label": args.label,
+        # Which runtime produced these numbers. A Q4_K_M row from llama.cpp and a Q4_K_M row from
+        # MNN are different measurements of different artifacts, and a results file that did not
+        # say so would be un-interpretable the moment both exist.
+        "backend": args.backend,
         "checkpoint": str(checkpoint),
         "base_model": args.base or None,
         "adapter": args.adapter or None,

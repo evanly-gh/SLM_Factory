@@ -42,12 +42,62 @@ import os
 # legitimate reply longer than this, so hitting it means something has gone wrong.
 MAX_OUTPUT_TOKENS = int(os.environ.get("SLM_MAX_OUTPUT_TOKENS", "16384"))
 
-# Characters per token for dense JSON and English prose. Conservative on purpose: this figure is used
-# to estimate how much of the context a PROMPT has already spent, and over-estimating the prompt
-# leaves a smaller output budget, which is the safe direction to be wrong in.
+# Characters per token for dense JSON and English prose, used to size what a reply must CONTAIN.
+# Over-asking for output is free (generation stops at EOS), so 4.0 is fine here.
 CHARS_PER_TOKEN = 4.0
 
-# Reserved for the chat template, role markers and the server's own accounting.
+# Characters per token used to estimate what the PROMPT has already spent. Deliberately SMALLER than
+# CHARS_PER_TOKEN, which makes the estimate larger and the resulting output budget smaller — the
+# safe direction, because this number is subtracted from a hard server limit.
+#
+# WHY IT IS NOT 4.0 — this is the "over by exactly one token" bug
+#     xlam run 39311800 died on 400s that read:
+#         requested 4736 output tokens, prompt contains at least 3457, total at least 8193 (max 8192)
+#     4.0 estimated that prompt at 3392 against a real 3457: 65 tokens short, against a 64-token
+#     margin. Raising the served context to 16384 did NOT fix it, because the shortfall is
+#     PROPORTIONAL to prompt length, not constant — run 39321471 then produced
+#         requested 13515, prompt at least 2870, total at least 16385 (max 16384)
+#     the identical 65-token gap at double the context. A fixed margin cannot absorb an error that
+#     grows with the prompt; the estimate itself has to be conservative.
+#
+#     Dense tool-schema JSON is punctuation-heavy and tokenizes near 3.9 chars/token, so 4.0 is
+#     optimistic by ~2%. 3.5 leaves ~14% headroom, which covers that with room to spare and costs
+#     only a slightly smaller output budget on very long prompts.
+#
+# WHY IT IS NO LONGER 3.5 — the SAME bug, on a corpus that tokenizes far worse (2026-09-09)
+#     `gec_bea19` synthesis failed 97 of 112 generation attempts with, verbatim:
+#         requested 15796 output tokens, prompt contains at least 589 input tokens,
+#         for a total of at least 16385 tokens (max 16384)
+#     Over by exactly one token again, from a 65-token shortfall against the 64-token margin —
+#     numerically identical to the xlam case above, which is what makes it worth spelling out:
+#     lowering 4.0 to 3.5 did not fix the class of bug, it moved the threshold.
+#
+#     W&I+LOCNESS is distributed WORD-TOKENIZED. Every punctuation mark is its own whitespace-
+#     separated token and contractions are split (`do n't`, `It 's`), so a two-character " ." costs
+#     a whole token. Measured over real 5-shot generation prompts:
+#
+#         task         chars  real tok  chars/token   est@3.5   short by
+#         gec_bea19     2302       766         3.01       657       +109
+#         multiconer    1445       406         3.56       412         -6
+#         dialogsum     4298      1171         3.67      1228        -57
+#         topv2         1600       420         3.81       457        -37
+#         goemotions    1289       337         3.82       368        -31
+#
+#     Only GEC falls below 3.5, and it does so by enough to blow through a fixed margin — 109
+#     tokens against 64. The other four are over-estimated, which is the safe direction.
+#
+#     2.5, not 3.0. Three would sit exactly at the worst observed ratio, and a margin of 1.00x is
+#     what this comment has now been written twice about: an estimate that is merely adequate for
+#     today's prompts fails the next corpus. 2.5 over-estimates GEC's prompt by ~20%.
+#
+#     IT COSTS ALMOST NOTHING. On GEC's 2,302-character prompt the estimate rises from 657 to 921
+#     tokens, so the output budget falls by 264 out of roughly 15,700 — and real replies are ~100
+#     tokens, because generation stops at EOS. The budget was never the binding constraint on a
+#     reply's length; it only has to not exceed what the server will accept.
+_PROMPT_CHARS_PER_TOKEN = 2.5
+
+# Reserved for the chat template, role markers and the server's own accounting. This covers the
+# FIXED overhead only; proportional tokenizer drift is handled by _PROMPT_CHARS_PER_TOKEN above.
 _CONTEXT_MARGIN_TOKENS = 64
 
 # Never return less than this, even when the prompt has nearly filled the context. A budget below
@@ -55,15 +105,38 @@ _CONTEXT_MARGIN_TOKENS = 64
 _FLOOR_TOKENS = 256
 
 
+# The two defaults `config.config` uses for the teacher's context, mirrored here. LOCAL is what
+# `_l40s_task_body.sh` launches vLLM with; API is what DeepSeek serves.
+_LOCAL_DEFAULT_CONTEXT = 8192
+_API_DEFAULT_CONTEXT = 131072
+
+
 def served_context() -> int:
-    """The context the teacher's vLLM server was actually launched with.
+    """The context the teacher is actually served at — local vLLM or the hosted API.
 
     Read from the environment rather than `from config.config import SYNTH_MAX_MODEL_LEN`, which
     imports a module that raises KeyError on any unset API key. That import, wrapped in a bare
     `except: pass`, is how the first version of this clamp came to be silently inactive whenever an
-    unrelated credential was missing. The default matches `config.py` so the two cannot disagree.
+    unrelated credential was missing.
+
+    THE DEFAULT IS PER-MODE, because `config.config` has two and matching only one of them is how
+    the two came to disagree. This returned a flat 8192 while API mode's config default is 131072,
+    and the xlam launcher had just stopped exporting the variable in API mode — deliberately, so its
+    local 16384 cap could not throttle DeepSeek. The result was a budget computed against an 8,192
+    window the teacher did not have: on run 39361648, `output_budget` allowed roughly 4,600 output
+    tokens where 16,384 were available, and `deepseek-v4-flash` spends most of a budget reasoning
+    before it emits content, so replies were cut off a few hundred characters in — 19 of one
+    350-attempt batch, reported as `unparseable JSON from the generator`.
+
+    An explicit `SLM_SYNTH_MAX_MODEL_LEN` still wins in both modes; it is the operator override that
+    the local profiles use to trade context against KV cache.
     """
-    return int(os.environ.get("SLM_SYNTH_MAX_MODEL_LEN", "8192"))
+    explicit = os.environ.get("SLM_SYNTH_MAX_MODEL_LEN")
+    if explicit:
+        return int(explicit)
+    if os.environ.get("SLM_SYNTH_API_MODE", "0") == "1":
+        return _API_DEFAULT_CONTEXT
+    return _LOCAL_DEFAULT_CONTEXT
 
 
 def output_budget(prompt: str = "", *, needed_chars: int = 0) -> int:
@@ -79,7 +152,7 @@ def output_budget(prompt: str = "", *, needed_chars: int = 0) -> int:
         # 1.5x, because a genuinely new instance is allowed to be somewhat longer than the row it
         # was modelled on.
         budget = max(budget, int(needed_chars / CHARS_PER_TOKEN * 1.5) + 128)
-    room = served_context() - int(len(prompt) / CHARS_PER_TOKEN) - _CONTEXT_MARGIN_TOKENS
+    room = served_context() - int(len(prompt) / _PROMPT_CHARS_PER_TOKEN) - _CONTEXT_MARGIN_TOKENS
     return max(_FLOOR_TOKENS, min(budget, room))
 
 

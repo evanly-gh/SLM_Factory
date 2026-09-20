@@ -46,6 +46,51 @@ def ner_turn(row: dict, _ctx: TrainingContext) -> tuple[str, str, str]:
     )
 
 
+def multilabel_emotion_turn(row: dict, _ctx: TrainingContext) -> tuple[str, str, str]:
+    """One GoEmotions row as `(prompt, comma-joined labels, marker)`.
+
+    Not `classification_turn`: that builds a single-label prompt from `ctx.labels` and targets one
+    label word. This task is multi-label, and its 28-name vocabulary is pinned in the loader
+    rather than read off the eval set.
+    """
+    from eval.scorers.multilabel_emotion import build_prompt
+
+    target = row.get("label") or ", ".join(row.get("labels") or [])
+    if not str(target).strip():
+        raise ValueError("emotion training row has no labels; nothing to learn")
+    return build_prompt(row.get("text", "")), str(target), "Answer"
+
+
+def semantic_parse_turn(row: dict, _ctx: TrainingContext) -> tuple[str, str, str]:
+    """One TOPv2 row as `(prompt, parse string, marker)`.
+
+    The target is the corpus's `semantic_parse` VERBATIM. Re-serializing it here — even
+    normalizing bracket spacing — would train the model toward a string the scorer then compares
+    against the unmodified gold, so exact match would penalize the model for obeying us.
+    """
+    from eval.scorers.semantic_parse import build_prompt
+
+    answer = row.get("answer", "")
+    if not str(answer).strip():
+        raise ValueError("semantic-parse training row has an empty 'answer'; nothing to learn")
+    return build_prompt(row.get("text", "")), str(answer), "Parse"
+
+
+def fine_ner_turn(row: dict, _ctx: TrainingContext) -> tuple[str, str, str]:
+    """One MultiCoNER row as `(prompt, JSON span list, marker)`.
+
+    Separate from `ner_turn` because the prompt is: this one enumerates all 33 type names, which
+    the model cannot guess and which the scorer then compares exactly.
+    """
+    from eval.scorers.fine_ner import build_prompt
+
+    return (
+        build_prompt(row.get("text", "")),
+        json.dumps(row.get("entities", [])),
+        "Entities",
+    )
+
+
 def generation_turn(row: dict, ctx: TrainingContext) -> tuple[str, str, str]:
     """Free-form answer, optionally preceded by a chain-of-thought block."""
     from eval.scorers.generation import build_generation_prompt
@@ -57,6 +102,40 @@ def generation_turn(row: dict, ctx: TrainingContext) -> tuple[str, str, str]:
     cot = row.get("cot_reasoning", "")
     target = f"<reasoning>\n{cot}\n</reasoning>\n\n{answer}" if cot else answer
     return str(prompt), str(target), "Answer"
+
+
+def summarization_turn(row: dict, ctx: TrainingContext) -> tuple[str, str, str]:
+    """One DialogSum row as `(prompt, reference summary, marker)`.
+
+    The target is `references[0]` — one human summary, not all three. Training on three targets
+    for one dialogue would teach the model to average three people's phrasing; the three exist to
+    make SCORING fair, not to triple the training signal. Train and dev are single-reference
+    anyway, so this is only a choice on the test split, which is never trained on.
+    """
+    from eval.scorers.summarization import build_summarization_prompt, resolve_instruction
+
+    references = row.get("references") or []
+    target = str(references[0] if references else row.get("answer", "")).strip()
+    if not target:
+        raise ValueError("summarization training row has no reference summary; nothing to learn")
+    instruction = ctx.instruction or resolve_instruction([row])
+    return build_summarization_prompt(row.get("text", ""), instruction), target, "Summary"
+
+
+def gec_turn(row: dict, _ctx: TrainingContext) -> tuple[str, str, str]:
+    """One GEC row as `(prompt, corrected sentence, marker)`.
+
+    The target is the TOKENIZED corrected sentence, exactly as the M2 file yields it. ERRANT reads
+    tokenized text, so detokenizing the target here would train the model to emit a string the
+    scorer then has to align against tokenized gold — misaligning every edit for reasons that have
+    nothing to do with grammar.
+    """
+    from eval.scorers.gec import GEC_PROMPT
+
+    answer = row.get("answer", "")
+    if not str(answer).strip():
+        raise ValueError("gec training row has an empty 'answer'; nothing to learn")
+    return GEC_PROMPT.format(text=row.get("text", "")), str(answer), "Correction"
 
 
 def function_call_turn(row: dict, _ctx: TrainingContext) -> tuple[str, str, str]:

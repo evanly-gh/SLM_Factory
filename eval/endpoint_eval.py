@@ -1,13 +1,20 @@
-"""Measure a hosted reference model's zero-shot score on THIS run's frozen eval set.
+"""Measure a hosted reference model's ZERO-SHOT score on THIS run's frozen eval set.
 
-Used to calibrate the accuracy goal to the separately-hosted Qwen-3.6 (config.SYNTH_ENDPOINT):
-the target a run must beat is the reference model's OWN performance on the identical E, scored
-by the identical task scorer — not a recalled leaderboard number. See
-agent.threshold.threshold_from_endpoint_baseline for how the score becomes the goal.
+NOT ON THE PIPELINE PATH ANY MORE. The accuracy goal used to be calibrated from this function while
+the synthesis gate was calibrated separately from a five-shot measurement, so a run scored its own
+teacher twice with two different prompts and set the goal from the shape nothing else ever sends. On
+a format-bound task those disagree by multiples (BC5CDR: 0.1131 zero-shot against 0.7190 five-shot),
+so both consumers now read the single five-shot verdict from `agent/teacher_fitness.py` and
+`agent/nodes/cold_start/eval_setup._calibrate_qwen_goal_if_pending` no longer calls this.
 
-The endpoint is a LOCAL vLLM OpenAI-compatible server reached via data.synth_client. When it is
-unreachable (e.g. a dev box with SLM_SYNTH_ENDPOINT unset), get_generate_fn returns None and
-the caller degrades honestly rather than crashing.
+It is kept because ZERO-shot remains a measurement worth being able to take on demand — it is half
+of what `scripts/probe_teacher_fewshot.py` compares, and the B320 diagnosis (demonstrations making a
+teacher look WORSE means a prompt-assembly defect, not an incapable model) needs both halves.
+
+The endpoint is whatever `data.synth_client` is configured for — a local vLLM server, or the
+DeepSeek API under SLM_SYNTH_API_MODE=1. When it is unreachable (e.g. a dev box with
+SLM_SYNTH_ENDPOINT unset), get_generate_fn returns None and the caller degrades honestly rather
+than crashing.
 """
 import logging
 from concurrent.futures import ThreadPoolExecutor

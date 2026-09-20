@@ -47,10 +47,11 @@ SPEC = TaskSpec(
     load=_load,
     required_fields=("text", "answer"),
     initial_train_cap=5000,
-    eval_cap=1000,
+    select_cap=1000,
     eval_sampling="shuffled",
     closed_label_space=False,
     label_definitions={},
+    entity_type_vocabulary=(),  # extracts no spans
     verifier_notes="",
     # These four had never run: `function_call` fell into `apply_quality_controls`' `else` branch
     # and the dataset was returned untouched, so no xlam curriculum was ever filtered (B299).
@@ -74,6 +75,12 @@ SPEC = TaskSpec(
     needs_judge=False,
     judge_overlap=False,
     attach_reasoning=True,
+
+    # Selection and reporting coincide: a call either matches the gold AST or it does not. No
+    # threshold to tune, no per-class averaging to destabilize.
+    report_load=None,
+    report_score=scorer.score,
+    report_metric_name="ast_arg_match",
 
     build_training_turn=function_call_turn,
 

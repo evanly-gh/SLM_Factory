@@ -46,12 +46,14 @@ class MissingEventPathError(RuntimeError):
 # Official public API rates, USD per million tokens, verified 2026-07-21.
 # Sources:
 #   Anthropic: https://platform.claude.com/docs/en/about-claude/pricing
+#   DeepSeek:  https://api-docs.deepseek.com/quick_start/pricing-details-usd
 _DEFAULT_PRICING = {
-    "effective_date": "2026-07-21",
+    "effective_date": "2026-08-28",
     "currency": "USD",
     "unit": "per_million_tokens",
     "sources": {
         "anthropic": "https://platform.claude.com/docs/en/about-claude/pricing",
+        "deepseek": "https://api-docs.deepseek.com/quick_start/pricing-details-usd",
     },
     "models": {
         "claude-sonnet-5": {
@@ -87,6 +89,47 @@ _DEFAULT_PRICING = {
             "cached_input_per_mtok": 0.10,
             "cache_write_5m_per_mtok": 1.25,
             "cache_write_1h_per_mtok": 2.0,
+        },
+        # DeepSeek, the teacher under SLM_SYNTH_API_MODE=1. The legacy `deepseek-chat` and
+        # `deepseek-reasoner` aliases were RETIRED 2026-07-24 and are not listed: a call to either
+        # is routed nowhere, so pricing one would only make a dead model look affordable.
+        #
+        # WHY THESE NUMBERS AND NOT THE LOWER ONES
+        #     DeepSeek introduced time-of-day billing on 2026-08-16 — peak hours (01:00-04:00 and
+        #     06:00-10:00 UTC) are exactly double off-peak — and published rates currently disagree
+        #     between sources, with the pre-repricing figures ($0.14 / $0.0028 / $0.28 for flash)
+        #     still widely quoted. These are the HIGHER off-peak rates, because a ledger that
+        #     understates spend is the more damaging error: it is the number a budget decision is
+        #     made from. Time-of-day is deliberately NOT modelled — an estimate that changes with
+        #     the clock is not reproducible across a re-read of the same ledger, and a peak-hours
+        #     run is under-counted by at most 2x against a figure already chosen to be pessimistic.
+        #
+        # Correct either direction without a code edit via SLM_PRICING_OVERRIDES (inline JSON) or
+        # SLM_PRICING_PATH (a JSON file); both merge over these defaults.
+        #
+        # There is no cache-WRITE line because DeepSeek does not charge for one: its disk prefix
+        # cache is automatic and populated for free, so `cache_write_*_per_mtok` are left to fall
+        # back to `input_per_mtok`, which is what an uncached input token costs anyway.
+        "deepseek-v4-flash": {
+            "provider": "deepseek",
+            "input_per_mtok": 0.22,
+            "output_per_mtok": 0.66,
+            "cached_input_per_mtok": 0.007,
+            "rate_note": "off-peak; peak (01:00-04:00, 06:00-10:00 UTC) is 2x",
+        },
+        "deepseek-v4-pro": {
+            "provider": "deepseek",
+            "input_per_mtok": 0.66,
+            "output_per_mtok": 1.98,
+            "cached_input_per_mtok": 0.022,
+            "rate_note": "off-peak; peak (01:00-04:00, 06:00-10:00 UTC) is 2x",
+        },
+        "deepseek-v4-flash-vision-exp": {
+            "provider": "deepseek",
+            "input_per_mtok": 0.22,
+            "output_per_mtok": 0.66,
+            "cached_input_per_mtok": 0.007,
+            "rate_note": "off-peak; peak (01:00-04:00, 06:00-10:00 UTC) is 2x",
         },
     },
     # Exa exposes the authoritative cost on successful responses.  This is used
@@ -150,6 +193,11 @@ def _pricing_key(provider: str, model: str, registry: dict) -> str | None:
         ("claude-opus-4-8", "claude-opus-4-8"),
         ("claude-sonnet-4-6", "claude-sonnet-4-6"),
         ("claude-haiku-4-5", "claude-haiku-4-5"),
+        # Longest first: "deepseek-v4-flash" is a prefix of the vision id, so matching it first
+        # would price every vision call off the text model.
+        ("deepseek-v4-flash-vision-exp", "deepseek-v4-flash-vision-exp"),
+        ("deepseek-v4-flash", "deepseek-v4-flash"),
+        ("deepseek-v4-pro", "deepseek-v4-pro"),
     )
     for needle, key in aliases:
         if needle in model_l and key in models:
@@ -339,11 +387,29 @@ def _cost_log_line(event: CostEvent) -> str:
 # FAILURE still prints because a failing local call is diagnostic.
 _LOG_LOCAL_COST_EVENTS = os.environ.get("SLM_LOG_LOCAL_COST_EVENTS", "0") == "1"
 
+# The SAME problem, for the SAME reason, on the paid teacher. Under SLM_SYNTH_API_MODE=1 the
+# per-row synthesis calls that used to be local become DeepSeek calls, and the volume does not
+# change: the calendar_json run this was measured against made 26,513 of them. Being paid is not a
+# reason to print each one — it is a reason to make the TOTAL easy to find, which the end-of-run
+# summary and the JSONL ledger already do. Only the high-volume per-row stages are suppressed;
+# one-off paid calls (orchestrator decisions, preflights, Exa searches) still print, and so does
+# every failure, because a failing paid call is the one you most need to see.
+_LOG_API_COST_EVENTS = os.environ.get("SLM_LOG_API_COST_EVENTS", "0") == "1"
+_HIGH_VOLUME_STAGES = frozenset({
+    "api_synthesis",
+    "local_synthesis",
+    "generation_judge",
+})
+
 
 def _should_echo_cost_event(event: CostEvent) -> bool:
-    if _LOG_LOCAL_COST_EVENTS:
+    if event.status != "success":
         return True
-    return not (event.provider == "local" and event.status == "success")
+    if event.provider == "local":
+        return _LOG_LOCAL_COST_EVENTS
+    if event.stage in _HIGH_VOLUME_STAGES:
+        return _LOG_API_COST_EVENTS
+    return True
 
 
 def record_cost_event(
@@ -644,22 +710,33 @@ def _is_private_host(hostname: str | None) -> bool:
 
 
 def openai_provider(client: Any, model: str, provider: str | None = None) -> str:
-    """Classify an OpenAI-compatible client. The only such client in the pipeline is the
-    local vLLM synth/judge endpoint (Qwen3.6); there are no cloud OpenAI-compatible teachers."""
+    """Classify an OpenAI-compatible client.
+
+    Two such clients exist: the local vLLM synth/judge endpoint (Qwen3.6, always $0), and the
+    DeepSeek teacher under SLM_SYNTH_API_MODE=1 (priced per token). Getting this wrong is not
+    cosmetic — a DeepSeek call misfiled as "local" is recorded at $0.00 and vanishes from the
+    run's spend, so the paid-provider checks come FIRST and an explicit `provider` argument is
+    honoured before any host or model-name heuristic.
+    """
     model_l = (model or "").lower()
+    provider_l = (provider or "").lower()
     base_url = _client_base_url(client)
     parsed = urlparse(base_url if "://" in base_url else f"//{base_url}")
     host = parsed.hostname
+    if provider_l and provider_l != "local":
+        return provider_l
+    if "deepseek" in model_l or (host or "").lower().endswith("deepseek.com"):
+        return "deepseek"
     configured_local = os.environ.get("SLM_SYNTH_ENDPOINT", "")
     if (
-        (provider or "").lower() == "local"
+        provider_l == "local"
         or "qwen" in model_l
         or "vllm" in model_l
         or _is_private_host(host)
         or (configured_local and base_url.rstrip("/") == configured_local.rstrip("/"))
     ):
         return "local"
-    return (provider or "local").lower()
+    return provider_l or "local"
 
 
 def _openai_usage(response: Any, provider: str) -> dict:
@@ -703,7 +780,7 @@ def tracked_openai_chat_create(
     provider: str | None = None,
     **kwargs,
 ) -> Any:
-    """Track an OpenAI-compatible chat call, including local vLLM at $0."""
+    """Track an OpenAI-compatible chat call: local vLLM at $0, or a priced DeepSeek call."""
     model = str(kwargs.get("model", ""))
     resolved_provider = openai_provider(client, model, provider)
     site = callsite or _infer_callsite()
@@ -767,9 +844,16 @@ def tracked_local_call(
     operation: str,
     event_path: str | os.PathLike | None = None,
     callsite: str | None = None,
+    provider: str = "local",
     **kwargs,
 ) -> Any:
-    """Track a non-chat local service call (for example vLLM preflight)."""
+    """Track a non-chat service call (for example a vLLM or DeepSeek `models.list` preflight).
+
+    `provider` exists so an API-mode preflight is not filed under "local". These calls carry no
+    token usage and no charge on either backend, so `estimated_usd` stays 0.0 and the pricing
+    status stays `not_applicable` regardless — what changes is only which provider the run's
+    summary attributes the call to.
+    """
     site = callsite or _infer_callsite()
     started = time.perf_counter()
     try:
@@ -777,7 +861,7 @@ def tracked_local_call(
     except BaseException as exc:
         record_cost_event(
             CostEvent(
-                provider="local",
+                provider=provider,
                 model=model,
                 stage=stage,
                 callsite=site,
@@ -795,7 +879,7 @@ def tracked_local_call(
         raise
     record_cost_event(
         CostEvent(
-            provider="local",
+            provider=provider,
             model=model,
             stage=stage,
             callsite=site,

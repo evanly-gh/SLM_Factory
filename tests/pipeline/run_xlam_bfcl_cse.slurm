@@ -46,6 +46,20 @@ export SLM_BENCHMARK_TASK=xlam_bfcl
 # removes a good row AND can stop the run. Until the notes are shown to lower the rejection rate on a
 # live run, the exact verifier is trusted on its own. Set SLM_VERIFY_SYNTH=1 to measure the pass again.
 export SLM_VERIFY_SYNTH=0
+# SYNTHESIS GATE: kept identical to this task's l40s launcher, where the reasoning is written out.
+# The teacher measurement, the real 0.80 gate and `bypassed` are all still recorded on the verdict;
+# BYPASS changes only the decision. Divergence here is what made two runs of the same task different.
+export SLM_TEACHER_SYNTH_BYPASS=1
+# TEACHER SERVED CONTEXT: kept identical to this task's l40s launcher, where the 400s that forced
+# it are quoted in full. xlam's rows do not fit the 8192 default; max-num-seqs is halved to pay the
+# KV cache for the wider context.
+# Local-vLLM only; see the l40s launcher for why applying these in API mode caps DeepSeek's
+# context to an eighth of its default and starves the demonstration budget.
+if [ "${SLM_SYNTH_API_MODE:-0}" != "1" ]; then
+    export SLM_SYNTH_MAX_MODEL_LEN=16384
+    export SLM_SYNTH_MAX_NUM_SEQS=32
+    export SLM_SYNTH_CONCURRENCY=24
+fi
 
 export TASK="Fine tune a small model for function/tool calling (train on xLAM-60k, evaluate on the Berkeley Function-Calling Leaderboard), targeting deployment on my Samsung Galaxy S24 Ultra with 12GB RAM and 256GB storage"
 source /mmfs1/gscratch/intelligentsystems/evanly/SLM_Factory/tests/pipeline/_l40s_task_body.sh

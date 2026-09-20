@@ -234,6 +234,11 @@ def clear_inference_cache() -> None:
     _cache_order.clear()
     _gguf_cache.clear()
     _gguf_cache_order.clear()
+    # MNN models are CPU-resident rather than VRAM-resident, so this frees host RAM rather than
+    # GPU memory — but the reason is the same one the comment above gives: a model the pipeline has
+    # moved on from must not stay loaded while the next, usually larger, one is loaded beside it.
+    _mnn_cache.clear()
+    _mnn_cache_order.clear()
     try:
         import gc
         import torch
@@ -797,6 +802,188 @@ def infer_batch(
     )
 
 
+def _label_score_rows(tokenizer, rendered_prompt: str, labels: list[str]) -> list[tuple[list, int]]:
+    """One `(token_ids, n_label_tokens)` pair per label, teacher-forced onto the prompt.
+
+    `add_special_tokens=False` on the label half is not optional: the prompt has already been
+    rendered through the chat template, so any BOS the tokenizer would prepend belongs to the
+    prompt and adding a second one mid-sequence scores a sequence the model will never see.
+    """
+    prompt_ids = tokenizer(rendered_prompt, add_special_tokens=False)["input_ids"]
+    rows = []
+    for label in labels:
+        label_ids = tokenizer(label, add_special_tokens=False)["input_ids"]
+        if not label_ids:
+            # A label that tokenizes to nothing cannot be scored. Recorded as zero-length so the
+            # caller assigns it -inf rather than silently averaging over an empty slice.
+            rows.append((list(prompt_ids), 0))
+            continue
+        rows.append((list(prompt_ids) + list(label_ids), len(label_ids)))
+    return rows
+
+
+def _score_label_batch(model, tokenizer, rows, torch_module) -> list[float]:
+    """Mean per-token logprob of each row's label continuation, in one padded forward pass."""
+    pad_id = tokenizer.pad_token_id
+    if pad_id is None:
+        pad_id = tokenizer.eos_token_id or 0
+    width = max(len(ids) for ids, _n in rows)
+    input_ids, attention_mask = [], []
+    for ids, _n in rows:
+        # RIGHT padding, unlike the generation path's left padding. Generation needs every
+        # sequence's last real token flush against the output, so it pads left; scoring needs
+        # known absolute positions for the label tokens, which right padding gives directly.
+        input_ids.append(list(ids) + [pad_id] * (width - len(ids)))
+        attention_mask.append([1] * len(ids) + [0] * (width - len(ids)))
+    device = getattr(model, "device", None)
+    ids_tensor = torch_module.tensor(input_ids)
+    mask_tensor = torch_module.tensor(attention_mask)
+    if device is not None:
+        ids_tensor = ids_tensor.to(device)
+        mask_tensor = mask_tensor.to(device)
+
+    with torch_module.no_grad():
+        logits = model(input_ids=ids_tensor, attention_mask=mask_tensor).logits
+    # Position i's logits predict token i+1, so the logprob of token t at index i comes from
+    # logits[i - 1]. Shifting once here keeps that offset in one place.
+    logprobs = torch_module.log_softmax(logits[:, :-1, :].float(), dim=-1)
+    targets = ids_tensor[:, 1:]
+    gathered = logprobs.gather(-1, targets.unsqueeze(-1)).squeeze(-1)
+
+    out: list[float] = []
+    for row_index, (ids, n_label) in enumerate(rows):
+        if n_label <= 0:
+            out.append(float("-inf"))
+            continue
+        end = len(ids) - 1            # last index into the shifted arrays
+        start = end - n_label         # first label token's shifted index
+        total = gathered[row_index, start:end].sum().item()
+        # LENGTH-NORMALIZED, i.e. mean logprob per label token. Within one label this is a
+        # division by a constant, so it cannot change that label's average precision — AP depends
+        # only on the ranking of examples for a fixed label. It is done anyway because the raw
+        # sum makes short labels systematically look likelier than long ones, which would make
+        # the per-label scores useless to read side by side in the diagnostics.
+        out.append(total / n_label)
+    return out
+
+
+def infer_label_scores_batch(
+    prompts: list[str],
+    labels: list[str],
+    weights_ref: str,
+    base_model: str,
+    task: str = "",
+) -> list[dict[str, float]]:
+    """Score every candidate label against every prompt. One dict of label -> logprob per prompt.
+
+    WHY THIS EXISTS AT ALL
+        The rest of the harness GENERATES text and parses it, which yields a hard decision: this
+        label or not. A threshold-free metric needs a RANKING, and generation cannot supply one.
+        GoEmotions' published headline is macro average precision — chosen precisely because
+        macro-F1 over 28 labels is a thresholding artifact that moves several points between a
+        fixed 0.5, a fixed 0.3 and a dev-tuned sweep — so without per-label scores the honest
+        metric for that task is not computable.
+
+        This is the only new inference capability the suite needs, and it is deliberately confined
+        to the report pass. The agent loop still selects on the 7-way Ekman grouping scored from
+        ordinary generation, so nothing in the hot path changes and no other task is affected.
+
+    WHAT IT DOES NOT DO
+        It does not reuse the prompt's KV cache across the 28 labels, which is the obvious
+        optimization: all labels share the prompt prefix, so a single prefill could serve all of
+        them. Skipped on purpose. Hand-rolling cache reuse puts the number this project reports
+        behind code whose bugs would shift scores rather than raise, and this runs once per run
+        on 5,427 rows. Correctness of a published metric beats the speed of a one-off pass.
+    """
+    if not prompts or not labels:
+        return []
+
+    from training.cuda_isolation import isolation_enabled, run_isolated
+
+    if isolation_enabled():
+        return run_isolated(
+            "infer_label_scores",
+            {
+                "prompts": prompts,
+                "labels": labels,
+                "weights_ref": weights_ref,
+                "base_model": base_model,
+                "task": task,
+            },
+        )
+    return _infer_label_scores_local(prompts, labels, weights_ref, base_model, task)
+
+
+def _infer_label_scores_local(
+    prompts: list[str],
+    labels: list[str],
+    weights_ref: str,
+    base_model: str,
+    task: str,
+) -> list[dict[str, float]]:
+    import torch
+
+    from agent.timing import TimingEvent, record_timing_event
+
+    started = time.perf_counter()
+    status = "success"
+    max_seq_length = task_max_seq_length(task) if task else _DEFAULT_INFERENCE_SEQ_LENGTH
+    # One prompt's worth of labels is the natural unit of work, but 28 sequences at once can be
+    # more than a small GPU wants, so the label dimension is chunked by the task's own eval batch
+    # size and halved on OOM exactly as the generation path does.
+    chunk = max(1, min(len(labels), _eval_batch_size(task) if task else 16))
+    metadata = {
+        "task": task,
+        "prompt_count": len(prompts),
+        "label_count": len(labels),
+        "max_seq_length": max_seq_length,
+        "initial_label_chunk": chunk,
+        "oom_retries": 0,
+    }
+    try:
+        model, tokenizer = _load_inference_model(weights_ref, base_model, max_seq_length)
+        results: list[dict[str, float]] = []
+        for prompt in prompts:
+            rendered = _render_inference_prompt(tokenizer, prompt, base_model)
+            rows = _label_score_rows(tokenizer, rendered, labels)
+            longest = max(len(ids) for ids, _n in rows)
+            if longest > max_seq_length:
+                raise ValueError(
+                    f"task={task}: a scored prompt plus label is {longest} tokens, over the "
+                    f"{max_seq_length}-token context. Raise the task's max_seq_length."
+                )
+            scored: list[float] = []
+            index = 0
+            while index < len(rows):
+                window = rows[index:index + chunk]
+                try:
+                    scored.extend(_score_label_batch(model, tokenizer, window, torch))
+                except BaseException as exc:  # noqa: BLE001 - re-raised unless it is an OOM
+                    if not _is_cuda_oom(exc, torch) or len(window) == 1:
+                        raise
+                    _clear_cuda_oom_cache(torch)
+                    chunk = max(1, len(window) // 2)
+                    metadata["oom_retries"] += 1
+                    continue
+                index += len(window)
+            results.append(dict(zip(labels, scored)))
+        return results
+    except BaseException as exc:
+        status = "error"
+        metadata.update({"error_type": type(exc).__name__, "error": str(exc)[:500]})
+        raise
+    finally:
+        metadata["final_label_chunk"] = chunk
+        metadata["latency_ms"] = round((time.perf_counter() - started) * 1000, 3)
+        record_timing_event(TimingEvent(
+            kind="inference",
+            name="infer_label_scores",
+            duration_ms=metadata["latency_ms"],
+            status=status,
+            metadata=metadata,
+        ))
+
+
 # Concurrent GGUF scoring: how many requests are in flight at once, and the floor it degrades to.
 #
 # WHY THIS IS CONCURRENCY AND NOT TENSOR BATCHING — the distinction is load-bearing
@@ -1061,3 +1248,720 @@ def infer_batch_gguf(
         max_seq_length=max_seq_length,
         task=task,
     )
+
+
+# ── MNN: the second on-device runtime ────────────────────────────────────────────────────────────
+#
+# Everything below is to `infer_batch_gguf` what `training/quantize_mnn.py` is to
+# `training/quantize.py`: the same job through the engine that actually runs on an MNN-Chat phone.
+# The prompt rendering is deliberately SHARED with the GGUF path (`_serving_prompt_prefix`) rather
+# than delegated to MNN's own chat template, for two reasons:
+#   1. Train/serve alignment is already asserted against that rendering in
+#      `training/lora_trainer.py::_assert_train_serve_prefix_alignment`. A second, subtly different
+#      template applied only on the MNN path is precisely the B290 failure — two stray `<think>`
+#      tags per prediction — with a new place to hide.
+#   2. It is what makes a backend comparison mean anything. If llama.cpp and MNN were each given
+#      their own idea of the prompt, a score difference between them could be the quantization,
+#      the runtime, or the template, and nothing would say which.
+# MNN is therefore configured with `use_template: false` and handed the fully rendered prompt.
+_mnn_cache: dict = {}
+_mnn_cache_order: list = []
+
+# MNN's own defaults are a chat app's, not an evaluator's: `sampler_type: "mixed"` with
+# temperature 0.8 / top_k 40. Scoring under those would make every eval a different experiment.
+# Greedy is the MNN spelling of the GGUF path's `temperature=0.0`.
+_MNN_EVAL_SAMPLER = "greedy"
+# Compute precision. "low" is what the exported config ships, what a phone runs (fp16 accumulate
+# where the backend has it), AND — measured — the only precision under which MNN's CUDA backend is
+# both correct and fast. See `_MNN_BAD_CUDA_COMBINATIONS`.
+_MNN_PRECISION = os.environ.get("SLM_MNN_PRECISION", "low")
+# HOW THE WEIGHTS ARE HELD, and on CUDA this is a correctness setting chosen by BIT WIDTH.
+#
+#   "low"    keeps the quantized weights packed and dequantizes inside the GEMM — MNN's
+#            weight-only-quant kernels, the path a phone uses.
+#   "normal" dequantizes the weights once into fp16 device memory and runs dense GEMMs. This costs
+#            VRAM, NOT accuracy: the values are still the quantized ones, just stored wider, so the
+#            arithmetic is the quantized model's arithmetic.
+#
+# Measured on SmolLM2-360M over clinc150 rows, 15 rows per cell:
+#
+#     artifact  backend  memory   macro_f1  format_valid  rows/s
+#     4-bit     cuda     low        works     works        2.86   <- fastest, and correct
+#     4-bit     cuda     normal     works     works        2.79
+#     8-bit     cpu      low        0.2667    0.2667       0.14
+#     8-bit     cuda     low        0.0000    0.0000       0.36   <- BROKEN: '<|endoftext|>' spam
+#     8-bit     cuda     normal     0.2667    0.2667       0.59   <- matches the CPU exactly
+#
+# So MNN's CUDA int4 weight-only kernel is sound and its int8 one is not. "auto" therefore picks
+# `low` for a 4-bit artifact and `normal` for anything else on CUDA, and `low` on the CPU (which
+# handles every width). An explicit value is honoured, except for the combination measured to be
+# broken, which is refused by name.
+_MNN_MEMORY = os.environ.get("SLM_MNN_MEMORY", "auto")
+
+# WHICH DEVICE MNN COMPUTES ON. This is the difference between an eval that takes 6 minutes and one
+# that takes 35, measured on the same artifact and rows (SmolLM2-360M @ 4-bit, clinc150):
+#
+#     backend   prefill        rows/s   exact labels
+#     cpu        671 tok/s      0.45      4/5
+#     cuda      6867 tok/s      2.86      5/5
+#
+# Prefill is ~99% of this workload (a CLINC150 prompt is ~1,385 tokens and the answer is one
+# label), so the 10x prefill win is the whole story. Accuracy is unchanged, which is the same
+# argument the GGUF path makes for offloading to the GPU: the artifact's accuracy is a property of
+# its weights, tokenizer and greedy decoding, not of the device that multiplies the matrices.
+#
+# "auto" (the default) means CUDA when this process can see a GPU, CPU when it cannot — the same
+# shape as `SLM_GGUF_GPU_LAYERS=-1` with its CPU fallback, except that here the choice is made ONCE
+# and stated, never silently per-load. An explicit "cuda" is a demand: if the backend is missing,
+# the load FAILS instead of quietly computing on the CPU (see `_assert_backend_honoured`).
+_MNN_BACKEND_TYPE = os.environ.get("SLM_MNN_BACKEND_TYPE", "auto").strip().lower()
+
+# Configurations measured to produce WRONG output on CUDA, refused rather than scored. The
+# combination below decodes `'ordinaryritz Hviations:`~ ...'` where every other combination decodes
+# `'accept_reservations'`, and it is also no faster than CPU — the int4 weight-only kernel appears
+# to have no fp32 path, so the model runs somewhere between the two and produces neither speed nor
+# sense. Keyed on (backend, precision, memory).
+_MNN_BAD_CUDA_COMBINATIONS = {("cuda", "normal", "low")}
+
+# Read only to REFUSE a value above 1 (see `infer_batch_mnn`). MNN eval is sequential, which is
+# parity with the GGUF path rather than a shortfall: `MAX_GGUF_EVAL_CONCURRENCY` defaults to 1 as
+# well, and asking MNN for more would be asking it for more than llama.cpp takes.
+_MNN_EVAL_CONCURRENCY_ENV = "SLM_MNN_EVAL_CONCURRENCY"
+
+# THREAD COUNT IS A CORRECTNESS SETTING IN MNN, NOT A SPEED SETTING, and it is measured.
+#
+# Run 40260927 scored `Qwen/Qwen3.5-0.8B@Q4_K_M` at 0.0000 with format_valid 0.0000: every one of
+# 1,000 CLINC150 rows decoded to `%+!!!!!!!!!!`, `feier!!!!!!!!!!` or `оте!!!!!!!!!!`. The weights
+# were fine. Sweeping the SAME artifact on the SAME prompts, one fresh process per setting:
+#
+#     threads   1   2   4   8  10  12  13  14  16
+#     verdict  ok  ok  ok  ok  ok  ok  ok  BAD  ok
+#
+# 14 corrupts compute; everything either side of it is correct and agrees token-for-token. The
+# logits are finite — no NaN, no inf, plausible magnitudes — with a different argmax, so there is
+# nothing to detect in the output except the answer being wrong. It also needs a LONG prompt: the
+# same artifact at 14 threads answers a 16-token `Hello` perfectly and only fails at ~1,050 tokens,
+# which is why the build's short smoke test passed and 35 minutes of eval was scored anyway.
+#
+# 8 is the default because it is measured-good, well under any plausible allocation, and close to
+# MNN's own exported `thread_num: 4`. An operator's value is NOT trusted on faith: every artifact
+# build cross-checks the configured count against `MNN_REFERENCE_THREADS` on a long prompt
+# (`quantize_mnn._assert_threaded_compute_is_sound`) and refuses the artifact on a mismatch.
+_MNN_THREADS = max(1, int(os.environ.get("SLM_MNN_THREADS", "8")))
+# The count the cross-check trusts. Low, so the work split is coarse and every model's tile
+# arithmetic is trivial, and measured correct on every configuration tested above.
+MNN_REFERENCE_THREADS = int(os.environ.get("SLM_MNN_REFERENCE_THREADS", "4"))
+# MNN's engine prints the prompt and the full decoded response for every call through
+# `MNN_PRINT`, at C level. Over an 800-row eval that is tens of thousands of lines between the
+# log lines a human is actually reading, so it is suppressed at the file-descriptor level unless
+# asked for. `SLM_MNN_VERBOSE=1` turns it back on, which is what to do when a load fails and the
+# engine's own diagnosis is the thing you need.
+_MNN_VERBOSE = os.environ.get("SLM_MNN_VERBOSE", "0") == "1"
+
+
+class _capture_c_stdout:
+    """Run a block with C-level stdout redirected into a file, and return what was written.
+
+    The suppressing sibling of `_suppress_c_stdout`, and it exists for one reason: MNN announces a
+    BACKEND FALLBACK only on stdout, as `Can't Find type=2 backend, use 0 instead`, and returns a
+    perfectly usable object that computes on the CPU. Nothing in the API reports it. Capturing the
+    engine's own words is the only way to tell "running on the GPU" from "asked for the GPU".
+
+    Same file-descriptor swap as the suppressor, for the same reason (`printf` ignores
+    `sys.stdout`), including the `fflush(NULL)` before restoring — without it the text is still
+    sitting in a C stdio buffer when the file is read.
+    """
+
+    def __init__(self):
+        self._saved = None
+        self._handle = None
+        self.text = ""
+
+    def __enter__(self):
+        import sys as _sys
+        import tempfile
+
+        _sys.stdout.flush()
+        _suppress_c_stdout._flush_c_stdio()
+        self._handle = tempfile.TemporaryFile(mode="w+b")
+        self._saved = os.dup(1)
+        os.dup2(self._handle.fileno(), 1)
+        return self
+
+    def __exit__(self, *exc_info):
+        if self._saved is not None:
+            _suppress_c_stdout._flush_c_stdio()
+            os.dup2(self._saved, 1)
+            os.close(self._saved)
+            self._saved = None
+        if self._handle is not None:
+            try:
+                self._handle.seek(0)
+                self.text = self._handle.read().decode("utf-8", "replace")
+            except OSError:
+                self.text = ""
+            self._handle.close()
+            self._handle = None
+        return False
+
+
+def mnn_backend_type() -> str:
+    """The MNN backend this process will compute on: "cuda" or "cpu".
+
+    "auto" asks whether this process can see a GPU at all — a machine without one is not a silent
+    fallback, it is a machine without a GPU — while an explicit value is honoured as written so
+    that a run pinned to CUDA fails loudly if CUDA is unavailable instead of quietly producing CPU
+    numbers 6x slower.
+
+    THE ENVIRONMENT IS READ ON EVERY CALL, not captured at import. `hardware_eval/mnn_backend_
+    matrix.py` scores the same artifact on both devices in one process by setting the variable
+    between cells, and with an import-time constant its "cpu" column silently ran on CUDA — the
+    two columns came back identical to four decimal places, which is what gave it away.
+    """
+    configured = os.environ.get("SLM_MNN_BACKEND_TYPE", _MNN_BACKEND_TYPE).strip().lower()
+    if configured in ("cpu", "cuda"):
+        return configured
+    if configured != "auto":
+        raise ValueError(
+            f"SLM_MNN_BACKEND_TYPE={configured!r} is not a supported MNN backend. Valid "
+            f"values: 'auto' (CUDA when a GPU is visible, else CPU), 'cuda', 'cpu'."
+        )
+    try:
+        import torch
+
+        return "cuda" if torch.cuda.is_available() else "cpu"
+    except Exception:  # noqa: BLE001 — no torch means no way to ask; CPU is the safe answer
+        return "cpu"
+
+
+# How many models this process has loaded on CUDA. MNN'S CUDA RUNTIME DOES NOT SURVIVE A SECOND
+# ONE, and it does not say so: measured over 27 artifacts loaded and freed in one process, the
+# first decoded correctly, the second decoded `<|endoftext|><|endoftext|>...`, and every one after
+# that returned an EMPTY STRING — scored as 0.0000 with no error anywhere, at a nonsensical 878
+# rows/s because generation was doing nothing. The CPU backend has no such limit (the thread
+# cross-check loads a second model on purpose).
+#
+# The pipeline is already safe: `run_eval` and `build_quant_artifact` each run in their own
+# disposable CUDA worker, so one process loads one artifact. This counter exists so that anything
+# ELSE — `hardware_eval/quant_accuracy_eval.py` sweeping several quants with isolation off, a
+# notebook, a future tool — fails loudly instead of recording zeros.
+_mnn_cuda_loads = 0
+
+_mnn_tmp_dir: str | None = None
+
+
+def _artifact_quant_bits(artifact_dir: str) -> int | None:
+    """The bit width this MNN artifact was exported at, from the exporter's own record."""
+    from training.quantize_mnn import _recorded_quant_bit
+
+    return _recorded_quant_bit(artifact_dir)
+
+
+def mnn_memory_mode(backend: str, artifact_dir: str) -> str:
+    """How MNN should hold the weights: "low" (packed) or "normal" (dequantized into memory).
+
+    See `_MNN_MEMORY` for the measurements. The short version: on CUDA only the int4 weight-only
+    kernel is trustworthy, so a 4-bit artifact gets `low` (fastest and correct) and anything wider
+    gets `normal`, which bypasses the broken int8 kernel at no cost in accuracy. The CPU handles
+    every width with `low`.
+    """
+    explicit = None if _MNN_MEMORY in ("auto", "") else _MNN_MEMORY
+    bits = _artifact_quant_bits(artifact_dir)
+    if backend != "cuda":
+        return explicit or "low"
+    if explicit is None:
+        return "low" if bits == 4 else "normal"
+    if explicit == "low" and bits is not None and bits != 4:
+        raise RuntimeError(
+            f"MNN on CUDA with memory=low decodes garbage for a {bits}-bit artifact: measured "
+            f"format_valid 0.0000 and '<|endoftext|>' repeated on every row, where the same "
+            f"artifact under memory=normal scores exactly what the CPU scores (0.2667 both) and "
+            f"4x faster than the CPU. MNN's CUDA int8 weight-only kernel is not sound; its int4 "
+            f"one is. Unset SLM_MNN_MEMORY to let the bit width choose (this is what 'auto' does), "
+            f"or set SLM_MNN_MEMORY=normal."
+        )
+    return explicit
+
+
+def _mnn_tmp_path() -> str:
+    """A writable scratch directory for MNN's kernel-tuning cache, created once per process."""
+    global _mnn_tmp_dir
+    if _mnn_tmp_dir is None:
+        import tempfile
+
+        _mnn_tmp_dir = tempfile.mkdtemp(prefix="slm-mnn-cache-")
+    return _mnn_tmp_dir
+
+
+def _assert_backend_honoured(requested: str, engine_output: str, artifact_dir: str) -> None:
+    """Refuse a model that MNN loaded onto a different backend than the one asked for.
+
+    THE FAILURE THIS EXISTS FOR. Asked for CUDA with a pymnn whose CUDA backend was not registered,
+    MNN printed `Can't Find type=2 backend, use 0 instead` and carried on — on the CPU, at CPU
+    speed, and (because it had already configured itself for a GPU and skipped the CPU blockwise-
+    quant setup) decoding `'accept<|endoftext|><|endoftext|>...'` instead of `'accept_reservations'`.
+    Every one of the first four CUDA measurements taken here was that, and it looked exactly like a
+    slow, broken GPU backend rather than an unregistered one.
+
+    It is worth failing hard on: the whole point of the GPU path is speed, so silently getting CPU
+    speed defeats it, and the accompanying corruption would be recorded as a model result. The fix
+    is a build fix, and the message says which one.
+    """
+    if "Can't Find type" not in engine_output and "Cant Find type" not in engine_output:
+        return
+    raise RuntimeError(
+        f"MNN could not use the {requested!r} backend and fell back to the CPU while loading "
+        f"{artifact_dir}. Its own words: "
+        f"{next((line for line in engine_output.splitlines() if 'Find type' in line), '').strip()!r}. "
+        f"This is a BUILD problem, not a model problem: the CUDA backend registers through a static "
+        f"initializer in libMNN, and a STATIC libMNN.a drops that object because nothing references "
+        f"it, so pymnn must be built against a SHARED libMNN.so (see scripts/setup_mnn_env.sh, which "
+        f"passes -DMNN_BUILD_SHARED_LIBS=ON and stages libMNN.so + libMNN_Cuda_Main.so). Refusing to "
+        f"score, because a fallback here means CPU speed AND corrupted output reported as a model "
+        f"result. Set SLM_MNN_BACKEND_TYPE=cpu to evaluate on the CPU deliberately."
+    )
+
+
+def _preload_mnn_shared_libs() -> list[str]:
+    """dlopen pymnn's own shared libraries from the venv before the extension asks for them.
+
+    WHY THIS EXISTS RATHER THAN A PATH VARIABLE. pymnn is linked against a SHARED libMNN.so
+    (mandatory — a static link drops the CUDA backend registrar, see
+    `_assert_backend_honoured`), and those libraries live in `$VIRTUAL_ENV/lib`, which is not a
+    system search path. `.venv_gpu/bin/activate` puts it on LD_LIBRARY_PATH, but LD_LIBRARY_PATH is
+    read once at process start, so anything invoking `.venv_gpu/bin/python` DIRECTLY — this repo's
+    own shell scripts and every bare pytest run — got `ImportError: libMNN.so: cannot open shared
+    object file`.
+
+    Loading them by absolute path with RTLD_GLOBAL satisfies the extension's dependency from
+    inside the process: the dynamic linker matches an already-loaded object by soname and does not
+    search the filesystem again.
+
+    It does NOT remove the one remaining environment dependency: libMNN.so needs a newer
+    libstdc++ (GLIBCXX_3.4.30) than the system provides, exactly as llama-cpp-python does, and
+    `.venv_gpu/bin/activate` is what puts gcc-12's on LD_LIBRARY_PATH. Returns the reasons any
+    library could not be loaded so the caller's ImportError can say THAT instead of the misleading
+    "cannot open shared object file".
+    """
+    import ctypes
+    import sys
+
+    failures: list[str] = []
+    lib_dir = os.path.join(sys.prefix, "lib")
+    for name in ("libMNN_Cuda_Main.so", "libMNN.so"):
+        path = os.path.join(lib_dir, name)
+        if not os.path.isfile(path):
+            continue
+        try:
+            ctypes.CDLL(path, mode=ctypes.RTLD_GLOBAL)
+        except OSError as error:
+            failures.append(f"{name}: {error}")
+    return failures
+
+
+def _mnn_llm_module():
+    """pymnn's LLM API, or an ImportError that says exactly what to run.
+
+    Two distinct failures, distinguished because they have different fixes: pymnn missing entirely,
+    and pymnn built WITHOUT `PYMNN_LLM_API` (its `MNN.llm` is then `None`, not absent — the package
+    swallows the ImportError). The second is the likely one, because the published wheel is built
+    without the LLM bindings; `scripts/setup_mnn_env.sh` builds them.
+    """
+    try:
+        # Suppressed because importing the extension prints MNN's CPU topology probe — a
+        # 400-core affinity list on this cluster's login nodes — before any Python runs.
+        #
+        # `import MNN.llm` rather than `getattr(MNN, "llm")`, which is NOT the same module.
+        # `MNN/__init__.py` does `from _mnncengine import *`, and the extension exposes a
+        # submodule of its own called `llm`, so the attribute can resolve to the RAW extension
+        # module instead of the Python package that wraps it. The two have identically named
+        # methods with different argument types — `set_config` takes a dict on the wrapper and a
+        # JSON string on the extension — so getting the wrong one surfaces as
+        # `SystemError: <method 'set_config' of 'LLM' objects> returned a result with an
+        # exception set`, which says nothing about the actual problem. Importing the submodule by
+        # path always resolves to the package.
+        preload_failures: list[str] = []
+        with _suppress_c_stdout(not _MNN_VERBOSE):
+            preload_failures = _preload_mnn_shared_libs()
+            import MNN  # noqa: F401 - the package must initialise before its submodule
+            import MNN.llm as llm_module
+    except ImportError as exc:
+        # A preload failure is the REAL cause whenever it happened, and it reads nothing like the
+        # import error it produces: "libMNN.so: cannot open shared object file" for a file that is
+        # plainly there, when what actually failed was its libstdc++ requirement.
+        detail = (
+            f" The shared libraries are present but did not load: {'; '.join(preload_failures)}."
+            f" That is an environment problem, not a build one — `source .venv_gpu/bin/activate`"
+            f" puts gcc-12's libstdc++ on LD_LIBRARY_PATH, which libMNN.so needs."
+            if preload_failures else ""
+        )
+        raise ImportError(
+            "MNN inference requires pymnn with the LLM API (MNN.llm), which is absent from the "
+            "published wheel and from a pymnn built without -DMNN_BUILD_LLM=ON. Build it with "
+            f"`bash scripts/setup_mnn_env.sh`. Underlying import error: {exc}.{detail}"
+        ) from exc
+    if getattr(llm_module, "create", None) is None:
+        raise ImportError(
+            "pymnn imported but MNN.llm has no `create` entry point, so it cannot load an MNN "
+            "LLM artifact. Rebuild it with `bash scripts/setup_mnn_env.sh --force`."
+        )
+    return llm_module
+
+
+def _mnn_set_config(llm, config: dict) -> None:
+    """Apply a runtime config to a pymnn LLM object, whichever of the two shapes it is.
+
+    pymnn's Python wrapper takes a dict and JSON-encodes it for the extension; the extension's own
+    object takes the encoded string. Both are reachable (see `_mnn_llm_module`), and handing either
+    one the other's argument fails with a `SystemError` that names neither cause nor fix — so the
+    shape is detected rather than guessed, by the wrapper's own handle on the C object.
+    """
+    if hasattr(llm, "_c_obj"):
+        llm.set_config(config)
+        return
+    import json as _json
+
+    llm.set_config(_json.dumps(config))
+
+
+def mnn_runtime_versions() -> dict:
+    """Which pymnn actually loaded the artifact, for the validation sidecar.
+
+    Read from installed distribution metadata rather than a module attribute: pymnn built from
+    source has no `__version__`, and the distribution it was installed as (`mnn`, lowercased by
+    setuptools) does carry the version its CMake build stamped in.
+    """
+    from importlib.metadata import PackageNotFoundError, version
+
+    for name in ("MNN", "mnn"):
+        try:
+            return {"pymnn": version(name)}
+        except PackageNotFoundError:
+            continue
+        except Exception:  # noqa: BLE001 — a version string must never break validation
+            break
+    return {"pymnn": "unknown"}
+
+
+class _suppress_c_stdout:
+    """Silence C-level stdout for the duration of a block, without touching Python's.
+
+    `contextlib.redirect_stdout` cannot do this: MNN prints with `printf`, which writes to file
+    descriptor 1 directly and never consults `sys.stdout`. So the descriptor itself is swapped.
+    Python-level prints inside the block are still swallowed, which is why every progress message
+    here is emitted outside it.
+
+    THE C-LEVEL FLUSH ON EXIT IS THE WHOLE TRICK. Redirecting the descriptor alone suppressed
+    nothing: C stdio buffers into a `FILE*`, so MNN's output sat in that buffer until the process
+    exited and was then flushed to whatever descriptor 1 pointed at BY THEN — the restored real
+    stdout. The result was an eval log with every prompt and response dumped at the end instead of
+    interleaved, which is worse than not suppressing at all. `fflush(NULL)` empties the buffers
+    into /dev/null while it is still attached.
+    """
+
+    def __init__(self, enabled: bool = True):
+        self._enabled = enabled
+        self._saved = None
+        self._devnull = None
+
+    @staticmethod
+    def _flush_c_stdio() -> None:
+        try:
+            import ctypes
+
+            ctypes.CDLL(None).fflush(None)
+        except Exception:  # noqa: BLE001 — losing the suppression is not worth an exception
+            pass
+
+    def __enter__(self):
+        if not self._enabled:
+            return self
+        import sys as _sys
+
+        _sys.stdout.flush()
+        self._flush_c_stdio()
+        self._devnull = os.open(os.devnull, os.O_WRONLY)
+        self._saved = os.dup(1)
+        os.dup2(self._devnull, 1)
+        return self
+
+    def __exit__(self, *exc_info):
+        if self._saved is not None:
+            self._flush_c_stdio()
+            os.dup2(self._saved, 1)
+            os.close(self._saved)
+            self._saved = None
+        if self._devnull is not None:
+            os.close(self._devnull)
+            self._devnull = None
+        return False
+
+
+def load_mnn_llm(
+    artifact_dir: str,
+    max_seq_length: int | None = None,
+    max_new_tokens: int = 512,
+    threads: int | None = None,
+    backend_type: str | None = None,
+):
+    """Load an MNN LLM artifact directory and return a configured, loaded pymnn `Llm`.
+
+    The config is applied BEFORE `load()` because two of its entries change what is allocated
+    rather than only how it decodes: `max_all_tokens` sizes the KV cache, and MNN's own default of
+    2048 is below the 4096-token window this pipeline's tasks are evaluated at. A CLINC150 prompt
+    carrying 150 intent names is not a hypothetical overflow.
+
+    `threads` overrides `SLM_MNN_THREADS` for this instance. It exists for the build-time
+    cross-check, and there is one thing to know before using it: MNN's thread pool is a
+    PROCESS-GLOBAL keyed by CPU mask, created by whoever loads first, and a later load asking for
+    MORE threads than the pool has silently gets the pool's count. So a comparison between two
+    thread counts in one process is only valid in one order — the higher count first — and an
+    in-process sweep that starts low measures the low setting several times over.
+
+    `backend_type` overrides the resolved device for this instance ("cuda" or "cpu"); it exists for
+    the same cross-check and for the backend matrix. A load that cannot honour the requested
+    backend raises rather than falling back to the CPU.
+    """
+    from training.quantize_mnn import mnn_config_path, missing_files
+
+    absent = missing_files(artifact_dir)
+    if absent:
+        raise RuntimeError(
+            f"Cannot load MNN artifact {artifact_dir}: missing {absent}"
+        )
+    context_tokens = max_seq_length or _DEFAULT_INFERENCE_SEQ_LENGTH
+    thread_count = _MNN_THREADS if threads is None else max(1, int(threads))
+    requested_backend = (backend_type or mnn_backend_type()).strip().lower()
+    memory_mode = mnn_memory_mode(requested_backend, artifact_dir)
+    # Checked BEFORE the engine is even imported: it is a pure configuration fault, and there is no
+    # reason to load a model to discover it.
+    combination = (requested_backend, _MNN_PRECISION, memory_mode)
+    if combination in _MNN_BAD_CUDA_COMBINATIONS:
+        raise RuntimeError(
+            f"MNN backend={requested_backend} with precision={_MNN_PRECISION} and "
+            f"memory={memory_mode} is measured to decode GARBAGE — the same artifact and prompts "
+            f"that give 'accept_reservations' under precision=low returned "
+            f"'ordinaryritz Hviations:`~ ...' under this combination, at no speed gain. Use "
+            f"SLM_MNN_PRECISION=low (the default, and the fastest on CUDA) or "
+            f"SLM_MNN_MEMORY=normal."
+        )
+    llm_module = _mnn_llm_module()
+    if requested_backend == "cuda":
+        _note_cuda_load(artifact_dir)
+
+    # Captured rather than suppressed: MNN reports a backend fallback only in this output, and a
+    # fallback is fatal here (see `_assert_backend_honoured`).
+    with _capture_c_stdout() as engine:
+        llm = llm_module.create(mnn_config_path(artifact_dir))
+        _mnn_set_config(llm, {
+            "backend_type": requested_backend,
+            # MNN writes a kernel-tuning cache and, given nowhere to put it, drops
+            # `mnn_cachefile.bin` into the CURRENT DIRECTORY — which for the pipeline is the
+            # project root. Pointed at a temp dir instead: not the artifact directory, because the
+            # cache-hit check hashes every file in there and a cache file written during scoring
+            # would invalidate the artifact that produced it.
+            "tmp_path": _mnn_tmp_path(),
+            "sampler_type": _MNN_EVAL_SAMPLER,
+            # The prompt arrives fully rendered by `_serving_prompt_prefix`; see the section note.
+            "use_template": False,
+            "precision": _MNN_PRECISION,
+            "memory": memory_mode,
+            "thread_num": thread_count,
+            "max_all_tokens": context_tokens,
+            "max_new_tokens": max_new_tokens,
+            # Each eval row is an independent prompt, so carrying a KV cache between them would be
+            # both wrong and slower.
+            "reuse_kv": False,
+        })
+        llm.load()
+    if _MNN_VERBOSE and engine.text:
+        print(engine.text, end="")
+    _assert_backend_honoured(requested_backend, engine.text, artifact_dir)
+    return llm
+
+
+def _note_cuda_load(artifact_dir: str) -> None:
+    """Refuse a second CUDA load in one process, because MNN returns empty text after the first.
+
+    See `_mnn_cuda_loads`. Failing here costs nothing in the pipeline — every eval and every
+    artifact build already runs in its own disposable worker — and it converts a whole class of
+    silent 0.0000 scores into a message that names the cause.
+    """
+    global _mnn_cuda_loads
+
+    _mnn_cuda_loads += 1
+    if _mnn_cuda_loads > 1:
+        raise RuntimeError(
+            f"This process has already loaded an MNN model on CUDA, and MNN's CUDA runtime does "
+            f"not survive a second one: measured over 27 loads in one process, the first decoded "
+            f"correctly, the second decoded '<|endoftext|>' repeatedly, and the rest returned "
+            f"EMPTY strings — scored as 0.0000 with no error raised. Refusing to load "
+            f"{artifact_dir}. Score one artifact per process: the pipeline already does (each "
+            f"run_eval and each artifact build runs in its own CUDA worker, SLM_CUDA_ISOLATION=1), "
+            f"and an out-of-loop sweep should either set that or use SLM_MNN_BACKEND_TYPE=cpu, "
+            f"which has no such limit."
+        )
+
+
+def mnn_generate(llm, rendered_prompt: str, max_new_tokens: int = 512) -> str:
+    """One rendered prompt through one loaded MNN model, as a decoded string.
+
+    `reset()` first, always. MNN's `Llm` is a CHAT object: it accumulates history across
+    `response()` calls, so without this the second eval row would be answered in the context of the
+    first — which does not crash, does not look wrong in the log, and quietly makes every score
+    after row 1 a different measurement.
+    """
+    llm.reset()
+    with _suppress_c_stdout(not _MNN_VERBOSE):
+        # pymnn's wrapper exposes `response(prompt, stream)` and takes the token cap from the
+        # config, which is why `max_new_tokens` is set there rather than passed here.
+        _mnn_set_config(llm, {"max_new_tokens": max_new_tokens})
+        text = llm.response(rendered_prompt, False)
+    return text or ""
+
+
+def _validate_mnn_budget(llm, rendered_prompt: str, index: int,
+                         max_seq_length: int, max_new_tokens: int) -> None:
+    """Refuse a prompt that cannot fit the context, instead of letting MNN quietly truncate it.
+
+    The exact counterpart of `infer_batch_gguf`'s `_validate_gguf_budget`, and it matters more here:
+    MNN sizes its KV cache from `max_all_tokens` and drops what does not fit, so an over-long prompt
+    produces a plausible-looking answer to a QUESTION THE MODEL NEVER SAW rather than an error. The
+    llama.cpp path raising on exactly this is what surfaced the real fault the first time this was
+    run — a CLINC150 prompt carries all 151 intent names and needs ~1,410 tokens, which does not fit
+    the task spec's 1,024 — and the MNN path silently scoring those rows would have hidden it.
+
+    Counted with the ARTIFACT'S OWN tokenizer (`tokenizer_encode`), not a HuggingFace one: the
+    exported `tokenizer.mtok` is what the runtime will actually use, so it is the only count that
+    describes what happens next.
+    """
+    encode = getattr(llm, "tokenizer_encode", None)
+    if not callable(encode):
+        return
+    with _suppress_c_stdout(not _MNN_VERBOSE):
+        tokens = encode(rendered_prompt)
+    if tokens is None:
+        return
+    budget = max_seq_length - max_new_tokens
+    if len(tokens) > budget:
+        raise ValueError(
+            f"Rendered MNN prompt index {index} contains {len(tokens)} tokens, exceeding input "
+            f"budget {budget} after reserving {max_new_tokens} output tokens inside configured "
+            f"max sequence length {max_seq_length}."
+        )
+
+
+def mnn_decode_stats(llm) -> dict:
+    """Prefill/decode token counts and microsecond timings for the last generation.
+
+    Read from MNN's own context rather than measured around the call, so the numbers recorded in a
+    report are the engine's accounting of itself: prompt length, tokens generated, and the two
+    phases' costs separately (the split a phone's TTFT-vs-throughput budget is written against).
+    """
+    try:
+        if hasattr(llm, "context"):
+            context = llm.context
+            data = {
+                "prompt_len": context.prompt_len,
+                "gen_seq_len": context.gen_seq_len,
+                "prefill_us": context.prefill_us,
+                "decode_us": context.decode_us,
+            }
+        else:
+            raw = llm.get_context()
+            data = {key: raw.get(key) for key in
+                    ("prompt_len", "gen_seq_len", "prefill_us", "decode_us")}
+        return data
+    except Exception:  # noqa: BLE001 — telemetry must never break an eval
+        return {}
+
+
+def infer_batch_mnn(
+    prompts: list[str],
+    mnn_dir: str,
+    max_new_tokens: int = 50,
+    base_model: str | None = None,
+    task: str = "",
+) -> list[str]:
+    """Run inference over all prompts against an MNN artifact via pymnn's LLM API.
+
+    The MNN counterpart of `infer_batch_gguf`, with the same contract: greedy decoding, one
+    independent prompt per row, output in input order. Caches the loaded model by
+    (artifact, context length) exactly as the GGUF path does, because a reload costs seconds and
+    every iteration scores hundreds of rows.
+
+    SEQUENTIAL, WHICH IS PARITY WITH THE GGUF PATH RATHER THAN A LIMITATION OF THIS ONE.
+    `MAX_GGUF_EVAL_CONCURRENCY` defaults to 1, so llama.cpp scores one row at a time too — and for
+    a measured reason recorded there: at 8-way it bought ~20% for 8x the memory and killed a run
+    with a SIGABRT the retry logic could not see. The same arithmetic is worse here, because an MNN
+    `Llm` owns one session and one KV cache, so a second worker means a second full copy of the
+    weights. `SLM_MNN_THREADS` (within one instance) and the GPU backend are the cheaper axes, and
+    the GPU is where the 6x came from.
+
+    Raises:
+        ImportError: if pymnn with the LLM API is not installed.
+    """
+    requested = int(os.environ.get(_MNN_EVAL_CONCURRENCY_ENV, "1"))
+    if requested > 1:
+        # Refused rather than ignored. A variable that silently does nothing is worse than one that
+        # is not supported, and the GGUF path's own default is 1 — so raising this would ask MNN for
+        # MORE concurrency than llama.cpp takes, not the same.
+        raise ValueError(
+            f"{_MNN_EVAL_CONCURRENCY_ENV}={requested} is not implemented: MNN eval is sequential, "
+            f"matching the GGUF path, whose MAX_GGUF_EVAL_CONCURRENCY also defaults to 1. Each MNN "
+            f"worker would need its own copy of the weights, and the GPU backend "
+            f"(SLM_MNN_BACKEND_TYPE) is where the throughput is."
+        )
+    max_seq_length = task_max_seq_length(task) if task else _DEFAULT_INFERENCE_SEQ_LENGTH
+    backend = mnn_backend_type()
+    # The backend is part of the key: a cached CPU model must never answer a request that asked for
+    # the GPU, which is the same reason the GGUF cache keys on its context length.
+    cache_key = (os.path.abspath(mnn_dir), max_seq_length, backend)
+    if cache_key not in _mnn_cache:
+        while len(_mnn_cache) >= _MAX_CACHED and _mnn_cache_order:
+            _mnn_cache.pop(_mnn_cache_order.pop(0), None)
+        started = time.time()
+        _mnn_cache[cache_key] = load_mnn_llm(
+            mnn_dir, max_seq_length=max_seq_length, max_new_tokens=max_new_tokens,
+            backend_type=backend,
+        )
+        _mnn_cache_order.append(cache_key)
+        print(
+            f"      [mnn-eval] loaded {os.path.basename(mnn_dir.rstrip(os.sep))} in "
+            f"{time.time() - started:.1f}s (backend={backend} threads={_MNN_THREADS} "
+            f"precision={_MNN_PRECISION} memory={mnn_memory_mode(backend, mnn_dir)} "
+            f"ctx={max_seq_length})"
+        )
+
+    llm = _mnn_cache[cache_key]
+    outputs: list[str] = []
+    started = time.time()
+    for index, prompt in enumerate(prompts):
+        rendered = _serving_prompt_prefix(prompt, base_model or "")
+        # OUTSIDE the try below, deliberately: a prompt that does not fit the context is a
+        # configuration fault that applies to every row, not one unscoreable row, so it must end
+        # the eval rather than be absorbed into 800 empty predictions and a score of zero.
+        _validate_mnn_budget(llm, rendered, index, max_seq_length, max_new_tokens)
+        try:
+            outputs.append(mnn_generate(llm, rendered, max_new_tokens=max_new_tokens))
+        except Exception as error:  # noqa: BLE001 — one unscoreable row must not lose the eval
+            print(
+                f"      [mnn-eval] row {index} failed to decode "
+                f"({type(error).__name__}: {str(error)[:160]}); scoring it as empty"
+            )
+            outputs.append("")
+        if prompts and (index + 1) % 100 == 0:
+            elapsed = time.time() - started
+            print(
+                f"      [mnn-eval] {index + 1}/{len(prompts)} rows in {elapsed:.0f}s "
+                f"({(index + 1) / max(elapsed, 1e-9):.2f} rows/s)"
+            )
+    stats = mnn_decode_stats(llm)
+    if stats:
+        print(
+            f"      [mnn-eval] {len(prompts)} rows in {time.time() - started:.0f}s; last row: "
+            f"prompt={stats.get('prompt_len')} tok, generated={stats.get('gen_seq_len')} tok, "
+            f"prefill={stats.get('prefill_us', 0) / 1000:.0f}ms, "
+            f"decode={stats.get('decode_us', 0) / 1000:.0f}ms"
+        )
+    return outputs

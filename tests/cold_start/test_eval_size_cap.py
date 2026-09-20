@@ -13,17 +13,22 @@ import pytest
 from agent.nodes.cold_start.eval_setup import _eval_target
 
 
-def test_every_task_declares_its_own_eval_cap():
+def test_every_task_declares_its_own_select_cap():
     """The cap used to be one module-level constant shared by every benchmark. It is now
-    `TaskSpec.eval_cap`, because the trade-off it encodes is per task: the eval runs every
-    iteration, so an unbounded split makes every loop turn proportionally slower, while the
-    standard error on a proportion at n=1,000 is ~1.5pp — well below the differences this project
-    resolves. A task whose held-out split is large can afford more rows than one whose is not."""
+    `TaskSpec.select_cap`, because the trade-off it encodes is per task: the eval runs every
+    iteration, so an unbounded split makes every loop turn proportionally slower.
+
+    It is also explicitly a SELECTION cap and not the size of anything published — that is what
+    the rename bought. The number is defensible for ranking because the comparison is paired
+    (identical rows, successive checkpoints, so the sampling error is common-mode), and it is not
+    defensible in a paper, where the +/-2.5-point CI half-width at n=1,000 would swallow most of
+    the effects being measured. `report_load`/`report_score` and `scripts/report_eval.py` are the
+    reporting half."""
     from tasks import TASKS
 
     assert TASKS, "the registry must not be empty"
-    assert all(spec.eval_cap >= 1 for spec in TASKS.values())
-    assert TASKS["xlam_bfcl"].eval_cap == 1000
+    assert all(spec.select_cap >= 1 for spec in TASKS.values())
+    assert TASKS["xlam_bfcl"].select_cap == 1000
 
 
 def test_eval_target_honours_a_large_request():
@@ -41,7 +46,7 @@ def test_eval_target_floors_a_tiny_request():
 def test_the_cap_reaches_the_loader_and_is_never_applied_a_second_time(monkeypatch):
     """The B288 invariant, driven through the production call path.
 
-    `TaskSpec.eval_cap` is handed to the loader as `max_test`, and whatever the loader returns IS
+    `TaskSpec.select_cap` is handed to the loader as `max_test`, and whatever the loader returns IS
     the target `build_eval_set` is given. That is the whole fix: there is no second number left to
     re-cap the split with. `eval_size_target` — the run-state field that supplied the second one —
     was removed with the autonomous path, so the branch this test used to reproduce at the call

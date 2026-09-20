@@ -90,8 +90,11 @@ def _ner_row(text, entities=None):
 ROW_BUILDERS = {
     "gsm8k": lambda i: {"text": f"Ann has {i} pears and buys {i + 2} more. How many?",
                         "answer": f"Add them.\n#### {2 * i + 2}"},
+    # `references` alongside `answer`: it is the field the scorer grades against, and the task's
+    # `require_fields` step checks for it since the 2026-09-06 rework.
     "dialogsum": lambda i: {"text": f"#Person1#: topic {i}? #Person2#: yes, about item {i}.",
-                            "answer": f"Two people discuss topic {i}."},
+                            "answer": f"Two people discuss topic {i}.",
+                            "references": [f"Two people discuss topic {i}."]},
     "xlam_bfcl": lambda i: _xlam_row(f"what is the weather in city number {i}?"),
     "calendar_json": lambda i: _calendar_row(f"add a dentist visit on the {i}th of March"),
     "toolbench": lambda i: _toolbench_row(
@@ -109,6 +112,22 @@ ROW_BUILDERS = {
                                       "label": "wait" if i % 2 else "interrupt"},
     "clinc150": lambda i: {"text": f"utterance number {i} about money",
                            "label": "transfer" if i % 2 else "balance"},
+    # The on-device SFT suite. Each builder emits the task's own schema, and each row is distinct
+    # in the field its QC steps actually inspect.
+    "topv2": lambda i: {"text": f"set alarm number {i} for {i} am",
+                        "answer": f"[IN:CREATE_ALARM set alarm number {i} "
+                                  f"[SL:DATE_TIME for {i} am ] ]",
+                        "domain": "reminder" if i % 2 else "weather"},
+    "multiconer": lambda i: _ner_row(f"organisation{i} released product{i} last year.",
+                                     [{"text": f"organisation{i}", "type": "ORG"}]),
+    "gec_bea19": lambda i: {"text": f"I has went to shop number {i} yesterday .",
+                            "answer": f"I went to shop number {i} yesterday .",
+                            "cefr": "ABC"[i % 3],
+                            "m2": f"S I has went to shop number {i} yesterday .\n"
+                                  f"A 1 2|||U:VERB:TENSE||||||REQUIRED|||-NONE-|||0"},
+    "goemotions": lambda i: {"text": f"comment number {i} about the weekend plan",
+                             "labels": ["joy"] if i % 2 else ["anger"],
+                             "label": "joy" if i % 2 else "anger"},
 }
 
 # The closed vocabulary each task's frozen eval set would pin, and None where there is no class.
@@ -123,6 +142,14 @@ ALLOWED_LABELS = {
     "sms_spam": {"ham", "spam"},
     "proactive_listening": {"interrupt", "wait"},
     "clinc150": {"transfer", "balance"},
+    # None for all four. `topv2`, `multiconer` and `gec_bea19` have no `label` field at all, and
+    # `goemotions` is MULTI-label — its `label` values are comma-joined combinations, not classes,
+    # so pinning them as a vocabulary would hand QC hundreds of "classes". All four therefore
+    # declare `closed_label_space=False` and none runs `qc.label_space`.
+    "topv2": None,
+    "multiconer": None,
+    "gec_bea19": None,
+    "goemotions": None,
 }
 
 TASK_IDS = sorted(ROW_BUILDERS)
@@ -409,8 +436,9 @@ def test_near_duplicate_rows_are_removed_where_the_task_asked_for_it(task):
     assert any("surface-dedup" in line for line in logs)
 
 
-@pytest.mark.parametrize("task", ["dialogsum", "calendar_json", "toolbench"])
-def test_three_tasks_deliberately_keep_near_duplicates(task):
+@pytest.mark.parametrize(
+    "task", ["dialogsum", "calendar_json", "toolbench", "topv2", "gec_bea19"])
+def test_the_tasks_that_keep_near_duplicates_do_so_deliberately(task):
     """Each for a stated reason about its own corpus, not about a channel.
 
     Chat transcripts share a great deal of surface form (greetings, scheduling small talk) and
@@ -418,10 +446,17 @@ def test_three_tasks_deliberately_keep_near_duplicates(task):
     removes legitimately distinct rows that differ only in the entity, which is the part the model
     has to learn to extract.
 
-    ToolBench is the strongest case of the three. Its rows are ~8,000 characters of shared API
-    schema, and two rows for the same tool differ by one action inside that — so any threshold low
-    enough to catch a genuine near-duplicate also catches distinct trajectories. The loader removes
-    the duplicates structurally instead, by keeping only complete paths.
+    ToolBench is the strongest case. Its rows are ~8,000 characters of shared API schema, and two
+    rows for the same tool differ by one action inside that — so any threshold low enough to catch
+    a genuine near-duplicate also catches distinct trajectories. The loader removes the duplicates
+    structurally instead, by keeping only complete paths.
+
+    TOPv2 and GEC joined the list on 2026-09-06 for the same shape of reason. Assistant commands
+    are formulaic — "set an alarm for 6am" and "set an alarm for 7am" are near-identical in
+    trigram Jaccard and are genuinely different parses. Learner sentences repeat heavily ("I like
+    it very much", "Thank you for your letter") because learners genuinely write them, often with
+    a different error in each instance, which is the systematic variation the model is there to
+    learn.
     """
     rows = _healthy(task)
     twin = dict(rows[0])

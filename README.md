@@ -23,7 +23,7 @@ The orchestrator is a frontier LLM (Claude); the *product* it builds is a tiny, 
 - **π = (D, H, S) joint search** — each training attempt is a tuple of Dataset, Hyperparameters, and Strategy, searched jointly as a durable DAG rather than a fixed hyperparameter sweep.
 - **Failure-driven data curation** — a contamination-firewalled "test-data agent" reports only aggregate difficulty/confusion signals, which drive a three-strategy data rebuild (`resample` / `acquire` / `synthesize`) with task-adaptive, verified synthetic generation.
 - **Rollback-first iteration** — any score regression reverts to the best prior checkpoint instead of compensating; training always restarts from the base model for clean causal attribution.
-- **Quantization-honest evaluation** — quantized variants are scored on real GGUF builds via llama.cpp, never credited a full-precision score; a failed measurement is recorded as `n/a`, never a fabricated `0.0`.
+- **Quantization-honest evaluation, on either on-device runtime** — quantized variants are scored on a real quantized build, never credited a full-precision score; a failed measurement is recorded as `n/a`, never a fabricated `0.0`. `--quant-backend` selects which runtime the artifact is built for and scored through: `llama_cpp` (default; GGUF via llama.cpp) or `mnn` (MNN model directory via MNN's `llmexport.py`, scored with pymnn on the GPU). One backend per run, and it is part of the resume fingerprint.
 - **Durable long-running execution** — SQLite-authoritative LangGraph checkpointing, atomic artifact writes, a locked paid-API spend ledger, and SLURM signal-driven requeue that rolls a job over across multi-day segments with continuous progress.
 - **Stretch goals** — once a goal is cleared, the orchestrator may ratchet the accuracy target upward under a hard ceiling; a missed stretch goal never turns a successful run into a reported failure.
 
@@ -49,7 +49,7 @@ curate → train → evaluate → iterate ↺   (with rollback, escalate, downwa
 ```
 - **`curate`** — build one dataset artifact. No-op unless the last intervention was a data rebuild (keeps score movements causally attributable). Executes one of three strategies, synth-fills to a per-tier target, applies four quality controls (label balancing, length-outlier removal anchored on trusted rows, entity capping, near-duplicate removal), and records honest per-origin provenance.
 - **`train`** — one LoRA configuration, always from the base model. Five tunable hyperparameters (rank, alpha ratio, weight decay, learning rate, epochs); batch shape and dropout are deliberately trainer-derived / retired. Completion-only loss, best-validation checkpointing, atomic write-or-nothing.
-- **`evaluate`** — score on the frozen eval set. The zero-shot baseline competes as a candidate (a fine-tune that loses to zero-shot is discarded). Builds/reuses cache-keyed GGUFs for quantized scoring; reaps GGUFs that did not set a new best.
+- **`evaluate`** — score on the frozen eval set. The zero-shot baseline competes as a candidate (a fine-tune that loses to zero-shot is discarded). Builds/reuses cache-keyed quantized artifacts for scoring — a GGUF file or an MNN model directory, per `--quant-backend` — each load-validated in its real runtime before it is scored, and reaped if it did not set a new best.
 - **`iterate`** — the decision node. A strictly-ordered ladder: budget/wall-clock checks → threshold handling (with stretch-goal raising and downward probing) → forced escalation on stagnation (measured over an append-only eval history) → one tool-free LLM decision carrying a structured **run memory** (what worked, what failed since the last improvement, surgical spend per confusion pair). Chooses one of two mutually-exclusive interventions: `data_rebuild` or `hyperparameter`.
 - **`rollback`** — pop the regressing score, prune the DAG node, restore the best non-pruned state, and force `iterate` to choose a *different* action.
 - **`escalate`** — step to the nearest higher non-empty size tier (a different model or quant variant), reset per-model search state, carry `lifetime_best_score` across tiers.
@@ -68,7 +68,7 @@ Replaces the three cold-start entry stages with `trace_ingest` → `live_confirm
 - **Orchestration:** LangGraph state machine with a SQLite checkpointer (`langgraph`, `langgraph-checkpoint-sqlite`)
 - **Orchestrator LLM ("the brain"):** Claude (default `claude-sonnet-5`) via `anthropic` / `langchain-anthropic`, using the Sonnet 1M-token context beta for long trajectories; drives all planning, model-selection, and iteration-decision calls
 - **Training:** Unsloth + PEFT + Transformers + PyTorch (4-bit base load, LoRA / text-only multimodal `FastVisionModel`)
-- **Quantization & on-device eval:** llama.cpp (`llama-cpp-python`) for GGUF build + inference; real peak-RSS measurement via `getrusage`
+- **Quantization & on-device eval:** llama.cpp (`llama-cpp-python`, CUDA-offloaded) for GGUF build + inference, or MNN (`llmexport.py` + `MNNConvert` + pymnn with its CUDA backend) for MNN builds — see `scripts/setup_mnn_env.sh`; real peak-RSS measurement via `getrusage`
 - **Local teacher / judge / synthesis:** a self-hosted vLLM endpoint serving **Qwen3.6-35B-A3B** — the sole CoT teacher, LLM-as-judge, and curriculum-synthesis model (chosen for zero cloud cost, reproducibility, and contamination safety; Claude is never a teacher)
 - **Data:** HuggingFace `datasets`, `pandas`, Exa (`exa-py`) for dataset/spec discovery, Kaggle for the device DB
 - **Model pool:** official Qwen3 (text) and Qwen3.5 (multimodal, tuned text-only) — 0.6B to 4B, each in `Q4_K_M` / `Q8_0` / `bf16`
@@ -150,7 +150,7 @@ data/                       Loaders (BC5CDR, CLINC150, xLAM/BFCL, ...), curricul
 training/                   LoRA trainer, CUDA worker isolation, quantize, hparams
 eval/                       Harness, scorers (classification/NER/function_call/diff/
                             code_execution/generation), LLM-judge client
-hardware_eval/              On-device measurement, GGUF quantize, quant-accuracy eval
+hardware_eval/              On-device measurement, quantize, quant-accuracy eval (either backend)
 scripts/                    GPU/vLLM setup, dataset download, SLURM supervision
 tests/                      200+ pytest tests + tests/pipeline/ SLURM launchers
 docs/                       PIPELINE.md (spec), PAPER.md (analysis+critique),
@@ -161,7 +161,7 @@ docs/                       PIPELINE.md (spec), PAPER.md (analysis+critique),
 
 ## Status / Roadmap
 
-**Working:** cold-start mode end-to-end (task analysis → hardware filtering → model selection → curate/train/evaluate/iterate loop with rollback, escalation, and downward probing), durable SQLite checkpoint/requeue, quantization-honest GGUF evaluation, six-plus curated benchmark loaders, 200+ passing tests.
+**Working:** cold-start mode end-to-end (task analysis → hardware filtering → model selection → curate/train/evaluate/iterate loop with rollback, escalation, and downward probing), durable SQLite checkpoint/requeue, quantization-honest evaluation on both llama.cpp/GGUF and MNN, six-plus curated benchmark loaders, 200+ passing tests.
 
 **Known gaps** (tracked in `docs/PIPELINE.md §12` and `docs/BUGS.md`):
 - Production mode is architected but not runnable end-to-end (the production graph never builds an eval set, which `curate` requires).

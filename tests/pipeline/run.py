@@ -39,6 +39,22 @@ os.chdir(PROJ)
 # below still declares --cheap for help/validation.
 if "--cheap" in sys.argv:
     os.environ["SLM_CHEAP"] = "1"
+# Same reasoning as --cheap: config.config resolves SYNTH_ENDPOINT/SYNTH_MODEL/JUDGE_* from
+# SLM_SYNTH_API_MODE at import time, so the flag has to land before the first config import.
+if "--synth-api" in sys.argv:
+    os.environ["SLM_SYNTH_API_MODE"] = "1"
+# WHICH on-device runtime this run quantizes for and scores through — llama.cpp/GGUF (default) or
+# MNN. Same early-parse treatment as the two flags above and for the same reason: `config.config`
+# resolves QUANT_BACKEND at import time, and `training/quant_backend.py` reads the environment
+# directly (it is imported by CUDA workers that must not hold an API key), so the value has to be
+# in the environment before the first import of either. argparse below still declares the flag so
+# `--help` documents it and an invalid value is rejected with a usage error rather than a
+# traceback from deep inside evaluate_node.
+for _index, _arg in enumerate(sys.argv):
+    if _arg == "--quant-backend" and _index + 1 < len(sys.argv):
+        os.environ["SLM_QUANT_BACKEND"] = sys.argv[_index + 1].strip().lower()
+    elif _arg.startswith("--quant-backend="):
+        os.environ["SLM_QUANT_BACKEND"] = _arg.split("=", 1)[1].strip().lower()
 # Keep this long-lived orchestrator free of model tensors. GPU-heavy operations run in
 # disposable child processes whose exit guarantees complete CUDA-context cleanup.
 os.environ.setdefault("SLM_CUDA_ISOLATION", "1")
@@ -69,12 +85,35 @@ parser.add_argument(
     "research. Minimizes Claude spend on runs that may crash.",
 )
 parser.add_argument(
+    "--synth-api",
+    action="store_true",
+    help="Route the teacher to the DeepSeek API instead of a local vLLM Qwen3.6: "
+    "curriculum synthesis, CoT annotation, the teacher-fitness gate, the accuracy-goal "
+    "baseline and the eval judge. No vLLM server is launched. Requires DEEPSEEK_API_KEY. "
+    "Disables the LLM self-check pass over generated rows (the exact programmatic "
+    "verifiers still run). Judged eval scores are not comparable to locally-judged runs.",
+)
+parser.add_argument(
+    "--quant-backend",
+    dest="quant_backend",
+    choices=["llama_cpp", "mnn"],
+    default=os.environ.get("SLM_QUANT_BACKEND", "llama_cpp"),
+    help="On-device runtime to quantize for and evaluate through. 'llama_cpp' (default) builds a "
+    "GGUF with convert_hf_to_gguf + llama-quantize and scores it with llama-cpp-python. 'mnn' "
+    "builds an MNN model directory with MNN's llmexport.py + MNNConvert (Q4_K_M → 4-bit, Q8_0 → "
+    "8-bit, blockwise) and scores it in-process with pymnn. One backend per run; requires "
+    "`bash scripts/setup_mnn_env.sh` to have built the MNN toolchain.",
+)
+parser.add_argument(
     "--resume",
     metavar="PATH",
     default="",
     help="Resume a checkpoint.json (or its containing run directory)",
 )
 args = parser.parse_args()
+# Re-export after parsing so an `SLM_QUANT_BACKEND` inherited from the submitting shell and an
+# explicit flag cannot disagree, and so argparse's `choices` is what validated the value.
+os.environ["SLM_QUANT_BACKEND"] = args.quant_backend
 
 _configured_run_dir = os.environ.get("SLM_RUN_DIR", "").strip()
 _resume_value = args.resume.strip() or os.environ.get("SLM_RESUME", "").strip()
@@ -137,6 +176,13 @@ from dotenv import load_dotenv
 # wise shadow the real .env key (load_dotenv defaults to override=False) → 401 auth errors.
 # The SLURM run scripts never put API keys in the environment, so overriding is safe here.
 load_dotenv(os.path.join(PROJ, ".env"), override=True)
+
+# Reproducibility, applied before anything can touch CUDA. The GPU-heavy operations run in
+# `training.cuda_worker` subprocesses that apply this for themselves, but the parent also
+# evaluates, tokenizes and samples, and a run is only reproducible if every process is.
+from training.determinism import enable_determinism as _enable_determinism
+
+_DETERMINISM = _enable_determinism(label="run")
 
 # --------------------------------------------------------------------------
 # Run directory + tee logger (set up before any imports that might print)
@@ -364,10 +410,17 @@ if _IS_RESUME:
         raise CheckpointError(
             "resume checkpoint path does not match the stable run manifest"
         )
+    # The run's OWN manifest is the authority for its checkpoint, not this process's freshly
+    # computed fingerprint. `load_run_manifest` above has already checked the manifest against the
+    # current environment — forgiving only fingerprint keys that did not exist when it was written
+    # AND are switched off now — so the chain current env ≈ manifest ≈ checkpoint still holds,
+    # while a run that predates a key added mid-flight can still be resumed. Re-stamping the
+    # checkpoint with a newer hash instead would rewrite the identity of a run already in progress.
+    _CHECKPOINT_COMPATIBILITY = _RUN_MANIFEST["compatibility"]
     try:
         _RESTORED_CHECKPOINT = load_checkpoint(
             CHECKPOINT_PATH,
-            expected_compatibility=_COMPATIBILITY,
+            expected_compatibility=_CHECKPOINT_COMPATIBILITY,
             validate_artifact_paths=False,
         )
     except CheckpointCorruptError:
@@ -395,6 +448,7 @@ else:
         cumulative_wall_time_s=0.0,
         status="initializing",
     )
+    _CHECKPOINT_COMPATIBILITY = _COMPATIBILITY
 
 THREAD_ID = _RUN_MANIFEST["thread_id"]
 SQLITE_PATH = _RUN_MANIFEST["sqlite_path"]
@@ -426,12 +480,12 @@ if _IS_RESUME and os.path.isfile(SQLITE_PATH):
                 config=_startup_config,
                 checkpoint_path=CHECKPOINT_PATH,
                 thread_id=THREAD_ID,
-                compatibility=_COMPATIBILITY,
+                compatibility=_CHECKPOINT_COMPATIBILITY,
                 cumulative_wall_time_s=_previous_wall,
             )
             _RESTORED_CHECKPOINT = load_checkpoint(
                 CHECKPOINT_PATH,
-                expected_compatibility=_COMPATIBILITY,
+                expected_compatibility=_CHECKPOINT_COMPATIBILITY,
             )
 if (
     _IS_RESUME
@@ -456,7 +510,7 @@ if not (_sqlite_startup_state and _sqlite_startup_state.exists):
     # Pre-graph JSON is authoritative only until the first SQLite generation.
     load_checkpoint(
         CHECKPOINT_PATH,
-        expected_compatibility=_COMPATIBILITY,
+        expected_compatibility=_CHECKPOINT_COMPATIBILITY,
     )
 _GRAPH_ALREADY_TERMINAL = bool(
     _sqlite_startup_state and _sqlite_startup_state.terminal
@@ -500,11 +554,29 @@ log(f"model selection strategy: {config.MODEL_SELECTION_STRATEGY}")
 log(f"turn budget: {config.MAX_TURNS_MAIN}")
 log(f"orchestrator model: {config.ORCHESTRATOR_MODEL}")
 log(f"judge model: {config.JUDGE_MODEL}  |  judge endpoint: "
-    f"{config.JUDGE_ENDPOINT or '<unset>'}  |  provider: local")
+    f"{config.JUDGE_ENDPOINT or '<unset>'}  |  provider: "
+    f"{config.SYNTH_API_PROVIDER if config.SYNTH_API_MODE else 'local'}")
+if config.SYNTH_API_MODE:
+    log(f"API TEACHER MODE ON ({config.SYNTH_API_PROVIDER}, model {config.SYNTH_MODEL}): no vLLM "
+        "server is launched. Curriculum synthesis, CoT annotation, the teacher-fitness/goal "
+        "measurement and the eval judge all run against the API and are PAID per token. "
+        "The LLM self-check over generated rows is DISABLED (the exact programmatic verifiers "
+        "still run).")
+    log("  ⚠ synthetic rows from this run are labelled synth:deepseek — their provenance is a "
+        "model we do not own. Judged eval scores (dialogsum, toolbench) are NOT comparable to "
+        "runs judged by the local Qwen3.6.")
 if config.CHEAP_MODE:
     log("CHEAP MODE ON: Haiku for Anthropic orchestration; local Qwen3.6 judge unchanged; "
         "curriculum synthesis + CoT annotation skipped (real acquired data only). Agent "
         "intervention decisions + Exa data research KEPT.")
+# Stated at the TOP as well as in the final report. An ablation that only announces itself after
+# the run is the one thing worse than not announcing itself: 9 hours of L40S time have already
+# been spent by then, and a flag left exported in a submitting shell — which is how run 39311801's
+# synthesis bypass came to be undeclared — would otherwise be invisible until it was too late.
+from agent.ablations import active_ablations as _active_ablations
+
+for _ablation in _active_ablations():
+    log(f"⚠ ABLATION: {_ablation}")
 log("")
 _PREGRAPH_RESTORED = bool(
     _IS_RESUME
@@ -552,7 +624,7 @@ else:
             CHECKPOINT_PATH,
             {"description": description},
             thread_id=THREAD_ID,
-            compatibility=_COMPATIBILITY,
+            compatibility=_CHECKPOINT_COMPATIBILITY,
             graph_steps=int(_prior.get("graph_steps", 0)),
             last_node=_prior.get("last_node"),
             next_nodes=("__pregraph__",),
@@ -649,6 +721,12 @@ fresh_initial_state = {
     "retained_gguf_paths": [],
     "last_eval": None,
     "last_curation": None,
+    # Seed snapshot for the reset ablation; populated by curate_node's initial_gold build only when
+    # SLM_ABLATION_RESET_DATA_ON_ESCALATION=1, and left None on every normal run.
+    "seed_dataset_path": None,
+    "seed_train_examples_path": None,
+    "seed_source_progress": None,
+    "seed_last_curation": None,
     "last_intervention": "data_rebuild",
     "last_hypothesis": "",
     "llm_iterate_decision": None,
@@ -698,7 +776,7 @@ if not _PREGRAPH_RESTORED:
         CHECKPOINT_PATH,
         initial_state,
         thread_id=THREAD_ID,
-        compatibility=_COMPATIBILITY,
+        compatibility=_CHECKPOINT_COMPATIBILITY,
         graph_steps=0,
         last_node=None,
         next_nodes=("task_analysis",),
@@ -756,7 +834,7 @@ def _exit_preflight(reason: str):
         CHECKPOINT_PATH,
         initial_state,
         thread_id=THREAD_ID,
-        compatibility=_COMPATIBILITY,
+        compatibility=_CHECKPOINT_COMPATIBILITY,
         graph_steps=int(_progress.get("graph_steps", 0)),
         last_node=_progress.get("last_node"),
         next_nodes=tuple(_progress.get("next_nodes") or ("task_analysis",)),
@@ -777,6 +855,21 @@ def _run_synth_preflight():
     if os.environ.get("SLM_REQUIRE_SYNTH", "1") == "0":
         return
     from data.synth_client import is_available as _synth_available
+    if config.SYNTH_API_MODE:
+        # ONE probe, no polling. The local branch below blocks for up to 40 minutes because a vLLM
+        # server genuinely takes that long to load 35B of weights and there is nothing to do but
+        # wait. A hosted API has no cold start: if it does not answer now, the cause is a bad key,
+        # a blocked network route or an outage, and none of those clear by waiting — so failing in
+        # seconds gets the run resubmitted with a fix instead of 40 minutes later without one.
+        log(f"  ▶ synthesis preflight: probing {config.SYNTH_ENDPOINT} "
+            f"(model={config.SYNTH_MODEL})")
+        if _synth_available(log=log):
+            log("      DeepSeek API reachable — proceeding")
+            return
+        log("  !! the DeepSeek API did not answer. Check DEEPSEEK_API_KEY in .env, that the key "
+            "has credit, and that this node can reach api.deepseek.com (HTTPS_PROXY). Set "
+            "SLM_REQUIRE_SYNTH=0 to allow a gold-only run.")
+        _exit_preflight(f"synthesis API {config.SYNTH_ENDPOINT} unreachable or unauthorized")
     endpoint = os.environ.get("SLM_SYNTH_ENDPOINT", "")
     if not endpoint:
         log("  !! SLM_REQUIRE_SYNTH=1 but SLM_SYNTH_ENDPOINT is unset — the task scripts export "
@@ -862,7 +955,7 @@ try:
                 config=_graph_config,
                 checkpoint_path=CHECKPOINT_PATH,
                 thread_id=THREAD_ID,
-                compatibility=_COMPATIBILITY,
+                compatibility=_CHECKPOINT_COMPATIBILITY,
                 cumulative_wall_time_s=_initial_graph_wall_s,
             )
             last_state = _authoritative_before_stream.state
@@ -888,7 +981,7 @@ try:
             config=_graph_config,
             checkpoint_path=CHECKPOINT_PATH,
             thread_id=THREAD_ID,
-            compatibility=_COMPATIBILITY,
+            compatibility=_CHECKPOINT_COMPATIBILITY,
             initial_graph_steps=GRAPH_STEPS,
             initial_wall_time_s=_initial_graph_wall_s,
             max_graph_steps=config.MAX_TURNS_MAIN,
@@ -910,7 +1003,7 @@ except BaseException as exc:
     try:
         _failure_checkpoint = load_checkpoint(
             CHECKPOINT_PATH,
-            expected_compatibility=_COMPATIBILITY,
+            expected_compatibility=_CHECKPOINT_COMPATIBILITY,
         )
         last_state = _failure_checkpoint["state"]
         GRAPH_STEPS = int(
@@ -1041,6 +1134,15 @@ if config.HW_VERIFY_ON_DEVICE:
         elif final_model.quant is None:
             log("      [hw-verify] final model is BF16 (no GGUF path) — skipping "
                 "SmolChat/GGUF verification; set a quantized variant to enable")
+        elif config.QUANT_BACKEND != "llama_cpp":
+            # Every measuring backend in hardware_eval/on_device_eval.py speaks GGUF: llama-cli
+            # locally, llama-cli over adb, or a SmolChat broadcast. An MNN artifact handed to any
+            # of them is not a slower measurement, it is a meaningless one, and measuring MNN on a
+            # phone needs MNN-Chat's own benchmark receiver (the reference harness's
+            # run_mnn_autobench.py). Skipped loudly rather than attempted.
+            log(f"      [hw-verify] quantization backend is {config.QUANT_BACKEND!r}; the "
+                "on-device backends here measure GGUF only — skipping. Accuracy for this run "
+                "was still measured on the real MNN artifact by the eval loop.")
         else:
             from training.cuda_isolation import merge_and_quantize
             from hardware_eval.on_device_eval import run_on_device_eval, result_to_dict
@@ -1190,13 +1292,24 @@ dag_lines.append(f"{'Iter':>4}  {'Model':<30}  {'Score':>7}  {'Pruned':>6}  {'Co
 dag_lines.append("-" * 100)
 for node in dag:
     pruned_str = "✗" if node.get("pruned") else ""
+    # `dict.get(key, default)` does NOT return the default when the key exists holding None, and a
+    # skipped iteration (`curate._record_skipped_iteration`) stores exactly that: `score: None`,
+    # because it was never evaluated. So `f"{node.get('score', 0):.4f}"` raised
+    # "unsupported format string passed to NoneType.__format__" — inside the PARTIAL-REPORT path,
+    # which meant it replaced the real traceback with its own and hid the actual cause of the
+    # 2026-09-04 ablation failures (a scoreless node reaching `rollback_node`) behind a formatting
+    # error in the error reporter. Formatted explicitly so this path can never do that again.
+    _score = node.get("score")
+    _score_str = f"{_score:.4f}" if isinstance(_score, (int, float)) else "  n/a "
+    _iteration = node.get("iteration")
+    _iteration_str = f"{_iteration:>4}" if isinstance(_iteration, int) else f"{'?':>4}"
     dag_lines.append(
-        f"{node.get('iteration', '?'):>4}  "
-        f"{node.get('model_id', '?'):<30}  "
-        f"{node.get('score', 0):.4f}  "
+        f"{_iteration_str}  "
+        f"{node.get('model_id', '?') or '?':<30}  "
+        f"{_score_str}  "
         f"{pruned_str:>6}  "
-        f"{node.get('best_config', '?'):<25}  "
-        f"{node.get('intervention', '?')}"
+        f"{node.get('best_config', '?') or '?':<25}  "
+        f"{node.get('intervention', '?') or '?'}"
     )
 dag_lines.append("")
 dag_text = "\n".join(dag_lines)
@@ -1283,15 +1396,20 @@ def _report_body() -> None:
     # Where the accuracy goal came from, ALWAYS — including when the 0.80 floor overrode a teacher that
     # scored below it. Without this, a converged run against a floored goal looks identical to one that
     # matched a strong teacher, and BC5CDR's "threshold 0.8000" hid a teacher score of 0.0999.
-    from agent.threshold import describe_threshold_provenance
+    from agent.threshold import describe_measured_teacher, describe_threshold_provenance
 
     _calibration = last_state.get("threshold_calibration") or {}
     log(f"  goal source: {describe_threshold_provenance(_calibration)}")
     if _calibration.get("measured_qwen") is not None:
-        log(f"  teacher    : Qwen-3.6 zero-shot "
-            f"{float(_calibration['measured_qwen']):.4f} "
-            f"{_calibration.get('measured_metric') or ''}".rstrip()
-            + "  (no fine-tuning; this is the score the goal is calibrated against)")
+        # Model, shot count, metric score, FORMAT VALIDITY and row count, all from the record
+        # rather than hardcoded — this line used to read "Qwen-3.6 zero-shot" unconditionally and
+        # was wrong on both counts the moment the measurement became five-shot and the teacher
+        # became configurable. format_valid belongs beside the score because the two fail
+        # differently: a low score at format_valid 1.0 is a capability ceiling, while a low
+        # format_valid is a broken output contract that bounds the score regardless of capability.
+        log(f"  teacher    : {describe_measured_teacher(_calibration)}"
+            "  (no fine-tuning; this is the score the goal is calibrated against, and the same "
+            "measurement that gated synthetic data)")
     if _raises:
         log(f"  stretch goals: raised {len(_raises)}x — "
             + " → ".join(
@@ -1419,15 +1537,34 @@ def _report_body() -> None:
                 f"{'Config':<34}  {'Intervention'}")
             for node in pdag:
                 pruned_str = "✗" if node.get("pruned") else ""
+                # SCORE IS FORMATTED THE SAME WAY `format_valid` ALREADY IS, and for the same
+                # reason. `node.get('score', 0)` does NOT fall back to 0 when the key exists
+                # holding None, and `curate._record_skipped_iteration` stores exactly that for a
+                # rebuild that added no rows — it was never trained or evaluated, so it has no
+                # score, and inventing one would put a fabricated measurement in the report.
+                #
+                # This is the THIRD site with this bug (after the `dag_summary.txt` writer and
+                # `rollback_node`) and it is the one that cost the most: it killed the FINAL REPORT
+                # of all three ablation runs on 2026-09-05 — 19 hours of GPU across them — after
+                # each had otherwise completed successfully. The runs exited 0 and the report was
+                # simply absent, printing "!! final report failed" mid-table with the DAG traversal
+                # cut off at the iteration before the first skipped one.
                 fmt = node.get("format_valid")
                 fmt_text = f"{fmt:.4f}" if isinstance(fmt, (int, float)) else "n/a"
-                log(f"     {node.get('iteration','?'):>4}  {node.get('score',0):8.4f}  "
+                score = node.get("score")
+                score_text = (
+                    f"{score:8.4f}" if isinstance(score, (int, float)) else f"{'skipped':>8}"
+                )
+                iteration = node.get("iteration")
+                iter_text = f"{iteration:>4}" if isinstance(iteration, int) else f"{'?':>4}"
+                log(f"     {iter_text}  {score_text}  "
                     f"{fmt_text:>7}  {pruned_str:>6}  {str(node.get('best_config','?')):<34}  "
                     f"{format_intervention_detail(node)}")
 
     log("")
     _anthropic_cost = cost["by_provider"].get("anthropic", {})
     _exa_cost = cost["by_provider"].get("exa", {})
+    _deepseek_cost = cost["by_provider"].get("deepseek", {})
     log(
         f"  cost: Claude {_anthropic_cost.get('calls', 0)} calls "
         f"({_anthropic_cost.get('input_tokens', 0)}→{_anthropic_cost.get('output_tokens', 0)} tok) "
@@ -1435,6 +1572,28 @@ def _report_body() -> None:
         f"Exa {_exa_cost.get('calls', 0)} searches ${_exa_cost.get('estimated_usd', 0.0):.4f}  |  "
         f"total ${cost['total_cost_usd']:.4f}"
     )
+    if _deepseek_cost:
+        # Only when API mode was used, and broken out by stage. The teacher makes tens of
+        # thousands of calls across several distinct jobs (synthesis, CoT, the fitness/baseline
+        # measurement, judging), and a single aggregate cannot answer the question anyone asks of
+        # it — which of those jobs the money went to. Cache hits are reported separately because
+        # DeepSeek prices them ~30x below a miss, so the hit rate IS the cost story.
+        log(
+            f"  cost: DeepSeek {_deepseek_cost.get('calls', 0)} calls "
+            f"({_deepseek_cost.get('input_tokens', 0)}→{_deepseek_cost.get('output_tokens', 0)} tok, "
+            f"{_deepseek_cost.get('cache_tokens', 0)} cached) "
+            f"${_deepseek_cost.get('estimated_usd', 0.0):.4f}  |  teacher model "
+            f"{config.SYNTH_MODEL}"
+        )
+        for _entry in cost.get("by_provider_model_stage", []):
+            if _entry.get("provider") != "deepseek":
+                continue
+            log(
+                f"    deepseek stage={_entry['stage']} calls={_entry['calls']} "
+                f"failures={_entry['failures']} "
+                f"tokens={_entry['input_tokens']}→{_entry['output_tokens']} "
+                f"cached={_entry['cache_tokens']} usd=${_entry['estimated_usd']:.4f}"
+            )
     for _provider, _summary in cost["by_provider"].items():
         log(
             f"    cost provider={_provider} calls={_summary['calls']} "
@@ -1466,14 +1625,38 @@ def _report_body() -> None:
     # synthesis was refused up front or attempted and failed.
     _fitness = last_state.get("teacher_fitness") or {}
     if _fitness:
-        _score = _fitness.get("score")
-        _shown = f"{_score:.4f}" if isinstance(_score, (int, float)) else "unmeasured"
+        from agent.teacher_fitness import format_fitness_measurement
+
         log("")
-        log(f"  teacher fitness: {_fitness.get('metric', '?')}={_shown} "
-            f"{_fitness.get('shots', '?')}-shot on {_fitness.get('n', 0)} eval row(s) "
-            f"vs a {_fitness.get('threshold', 0.8):.2f} gate → synthetic data "
+        log(f"  teacher measurement: {format_fitness_measurement(_fitness)}")
+        log(f"    → vs a {_fitness.get('threshold', 0.8):.2f} gate: synthetic data "
             f"{'ALLOWED' if _fitness.get('synthesis_allowed') else 'REFUSED'}"
             + (f" ({_fitness.get('reason')})" if _fitness.get("reason") else ""))
+        log(f"    → floored at 0.80, this set the run's accuracy goal ({threshold:.4f})")
+        if _fitness.get("bypassed"):
+            log("    ⚠ SLM_TEACHER_SYNTH_BYPASS=1: the gate was NOT cleared and synthetic data "
+                "was allowed anyway. Any accuracy above was obtained with data the gate would "
+                "have refused.")
+        if _fitness.get("disallowed_by_operator"):
+            log("    ⚠ SLM_SYNTH_DISALLOW=1: synthetic data was refused by operator override "
+                "rather than by the gate above. No generated row entered the curriculum, whatever "
+                "the measurement says the teacher could have done.")
+
+    # WHICH ABLATIONS WERE ACTIVE. Printed unconditionally when any flag is set, and separately
+    # from the teacher block, because the reset ablation leaves no trace in a fitness verdict —
+    # and a run whose curriculum was rewound three times is not comparable to one that grew
+    # monotonically, however similar the two summaries look side by side.
+    try:
+        from agent.ablations import active_ablations
+
+        _ablations = active_ablations()
+        if _ablations:
+            log("")
+            log("  ⚠ ABLATION RUN — this is not a standard configuration:")
+            for _ablation in _ablations:
+                log(f"    • {_ablation}")
+    except Exception as _ablation_error:  # noqa: BLE001 — reporting must not fail a finished run
+        log(f"  ablation status unavailable: {type(_ablation_error).__name__}: {_ablation_error}")
 
     # Post-run summary graphics. Fail-safe: the run has already succeeded by this point, so a
     # plotting error (or a missing matplotlib) must never change the outcome — log and move on.

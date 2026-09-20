@@ -63,10 +63,11 @@ SPEC = TaskSpec(
     # cost is a smaller starting curriculum; the gain is that the data intervention exists at all,
     # which matters more on the one task where synthesis is unavailable.
     initial_train_cap=3000,
-    eval_cap=1000,
+    select_cap=1000,
     eval_sampling="shuffled",
     closed_label_space=False,
     label_definitions={},
+    entity_type_vocabulary=(),  # extracts no spans
     # The four conventions `verify_calendar_row` enforces exactly, restated for the TEACHER — which
     # judges the same rows afterwards and, without them, invents its own. See TaskSpec.verifier_notes
     # for the measurement that made this necessary.
@@ -103,6 +104,12 @@ SPEC = TaskSpec(
     needs_judge=False,
     judge_overlap=False,
     attach_reasoning=True,
+
+    # Selection and reporting coincide: a call either matches the gold AST or it does not. No
+    # threshold to tune, no per-class averaging to destabilize.
+    report_load=None,
+    report_score=scorer.score,
+    report_metric_name="ast_arg_match",
 
     build_training_turn=function_call_turn,
 

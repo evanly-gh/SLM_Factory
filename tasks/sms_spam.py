@@ -28,7 +28,7 @@ SPEC = TaskSpec(
     # so `mine_new_real` has somewhere to go on its first attempt, which is the lesson calendar_json
     # taught: a cap that consumes the whole pool at cold start kills the data intervention outright.
     initial_train_cap=3000,
-    eval_cap=1000,
+    select_cap=1000,
     # Binary at a ~87/13 base rate. Without round-robin sampling a 1,000-row eval draw is ~870 ham,
     # and the minority class the metric is computed over would rest on a few dozen rows.
     eval_sampling="label_balanced",
@@ -48,6 +48,7 @@ SPEC = TaskSpec(
             "conventional name for the non-spam class in this corpus"
         ),
     },
+    entity_type_vocabulary=(),  # extracts no spans
     verifier_notes="",
     quality_controls=(
         qc.require_fields("text", "label"),
@@ -77,6 +78,12 @@ SPEC = TaskSpec(
     needs_judge=False,
     judge_overlap=False,
     attach_reasoning=True,
+
+    # Selection and reporting coincide: two classes, and `eval_sampling="label_balanced"` guarantees
+    # the minority class has support in any draw, so the selection metric is already the honest one.
+    report_load=None,
+    report_score=scorer.score_minority_f1,
+    report_metric_name="minority_f1",
 
     build_training_turn=classification_turn,
 

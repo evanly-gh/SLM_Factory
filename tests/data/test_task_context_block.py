@@ -184,14 +184,20 @@ def test_the_entity_types_are_declared_exhaustive():
     assert "only ones" in block
 
 
-@pytest.mark.parametrize("task", ("gsm8k", "dialogsum"))
+@pytest.mark.parametrize("task", ("gsm8k",))
 def test_an_open_ended_task_with_neither_vocabulary_yields_nothing(task):
     """Empty string, not an empty heading.
 
     A heading with nothing under it reads as a section the teacher was supposed to be given and is
-    worse than silence — and for these tasks there is genuinely nothing to enumerate: the answer is a
-    number the question determines, or free prose. Claiming a label space here would be the B267
-    mistake manufactured rather than merely inherited.
+    worse than silence — and for this task there is genuinely nothing to enumerate: the answer is a
+    number the question determines. Claiming a label space here would be the B267 mistake
+    manufactured rather than merely inherited.
+
+    `dialogsum` used to be the second case and is no longer. The 2026-09-06 rework gave it real
+    task-level conventions that appear on no single row — the transcript's `#Person1#` speaker
+    labels, and summaries being SHORT relative to the conversation — so its block is deliberately
+    non-empty. That is the distinction this test is drawing: silence when there is nothing to say,
+    not silence as a default.
     """
     rows = [{"text": "a request", "answer": "an answer"}]
 
@@ -415,7 +421,65 @@ TASK_FIXTURES = {
     # No closed vocabulary of any kind: the answer is a number the question determines, or free
     # prose. The requirement for these two is the opposite one — see the assertion below.
     "gsm8k": ([{"text": "Janet has 3 apples and buys 4 more.", "answer": "7"}], ()),
-    "dialogsum": ([{"text": "A: are we still on for 6?\nB: yes", "answer": "They confirm 6pm."}], ()),
+    # No longer vocabulary-free. The 2026-09-06 rework gave this task two conventions that appear
+    # on no single row and that a teacher will otherwise invent: the transcript's `#Person1#`
+    # speaker labels, and summaries being SHORT relative to the conversation. Left unstated, a
+    # teacher rewards the fluent condensed-transcript summary and rejects the correct terse one.
+    # Neither token is in the row, so both can only have arrived via the task-context block.
+    "dialogsum": (
+        [{"text": "A: are we still on for 6?\nB: yes", "answer": "They confirm 6pm.",
+          "references": ["They confirm 6pm."]}],
+        ("#Person1#", "terse"),
+    ),
+    # Span vocabulary, same shape as BC5CDR: the gold lives in `entities` and the `answer` names
+    # only the span TEXTS, so a type name can only have reached the prompt through the
+    # task-context block. Two of the 33 are checked, one of them a type whose name a teacher
+    # would not guess.
+    "multiconer": (
+        [{
+            "text": "robert gottschalk founded panavision",
+            "entities": [{"text": "robert gottschalk", "type": "OtherPER"},
+                         {"text": "panavision", "type": "ORG"}],
+            "answer": json.dumps(["robert gottschalk", "panavision"]),
+        }],
+        ("OtherPER", "Medication/Vaccine"),
+    ),
+    # The extractive constraint is the one property a fluent generated parse violates, and it is
+    # not visible in any single row — so it has to reach the teacher through the task-context
+    # block or the teacher invents a convention, which is B267/B269/B314 one level up.
+    "topv2": (
+        [{
+            "text": "set alarm for 6 am",
+            "answer": "[IN:CREATE_ALARM set alarm [SL:DATE_TIME for 6 am ] ]",
+            "domain": "reminder",
+        }],
+        ("EXTRACTIVE", "paraphrased"),
+    ),
+    # Two conventions invisible in a row: the text is TOKENIZED, and a correction identical to the
+    # input is legitimate rather than a non-answer. Left unstated, a teacher "fixes" the
+    # tokenization and rejects every unedited sentence — 36% of this corpus.
+    "gec_bea19": (
+        [{
+            "text": "I has went to the store yesterday .",
+            "answer": "I went to the store yesterday .",
+            "cefr": "A",
+            "m2": "S I has went to the store yesterday .\n"
+                  "A 1 2|||U:VERB:TENSE||||||REQUIRED|||-NONE-|||0",
+        }],
+        ("TOKENIZED", "IDENTICAL"),
+    ),
+    # The 28 labels are a fixed vocabulary compared exactly, so a synonym is a wrong answer. The
+    # expected tokens include a label the row does not carry, so the assertion cannot be satisfied
+    # by the proposed answer being echoed back.
+    "goemotions": (
+        [{
+            "text": "thank you so much, this made my day",
+            "labels": ["gratitude", "joy"],
+            "label": "gratitude, joy",
+            "answer": "gratitude, joy",
+        }],
+        ("annoyance", "neutral"),
+    ),
 }
 
 
@@ -424,7 +488,7 @@ def test_the_fixture_table_covers_the_whole_registry():
     than silently inheriting no coverage, which is the shape of failure the task registry exists to
     prevent (a task inheriting whatever an `else` branch did)."""
     assert sorted(TASK_FIXTURES) == sorted(task_names())
-    assert len(TASK_FIXTURES) == 10
+    assert len(TASK_FIXTURES) == 14
 
 
 def _verifier_prompt_for(task: str, rows: list[dict]) -> str:

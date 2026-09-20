@@ -19,6 +19,63 @@ def _make_eval_set(task="routerbench"):
     )
 
 
+def test_scoring_mode_selects_between_the_two_scorers_a_task_declares():
+    """`resolve_scorer` is the only place the select/report choice is made.
+
+    Asserted directly because the alternative — reading `spec.score` at the call site — is what
+    let a single overloaded eval serve two purposes in the first place. An unknown mode must raise
+    rather than fall back to selection: a typo'd mode that silently scored the SELECTION metric and
+    labelled the output a report is the exact failure this whole split exists to prevent.
+    """
+    from eval.harness import SCORING_MODES, resolve_scorer
+    from tasks import get_task
+
+    spec = get_task("routerbench")
+    assert SCORING_MODES == ("select", "report")
+    assert resolve_scorer(spec, "select") == (spec.score, spec.metric_name)
+    assert resolve_scorer(spec, "report") == (spec.report_score, spec.report_metric_name)
+    with pytest.raises(ValueError, match="scoring must be one of"):
+        resolve_scorer(spec, "reporting")
+
+
+@patch("eval.harness.infer_batch")
+def test_report_scoring_grades_with_the_report_scorer_and_names_its_metric(mock_infer, monkeypatch):
+    """A report pass must carry the report metric's NAME, or the JSON misattributes the number.
+
+    Driven through a stub task rather than a real one because every task in the registry today
+    either reports the metric it selects on or is graded by a scorer needing real inference. The
+    thing under test is the plumbing: that `scoring="report"` reaches `report_score`, and that the
+    returned `EvalResult.metric` is the report name and not `spec.metric_name`.
+    """
+    import dataclasses
+
+    from tasks import get_task
+
+    monkeypatch.delenv("SLM_CUDA_ISOLATION", raising=False)
+    mock_infer.return_value = ["local", "route"]
+    eval_set = _make_eval_set()
+
+    def report_score(_eval_set, _predictions) -> dict:
+        return {
+            "f1": 0.25,
+            "metric": "pretend_auprc",
+            "per_class": {"pretend_auprc": 0.25, "format_valid": 1.0},
+            "failures": [],
+            "format_valid": 1.0,
+        }
+
+    stub = dataclasses.replace(
+        get_task("routerbench"), report_score=report_score,
+        report_metric_name="pretend_auprc",
+    )
+    with patch("tasks.get_task", return_value=stub):
+        selected = run_eval(eval_set, "/weights", "model-id")
+        reported = run_eval(eval_set, "/weights", "model-id", scoring="report")
+
+    assert (selected.f1, selected.metric) == (1.0, "minority_f1")
+    assert (reported.f1, reported.metric) == (0.25, "pretend_auprc")
+
+
 @patch("eval.harness.infer_batch")
 def test_run_eval_uses_infer_batch_when_no_gguf(mock_infer, monkeypatch):
     monkeypatch.delenv("SLM_CUDA_ISOLATION", raising=False)
@@ -58,7 +115,7 @@ def test_run_eval_uses_infer_batch_gguf_when_gguf_path_set(mock_gguf, monkeypatc
     )
 
     result = run_eval(
-        eval_set, "/weights", "model-id", quant="Q4_K_M", gguf_path="/model.gguf"
+        eval_set, "/weights", "model-id", quant="Q4_K_M", quant_artifact="/model.gguf"
     )
 
     mock_gguf.assert_called_once_with(
@@ -71,6 +128,45 @@ def test_run_eval_uses_infer_batch_gguf_when_gguf_path_set(mock_gguf, monkeypatc
         # that matters. The bf16 branch always passed it; this branch did not.
         task="routerbench",
     )
+    assert result.f1 == pytest.approx(2 / 3)
+
+
+@patch("eval.harness.infer_batch_mnn")
+@patch("eval.harness.infer_batch_gguf")
+def test_run_eval_routes_an_mnn_artifact_to_the_mnn_engine(mock_gguf, mock_mnn, monkeypatch):
+    """The backend decides the engine, NOT the path.
+
+    Both artifacts are just paths, and the failure this guards against is silent: scoring an MNN
+    directory through llama-cpp-python does not produce a wrong number, it produces a load error
+    whose message blames the artifact. Worse in the other direction — a GGUF scored through the
+    wrong engine under an MNN label would report a real accuracy for the wrong runtime.
+    """
+    monkeypatch.delenv("SLM_CUDA_ISOLATION", raising=False)
+    mock_mnn.return_value = ["local", "local", "route"]
+    eval_set = EvalSet(
+        all=[
+            {"text": "a", "label": "local"},
+            {"text": "b", "label": "route"},
+            {"text": "c", "label": "route"},
+        ],
+        task="routerbench",
+    )
+
+    result = run_eval(
+        eval_set, "/weights", "model-id",
+        quant="Q4_K_M",
+        quant_artifact="/artifacts/mnn/model-mnn-q4",
+        quant_backend="mnn",
+    )
+
+    mock_mnn.assert_called_once_with(
+        eval_set.spec.build_prompts(eval_set),
+        "/artifacts/mnn/model-mnn-q4",
+        max_new_tokens=50,
+        base_model="model-id",
+        task="routerbench",
+    )
+    mock_gguf.assert_not_called()
     assert result.f1 == pytest.approx(2 / 3)
 
 
@@ -91,12 +187,19 @@ def test_run_eval_delegates_to_disposable_worker_when_enabled(monkeypatch):
     monkeypatch.delenv("SLM_CUDA_WORKER", raising=False)
     with patch("training.cuda_isolation.run_isolated", return_value=expected) as worker, \
          patch("training.slm_helpers.clear_inference_cache") as clear:
-        result = run_eval(eval_set, "/weights", "model-id", quant=None, gguf_path=None)
+        result = run_eval(eval_set, "/weights", "model-id", quant=None, quant_artifact=None)
 
     assert result == expected
     assert clear.call_count == 2
     # The task is no longer part of the payload: it travels inside the eval set, so the two can
     # never be passed inconsistently.
+    #
+    # `scoring` IS in the payload, and must be: the boundary is pickle, so the mode crosses as a
+    # string and is re-resolved against the registry inside the worker. Passing the scorer itself
+    # would either fail to pickle or pickle by qualified name and resolve to a different object in
+    # the child — a parent and child silently disagreeing about which metric was computed. It
+    # defaults to "select" here because that is what the loop always wants; a default of "report"
+    # would feed a report metric straight into `best_score`.
     worker.assert_called_once_with(
         "eval",
         {
@@ -104,7 +207,12 @@ def test_run_eval_delegates_to_disposable_worker_when_enabled(monkeypatch):
             "weights_ref": "/weights",
             "base_model": "model-id",
             "quant": None,
-            "gguf_path": None,
+            "quant_artifact": None,
+            # The backend travels WITH the artifact, for the same reason `scoring` travels as a
+            # string: the worker is a separate process, and a path alone cannot say which engine
+            # should load it. Both are `None` here because this eval scores unquantized weights.
+            "quant_backend": None,
+            "scoring": "select",
         },
     )
 
