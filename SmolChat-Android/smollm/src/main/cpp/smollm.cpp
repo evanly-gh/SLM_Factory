@@ -60,6 +60,15 @@ Java_io_shubham0204_smollm_SmolLM_getPromptTokenCount(JNIEnv* env, jobject thiz,
     return llmInference->getPromptTokenCount();
 }
 
+extern "C" JNIEXPORT jdoubleArray JNICALL
+Java_io_shubham0204_smollm_SmolLM_getPerfMetrics(JNIEnv* env, jobject thiz, jlong modelPtr) {
+    auto*               llmInference = reinterpret_cast<LLMInference*>(modelPtr);
+    std::vector<double> metrics      = llmInference->getPerfMetrics();
+    jdoubleArray        result       = env->NewDoubleArray((jsize) metrics.size());
+    env->SetDoubleArrayRegion(result, 0, (jsize) metrics.size(), metrics.data());
+    return result;
+}
+
 extern "C" JNIEXPORT void JNICALL
 Java_io_shubham0204_smollm_SmolLM_close(JNIEnv* env, jobject thiz, jlong modelPtr) {
     auto* llmInference = reinterpret_cast<LLMInference*>(modelPtr);

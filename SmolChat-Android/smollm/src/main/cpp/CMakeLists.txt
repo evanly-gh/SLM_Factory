@@ -78,22 +78,16 @@ if (SMOLLM_BUILD_VULKAN_VARIANT AND TARGET ggml-vulkan)
     )
 endif()
 
-# The vendored libOpenCL.so (see vendor/README.md) is a real prebuilt
-# binary, not something this configure pass builds -- so unlike every other
-# .so here, Gradle's externalNativeBuild packaging step (which just scans
-# CMAKE_LIBRARY_OUTPUT_DIRECTORY for whatever landed there after the build)
-# would never see it on its own. Copying it there ourselves at configure
-# time is what gets it included in the APK alongside libggml-opencl.so.
-#
-# (Tried removing this + relying on uses-native-library in
-# AndroidManifest.xml to grant access to the device's real vendor
-# libOpenCL.so instead -- confirmed the app then hangs indefinitely rather
-# than working or failing cleanly, see conversation. Reverted; bundling our
-# own shim here remains the working, if OpenCL-non-functional, behavior.)
-if (SMOLLM_BUILD_OPENCL_VARIANT AND TARGET ggml-opencl)
-    file(COPY ${SMOLLM_VENDOR_DIR}/opencl-icd-loader/libOpenCL.so
-         DESTINATION ${CMAKE_LIBRARY_OUTPUT_DIRECTORY})
-endif()
+# The vendored libOpenCL.so (see vendor/README.md) is used only at LINK time,
+# to satisfy libggml-opencl.so's DT_NEEDED libOpenCL.so. It is deliberately
+# NOT packaged into the APK (AGP would package it automatically as a linked
+# runtime file; app/build.gradle.kts excludes it): a bundled Khronos ICD loader finds no ICDs on
+# Android (no /vendor/etc/OpenCL/vendors/), and its absolute-path dlopen of
+# /vendor/lib64/libOpenCL.so is refused by the app's linker namespace, so
+# ggml_opencl reported "platform IDs not available" and fell back to CPU.
+# Instead, the "opencl" flavor's manifest (app/src/opencl/AndroidManifest.xml)
+# declares <uses-native-library android:name="libOpenCL.so">, so at runtime
+# DT_NEEDED libOpenCL.so resolves to the device's own vendor driver.
 
 # llama-common is built by upstream llama.cpp as a SHARED library whenever
 # BUILD_SHARED_LIBS is on (the Android default), but its headers (common.h,

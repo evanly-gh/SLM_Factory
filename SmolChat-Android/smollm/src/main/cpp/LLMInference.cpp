@@ -113,21 +113,13 @@ LLMInference::loadModel(const char *model_path, float minP, float temperature, b
     redirectStderrToLogcat();
     llama_log_set(llamaLogToLogcat, nullptr);
 
-    // Our vendored OpenCL ICD loader (vendor/opencl-icd-loader/libOpenCL.so)
-    // discovers vendor drivers by scanning a Linux-style /etc/OpenCL/vendors/
-    // *.icd filesystem registry -- which doesn't exist on Android, so
-    // clGetPlatformIDs() finds nothing even though a real vendor driver is
-    // genuinely present on-device (confirmed via `adb shell ls
-    // /vendor/lib64/libOpenCL.so` on a real device; ggml_backend_opencl_reg()
-    // itself logged "platform IDs not available" as the reason). The loader
-    // supports OCL_ICD_FILENAMES as a direct override -- a colon-separated
-    // list of driver .so paths to load, bypassing that registry scan
-    // entirely. This is harmless outside the "opencl" flavor (the loader
-    // itself, and thus this env var, isn't even present in other flavors'
-    // APKs) and harmless on a device without a driver at this exact path
-    // (the vendor-add attempt just fails, leaving OpenCL unavailable exactly
-    // as before -- no regression risk).
-    setenv("OCL_ICD_FILENAMES", "/vendor/lib64/libOpenCL.so", 1);
+    // No OCL_ICD_FILENAMES override here: the "opencl" flavor links against the
+    // device's own vendor libOpenCL.so (see app/src/opencl/AndroidManifest.xml).
+    // On Adreno that library is itself Qualcomm's ICD loader and finds its
+    // driver (libOpenCL_adreno.so) on its own. Setting
+    // OCL_ICD_FILENAMES=/vendor/lib64/libOpenCL.so made it register itself as a
+    // vendor, re-entering its own one-time init and deadlocking in
+    // khrIcdVendorAdd() (confirmed on SM8850 via debug.gfx.opencl.icdtrace).
 
     LOGi("loading model with"
          "\n\tmodel_path = %s"
@@ -284,6 +276,13 @@ LLMInference::getContextSizeUsed() const {
     return _nCtxUsed;
 }
 
+std::vector<double>
+LLMInference::getPerfMetrics() const {
+    const llama_perf_context_data perf = llama_perf_context(_ctx);
+    return {perf.t_p_eval_ms, (double) perf.n_p_eval, perf.t_eval_ms, (double) perf.n_eval,
+            (double) _responseNumTokens};
+}
+
 bool
 LLMInference::startCompletion(const char *query, int maxTokens, bool suppressEarlyEos) {
     if (!_storeChats) {
@@ -292,6 +291,7 @@ LLMInference::startCompletion(const char *query, int maxTokens, bool suppressEar
     }
     _responseGenerationTime = 0;
     _responseNumTokens = 0;
+    llama_perf_context_reset(_ctx);
     _maxTokens = maxTokens;
     _pendingStop = false;
     _suppressEarlyEos = suppressEarlyEos;
@@ -434,12 +434,6 @@ LLMInference::completionLoop() {
     // so this covers tokens 0..kEosSuppressTokenWindow-1.
     llama_sampler *activeSampler =
         (_suppressEarlyEos && _responseNumTokens < kEosSuppressTokenWindow) ? _samplerEosSuppressed : _sampler;
-
-    // TEMPORARY DIAGNOSTIC: one line per token showing exactly what the selection logic decided,
-    // so it's visible from logcat whether suppression is actually engaging for early tokens.
-    LOGi("EOS-suppress diag: token#=%ld suppressEarlyEos=%d selected=%s",
-         _responseNumTokens, _suppressEarlyEos,
-         (activeSampler == _samplerEosSuppressed) ? "EOS_SUPPRESSED" : "NORMAL");
 
     // convert the integer token to its corresponding word-piece
     _currToken = llama_sampler_sample(activeSampler, _ctx, -1);
