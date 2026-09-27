@@ -33,6 +33,18 @@ RECEIVER_COMPONENT = f"{PACKAGE}/.benchmark.headless.BenchmarkHeadlessReceiver"
 FALLBACK_ADB = str(Path.home() / "Library/Android/sdk/platform-tools/adb")
 MONSOON_SCRIPT = Path.home() / "SLM_Factory_Krishna_Personal/Power-Monitor/monsoon_single_reading.py"
 
+# Shared measurement protocol (readiness gate, page-cache eviction, Perfetto energy) - the same
+# module SmolChat's run_autobench.py uses, so both engines are measured identically.
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "Benchmark-Harness"))
+import bench_common  # noqa: E402
+
+# Set in main(): readiness gate + fixed rest applied before every broadcast (see pre_run()).
+_GATE = None
+_REST_SECONDS = 0
+
+# HeadlessBenchmarkRunner logs one RESPDEBUG line per streamed chunk with a wall-clock ts=.
+RESPDEBUG_RE = re.compile(r"onProgress call #\d+ raw_chunk=(\S+).*?\bts=(\d+)")
+
 DEFAULT_QUESTIONS = [
     "What is the capital of France?",
     "Who wrote Romeo and Juliet?",
@@ -213,7 +225,7 @@ def clear_logcat(adb: Adb):
 
 
 def fire_broadcast(adb: Adb, model_path: str, question: str, run_id: str, max_tokens: int,
-                    backend_type: str = None):
+                    backend_type: str = None, warmup_runs: int = None, trials: int = None):
     # "adb shell <args...>" re-joins its args into ONE remote command string;
     # an unquoted space inside an extra's value gets split by the on-device
     # shell into extra argv tokens. Building the full command as a single,
@@ -241,6 +253,15 @@ def fire_broadcast(adb: Adb, model_path: str, question: str, run_id: str, max_to
     # today". Only add the extra when the caller actually asked for one.
     if backend_type is not None:
         cmd += f" --es backend_type {shlex.quote(backend_type)}"
+    # Both optional (None means "let the app use its own single-shot
+    # defaults": 0 warmups, 1 trial) - see run_sweep(), which is the only
+    # caller that ever passes non-None values here. run_one()/run_benchmark()
+    # never pass these, so their broadcasts are byte-for-byte identical to
+    # before this was added.
+    if warmup_runs is not None:
+        cmd += f" --ei warmup_runs {int(warmup_runs)}"
+    if trials is not None:
+        cmd += f" --ei trials {int(trials)}"
     adb.run(["shell", cmd], timeout=20)
 
 
@@ -347,7 +368,40 @@ def extract_num(tag_lines: dict, tag: str, cast):
         return None
 
 
-def build_metrics(tag_lines: dict) -> dict:
+def wall_clock_metrics(run_lines: list, ttft_ms, prompt_len, decode_len, cold_load_ms) -> dict:
+    """Paper-definition, wall-clock metrics from the per-chunk RESPDEBUG timestamps, so MNN is
+    measured exactly like SmolChat: prefill_tps = prompt_len / TTFT,
+    decode_tps = (decode_len - 1) / (t_last_chunk - t_first_chunk), TTLT = dispatch -> last chunk.
+    Also returns the epoch-ms window markers used for energy integration. All None when the
+    installed app build doesn't emit RESPDEBUG lines."""
+    stamps = [int(m.group(2)) for m in (RESPDEBUG_RE.search(l) for l in run_lines or [])
+              if m and m.group(1) != "null"]
+    out = dict.fromkeys(("prefill_tps", "decode_tps", "ttlt_ms", "stream_chunks", "dispatch_epoch_ms",
+                         "first_token_epoch_ms", "last_token_epoch_ms", "load_start_epoch_ms"))
+    if ttft_ms and prompt_len:
+        out["prefill_tps"] = prompt_len / (ttft_ms / 1000)
+    if not stamps or ttft_ms is None or ttft_ms < 0:
+        return out
+    first, last = min(stamps), max(stamps)
+    dispatch = first - ttft_ms
+    out.update({
+        "stream_chunks": len(stamps),
+        "dispatch_epoch_ms": int(dispatch),
+        "first_token_epoch_ms": first,
+        "last_token_epoch_ms": last,
+        "ttlt_ms": last - dispatch,
+        # Approximation: load() ends immediately before the first generate(), which is all the
+        # code does in between (setKeepHistory/updateThinking/updateMaxNewTokens).
+        "load_start_epoch_ms": int(dispatch - cold_load_ms) if cold_load_ms else None,
+    })
+    # decode_len counting is verified against stream_chunks on device; the window spans
+    # decode_len - 1 steps if decode_len includes the first (prefill-produced) token.
+    if decode_len and decode_len >= 2 and last > first:
+        out["decode_tps"] = (decode_len - 1) / ((last - first) / 1000)
+    return out
+
+
+def build_metrics(tag_lines: dict, run_lines: list = None) -> dict:
     cold_load_ms = extract_num(tag_lines, "COLD_LOAD_MS", int)
     ttft_ms = extract_num(tag_lines, "TTFT_MS", float)
     prefill_time_us = extract_num(tag_lines, "PREFILL_TIME_US", int)
@@ -382,15 +436,26 @@ def build_metrics(tag_lines: dict) -> dict:
     if decode_len is not None and decode_time_us:
         decode_tps = decode_len / (decode_time_us / 1_000_000)
 
-    return {
+    native_prefill = round(prefill_tps, 3) if prefill_tps is not None else None
+    native_decode = round(decode_tps, 3) if decode_tps is not None else None
+    metrics = {
         "cold_load_ms": cold_load_ms,
         "ttft_ms": ttft_ms,
         "prefill_time_us": prefill_time_us,
         "decode_time_us": decode_time_us,
         "prompt_len": prompt_len,
         "decode_len": decode_len,
-        "prefill_tps": round(prefill_tps, 3) if prefill_tps is not None else None,
-        "decode_tps": round(decode_tps, 3) if decode_tps is not None else None,
+        # Same names/meaning as run_autobench.py (SmolChat), so both engines line up.
+        "prompt_tokens": prompt_len,
+        "gen_tokens": decode_len,
+        "native_prefill_tps": native_prefill,
+        "native_decode_tps": native_decode,
+        # Without run_lines (legacy callers, e.g. energy_latency_agent.py) these stay the native
+        # engine-timer rates, as before; with run_lines they become the wall-clock paper
+        # definitions below.
+        "prefill_tps": native_prefill,
+        "decode_tps": native_decode,
+        "cold_start_ms": (cold_load_ms + ttft_ms) if cold_load_ms and ttft_ms and ttft_ms > 0 else None,
         "peak_rss_kb": peak_rss_kb,
         "power_ma": power_ma,
         "power_ma_raw": power_ma_raw,
@@ -400,6 +465,12 @@ def build_metrics(tag_lines: dict) -> dict:
         "thermal_cpu_c": thermal_cpu_c,
         "thermal_skin_c": thermal_skin_c,
     }
+    if run_lines is not None:
+        wall = wall_clock_metrics(run_lines, ttft_ms, prompt_len, decode_len, cold_load_ms)
+        for key in ("prefill_tps", "decode_tps"):
+            metrics[key] = round(wall[key], 3) if wall[key] is not None else None
+        metrics.update({k: v for k, v in wall.items() if k not in ("prefill_tps", "decode_tps")})
+    return metrics
 
 
 # ---------------------------------------------------------------------------
@@ -448,6 +519,156 @@ def run_one(adb: Adb, model_path: str, question: str, n: int, timeout: int, no_t
     }
 
 
+def poll_for_sweep_result(adb: Adb, base_run_id: str, final_sub_id: str, timeout: int) -> tuple:
+    """Like poll_for_result(), but for a run_sweep() broadcast that runs
+    several generations (warmups + trials) against one loaded session
+    inside a single broadcast: succeeds once final_sub_id's own RUN_DONE
+    appears (the last trial finished), but also stops early if the whole
+    sweep aborts between generations - an unhandled exception inside
+    HeadlessBenchmarkRunner.run() logs RUN_ERROR under the sweep's own
+    base_run_id, not any one generation's sub run_id, since it isn't tied
+    to any single generation. Substring matching (get_run_id_lines) means
+    parse_run(raw, base_run_id) would also see every sub-id's lines, but
+    tag_of()'s regex requires whitespace immediately after the run_id
+    token, which a sub-id like "{base_run_id}_t1" never has right after
+    the bare base_run_id - so base_run_id's own tag_lines only ever
+    contains genuinely bare-base_run_id lines (SWEEP_CONFIG,
+    BACKEND_TYPE_OVERRIDE, MAX_TOKENS, ENABLE_THINKING, SWEEP_STEP, and
+    the outer catch block's own RUN_ERROR), never a sub-generation's.
+    Returns (status, raw_log) - no tag_lines/run_lines, since callers
+    re-derive those per sub-id from raw_log via parse_run() themselves.
+    """
+    deadline = time.time() + timeout
+    last_raw = ""
+    while time.time() < deadline:
+        result = adb.run(["logcat", "-d", "-b", "main"], timeout=30)
+        raw = result.stdout or ""
+        last_raw = raw
+        final_tags, _ = parse_run(raw, final_sub_id)
+        if "RUN_DONE" in final_tags:
+            return "done", raw
+        if "RUN_ERROR" in final_tags:
+            return "error", raw
+        base_tags, _ = parse_run(raw, base_run_id)
+        if "RUN_ERROR" in base_tags:
+            return "error", raw
+        time.sleep(1)
+    return "timeout", last_raw
+
+
+def pre_run(adb: Adb) -> dict:
+    """Fixed rest, then the readiness gate (cool + CPU caps at baseline), then a device-state
+    snapshot recorded with the run. With no gate configured this is just the snapshot."""
+    if _REST_SECONDS:
+        time.sleep(_REST_SECONDS)
+    if _GATE is not None:
+        return _GATE.wait()
+    return {"passed": None, "waited_s": 0.0, "state": bench_common.device_state(adb)}
+
+
+def run_sweep(adb: Adb, model_path: str, question: str, n: int, timeout: int, no_think: bool = False,
+              max_tokens: int = 4096, backend_type: str = None, warmup_runs: int = 1, trials: int = 1) -> dict:
+    """Fires ONE broadcast that runs `warmup_runs` discarded warmup
+    generations followed by `trials` recorded generations, all against a
+    SINGLE loaded LlmSession on-device (see HeadlessBenchmarkRunner.run()
+    and its warmupRuns/trials parameters) - unlike run_one(), which always
+    creates, loads, and tears down a brand-new session for one generation.
+
+    This exists because OpenCL (and any other GPU backend) JIT-compiles
+    kernels lazily on the first real forward pass, not at load() time, and
+    that compile cost is only amortized across generations sharing one
+    live session/runtime. run_trials_benchmark()'s original design fired a
+    separate broadcast (and therefore a brand-new session) for the warmup
+    AND for every recorded trial, so every one of them - including the
+    "warmup" - paid the full cold-compile cost from scratch: warmup never
+    actually warmed anything up. run_sweep() reuses one session across the
+    whole warmup+trials sequence, matching the paper protocol this harness
+    is trying to reproduce ("one warm-up run followed by at least three
+    recorded trials").
+
+    Returns a dict: {"warmups": [...], "trials": [...], "monsoon": {...},
+    "raw_log": str}, where each list entry is a run_one()-shaped outcome
+    dict ({"run_id", "status", "tag_lines", "run_lines"}) for that one
+    generation, parsed out of the single shared logcat capture.
+
+    Note on Monsoon: the single physical-power reading below is taken once,
+    right after firing the broadcast, so it only really characterizes the
+    very start of the sweep (typically the first warmup's cold compile) -
+    unlike run_one()'s per-call reading, it is NOT a meaningful per-trial
+    ground-truth cross-check here. Each trial's BatteryManager-based
+    power_ma is unaffected and still recorded correctly per generation.
+    """
+    # Gate once per sweep: warmup + trials run back-to-back inside one on-device session.
+    gate = pre_run(adb)
+    base_run_id = f"run_{n}_{int(time.time() * 1000)}"
+    prompt_text = f"{question} /no_think" if no_think else question
+    clear_logcat(adb)
+    fire_broadcast(adb, model_path, prompt_text, base_run_id, max_tokens,
+                   backend_type=backend_type, warmup_runs=warmup_runs, trials=trials)
+    # Sampled right after firing the broadcast, same as run_one() - see the
+    # Monsoon caveat in this function's docstring.
+    monsoon = get_monsoon_power(duration_seconds=5)
+
+    final_sub_id = f"{base_run_id}_t{trials}"
+    # Every generation in the sweep could in principle need the full
+    # per-generation timeout (the first one always does, for the cold
+    # compile; a later one only would if something regressed) - budget for
+    # all of them rather than risk cutting off a slow final trial just
+    # because the sweep as a whole ran long.
+    aggregate_timeout = timeout * (warmup_runs + trials)
+    sweep_status, raw_log = poll_for_sweep_result(adb, base_run_id, final_sub_id, aggregate_timeout)
+
+    # If the sweep ended for a reason OTHER than genuinely running out of
+    # time (sweep_status != "timeout"), any generation that never got its
+    # own RUN_DONE/RUN_ERROR didn't "time out" - the sweep aborted before
+    # ever reaching it (most commonly: an unhandled exception inside
+    # HeadlessBenchmarkRunner.run(), logged as a bare RUN_ERROR under
+    # base_run_id itself, before or between generations - see
+    # poll_for_sweep_result()'s own docstring). Label those "aborted"
+    # instead of "timeout" and carry over the real reason/message so
+    # run_trials_benchmark() can print what actually happened rather than
+    # a misleading "timeout after {timeout}s" when the real failure
+    # surfaced in a couple of seconds, not {timeout}.
+    base_tag_lines, _ = parse_run(raw_log, base_run_id)
+    sweep_abort_reason, sweep_abort_message = extract_error(base_tag_lines.get("RUN_ERROR", ""))
+
+    def _generation_status(sub_id: str, tag_lines: dict) -> str:
+        if "RUN_DONE" in tag_lines:
+            return "done"
+        if "RUN_ERROR" in tag_lines:
+            return "error"
+        if sweep_status != "timeout":
+            return "aborted"
+        return "timeout"
+
+    warmups = []
+    for w in range(1, warmup_runs + 1):
+        sub_id = f"{base_run_id}_w{w}"
+        tag_lines, run_lines = parse_run(raw_log, sub_id)
+        sub_status = _generation_status(sub_id, tag_lines)
+        warmups.append({"run_id": sub_id, "status": sub_status, "tag_lines": tag_lines, "run_lines": run_lines})
+
+    trial_outcomes = []
+    for t in range(1, trials + 1):
+        sub_id = f"{base_run_id}_t{t}"
+        tag_lines, run_lines = parse_run(raw_log, sub_id)
+        sub_status = _generation_status(sub_id, tag_lines)
+        trial_outcomes.append({"run_id": sub_id, "status": sub_status, "tag_lines": tag_lines, "run_lines": run_lines})
+
+    return {
+        "base_run_id": base_run_id,
+        "sweep_status": sweep_status,
+        "sweep_abort_reason": sweep_abort_reason,
+        "sweep_abort_message": sweep_abort_message,
+        "warmups": warmups,
+        "trials": trial_outcomes,
+        "monsoon": monsoon,
+        "raw_log": raw_log,
+        "gate": gate,
+        "state_after": bench_common.device_state(adb),
+    }
+
+
 # ---------------------------------------------------------------------------
 # Main per-question loop
 # ---------------------------------------------------------------------------
@@ -492,7 +713,7 @@ def run_benchmark(adb: Adb, model_path: str, questions: list, timeout: int, no_t
         }
 
         if status == "done":
-            metrics = build_metrics(tag_lines)
+            metrics = build_metrics(tag_lines, run_lines)
             metrics["power_ma_monsoon"] = monsoon.get("power_ma_mean")
             response = extract_response(run_lines, run_id)
             entry["status"] = "success"
@@ -536,11 +757,21 @@ def run_trials_benchmark(adb: Adb, model_path: str, questions: list, timeout: in
                           max_tokens: int = 4096, backend_type: str = None, trials: int = 1) -> list:
     """Paper-exact protocol, genuinely different from --warmup-runs's own
     "run N, discard N-1, keep only the last" mechanic: for EACH question,
-    run once as a discarded warmup, then run `trials` SEPARATE, real times,
-    recording EVERY one of those trials as its own full result. Each entry
-    carries a "trial_number" (1..trials) field (in addition to the usual
+    run once as a discarded warmup, then run `trials` real times, recording
+    EVERY one of those trials as its own full result. Each entry carries a
+    "trial_number" (1..trials) field (in addition to the usual
     "question_number") so per-question trial statistics can be computed
     afterward (see compute_trial_summary()).
+
+    The warmup and all `trials` recorded generations run inside ONE
+    run_sweep() broadcast, sharing a single loaded on-device LlmSession,
+    rather than each being its own separate broadcast/session (the original
+    implementation). A fresh session per trial paid a full cold OpenCL (or
+    any GPU backend) kernel JIT-compile cost on literally every trial,
+    warmup included - which meant "warmup" never warmed anything up, and
+    every trial number showed the identical cold-compile-dominated timing
+    no matter what engine-level fix was tried. See run_sweep()'s own
+    docstring for the full explanation.
 
     Deliberately a fully independent function, not a refactor of
     run_benchmark() into a shared code path - it has its own copy of the
@@ -550,34 +781,38 @@ def run_trials_benchmark(adb: Adb, model_path: str, questions: list, timeout: in
     """
     results = []
     total = len(questions)
+    warmup_runs = 1  # fixed at 1, matching this protocol's existing "one discarded warmup" contract
 
     for n, question in enumerate(questions, start=1):
-        print(f"\n[{n}/{total}] \"{question}\" - warmup (discarded)")
-        run_one(adb, model_path, question, n, timeout, no_think=no_think, max_tokens=max_tokens,
-                backend_type=backend_type)
-        time.sleep(2)
+        print(f"\n[{n}/{total}] \"{question}\" - warmup (discarded), then {trials} recorded trial(s) - one shared session")
+        sweep = run_sweep(adb, model_path, question, n, timeout, no_think=no_think, max_tokens=max_tokens,
+                           backend_type=backend_type, warmup_runs=warmup_runs, trials=trials)
+        monsoon = sweep["monsoon"]
 
         for trial in range(1, trials + 1):
             print(f"[{n}/{total}] trial {trial}/{trials} (recording)")
-            outcome = run_one(adb, model_path, question, n, timeout, no_think=no_think, max_tokens=max_tokens,
-                               backend_type=backend_type)
-            status, tag_lines, run_lines, run_id, monsoon = (
-                outcome["status"], outcome["tag_lines"], outcome["run_lines"], outcome["run_id"], outcome["monsoon"]
+            outcome = sweep["trials"][trial - 1]
+            status, tag_lines, run_lines, run_id = (
+                outcome["status"], outcome["tag_lines"], outcome["run_lines"], outcome["run_id"]
             )
 
             entry = {
                 "question_number": n,
                 "question": question,
                 "trial_number": trial,
+                "phase": "steady",
                 "run_id": run_id,
                 "status": None,
                 "metrics": None,
                 "response": None,
                 "error": None,
+                "gate": {k: v for k, v in sweep["gate"].items() if k != "state"},
+                "state_before": sweep["gate"].get("state"),
+                "state_after": sweep["state_after"],
             }
 
             if status == "done":
-                metrics = build_metrics(tag_lines)
+                metrics = build_metrics(tag_lines, run_lines)
                 metrics["power_ma_monsoon"] = monsoon.get("power_ma_mean")
                 response = extract_response(run_lines, run_id)
                 entry["status"] = "success"
@@ -587,14 +822,14 @@ def run_trials_benchmark(adb: Adb, model_path: str, questions: list, timeout: in
                 def fmt(v, unit="", nd=1):
                     return f"{v:.{nd}f}{unit}" if isinstance(v, (int, float)) else "N/A"
 
-                battery_power_disp = metrics["power_ma_raw"] if metrics["power_ma_raw"] is not None else "N/A"
-                monsoon_power_disp = fmt(metrics["power_ma_monsoon"], "mA", 2)
                 print(
                     f"  ColdLoad={fmt(metrics['cold_load_ms'], 'ms', 0)} TTFT={fmt(metrics['ttft_ms'], 'ms')} "
-                    f"PrefillTPS={fmt(metrics['prefill_tps'])} DecodeTPS={fmt(metrics['decode_tps'])} "
+                    f"TTLT={fmt(metrics.get('ttlt_ms'), 'ms', 0)} "
+                    f"Prefill={fmt(metrics['prefill_tps'])} (native {fmt(metrics['native_prefill_tps'])}) "
+                    f"Decode={fmt(metrics['decode_tps'])} (native {fmt(metrics['native_decode_tps'])}) "
+                    f"Tokens={metrics['prompt_len']}+{metrics['decode_len']} (chunks {metrics.get('stream_chunks')}) "
                     f"RSS={fmt(metrics['peak_rss_kb'], 'KB', 0)} "
-                    f"Power={battery_power_disp}mA (BatteryMgr) / {monsoon_power_disp} (Monsoon) "
-                    f"ThermalCPU={fmt(metrics['thermal_cpu_c'], '°C')} ThermalSkin={fmt(metrics['thermal_skin_c'], '°C')}"
+                    f"ThermalCPU={fmt(metrics['thermal_cpu_c'], '°C')}"
                 )
                 preview = response if response and len(response) <= 160 else (response[:157] + "..." if response else "")
                 print(f"  Response: \"{preview}\"")
@@ -603,14 +838,67 @@ def run_trials_benchmark(adb: Adb, model_path: str, questions: list, timeout: in
                 entry["status"] = "failed"
                 entry["error"] = {"reason": reason, "message": message}
                 print(f"  FAILED: reason={reason} message={message}")
+            elif status == "aborted":
+                # The sweep ended (done or error) before this generation
+                # ever got its own RUN_DONE/RUN_ERROR - most likely because
+                # an earlier generation in the same sweep hit an unhandled
+                # exception, logged under the sweep's own base run_id
+                # rather than this generation's sub-id. Surface the real
+                # reason/message from that base-level failure instead of a
+                # misleading "timeout after {timeout}s", since this branch
+                # is typically reached within seconds, not the real timeout.
+                reason = sweep.get("sweep_abort_reason") or "sweep_aborted"
+                message = sweep.get("sweep_abort_message") or (
+                    f"Sweep ended (status={sweep['sweep_status']}) before this generation produced output - "
+                    "check logcat for an earlier RUN_ERROR under the base run_id."
+                )
+                entry["status"] = "failed"
+                entry["error"] = {"reason": reason, "message": message}
+                print(f"  FAILED: sweep aborted early - reason={reason} message={message}")
             else:  # timeout
                 entry["status"] = "failed"
                 entry["error"] = {"reason": "timeout", "message": f"No RUN_DONE/RUN_ERROR within {timeout}s"}
                 print(f"  FAILED: timeout after {timeout}s")
 
             results.append(entry)
-            time.sleep(2)
 
+    return results
+
+
+def run_cold_start_block(adb: Adb, model_path: str, questions: list, runs: int, timeout: int,
+                         no_think: bool = False, max_tokens: int = 4096, backend_type: str = None) -> list:
+    """Genuine cold starts: for each run, force-stop MNN Chat (so no process maps the model),
+    evict every file of the model folder from the page cache, then create/load a session and
+    answer one question (a 0-warmup, 1-trial sweep). Cold start = cold_load_ms + TTFT."""
+    results = []
+    for i in range(runs):
+        question = questions[i % len(questions)]
+        adb.run(["shell", "am", "force-stop", PACKAGE], timeout=15)
+        time.sleep(2)
+        eviction = bench_common.evict_page_cache(adb, PACKAGE, model_path)
+        print(f"\n[COLD {i + 1}/{runs}] evicted page cache: resident after = "
+              f"{eviction.get('resident_after_pct')}%" + (f" ({eviction['error']})" if eviction.get("error") else ""))
+        sweep = run_sweep(adb, model_path, question, 0, timeout, no_think=no_think, max_tokens=max_tokens,
+                          backend_type=backend_type, warmup_runs=0, trials=1)
+        outcome = sweep["trials"][0]
+        entry = {
+            "question_number": 0, "question": question, "phase": "cold", "cold_run": i + 1,
+            "run_id": outcome["run_id"], "status": "failed", "metrics": None, "response": None,
+            "error": None, "page_cache_eviction": eviction,
+            "gate": {k: v for k, v in sweep["gate"].items() if k != "state"},
+            "state_before": sweep["gate"].get("state"), "state_after": sweep["state_after"],
+        }
+        if outcome["status"] == "done":
+            entry["status"] = "success"
+            entry["metrics"] = build_metrics(outcome["tag_lines"], outcome["run_lines"])
+            entry["response"] = extract_response(outcome["run_lines"], outcome["run_id"])
+            m = entry["metrics"]
+            print(f"  ColdStart={m['cold_start_ms']}ms (load {m['cold_load_ms']}ms + TTFT {m['ttft_ms']}ms)")
+        else:
+            reason, message = extract_error(outcome["tag_lines"].get("RUN_ERROR", ""))
+            entry["error"] = {"reason": reason or outcome["status"], "message": message}
+            print(f"  FAILED: {entry['error']}")
+        results.append(entry)
     return results
 
 
@@ -635,18 +923,34 @@ def stat_block(values):
 
 
 SUMMARY_METRICS = [
-    "cold_load_ms", "ttft_ms", "prefill_tps", "decode_tps",
+    "cold_load_ms", "ttft_ms", "ttlt_ms", "prefill_tps", "decode_tps", "native_prefill_tps", "native_decode_tps",
+    "prompt_tokens", "gen_tokens", "stream_chunks",
     "peak_rss_kb", "power_ma", "power_ma_monsoon", "thermal_cpu_c", "thermal_skin_c",
     "energy_mas_sampled", "energy_mj_sampled",
+    "energy_mj", "energy_net_mj", "avg_power_mw", "energy_mj_per_token", "energy_net_mj_per_token",
 ]
+# Perfetto energy fields only count toward statistics when the run's energy_valid is true.
+ENERGY_KEYS = {"energy_mj", "energy_net_mj", "avg_power_mw", "energy_mj_per_token", "energy_net_mj_per_token"}
+COLD_METRICS = ["cold_start_ms", "cold_load_ms", "ttft_ms", "cold_start_energy_mj", "cold_start_energy_net_mj"]
+
+
+def metric_values(results: list, key: str) -> list:
+    return [
+        r["metrics"][key] for r in results
+        if r["status"] == "success" and r["metrics"] and r["metrics"].get(key) is not None
+        and (key not in ENERGY_KEYS or r["metrics"].get("energy_valid"))
+    ]
+
+
+def compute_cold_summary(cold_results: list) -> dict:
+    return {key: stat_block(metric_values(cold_results, key)) for key in COLD_METRICS}
 
 
 def compute_summary(results: list) -> dict:
+    results = [r for r in results if r.get("phase") != "cold"]
+
     def vals(key):
-        return [
-            r["metrics"][key] for r in results
-            if r["status"] == "success" and r["metrics"] and r["metrics"].get(key) is not None
-        ]
+        return metric_values(results, key)
 
     thermal_states = sorted({
         r["metrics"]["thermal_status"] for r in results
@@ -847,6 +1151,7 @@ def parse_args():
                          "e.g. the normal chat UI or a prior separate script invocation) for skipping that "
                          "~4s force-stop+relaunch+settle delay. Default: OFF (unchanged behavior - the reset "
                          "always runs, same as before this flag existed).")
+    bench_common.add_common_args(p)
     return p.parse_args()
 
 
@@ -862,12 +1167,23 @@ def main():
     print(f"  Model path: {args.model_path}  Timeout: {args.timeout}s")
     no_think_banner = "ON (appending /no_think to all prompts)" if args.no_think else "OFF"
     print(f"  No-think mode: {no_think_banner}")
-    # Only actually sent as a broadcast extra when it differs from "cpu" -
-    # see --backend-type's own help text for why "cpu" (the default) must
-    # NOT be forwarded as an explicit override to keep existing calls
-    # behaviorally identical to before this flag existed.
-    broadcast_backend_type = args.backend_type if args.backend_type != "cpu" else None
-    print(f"  Backend type: {args.backend_type}" + (" (default, no override sent)" if broadcast_backend_type is None else " (override)"))
+    # Always sent as an explicit broadcast extra now (previously omitted
+    # for "cpu" on the assumption that every deployed model's own
+    # config.json already defaults to backend_type=cpu, so omitting the
+    # override was "behaviorally identical" to sending it). That assumption
+    # broke silently: a model folder deployed for GPU testing can have
+    # backend_type baked into its own config.json as e.g. "opencl" (this is
+    # confirmed true for at least one deployed model here), and in that
+    # case the old omit-for-cpu logic meant "--backend-type cpu" never
+    # actually forced CPU at all - it silently kept running on whatever
+    # backend_type the model's config.json already had. Always forwarding
+    # the extra makes this flag's behavior correct regardless of what's
+    # baked into any given model folder's config.json - LlmSession.kt's own
+    # override check (backendType != null) already handles an explicit
+    # "cpu" value correctly, so this was a Python-side over-optimization,
+    # not something the Kotlin/native side needed.
+    broadcast_backend_type = args.backend_type
+    print(f"  Backend type: {args.backend_type} (explicit override sent)")
     if args.warmup_runs > 0:
         print(f"  Warmup runs: {args.warmup_runs} (discarding first {args.warmup_runs - 1}, recording only the final run per question)")
     if args.trials > 1:
@@ -892,16 +1208,46 @@ def main():
     questions = load_questions(args.questions)
     device_serial = adb.run(["get-serialno"], timeout=10).stdout.strip()
 
+    global _GATE, _REST_SECONDS
+    _REST_SECONDS = args.rest_seconds
+    initial_state = bench_common.device_state(adb)
+    if args.gate_max_temp is not None:
+        _GATE = bench_common.ReadinessGate(adb, args.gate_max_temp, args.gate_timeout)
+        _GATE.set_baseline(initial_state)
+    if args.energy and initial_state["externally_powered"]:
+        print(f"[WARN] --energy: phone is externally powered ({', '.join(initial_state['power_sources'])}) - "
+              "energy will be recorded but flagged invalid. Unplug and use wireless adb for valid energy.")
+
+    energy_trace, idle_window = None, None
+    if args.energy:
+        energy_trace = bench_common.EnergyTrace(adb, Path(args.output).resolve().parent / "traces")
+        energy_trace.start()
+        idle_window = bench_common.measure_idle_window(adb, args.idle_seconds)
+
     start_time = datetime.now(timezone.utc).isoformat()
-    if args.trials > 1:
-        results = run_trials_benchmark(adb, args.model_path, questions, args.timeout, no_think=args.no_think,
-                                        max_tokens=args.max_tokens, backend_type=broadcast_backend_type,
-                                        trials=args.trials)
-    else:
-        results = run_benchmark(adb, args.model_path, questions, args.timeout, no_think=args.no_think,
-                                 max_tokens=args.max_tokens, backend_type=broadcast_backend_type,
-                                 warmup_runs=args.warmup_runs)
+    try:
+        cold_results = []
+        if args.cold_start_runs > 0:
+            cold_results = run_cold_start_block(adb, args.model_path, questions, args.cold_start_runs, args.timeout,
+                                                no_think=args.no_think, max_tokens=args.max_tokens,
+                                                backend_type=broadcast_backend_type)
+        if args.trials > 1:
+            results = run_trials_benchmark(adb, args.model_path, questions, args.timeout, no_think=args.no_think,
+                                            max_tokens=args.max_tokens, backend_type=broadcast_backend_type,
+                                            trials=args.trials)
+        else:
+            results = run_benchmark(adb, args.model_path, questions, args.timeout, no_think=args.no_think,
+                                     max_tokens=args.max_tokens, backend_type=broadcast_backend_type,
+                                     warmup_runs=args.warmup_runs)
+        results = cold_results + results
+    finally:
+        if energy_trace is not None:
+            energy_trace.stop()
     end_time = datetime.now(timezone.utc).isoformat()
+
+    idle_power_mw = None
+    if energy_trace is not None:
+        idle_power_mw = bench_common.attach_energy(results, energy_trace, idle_window)
 
     completed = sum(1 for r in results if r["status"] == "success")
     failed = len(results) - completed
@@ -927,9 +1273,24 @@ def main():
         "battery_warning": battery_info["battery_warning"],
         "battery_level_pct": battery_info["battery_level_pct"],
         "battery_status": battery_info["battery_status"],
+        "cold_start_runs": args.cold_start_runs,
+        "gate_max_temp_c": args.gate_max_temp,
+        "gate_baseline_cpu_caps_khz": _GATE.baseline_caps if _GATE else None,
+        "rest_seconds": args.rest_seconds,
+        "initial_device_state": initial_state,
+        "energy_enabled": args.energy,
+        "energy_trace": str(energy_trace.local_path) if energy_trace else None,
+        "idle_power_mw": idle_power_mw,
+        "metric_definitions": (
+            "prefill_tps = prompt_len / TTFT and decode_tps = (decode_len - 1) / (t_last_chunk - "
+            "t_first_chunk), wall clock (paper definitions, same as run_autobench.py); "
+            "native_prefill_tps/native_decode_tps = MNN's own prefill/decode timers."
+        ),
     }
 
     summary = compute_summary(results)
+    summary["cold_start"] = compute_cold_summary([r for r in results if r.get("phase") == "cold"])
+    summary["energy_aggregate"] = bench_common.aggregate_energy(results) if args.energy else None
     trial_summary = compute_trial_summary(results, questions) if args.trials > 1 else None
     save_results(args.output, run_info, summary, results, trial_summary=trial_summary)
     print_summary_table(summary, run_info)

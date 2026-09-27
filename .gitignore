@@ -78,3 +78,10 @@ paper_repro_prompt_*.txt
 Benchmark-Harness/old_test_results/
 Benchmark-Harness/*.json
 !Benchmark-Harness/test_questions.txt
+
+# Paper-replication llama.cpp checkout: its own git repo (upstream remote) plus model weights
+llama-cpp-paper-repro/
+# Built by bench_common.py from Benchmark-Harness/tools/*.c
+Benchmark-Harness/tools/bin/
+# Perfetto battery traces written by --energy runs (large, regenerable per run)
+*.pftrace
