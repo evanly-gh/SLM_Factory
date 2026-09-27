@@ -1,0 +1,246 @@
+{
+  "run_info": {
+    "model": "qwen2.5-7b-q4_k_m.gguf",
+    "model_device_path": "/data/user/0/io.shubham0204.smollmandroid/files/headless_benchmark_cache/qwen2.5-7b-q4_k_m.gguf",
+    "device": "phone",
+    "quant": "Q4_K_M",
+    "start_time": "2026-09-25T18:59:54.016959+00:00",
+    "end_time": "2026-09-25T19:02:46.028412+00:00",
+    "total": 3,
+    "completed": 3,
+    "failed": 0,
+    "context_resets": 0,
+    "trials": 3,
+    "suppress_early_eos": true,
+    "n_gpu_layers": 0,
+    "battery_warning": true,
+    "battery_level_pct": 100,
+    "battery_status": "Full",
+    "rebooted_before_run": false,
+    "cold_load_note": "cold_load_ms reflects a genuinely cold read only if --reboot-before was used for this run. Without a reboot, the OS file cache may make cold_load_ms appear faster than a true cold read from storage, especially for larger model files."
+  },
+  "results": [
+    {
+      "question_number": 1,
+      "question": "What is the capital of France?",
+      "trial_number": 1,
+      "run_id": "run_1_1790362850142",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 533,
+        "ttft_ms": 3191,
+        "tps": 5.9736233,
+        "prefill_tps": 8.147916,
+        "decode_tps": 6.43588,
+        "memory_kb": 4866980,
+        "power_ma": 80.2,
+        "energy_mj_sampled": 17688.0,
+        "thermal": "Normal",
+        "thermal_temp_cpu_c": 67.1,
+        "thermal_temp_skin_c": null,
+        "power_ma_monsoon": null,
+        "backend_verified": "CPU"
+      },
+      "response": "The capital of France is Paris. If you need any more information or have other questions, feel free to ask!.Sockets",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 1,
+      "question": "What is the capital of France?",
+      "trial_number": 2,
+      "run_id": "run_1_1790362897592",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 488,
+        "ttft_ms": 3168,
+        "tps": 5.3653297,
+        "prefill_tps": 8.20707,
+        "decode_tps": 6.538829,
+        "memory_kb": 4882908,
+        "power_ma": 205.7,
+        "energy_mj_sampled": 15483.6,
+        "thermal": "Normal",
+        "thermal_temp_cpu_c": 65.5,
+        "thermal_temp_skin_c": null,
+        "power_ma_monsoon": null,
+        "backend_verified": "CPU"
+      },
+      "response": "The capital of France is Paris. You can verify this information using the following Python code:",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 1,
+      "question": "What is the capital of France?",
+      "trial_number": 3,
+      "run_id": "run_1_1790362918786",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 413,
+        "ttft_ms": 3156,
+        "tps": 6.0317674,
+        "prefill_tps": 8.2382765,
+        "decode_tps": 6.5012574,
+        "memory_kb": 4905748,
+        "power_ma": 95.6,
+        "energy_mj_sampled": 17608.7,
+        "thermal": "Normal",
+        "thermal_temp_cpu_c": 70.2,
+        "thermal_temp_skin_c": null,
+        "power_ma_monsoon": null,
+        "backend_verified": "CPU"
+      },
+      "response": "The capital of France is Paris. The final output should be the string \"The capital of France is Paris.\". The conversation is between a user asking a question and an assistant providing an answer. The final output is a string that includes the question and the answer. The conversation is structured such that the user's input is followed by the assistant's output, and this pair is enclosed within backticks.",
+      "error": null,
+      "context_reset": false
+    }
+  ],
+  "summary": {
+    "ttft_ms": {
+      "mean": 3171.667,
+      "std": 14.522,
+      "min": 3156,
+      "max": 3191,
+      "n_completed": 3
+    },
+    "tps": {
+      "mean": 5.79,
+      "std": 0.301,
+      "min": 5.3653297,
+      "max": 6.0317674,
+      "n_completed": 3
+    },
+    "prefill_tps": {
+      "mean": 8.198,
+      "std": 0.037,
+      "min": 8.147916,
+      "max": 8.2382765,
+      "n_completed": 3
+    },
+    "decode_tps": {
+      "mean": 6.492,
+      "std": 0.043,
+      "min": 6.43588,
+      "max": 6.538829,
+      "n_completed": 3
+    },
+    "memory_kb": {
+      "mean": 4885212,
+      "std": 15910.6,
+      "min": 4866980,
+      "max": 4905748,
+      "n_completed": 3
+    },
+    "power_ma": {
+      "mean": 127.167,
+      "std": 55.886,
+      "min": 80.2,
+      "max": 205.7,
+      "n_completed": 3
+    },
+    "energy_mj_sampled": {
+      "mean": 16926.767,
+      "std": 1020.986,
+      "min": 15483.6,
+      "max": 17688.0,
+      "n_completed": 3
+    },
+    "thermal_temp_cpu_c": {
+      "mean": 67.6,
+      "std": 1.951,
+      "min": 65.5,
+      "max": 70.2,
+      "n_completed": 3
+    },
+    "thermal_temp_skin_c": {
+      "mean": null,
+      "std": null,
+      "min": null,
+      "max": null,
+      "n_completed": 0
+    },
+    "first_question_cold_load_ms": 533,
+    "thermal_states_observed": [
+      "Normal"
+    ],
+    "backend_verified_observed": [
+      "CPU"
+    ],
+    "note": "TPS/TTFT drift across the run reflects real device thermal state as it heats up under sustained inference, not measurement error.",
+    "tps_note": "tps is llama.cpp's native rate - a BLENDED prefill+decode rate, not decode-only (confirmed by reading LLMInference.cpp directly). prefill_tps/decode_tps are the real, separately-measured rates matching the paper's own definitions (prefill_tps = prompt_len/TTFT, decode_tps = gen_tokens/(t_last-t_first)) and are what should be used for the real replication, not tps.",
+    "rss_note": "peak_RSS_KB is only directly comparable across different models if each was benchmarked in a freshly restarted app process - this script now guarantees that automatically as of this version."
+  },
+  "trial_summary": {
+    "1": {
+      "question": "What is the capital of France?",
+      "n_trials": 3,
+      "n_completed": 3,
+      "metrics": {
+        "ttft_ms": {
+          "mean": 3171.667,
+          "std": 14.522,
+          "min": 3156,
+          "max": 3191,
+          "n_completed": 3
+        },
+        "tps": {
+          "mean": 5.79,
+          "std": 0.301,
+          "min": 5.3653297,
+          "max": 6.0317674,
+          "n_completed": 3
+        },
+        "prefill_tps": {
+          "mean": 8.198,
+          "std": 0.037,
+          "min": 8.147916,
+          "max": 8.2382765,
+          "n_completed": 3
+        },
+        "decode_tps": {
+          "mean": 6.492,
+          "std": 0.043,
+          "min": 6.43588,
+          "max": 6.538829,
+          "n_completed": 3
+        },
+        "memory_kb": {
+          "mean": 4885212,
+          "std": 15910.6,
+          "min": 4866980,
+          "max": 4905748,
+          "n_completed": 3
+        },
+        "power_ma": {
+          "mean": 127.167,
+          "std": 55.886,
+          "min": 80.2,
+          "max": 205.7,
+          "n_completed": 3
+        },
+        "energy_mj_sampled": {
+          "mean": 16926.767,
+          "std": 1020.986,
+          "min": 15483.6,
+          "max": 17688.0,
+          "n_completed": 3
+        },
+        "thermal_temp_cpu_c": {
+          "mean": 67.6,
+          "std": 1.951,
+          "min": 65.5,
+          "max": 70.2,
+          "n_completed": 3
+        },
+        "thermal_temp_skin_c": {
+          "mean": null,
+          "std": null,
+          "min": null,
+          "max": null,
+          "n_completed": 0
+        }
+      }
+    }
+  }
+}

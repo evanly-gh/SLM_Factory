@@ -86,6 +86,13 @@ class LLMInference {
     // hasn't been called yet.
     int getPromptTokenCount() const;
 
+    // Engine-side timings for the most recent completion, from llama.cpp's own perf counters
+    // (reset in startCompletion()): {t_p_eval_ms, n_p_eval, t_eval_ms, n_eval, n_response_tokens}.
+    // t_p_eval/n_p_eval cover the prompt batch; t_eval/n_eval the single-token decode steps
+    // (llama_decode() compute only, excluding sampling). n_response_tokens is the exact number
+    // of generated (non-EOG) tokens, unlike a count of streamed UTF-8 pieces.
+    std::vector<double> getPerfMetrics() const;
+
     // Returns true if Jinja template was used, false if legacy fallback was needed.
     // maxTokens caps the number of tokens completionLoop() will generate before it force-stops
     // (returns "[EOG]"), defaulting to 256 when not provided by the caller.

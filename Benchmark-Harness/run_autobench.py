@@ -73,6 +73,15 @@ FALLBACK_ADB = str(Path.home() / "Library/Android/sdk/platform-tools/adb")
 
 MONSOON_SCRIPT = str(Path.home() / "SLM_Factory_Krishna_Personal/Power-Monitor/monsoon_single_reading.py")
 
+# Shared measurement protocol (readiness gate, page-cache eviction, Perfetto energy) - the same
+# module run_mnn_autobench.py uses, so both engines are measured identically.
+sys.path.insert(0, str(Path.home() / "SLM_Factory_Krishna_Personal/Benchmark-Harness"))
+import bench_common  # noqa: E402
+
+# Set in main(): readiness gate + fixed rest applied before every broadcast (see pre_run()).
+_GATE = None
+_REST_SECONDS = 0
+
 CONVERT_SCRIPT = str(Path.home() / "SLM_Factory-SmolChat/Model-Conversion/convert_to_gguf.py")
 # Fallback locations only - the real, guaranteed location is computed
 # per-call in convert_to_gguf() once the model's output directory is known,
@@ -586,7 +595,9 @@ def fire_broadcast(adb: Adb, model_path: str, question: str, run_id: str, max_to
         f"--es model_path {shlex.quote(model_path)} "
         f"--es prompt {shlex.quote(question)} "
         f"--es run_id {shlex.quote(run_id)} "
-        f"--ei max_tokens {int(max_tokens)} "
+        # --es, not --ei: BenchmarkService.kt reads max_tokens via getStringExtra(), so an
+        # int extra was silently ignored and every run used the app's DEFAULT_MAX_TOKENS.
+        f"--es max_tokens {int(max_tokens)} "
         # BenchmarkService.kt reads this as a string extra, defaulting to "true" (the
         # long-standing behavior) whenever it's absent or not a valid boolean - see
         # onStartCommand()'s suppressEarlyEos parsing. Explicitly sent every time (not
@@ -601,7 +612,10 @@ def fire_broadcast(adb: Adb, model_path: str, question: str, run_id: str, max_to
     adb.run(["shell", cmd], timeout=20)
 
 
-KNOWN_TAGS = ["RUN_DONE", "RUN_ERROR", "BROADCAST_RECEIVER", "COLD_LOAD", "TTFT", "TPS", "PREFILL_TPS", "DECODE_TPS", "MEMORY", "POWER", "ENERGY_MJ_SAMPLED", "THERMAL_TEMP_CPU", "THERMAL_TEMP_SKIN", "THERMAL"]
+KNOWN_TAGS = ["RUN_DONE", "RUN_ERROR", "BROADCAST_RECEIVER", "COLD_LOAD", "TTFT", "TTLT", "TPS", "PREFILL_TPS", "DECODE_TPS",
+              "NATIVE_PREFILL_TPS", "NATIVE_DECODE_TPS", "PROMPT_TOKENS", "GEN_TOKENS",
+              "LOAD_START_EPOCH_MS", "DISPATCH_EPOCH_MS", "FIRST_TOKEN_EPOCH_MS", "LAST_TOKEN_EPOCH_MS",
+              "MEMORY", "POWER", "ENERGY_MJ_SAMPLED", "THERMAL_TEMP_CPU", "THERMAL_TEMP_SKIN", "THERMAL"]
 
 
 def parse_run_lines(logcat_text: str, run_id: str) -> dict:
@@ -799,12 +813,48 @@ def reset_smolchat_for_clean_process(adb: Adb):
     time.sleep(4)
 
 
+def pre_run(adb: Adb) -> dict:
+    """Fixed rest, then the readiness gate (cool + CPU caps at baseline), then a device-state
+    snapshot recorded with the run. With no gate configured this is just the snapshot."""
+    if _REST_SECONDS:
+        time.sleep(_REST_SECONDS)
+    if _GATE is not None:
+        return _GATE.wait()
+    return {"passed": None, "waited_s": 0.0, "state": bench_common.device_state(adb)}
+
+
 def run_one(adb: Adb, model_path: str, question: str, n: int, timeout: int, max_tokens: int, suppress_early_eos: bool = True, n_gpu_layers: int = 0) -> dict:
+    gate = pre_run(adb)
     run_id = f"run_{n}_{int(time.time() * 1000)}"
     clear_logcat(adb)
     fire_broadcast(adb, model_path, question, run_id, max_tokens, suppress_early_eos, n_gpu_layers)
     status, lines = poll_for_result(adb, run_id, timeout)
-    return {"run_id": run_id, "status": status, "lines": lines}
+    return {"run_id": run_id, "status": status, "lines": lines, "gate": gate,
+            "state_after": bench_common.device_state(adb)}
+
+
+def run_cold_start_block(adb: Adb, model_path: str, questions: list, runs: int, timeout: int, max_tokens: int,
+                         suppress_early_eos: bool = True, n_gpu_layers: int = 0) -> list:
+    """Genuine cold starts: for each run, force-stop SmolChat (so no process maps the model),
+    evict the model file from the page cache, then load + answer one question. Cold start is
+    reported as load time + TTFT: with mmap (SmolChat's default) most weight reads happen
+    during the first decode, not inside the timed load call, so load time alone understates it.
+    Every headless call reloads the model, so steady-state trials never measure this."""
+    results = []
+    for i in range(runs):
+        question = questions[i % len(questions)]
+        adb.run(["shell", "am", "force-stop", PACKAGE], timeout=15)
+        time.sleep(2)
+        eviction = bench_common.evict_page_cache(adb, PACKAGE, model_path)
+        qprint(f"\n[COLD {i + 1}/{runs}] evicted page cache: resident after = "
+               f"{eviction.get('resident_after_pct')}%" + (f" ({eviction['error']})" if eviction.get("error") else ""))
+        outcome = run_one(adb, model_path, question, 0, timeout, max_tokens, suppress_early_eos, n_gpu_layers)
+        entry = outcome_to_entry(outcome, 0, question, timeout)
+        entry.update({"phase": "cold", "cold_run": i + 1, "page_cache_eviction": eviction})
+        if entry["metrics"]:
+            print_run_line(entry["metrics"], entry["response"])
+        results.append(entry)
+    return results
 
 
 def wait_for_broadcast_receipt(adb: Adb, run_id: str, poll_seconds: int) -> bool:
@@ -892,16 +942,34 @@ def build_metrics(lines: dict) -> dict:
             return None
 
     monsoon = get_monsoon_power()
+    cold_load_ms, ttft_ms = num("COLD_LOAD", int), num("TTFT", int)
 
     return {
-        "cold_load_ms": num("COLD_LOAD", int),
-        "ttft_ms": num("TTFT", int),
+        "cold_load_ms": cold_load_ms,
+        "ttft_ms": ttft_ms,
+        # Wall-clock dispatch -> last generated token.
+        "ttlt_ms": num("TTLT", int),
+        # load + first token: the cold-start latency a user sees. Only a genuine cold start for
+        # phase="cold" runs (page cache evicted first); steady-state reloads hit a warm cache.
+        "cold_start_ms": (cold_load_ms + ttft_ms) if cold_load_ms and ttft_ms else None,
+        "prompt_tokens": num("PROMPT_TOKENS", int),
+        "gen_tokens": num("GEN_TOKENS", int),
+        # Engine-side rates from llama.cpp's perf counters (prompt-eval / decode-eval compute
+        # time only), comparable to MNN's native prefill/decode timers.
+        "native_prefill_tps": num("NATIVE_PREFILL_TPS", float),
+        "native_decode_tps": num("NATIVE_DECODE_TPS", float),
+        "load_start_epoch_ms": num("LOAD_START_EPOCH_MS", int),
+        "dispatch_epoch_ms": num("DISPATCH_EPOCH_MS", int),
+        "first_token_epoch_ms": num("FIRST_TOKEN_EPOCH_MS", int),
+        "last_token_epoch_ms": num("LAST_TOKEN_EPOCH_MS", int),
         # TPS is llama.cpp's native rate - a BLENDED prefill+decode rate, not decode-only (see
         # SmolLMManager.SmolLMResponse's kdoc). Kept for backward compat with existing data;
         # prefill_tps/decode_tps below are the real, separately-measured rates matching the
         # paper's own definitions (prefill_tps = prompt_len/TTFT, decode_tps =
         # gen_tokens/(t_last-t_first)) and are what should be used for the real replication.
         "tps": num("TPS", float),
+        # Paper definitions, wall clock: prompt_tokens / TTFT and
+        # (gen_tokens - 1) / (t_last_token - t_first_token).
         "prefill_tps": num("PREFILL_TPS", float),
         "decode_tps": num("DECODE_TPS", float),
         "memory_kb": num("MEMORY", int),
@@ -923,6 +991,51 @@ def build_metrics(lines: dict) -> dict:
         # extract_backend_verified()'s docstring) - not just which one was requested.
         "backend_verified": extract_backend_verified(lines.get("BACKEND_CHECK")),
     }
+
+
+def outcome_to_entry(outcome: dict, n: int, question: str, timeout: int) -> dict:
+    """Turn a run_one() outcome into a results entry (status/metrics/response/error plus the
+    pre-run gate result and device state before/after)."""
+    status, lines = outcome["status"], outcome["lines"]
+    entry = {
+        "question_number": n,
+        "question": question,
+        "run_id": outcome["run_id"],
+        "status": None,
+        "metrics": None,
+        "response": None,
+        "error": None,
+        "gate": {k: v for k, v in outcome.get("gate", {}).items() if k != "state"},
+        "state_before": outcome.get("gate", {}).get("state"),
+        "state_after": outcome.get("state_after"),
+    }
+    if status == "done":
+        entry["status"] = "success"
+        entry["metrics"] = build_metrics(lines)
+        entry["response"] = extract_response(lines["RUN_DONE"])
+    elif status == "error":
+        reason, message = extract_error(lines.get("RUN_ERROR", ""))
+        entry["status"] = "failed"
+        entry["error"] = {"reason": reason, "message": message}
+        qprint(f"  FAILED: reason={reason} message={message}")
+    else:
+        entry["status"] = "failed"
+        entry["error"] = {"reason": "timeout", "message": f"No RUN_DONE/RUN_ERROR within {timeout}s"}
+        qprint(f"  FAILED: timeout after {timeout}s")
+    return entry
+
+
+def print_run_line(metrics: dict, response: str):
+    def f(key, unit=""):
+        v = metrics.get(key)
+        return "N/A" if v is None else (f"{v:.1f}{unit}" if isinstance(v, float) else f"{v}{unit}")
+    qprint(f"  ColdLoad={f('cold_load_ms', 'ms')} TTFT={f('ttft_ms', 'ms')} TTLT={f('ttlt_ms', 'ms')} "
+           f"Prefill={f('prefill_tps')}t/s (native {f('native_prefill_tps')}) "
+           f"Decode={f('decode_tps')}t/s (native {f('native_decode_tps')}) "
+           f"Tokens={f('prompt_tokens')}+{f('gen_tokens')} RSS={f('memory_kb', 'KB')} "
+           f"Backend={metrics.get('backend_verified')}")
+    preview = response if response and len(response) <= 160 else (response[:157] + "..." if response else "")
+    qprint(f"  Response: \"{preview}\"")
 
 
 # ---------------------------------------------------------------------------
@@ -1056,56 +1169,10 @@ def run_trials_benchmark(adb: Adb, model_path: str, questions: list, timeout: in
                     outcome = run_one(adb, model_path, question, n, timeout, max_tokens, suppress_early_eos, n_gpu_layers)
                     status, lines, run_id = outcome["status"], outcome["lines"], outcome["run_id"]
 
-            entry = {
-                "question_number": n,
-                "question": question,
-                "trial_number": trial,
-                "run_id": run_id,
-                "status": None,
-                "metrics": None,
-                "response": None,
-                "error": None,
-                "context_reset": context_reset_for_this_q,
-            }
-
-            if status == "done":
-                metrics = build_metrics(lines)
-                response = extract_response(lines["RUN_DONE"])
-                entry["status"] = "success"
-                entry["metrics"] = metrics
-                entry["response"] = response
-
-                temp_parts = []
-                if metrics["thermal_temp_cpu_c"] is not None:
-                    temp_parts.append(f"CPU:{metrics['thermal_temp_cpu_c']}°C")
-                if metrics["thermal_temp_skin_c"] is not None:
-                    temp_parts.append(f"Skin:{metrics['thermal_temp_skin_c']}°C")
-                temp_suffix = f" ({' '.join(temp_parts)})" if temp_parts else ""
-                backend_suffix = f" Backend={metrics['backend_verified']}" if metrics["backend_verified"] else ""
-                energy_suffix = f" Energy={metrics['energy_mj_sampled']}mJ" if metrics["energy_mj_sampled"] is not None else ""
-                rate_parts = []
-                if metrics["prefill_tps"] is not None:
-                    rate_parts.append(f"Prefill={metrics['prefill_tps']}tok/s")
-                if metrics["decode_tps"] is not None:
-                    rate_parts.append(f"Decode={metrics['decode_tps']}tok/s")
-                rate_suffix = f" ({' '.join(rate_parts)})" if rate_parts else ""
-                qprint(
-                    f"  ColdLoad={metrics['cold_load_ms']}ms TTFT={metrics['ttft_ms']}ms TPS={metrics['tps']}{rate_suffix} "
-                    f"RSS={metrics['memory_kb']}KB Power={metrics['power_ma']}mA{energy_suffix} "
-                    f"Thermal={metrics['thermal']}{temp_suffix}{backend_suffix}"
-                )
-                preview = response if response and len(response) <= 160 else (response[:157] + "..." if response else "")
-                qprint(f"  Response: \"{preview}\"")
-            elif status == "error":
-                reason, message = extract_error(lines.get("RUN_ERROR", ""))
-                entry["status"] = "failed"
-                entry["error"] = {"reason": reason, "message": message}
-                qprint(f"  FAILED: reason={reason} message={message}")
-            else:  # timeout
-                entry["status"] = "failed"
-                entry["error"] = {"reason": "timeout", "message": f"No RUN_DONE/RUN_ERROR within {timeout}s"}
-                qprint(f"  FAILED: timeout after {timeout}s")
-
+            entry = outcome_to_entry(outcome, n, question, timeout)
+            entry.update({"phase": "steady", "trial_number": trial, "context_reset": context_reset_for_this_q})
+            if entry["metrics"]:
+                print_run_line(entry["metrics"], entry["response"])
             results.append(entry)
             time.sleep(2)
 
@@ -1133,18 +1200,34 @@ def stat_block(values):
 # Mirrors MNN's own SUMMARY_METRICS list as closely as this script's actual
 # metric set allows (no peak_rss_kb/power_ma_monsoon equivalents here).
 SUMMARY_METRICS = [
-    "ttft_ms", "tps", "prefill_tps", "decode_tps",
+    "ttft_ms", "ttlt_ms", "tps", "prefill_tps", "decode_tps", "native_prefill_tps", "native_decode_tps",
+    "prompt_tokens", "gen_tokens",
     "memory_kb", "power_ma", "energy_mj_sampled",
+    "energy_mj", "energy_net_mj", "avg_power_mw", "energy_mj_per_token", "energy_net_mj_per_token",
     "thermal_temp_cpu_c", "thermal_temp_skin_c",
 ]
+# Perfetto energy fields only count toward statistics when the run's energy_valid is true.
+ENERGY_KEYS = {"energy_mj", "energy_net_mj", "avg_power_mw", "energy_mj_per_token", "energy_net_mj_per_token"}
+COLD_METRICS = ["cold_start_ms", "cold_load_ms", "ttft_ms", "cold_start_energy_mj", "cold_start_energy_net_mj"]
+
+
+def metric_values(results: list, key: str) -> list:
+    return [
+        r["metrics"][key] for r in results
+        if r["status"] == "success" and r["metrics"] and r["metrics"].get(key) is not None
+        and (key not in ENERGY_KEYS or r["metrics"].get("energy_valid"))
+    ]
+
+
+def compute_cold_summary(cold_results: list) -> dict:
+    return {key: stat_block(metric_values(cold_results, key)) for key in COLD_METRICS}
 
 
 def compute_summary(results: list) -> dict:
+    results = [r for r in results if r.get("phase") != "cold"]
+
     def vals(key):
-        return [
-            r["metrics"][key] for r in results
-            if r["status"] == "success" and r["metrics"] and r["metrics"].get(key) is not None
-        ]
+        return metric_values(results, key)
 
     thermal_states = sorted({
         r["metrics"]["thermal"] for r in results
@@ -1172,15 +1255,7 @@ def compute_summary(results: list) -> dict:
         first_cold_load_ms = first_q["metrics"].get("cold_load_ms")
 
     return {
-        "ttft_ms": stat_block(vals("ttft_ms")),
-        "tps": stat_block(vals("tps")),
-        "prefill_tps": stat_block(vals("prefill_tps")),
-        "decode_tps": stat_block(vals("decode_tps")),
-        "memory_kb": stat_block(vals("memory_kb")),
-        "power_ma": stat_block(vals("power_ma")),
-        "energy_mj_sampled": stat_block(vals("energy_mj_sampled")),
-        "thermal_temp_cpu_c": stat_block(vals("thermal_temp_cpu_c")),
-        "thermal_temp_skin_c": stat_block(vals("thermal_temp_skin_c")),
+        **{key: stat_block(vals(key)) for key in SUMMARY_METRICS},
         "first_question_cold_load_ms": first_cold_load_ms,
         "thermal_states_observed": thermal_states,
         "backend_verified_observed": backend_states,
@@ -1192,8 +1267,9 @@ def compute_summary(results: list) -> dict:
             "tps is llama.cpp's native rate - a BLENDED prefill+decode rate, not decode-only "
             "(confirmed by reading LLMInference.cpp directly). prefill_tps/decode_tps are the "
             "real, separately-measured rates matching the paper's own definitions "
-            "(prefill_tps = prompt_len/TTFT, decode_tps = gen_tokens/(t_last-t_first)) and are "
-            "what should be used for the real replication, not tps."
+            "(prefill_tps = prompt_len/TTFT, decode_tps = (gen_tokens-1)/(t_last-t_first)) and are "
+            "what should be used for the real replication, not tps. native_prefill_tps/"
+            "native_decode_tps are llama.cpp's own compute-only timers."
         ),
         "rss_note": (
             "peak_RSS_KB is only directly comparable across different models if each was "
@@ -1210,7 +1286,11 @@ def print_summary_table(summary: dict, run_info: dict):
     header = f"{'Metric':<10}{'Mean':>12}{'Std':>12}{'Min':>12}{'Max':>12}"
     qprint(header)
     qprint("-" * len(header))
-    for label, key in [("TTFT_ms", "ttft_ms"), ("TPS", "tps"), ("PrefillTPS", "prefill_tps"), ("DecodeTPS", "decode_tps"), ("RSS_KB", "memory_kb"), ("Power_mA", "power_ma"), ("Energy_mJ", "energy_mj_sampled"), ("ThermalCPU_C", "thermal_temp_cpu_c"), ("ThermalSkin_C", "thermal_temp_skin_c")]:
+    for label, key in [("TTFT_ms", "ttft_ms"), ("TTLT_ms", "ttlt_ms"), ("PrefillTPS", "prefill_tps"),
+                       ("DecodeTPS", "decode_tps"), ("NatPrefill", "native_prefill_tps"),
+                       ("NatDecode", "native_decode_tps"), ("GenTokens", "gen_tokens"), ("RSS_KB", "memory_kb"),
+                       ("Energy_mJ", "energy_mj"), ("mJ/token", "energy_mj_per_token"),
+                       ("Net_mJ/tok", "energy_net_mj_per_token"), ("ThermalCPU_C", "thermal_temp_cpu_c")]:
         s = summary[key]
         row = f"{label:<10}" + "".join(
             f"{(s[k] if s[k] is not None else 'N/A'):>12}" for k in ("mean", "std", "min", "max")
@@ -1300,8 +1380,10 @@ def parse_args():
     p.add_argument("--output", default="autobench_results.json")
     p.add_argument("--quant", choices=["Q4_K_M", "Q5_K_M", "Q8_0", "F16"], default="Q4_K_M")
     p.add_argument("--timeout", type=int, default=180, help="Seconds to wait for RUN_DONE/RUN_ERROR per question")
-    p.add_argument("--max-tokens", type=int, default=4096, dest="max_tokens",
-                    help="Max tokens the receiver should generate per response (matches MNN's default)")
+    p.add_argument("--max-tokens", type=int, default=256, dest="max_tokens",
+                    help="Max tokens the receiver should generate per response. Default 256 = the app's "
+                         "own DEFAULT_MAX_TOKENS, which is what every run used before the --ei/--es fix "
+                         "made this flag take effect.")
     p.add_argument("--reboot-before", action="store_true",
                     help="Reboot the device before benchmarking for a genuine cold-load read (adds ~30-60s)")
     p.add_argument("--trials", type=int, default=1, dest="trials",
@@ -1336,6 +1418,7 @@ def parse_args():
     p.add_argument("--quiet", action="store_true",
                     help="Suppress routine per-question and pre-flight progress output. [ERROR]/[WARN] lines "
                          "and the final 'Results saved'/'DONE' confirmation are still always printed.")
+    bench_common.add_common_args(p)
     return p.parse_args()
 
 
@@ -1374,18 +1457,49 @@ def main():
     if args.n_gpu_layers > 0:
         qprint(f"  n_gpu_layers: {args.n_gpu_layers}")
 
+    global _GATE, _REST_SECONDS
+    _REST_SECONDS = args.rest_seconds
+    initial_state = bench_common.device_state(adb)
+    if args.gate_max_temp is not None:
+        _GATE = bench_common.ReadinessGate(adb, args.gate_max_temp, args.gate_timeout, log=qprint)
+        _GATE.set_baseline(initial_state)
+    if args.energy and initial_state["externally_powered"]:
+        print(f"[WARN] --energy: phone is externally powered ({', '.join(initial_state['power_sources'])}) - "
+              "energy will be recorded but flagged invalid. Unplug and use wireless adb for valid energy.")
+
+    energy_trace, idle_window = None, None
+    if args.energy:
+        energy_trace = bench_common.EnergyTrace(adb, Path(args.output).resolve().parent / "traces", log=qprint)
+        energy_trace.start()
+        idle_window = bench_common.measure_idle_window(adb, args.idle_seconds, log=qprint)
+
     start_time = datetime.now(timezone.utc).isoformat()
-    if args.trials > 1:
-        results, context_resets = run_trials_benchmark(
-            adb, model_path, questions, args.timeout, args.max_tokens, trials=args.trials,
-            suppress_early_eos=suppress_early_eos, n_gpu_layers=args.n_gpu_layers,
-        )
-    else:
-        results, context_resets = run_benchmark(
-            adb, model_path, questions, args.timeout, args.max_tokens, reboot_before=args.reboot_before,
-            suppress_early_eos=suppress_early_eos, n_gpu_layers=args.n_gpu_layers,
-        )
+    try:
+        cold_results = []
+        if args.cold_start_runs > 0:
+            cold_results = run_cold_start_block(
+                adb, model_path, questions, args.cold_start_runs, args.timeout, args.max_tokens,
+                suppress_early_eos=suppress_early_eos, n_gpu_layers=args.n_gpu_layers,
+            )
+        if args.trials > 1:
+            results, context_resets = run_trials_benchmark(
+                adb, model_path, questions, args.timeout, args.max_tokens, trials=args.trials,
+                suppress_early_eos=suppress_early_eos, n_gpu_layers=args.n_gpu_layers,
+            )
+        else:
+            results, context_resets = run_benchmark(
+                adb, model_path, questions, args.timeout, args.max_tokens, reboot_before=args.reboot_before,
+                suppress_early_eos=suppress_early_eos, n_gpu_layers=args.n_gpu_layers,
+            )
+        results = cold_results + results
+    finally:
+        if energy_trace is not None:
+            energy_trace.stop()
     end_time = datetime.now(timezone.utc).isoformat()
+
+    idle_power_mw = None
+    if energy_trace is not None:
+        idle_power_mw = bench_common.attach_energy(results, energy_trace, idle_window, log=qprint)
 
     completed = sum(1 for r in results if r["status"] == "success")
     failed = len(results) - completed
@@ -1412,9 +1526,20 @@ def main():
         "battery_status": battery_info["battery_status"],
         "rebooted_before_run": args.reboot_before,
         "cold_load_note": COLD_LOAD_NOTE,
+        "max_tokens": args.max_tokens,
+        "cold_start_runs": args.cold_start_runs,
+        "gate_max_temp_c": args.gate_max_temp,
+        "gate_baseline_cpu_caps_khz": _GATE.baseline_caps if _GATE else None,
+        "rest_seconds": args.rest_seconds,
+        "initial_device_state": initial_state,
+        "energy_enabled": args.energy,
+        "energy_trace": str(energy_trace.local_path) if energy_trace else None,
+        "idle_power_mw": idle_power_mw,
     }
 
     summary = compute_summary(results)
+    summary["cold_start"] = compute_cold_summary([r for r in results if r.get("phase") == "cold"])
+    summary["energy_aggregate"] = bench_common.aggregate_energy(results) if args.energy else None
     trial_summary = compute_trial_summary(results, questions) if args.trials > 1 else None
     save_results(args.output, run_info, summary, results, trial_summary=trial_summary)
     print_summary_table(summary, run_info)

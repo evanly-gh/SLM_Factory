@@ -142,6 +142,11 @@ class SmolLMManager(private val appDB: AppDB, private val context: Context) {
      */
     fun getColdLoadTimeMs(): Long? = if (lastColdLoadTimeMs > 0L) lastColdLoadTimeMs else null
 
+    // Epoch-ms start of the last [load]'s native load call (0 if none), for host-side alignment.
+    @Volatile
+    var lastLoadStartEpochMs: Long = 0L
+        private set
+
     data class SmolLMResponse(
         val response: String,
         // llama.cpp's native token-rate reading (LLMInference::getResponseGenerationSpeed()).
@@ -172,12 +177,24 @@ class SmolLMManager(private val appDB: AppDB, private val context: Context) {
         // getResponse()'s computation for the exact math). Null when TTFT is 0 (no tokens ever
         // arrived) to avoid a divide-by-zero producing a meaningless value.
         val prefillTps: Float? = null,
-        // gen_tokens / (t_last - t_first), matching the paper's own decode_tps definition.
-        // t_first = dispatch + TTFT; t_last = dispatch + total generation duration (both real
-        // wall-clock timestamps already collected for other purposes, not new measurements).
-        // Null when there were fewer than 2 tokens (nothing to measure a rate between) or the
-        // decode window is non-positive.
+        // (gen_tokens - 1) / (t_last - t_first): the window starts at the first token, so it
+        // spans gen_tokens - 1 decode steps. gen_tokens is the exact native token count
+        // ([genTokens]), not the number of streamed UTF-8 pieces. Null when there were fewer
+        // than 2 tokens or the decode window is non-positive.
         val decodeTps: Float? = null,
+        // Wall-clock time from dispatch to the last generated token.
+        val ttltMs: Long? = null,
+        // Epoch-ms timestamps (System.currentTimeMillis()) of dispatch, first and last token, so
+        // host-side energy traces can be integrated over exactly this generation window.
+        val dispatchEpochMs: Long = 0L,
+        val firstTokenEpochMs: Long? = null,
+        val lastTokenEpochMs: Long? = null,
+        val promptTokens: Int = 0,
+        val genTokens: Int = 0,
+        // Engine-side rates from llama.cpp's perf counters (see SmolLM.getPerfMetrics()):
+        // prompt tokens / prompt-eval time and decode steps / decode-eval time.
+        val nativePrefillTps: Float? = null,
+        val nativeDecodeTps: Float? = null,
     )
 
     fun load(
@@ -205,6 +222,7 @@ class SmolLMManager(private val appDB: AppDB, private val context: Context) {
                 modelInitJob = CoroutineScope(Dispatchers.Default).launch {
                     try {
                         previousJob?.join()
+                        lastLoadStartEpochMs = System.currentTimeMillis()
                         val loadDuration =
                             measureTime { instance.load(modelPath, params, context.applicationInfo.nativeLibraryDir) }
                         lastColdLoadTimeMs = loadDuration.inWholeMilliseconds
@@ -359,6 +377,8 @@ class SmolLMManager(private val appDB: AppDB, private val context: Context) {
                     val promptSubmitTime = if (promptDispatchTimeMs > 0L) promptDispatchTimeMs
                                           else System.currentTimeMillis()
                     var firstTokenReceived = false
+                    var firstTokenEpochMs = 0L
+                    var lastTokenEpochMs = 0L
                     var peakRssKb = 0L
                     // Every Flow piece from getResponseAsFlow() is exactly one generated token
                     // (SmolLM.kt's flow emits one completionLoop() result per token, stopping
@@ -376,8 +396,10 @@ class SmolLMManager(private val appDB: AppDB, private val context: Context) {
 
                     val duration = measureTime {
                         instance.getResponseAsFlow(query, maxTokens, suppressEarlyEos).collect { piece ->
+                            lastTokenEpochMs = System.currentTimeMillis()
                             if (!firstTokenReceived) {
-                                ttftMs = System.currentTimeMillis() - promptSubmitTime
+                                firstTokenEpochMs = lastTokenEpochMs
+                                ttftMs = firstTokenEpochMs - promptSubmitTime
                                 firstTokenReceived = true
                             }
                             genTokenCount++
@@ -410,12 +432,20 @@ class SmolLMManager(private val appDB: AppDB, private val context: Context) {
                     // window is non-positive or there's nothing to measure a rate between.
                     val promptTokenCount = instance.getPromptTokenCount()
                     val prefillTps = if (ttftMs > 0L) promptTokenCount / (ttftMs / 1000.0f) else null
-                    val decodeDurationMs = duration.inWholeMilliseconds - ttftMs
-                    val decodeTps = if (genTokenCount >= 2 && decodeDurationMs > 0L) {
-                        genTokenCount / (decodeDurationMs / 1000.0f)
+                    // perf = {t_p_eval_ms, n_p_eval, t_eval_ms, n_eval, n_response_tokens}
+                    val perf = instance.getPerfMetrics()
+                    // Exact generated-token count; genTokenCount counts streamed UTF-8 pieces,
+                    // which undercounts when a character spans several tokens.
+                    val genTokens = perf[4].toInt().takeIf { it > 0 } ?: genTokenCount
+                    val decodeWindowMs = lastTokenEpochMs - firstTokenEpochMs
+                    val decodeTps = if (firstTokenReceived && genTokens >= 2 && decodeWindowMs > 0L) {
+                        (genTokens - 1) / (decodeWindowMs / 1000.0f)
                     } else {
                         null
                     }
+                    val ttltMs = if (firstTokenReceived) lastTokenEpochMs - promptSubmitTime else null
+                    val nativePrefillTps = if (perf[0] > 0.0) (perf[1] / (perf[0] / 1000.0)).toFloat() else null
+                    val nativeDecodeTps = if (perf[2] > 0.0) (perf[3] / (perf[2] / 1000.0)).toFloat() else null
 
                     // Thread-safe access to chat
                     val currentChat = stateLock.withLock { chat }
@@ -447,6 +477,14 @@ class SmolLMManager(private val appDB: AppDB, private val context: Context) {
                                 savedMessageId = savedMessageId,
                                 prefillTps = prefillTps,
                                 decodeTps = decodeTps,
+                                ttltMs = ttltMs,
+                                dispatchEpochMs = promptSubmitTime,
+                                firstTokenEpochMs = if (firstTokenReceived) firstTokenEpochMs else null,
+                                lastTokenEpochMs = if (firstTokenReceived) lastTokenEpochMs else null,
+                                promptTokens = promptTokenCount,
+                                genTokens = genTokens,
+                                nativePrefillTps = nativePrefillTps,
+                                nativeDecodeTps = nativeDecodeTps,
                             )
                         )
                     }

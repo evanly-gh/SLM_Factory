@@ -330,7 +330,10 @@ class BenchmarkService : Service() {
         // Wake lock acquisition is best-effort: if it fails for any reason, inference must still
         // proceed rather than hang forever waiting on inferenceDeferred.
         try {
-            wakeLock.acquire(2 * 60 * 1000L /* 2 min safety timeout */)
+            // Safety timeout only: generous enough for the slowest configs (e.g. a 4B FP16 model on
+            // CPU generating 256 tokens can exceed 2 min), after which the lock would silently
+            // lapse mid-run and let the CPU drop into idle.
+            wakeLock.acquire(20 * 60 * 1000L /* 20 min safety timeout */)
         } catch (e: Exception) {
             Log.w("BENCHMARK", "run_id=$runId could not acquire wake lock: ${e.message}")
         }
@@ -415,6 +418,16 @@ class BenchmarkService : Service() {
         // edge cases documented there — e.g. too few tokens to measure a decode rate between.
         Log.d("PREFILL_TPS", "run_id=$runId value=${response.prefillTps ?: "unsupported"}")
         Log.d("DECODE_TPS",  "run_id=$runId value=${response.decodeTps ?: "unsupported"}")
+        Log.d("TTLT",        "run_id=$runId value=${response.ttltMs ?: "unsupported"}")
+        Log.d("PROMPT_TOKENS", "run_id=$runId value=${response.promptTokens}")
+        Log.d("GEN_TOKENS",  "run_id=$runId value=${response.genTokens}")
+        Log.d("NATIVE_PREFILL_TPS", "run_id=$runId value=${response.nativePrefillTps ?: "unsupported"}")
+        Log.d("NATIVE_DECODE_TPS",  "run_id=$runId value=${response.nativeDecodeTps ?: "unsupported"}")
+        // Epoch-ms markers for host-side energy integration (see run_autobench.py).
+        Log.d("LOAD_START_EPOCH_MS",   "run_id=$runId value=${smolLMManager.lastLoadStartEpochMs}")
+        Log.d("DISPATCH_EPOCH_MS",     "run_id=$runId value=${response.dispatchEpochMs}")
+        Log.d("FIRST_TOKEN_EPOCH_MS",  "run_id=$runId value=${response.firstTokenEpochMs ?: "unsupported"}")
+        Log.d("LAST_TOKEN_EPOCH_MS",   "run_id=$runId value=${response.lastTokenEpochMs ?: "unsupported"}")
         Log.d("MEMORY",    "run_id=$runId value=${response.peakRssKb}")
         Log.d("POWER",     "run_id=$runId value=${
             avgPowerMa?.let { "%.1f".format(it) } ?: "unsupported"}")
