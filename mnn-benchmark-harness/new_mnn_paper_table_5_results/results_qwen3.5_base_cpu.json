@@ -1,0 +1,137 @@
+{
+  "run_info": {
+    "model_path": "/data/local/tmp/mnn_models/Qwen3.5-0.8B-base-q4",
+    "device": "3C166R00G7Y00000",
+    "start_time": "2026-09-23T07:08:47.213810+00:00",
+    "end_time": "2026-09-23T07:08:59.738274+00:00",
+    "timeout_s": 180,
+    "no_think_mode": false,
+    "max_tokens": 4096,
+    "backend_type": "cpu",
+    "warmup_runs": 0,
+    "trials": 1,
+    "process_reset": true,
+    "total": 1,
+    "completed": 1,
+    "failed": 0,
+    "battery_warning": true,
+    "battery_level_pct": 100,
+    "battery_status": "Full"
+  },
+  "results": [
+    {
+      "question_number": 1,
+      "question": "What is the Capital of France?",
+      "run_id": "run_1_1790147327214",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 751,
+        "ttft_ms": 274.350052,
+        "prefill_time_us": 266678,
+        "decode_time_us": 8726131,
+        "prompt_len": 34,
+        "decode_len": 150,
+        "prefill_tps": 127.495,
+        "decode_tps": 17.19,
+        "peak_rss_kb": 1211652,
+        "power_ma": 23.36,
+        "power_ma_raw": "23.36",
+        "energy_mas_sampled": 196.476,
+        "energy_mj_sampled": 881.193,
+        "thermal_status": "Normal",
+        "thermal_cpu_c": 42.6,
+        "thermal_skin_c": null,
+        "power_ma_monsoon": null
+      },
+      "response": "Based on the information I have, there's no specific city or city name mentioned in the provided text.\\n\\nHowever, based on the information typically associated with \"France\" in general, there are several major cities and cities that are commonly associated with France. Here are some examples:\\n\\n*   **Paris** - The capital city of France, known for its capital city (Paris).\\n*   **Paris** - The capital city of France, with the capital city being Paris.\\n*   **Paris** is the capital city of France and the capital of the region of Normandy.\\n*   **Paris** is also known for its rich history, art, and cultural heritage.\\n*\\n</thinking>\\n</analysis>",
+      "error": null
+    }
+  ],
+  "summary": {
+    "cold_load_ms": {
+      "mean": 751,
+      "std": 0.0,
+      "min": 751,
+      "max": 751,
+      "n_completed": 1
+    },
+    "ttft_ms": {
+      "mean": 274.35,
+      "std": 0.0,
+      "min": 274.35,
+      "max": 274.35,
+      "n_completed": 1
+    },
+    "prefill_tps": {
+      "mean": 127.495,
+      "std": 0.0,
+      "min": 127.495,
+      "max": 127.495,
+      "n_completed": 1
+    },
+    "decode_tps": {
+      "mean": 17.19,
+      "std": 0.0,
+      "min": 17.19,
+      "max": 17.19,
+      "n_completed": 1
+    },
+    "peak_rss_kb": {
+      "mean": 1211652,
+      "std": 0.0,
+      "min": 1211652,
+      "max": 1211652,
+      "n_completed": 1
+    },
+    "power_ma": {
+      "mean": 23.36,
+      "std": 0.0,
+      "min": 23.36,
+      "max": 23.36,
+      "n_completed": 1
+    },
+    "power_ma_monsoon": {
+      "mean": null,
+      "std": null,
+      "min": null,
+      "max": null,
+      "n_completed": 0
+    },
+    "thermal_cpu_c": {
+      "mean": 42.6,
+      "std": 0.0,
+      "min": 42.6,
+      "max": 42.6,
+      "n_completed": 1
+    },
+    "thermal_skin_c": {
+      "mean": null,
+      "std": null,
+      "min": null,
+      "max": null,
+      "n_completed": 0
+    },
+    "energy_mas_sampled": {
+      "mean": 196.476,
+      "std": 0.0,
+      "min": 196.476,
+      "max": 196.476,
+      "n_completed": 1
+    },
+    "energy_mj_sampled": {
+      "mean": 881.193,
+      "std": 0.0,
+      "min": 881.193,
+      "max": 881.193,
+      "n_completed": 1
+    },
+    "thermal_states_observed": [
+      "Normal"
+    ],
+    "power_comparison": {
+      "mean_abs_diff_ma": null,
+      "n_completed": 0
+    },
+    "note": "power_ma stats exclude questions where POWER_MA was reported as 'unavailable' or missing; power_ma_monsoon stats exclude questions where the Monsoon reading failed. n_completed is reported per-metric because failed/timed-out questions - and, for these two power metrics specifically, unavailable/failed readings - are silently excluded from that metric's mean otherwise, which can bias results toward easier/luckier questions."
+  }
+}

@@ -1,0 +1,137 @@
+{
+  "run_info": {
+    "model_path": "/data/local/tmp/mnn_models/Qwen2.5-1.5B-base-q4-opencl",
+    "device": "3C166R00G7Y00000",
+    "start_time": "2026-09-23T22:46:27.456134+00:00",
+    "end_time": "2026-09-23T22:48:56.821021+00:00",
+    "timeout_s": 180,
+    "no_think_mode": false,
+    "max_tokens": 4096,
+    "backend_type": "opencl",
+    "warmup_runs": 2,
+    "trials": 1,
+    "process_reset": true,
+    "total": 1,
+    "completed": 1,
+    "failed": 0,
+    "battery_warning": true,
+    "battery_level_pct": 100,
+    "battery_status": "Full"
+  },
+  "results": [
+    {
+      "question_number": 1,
+      "question": "What is the Capital of France?",
+      "run_id": "run_1_1790203666758",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 10600,
+        "ttft_ms": 39312.854777,
+        "prefill_time_us": 39305940,
+        "decode_time_us": 16368604,
+        "prompt_len": 26,
+        "decode_len": 88,
+        "prefill_tps": 0.661,
+        "decode_tps": 5.376,
+        "peak_rss_kb": 6732596,
+        "power_ma": 17.05,
+        "power_ma_raw": "17.05",
+        "energy_mas_sampled": 786.424,
+        "energy_mj_sampled": 3524.752,
+        "thermal_status": "Normal",
+        "thermal_cpu_c": 47.7,
+        "thermal_skin_c": null,
+        "power_ma_monsoon": null
+      },
+      "response": "What is the largest river in France?\u731e\u731e\u731e\u731e\u731e\u731e\u731e\u731e\u731e\u731e\u731e\u731e\u731e\u731e\u731e\u731e\u731e\u731e\u731e\u731e\u731e\u731e\u731e\u731e\u731e\u731e\u731e\u731e\u731e\u731e\u731e\u731e\u731e\u731e\u731e\u731e\u731e\u731e\u731e\u731e\u731e\u731e\u731e\u731e\u731e\u731e\u731e\u731e\u731e\u731e\u731e\u731e\u731e\u731e\u731e\u731e\u731e\u731e\u731e\u731e\u731e\u731e\u731e\u731e\u731e\u731e\u731e\u731e\u731e\u731e\u731e\u731e\u731e\u731e\u731e\u731e\u731e\u731e\u731e\u731e",
+      "error": null
+    }
+  ],
+  "summary": {
+    "cold_load_ms": {
+      "mean": 10600,
+      "std": 0.0,
+      "min": 10600,
+      "max": 10600,
+      "n_completed": 1
+    },
+    "ttft_ms": {
+      "mean": 39312.855,
+      "std": 0.0,
+      "min": 39312.855,
+      "max": 39312.855,
+      "n_completed": 1
+    },
+    "prefill_tps": {
+      "mean": 0.661,
+      "std": 0.0,
+      "min": 0.661,
+      "max": 0.661,
+      "n_completed": 1
+    },
+    "decode_tps": {
+      "mean": 5.376,
+      "std": 0.0,
+      "min": 5.376,
+      "max": 5.376,
+      "n_completed": 1
+    },
+    "peak_rss_kb": {
+      "mean": 6732596,
+      "std": 0.0,
+      "min": 6732596,
+      "max": 6732596,
+      "n_completed": 1
+    },
+    "power_ma": {
+      "mean": 17.05,
+      "std": 0.0,
+      "min": 17.05,
+      "max": 17.05,
+      "n_completed": 1
+    },
+    "power_ma_monsoon": {
+      "mean": null,
+      "std": null,
+      "min": null,
+      "max": null,
+      "n_completed": 0
+    },
+    "thermal_cpu_c": {
+      "mean": 47.7,
+      "std": 0.0,
+      "min": 47.7,
+      "max": 47.7,
+      "n_completed": 1
+    },
+    "thermal_skin_c": {
+      "mean": null,
+      "std": null,
+      "min": null,
+      "max": null,
+      "n_completed": 0
+    },
+    "energy_mas_sampled": {
+      "mean": 786.424,
+      "std": 0.0,
+      "min": 786.424,
+      "max": 786.424,
+      "n_completed": 1
+    },
+    "energy_mj_sampled": {
+      "mean": 3524.752,
+      "std": 0.0,
+      "min": 3524.752,
+      "max": 3524.752,
+      "n_completed": 1
+    },
+    "thermal_states_observed": [
+      "Normal"
+    ],
+    "power_comparison": {
+      "mean_abs_diff_ma": null,
+      "n_completed": 0
+    },
+    "note": "power_ma stats exclude questions where POWER_MA was reported as 'unavailable' or missing; power_ma_monsoon stats exclude questions where the Monsoon reading failed. n_completed is reported per-metric because failed/timed-out questions - and, for these two power metrics specifically, unavailable/failed readings - are silently excluded from that metric's mean otherwise, which can bias results toward easier/luckier questions."
+  }
+}

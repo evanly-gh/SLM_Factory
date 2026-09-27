@@ -1,0 +1,137 @@
+{
+  "run_info": {
+    "model_path": "/data/local/tmp/mnn_models/Qwen3-0.6B-base-q4",
+    "device": "3C166R00G7Y00000",
+    "start_time": "2026-09-23T07:30:19.628139+00:00",
+    "end_time": "2026-09-23T07:32:31.981564+00:00",
+    "timeout_s": 180,
+    "no_think_mode": false,
+    "max_tokens": 4096,
+    "backend_type": "opencl",
+    "warmup_runs": 0,
+    "trials": 1,
+    "process_reset": true,
+    "total": 1,
+    "completed": 1,
+    "failed": 0,
+    "battery_warning": true,
+    "battery_level_pct": 100,
+    "battery_status": "Full"
+  },
+  "results": [
+    {
+      "question_number": 1,
+      "question": "What is the Capital of France?",
+      "run_id": "run_1_1790148619628",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 3586,
+        "ttft_ms": 55463.746437,
+        "prefill_time_us": 55446147,
+        "decode_time_us": 60304118,
+        "prompt_len": 32,
+        "decode_len": 2121,
+        "prefill_tps": 0.577,
+        "decode_tps": 35.172,
+        "peak_rss_kb": 847712,
+        "power_ma": 19.08,
+        "power_ma_raw": "19.08",
+        "energy_mas_sampled": 2022.466,
+        "energy_mj_sampled": 9066.715,
+        "thermal_status": "Normal",
+        "thermal_cpu_c": 43.4,
+        "thermal_skin_c": null,
+        "power_ma_monsoon": null
+      },
+      "response": "<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n\\n<ApplicationUser>\\n\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<ApplicationUser>\\n<Applicat",
+      "error": null
+    }
+  ],
+  "summary": {
+    "cold_load_ms": {
+      "mean": 3586,
+      "std": 0.0,
+      "min": 3586,
+      "max": 3586,
+      "n_completed": 1
+    },
+    "ttft_ms": {
+      "mean": 55463.746,
+      "std": 0.0,
+      "min": 55463.746,
+      "max": 55463.746,
+      "n_completed": 1
+    },
+    "prefill_tps": {
+      "mean": 0.577,
+      "std": 0.0,
+      "min": 0.577,
+      "max": 0.577,
+      "n_completed": 1
+    },
+    "decode_tps": {
+      "mean": 35.172,
+      "std": 0.0,
+      "min": 35.172,
+      "max": 35.172,
+      "n_completed": 1
+    },
+    "peak_rss_kb": {
+      "mean": 847712,
+      "std": 0.0,
+      "min": 847712,
+      "max": 847712,
+      "n_completed": 1
+    },
+    "power_ma": {
+      "mean": 19.08,
+      "std": 0.0,
+      "min": 19.08,
+      "max": 19.08,
+      "n_completed": 1
+    },
+    "power_ma_monsoon": {
+      "mean": null,
+      "std": null,
+      "min": null,
+      "max": null,
+      "n_completed": 0
+    },
+    "thermal_cpu_c": {
+      "mean": 43.4,
+      "std": 0.0,
+      "min": 43.4,
+      "max": 43.4,
+      "n_completed": 1
+    },
+    "thermal_skin_c": {
+      "mean": null,
+      "std": null,
+      "min": null,
+      "max": null,
+      "n_completed": 0
+    },
+    "energy_mas_sampled": {
+      "mean": 2022.466,
+      "std": 0.0,
+      "min": 2022.466,
+      "max": 2022.466,
+      "n_completed": 1
+    },
+    "energy_mj_sampled": {
+      "mean": 9066.715,
+      "std": 0.0,
+      "min": 9066.715,
+      "max": 9066.715,
+      "n_completed": 1
+    },
+    "thermal_states_observed": [
+      "Normal"
+    ],
+    "power_comparison": {
+      "mean_abs_diff_ma": null,
+      "n_completed": 0
+    },
+    "note": "power_ma stats exclude questions where POWER_MA was reported as 'unavailable' or missing; power_ma_monsoon stats exclude questions where the Monsoon reading failed. n_completed is reported per-metric because failed/timed-out questions - and, for these two power metrics specifically, unavailable/failed readings - are silently excluded from that metric's mean otherwise, which can bias results toward easier/luckier questions."
+  }
+}
