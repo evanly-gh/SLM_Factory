@@ -21,3 +21,6 @@ Model-Conversion/output-*/
 Benchmark-Harness/old_test_results/
 Benchmark-Harness/*.json
 !Benchmark-Harness/test_questions.txt
+
+# Perfetto battery traces written by --energy runs (large, regenerable per run)
+*.pftrace

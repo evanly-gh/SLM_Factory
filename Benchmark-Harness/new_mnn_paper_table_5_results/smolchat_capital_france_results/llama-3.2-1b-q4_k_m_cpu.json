@@ -1,0 +1,246 @@
+{
+  "run_info": {
+    "model": "llama-3.2-1b-q4_k_m.gguf",
+    "model_device_path": "/data/user/0/io.shubham0204.smollmandroid/files/headless_benchmark_cache/llama-3.2-1b-q4_k_m.gguf",
+    "device": "phone",
+    "quant": "Q4_K_M",
+    "start_time": "2026-09-25T18:56:27.198935+00:00",
+    "end_time": "2026-09-25T18:57:18.845444+00:00",
+    "total": 3,
+    "completed": 3,
+    "failed": 0,
+    "context_resets": 0,
+    "trials": 3,
+    "suppress_early_eos": true,
+    "n_gpu_layers": 0,
+    "battery_warning": true,
+    "battery_level_pct": 100,
+    "battery_status": "Full",
+    "rebooted_before_run": false,
+    "cold_load_note": "cold_load_ms reflects a genuinely cold read only if --reboot-before was used for this run. Without a reboot, the OS file cache may make cold_load_ms appear faster than a true cold read from storage, especially for larger model files."
+  },
+  "results": [
+    {
+      "question_number": 1,
+      "question": "What is the capital of France?",
+      "trial_number": 1,
+      "run_id": "run_1_1790362597521",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 315,
+        "ttft_ms": 828,
+        "tps": 27.432678,
+        "prefill_tps": 53.140095,
+        "decode_tps": 29.809034,
+        "memory_kb": 1264584,
+        "power_ma": 132.5,
+        "energy_mj_sampled": 5591.8,
+        "thermal": "Normal",
+        "thermal_temp_cpu_c": 55.0,
+        "thermal_temp_skin_c": null,
+        "power_ma_monsoon": null,
+        "backend_verified": "CPU"
+      },
+      "response": "1|>La France<br>2|>Paris<br>3|>France<br>4|>France<br>5|>France<br>6|>France<br>7|>France<br>8|>France<br>9|>France<br>10|>France<br>11|>France<br>12|>France<br>13|>France<br>14|>France<br>15|>France<br>16|>France<br>17|>France<br>18|>France<br>19|>France<br>20|>Europe<br>21|>Europe<br>22|>Europe<br>23|>Europe<br>24|>Europe<br>25|>Europe<br>26|>Europe<br>27|>Europe<br>28|>Europe<br>29|>Europe<br>30|>Europe<br>31|>Europe<br>32|>Europe<br>33|>Europe<br>34|>Europe<br>35|>Europe<br>36|>Europe<br>37|>Europe<br>38|>Europe<br>39|>Europe<br>40|>Europe<br>41|>Europe<br>42|>Europe<br>43|>",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 1,
+      "question": "What is the capital of France?",
+      "trial_number": 2,
+      "run_id": "run_1_1790362611425",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 310,
+        "ttft_ms": 812,
+        "tps": 27.937637,
+        "prefill_tps": 54.187195,
+        "decode_tps": 30.356932,
+        "memory_kb": 1279196,
+        "power_ma": 193.6,
+        "energy_mj_sampled": 8039.3,
+        "thermal": "Normal",
+        "thermal_temp_cpu_c": 55.8,
+        "thermal_temp_skin_c": null,
+        "power_ma_monsoon": null,
+        "backend_verified": "CPU"
+      },
+      "response": "18|> Hello , I am assistant . I am a good assistant . <|im_end|> <|im_start|>user What is the capital of France (1.<|im_end|> 2. 18. 24. 20. 27. 3. 7. 99. 4. 80. 5. 1. 6. 7. 8. 9. 10. 11. 15. 16. 17. 19. 26. 29. 30. 33. 39. 40. 41. 42. 43. 44. 45. 46. 47. 61. 62. 63. 66. 67. 68. 71. 72. 73. 74. 75. 76. 77. 78. 89. 91. 92. 96. 97. 98. 99. 100. 101 103 104 106 108 110 111 112 113 114 116 118 119 123 125 126 127 128 129 130 131 132",
+      "error": null,
+      "context_reset": false
+    },
+    {
+      "question_number": 1,
+      "question": "What is the capital of France?",
+      "trial_number": 3,
+      "run_id": "run_1_1790362625241",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 275,
+        "ttft_ms": 811,
+        "tps": 27.71072,
+        "prefill_tps": 54.25401,
+        "decode_tps": 30.082254,
+        "memory_kb": 1181164,
+        "power_ma": 136.4,
+        "energy_mj_sampled": 5695.5,
+        "thermal": "Normal",
+        "thermal_temp_cpu_c": 56.6,
+        "thermal_temp_skin_c": null,
+        "power_ma_monsoon": null,
+        "backend_verified": "CPU"
+      },
+      "response": "1. France -- capital: Paris 2. France -- capital: Paris 3. France -- capital: Paris 4. France -- capital: Paris 5. France -- capital: Paris 6. France -- capital: Paris 7. France -- capital: Paris 8. France -- capital: Paris 9. France -- capital: Paris 10. France -- capital: Paris 11. France -- capital: Paris 12. France -- capital: Paris 13. France -- capital: Paris 14. France -- capital: Paris 15. France -- capital: Paris 16. France -- capital: Paris 17. France -- capital: Paris 18. France -- capital: Paris 19. France -- capital: Paris 20. France -- capital: Paris 21. France -- capital: Paris 22. France -- capital: Paris 23. France -- capital: Paris 24. France -- capital: Paris 25. France -- capital: Paris 26. France -- capital: Paris 27. France -- capital: Paris 28. France -- capital: Paris 29. France -- capital: Paris 30. France -- capital: Paris 31. France -- capital: Paris 32. France -- capital: Paris",
+      "error": null,
+      "context_reset": false
+    }
+  ],
+  "summary": {
+    "ttft_ms": {
+      "mean": 817,
+      "std": 7.789,
+      "min": 811,
+      "max": 828,
+      "n_completed": 3
+    },
+    "tps": {
+      "mean": 27.694,
+      "std": 0.207,
+      "min": 27.432678,
+      "max": 27.937637,
+      "n_completed": 3
+    },
+    "prefill_tps": {
+      "mean": 53.86,
+      "std": 0.51,
+      "min": 53.140095,
+      "max": 54.25401,
+      "n_completed": 3
+    },
+    "decode_tps": {
+      "mean": 30.083,
+      "std": 0.224,
+      "min": 29.809034,
+      "max": 30.356932,
+      "n_completed": 3
+    },
+    "memory_kb": {
+      "mean": 1241648,
+      "std": 43182.661,
+      "min": 1181164,
+      "max": 1279196,
+      "n_completed": 3
+    },
+    "power_ma": {
+      "mean": 154.167,
+      "std": 27.929,
+      "min": 132.5,
+      "max": 193.6,
+      "n_completed": 3
+    },
+    "energy_mj_sampled": {
+      "mean": 6442.2,
+      "std": 1130.113,
+      "min": 5591.8,
+      "max": 8039.3,
+      "n_completed": 3
+    },
+    "thermal_temp_cpu_c": {
+      "mean": 55.8,
+      "std": 0.653,
+      "min": 55.0,
+      "max": 56.6,
+      "n_completed": 3
+    },
+    "thermal_temp_skin_c": {
+      "mean": null,
+      "std": null,
+      "min": null,
+      "max": null,
+      "n_completed": 0
+    },
+    "first_question_cold_load_ms": 315,
+    "thermal_states_observed": [
+      "Normal"
+    ],
+    "backend_verified_observed": [
+      "CPU"
+    ],
+    "note": "TPS/TTFT drift across the run reflects real device thermal state as it heats up under sustained inference, not measurement error.",
+    "tps_note": "tps is llama.cpp's native rate - a BLENDED prefill+decode rate, not decode-only (confirmed by reading LLMInference.cpp directly). prefill_tps/decode_tps are the real, separately-measured rates matching the paper's own definitions (prefill_tps = prompt_len/TTFT, decode_tps = gen_tokens/(t_last-t_first)) and are what should be used for the real replication, not tps.",
+    "rss_note": "peak_RSS_KB is only directly comparable across different models if each was benchmarked in a freshly restarted app process - this script now guarantees that automatically as of this version."
+  },
+  "trial_summary": {
+    "1": {
+      "question": "What is the capital of France?",
+      "n_trials": 3,
+      "n_completed": 3,
+      "metrics": {
+        "ttft_ms": {
+          "mean": 817,
+          "std": 7.789,
+          "min": 811,
+          "max": 828,
+          "n_completed": 3
+        },
+        "tps": {
+          "mean": 27.694,
+          "std": 0.207,
+          "min": 27.432678,
+          "max": 27.937637,
+          "n_completed": 3
+        },
+        "prefill_tps": {
+          "mean": 53.86,
+          "std": 0.51,
+          "min": 53.140095,
+          "max": 54.25401,
+          "n_completed": 3
+        },
+        "decode_tps": {
+          "mean": 30.083,
+          "std": 0.224,
+          "min": 29.809034,
+          "max": 30.356932,
+          "n_completed": 3
+        },
+        "memory_kb": {
+          "mean": 1241648,
+          "std": 43182.661,
+          "min": 1181164,
+          "max": 1279196,
+          "n_completed": 3
+        },
+        "power_ma": {
+          "mean": 154.167,
+          "std": 27.929,
+          "min": 132.5,
+          "max": 193.6,
+          "n_completed": 3
+        },
+        "energy_mj_sampled": {
+          "mean": 6442.2,
+          "std": 1130.113,
+          "min": 5591.8,
+          "max": 8039.3,
+          "n_completed": 3
+        },
+        "thermal_temp_cpu_c": {
+          "mean": 55.8,
+          "std": 0.653,
+          "min": 55.0,
+          "max": 56.6,
+          "n_completed": 3
+        },
+        "thermal_temp_skin_c": {
+          "mean": null,
+          "std": null,
+          "min": null,
+          "max": null,
+          "n_completed": 0
+        }
+      }
+    }
+  }
+}
