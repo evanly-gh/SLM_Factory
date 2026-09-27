@@ -1,0 +1,4 @@
+paper_reproduction/
+energy_latency_results/
+logs/
+qwen3-0.6b_mnn_*.json

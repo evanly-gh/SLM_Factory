@@ -1,0 +1,137 @@
+{
+  "run_info": {
+    "model_path": "/data/local/tmp/mnn_models/Llama-3.2-1B-base-q4",
+    "device": "3C166R00G7Y00000",
+    "start_time": "2026-09-23T06:56:17.530336+00:00",
+    "end_time": "2026-09-23T06:58:28.855115+00:00",
+    "timeout_s": 180,
+    "no_think_mode": false,
+    "max_tokens": 4096,
+    "backend_type": "cpu",
+    "warmup_runs": 0,
+    "trials": 1,
+    "process_reset": true,
+    "total": 1,
+    "completed": 1,
+    "failed": 0,
+    "battery_warning": true,
+    "battery_level_pct": 100,
+    "battery_status": "Full"
+  },
+  "results": [
+    {
+      "question_number": 1,
+      "question": "What is the Capital of France?",
+      "run_id": "run_1_1790146577530",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 1623,
+        "ttft_ms": 119.554323,
+        "prefill_time_us": 117977,
+        "decode_time_us": 122359922,
+        "prompt_len": 13,
+        "decode_len": 4096,
+        "prefill_tps": 110.191,
+        "decode_tps": 33.475,
+        "peak_rss_kb": 1574596,
+        "power_ma": 22.78,
+        "power_ma_raw": "22.78",
+        "energy_mas_sampled": 2774.386,
+        "energy_mj_sampled": 12442.904,
+        "thermal_status": "Normal",
+        "thermal_cpu_c": 64.3,
+        "thermal_skin_c": null,
+        "power_ma_monsoon": null
+      },
+      "response": "What is the capital of France? What is the Capital of France? What is the capital of France? What is the capital of France? What is the capital of France? What is the capital of France? What is the capital of France? What is the capital of France? What is the capital of France? What is the capital of France? What is the capital of France? What is the capital of France? What is the capital of France? What is the capital of France? What is the capital of France? What is the capital of France? What is the capital of France? What is the capital of France? What is the capital of France? What is the capital of France? What is the capital of France? What is the capital of France? What is the capital of France? What is the capital of France? What is the capital of France? What is the capital of France? What is the capital of France? What is the capital of France? What is the capital of France? What is the capital of France? What is the capital of France? What is the capital of France? What is the capital of France? What is the capital of France? What is the capital of France? What is the capital of France? What is the capital of France? What is the capital of France? What is the capital of France? What is the capital of France? What is the capital of France? What is the capital of France? What is the capital of France? What is the capital of France? What is the capital of France? What is the capital of France? What is the capital of France? What is the capital of France? What is the capital of France? What is the capital of France? What is the capital of France? What is the capital of France? What is the capital of France? What is the capital of France? What is the capital of France? What is the capital of France? What is the capital of France? What is the capital of France? What is the capital of France? What is the capital of France? What is the capital of France? What is the capital of France? What is the capital of France? What is the capital of France? What is the capital of France? What is the capital of France? What is the capital of France? What is the capital of France? What is the capital of France? What is the capital of France? What is the capital of France? What is the capital of France? What is the capital of France? What is the capital of France? What is the capital of France? What is the capital of France? What is the capital of France? What is the capital of France? What is the capital of France? What is the capital of France? What is the capital of France? What is the capital of France? What is the capital of France? What is the capital of France? What is the capital of France? What is the capital of France? What is the capital of France? What is the capital of France? What is the capital of France? What is the capital of France? What is the capital of France? What is the capital of France? What is the capital of France? What is the capital of France? What is the capital of France? What is the capital of France? What is the capital of France? What is the capital of France? What is the capital of France? What is the capital of France? What is the capital of France? What is the capital of France? What is the capital of France? What is the capital of France? What is the capital of France? What is the capital of France? What is the capital of France? What is the capital of France? What is the capital of France? What is the capital of France? What is the capital of France? What is the capital of France? What is the capital of France? What is the capital of France? What is the capital of France? What is the capital of France? What is the capital of France? What is the capital of France? What is the capital of France? What is the capital of France? What is the capital of France? What is the capital of France? What is the capital of France? What is the capital of France? What is the capital of France? What is the capital of France? What is the capital of France? What is the capital of France? What is the capital of France? What",
+      "error": null
+    }
+  ],
+  "summary": {
+    "cold_load_ms": {
+      "mean": 1623,
+      "std": 0.0,
+      "min": 1623,
+      "max": 1623,
+      "n_completed": 1
+    },
+    "ttft_ms": {
+      "mean": 119.554,
+      "std": 0.0,
+      "min": 119.554,
+      "max": 119.554,
+      "n_completed": 1
+    },
+    "prefill_tps": {
+      "mean": 110.191,
+      "std": 0.0,
+      "min": 110.191,
+      "max": 110.191,
+      "n_completed": 1
+    },
+    "decode_tps": {
+      "mean": 33.475,
+      "std": 0.0,
+      "min": 33.475,
+      "max": 33.475,
+      "n_completed": 1
+    },
+    "peak_rss_kb": {
+      "mean": 1574596,
+      "std": 0.0,
+      "min": 1574596,
+      "max": 1574596,
+      "n_completed": 1
+    },
+    "power_ma": {
+      "mean": 22.78,
+      "std": 0.0,
+      "min": 22.78,
+      "max": 22.78,
+      "n_completed": 1
+    },
+    "power_ma_monsoon": {
+      "mean": null,
+      "std": null,
+      "min": null,
+      "max": null,
+      "n_completed": 0
+    },
+    "thermal_cpu_c": {
+      "mean": 64.3,
+      "std": 0.0,
+      "min": 64.3,
+      "max": 64.3,
+      "n_completed": 1
+    },
+    "thermal_skin_c": {
+      "mean": null,
+      "std": null,
+      "min": null,
+      "max": null,
+      "n_completed": 0
+    },
+    "energy_mas_sampled": {
+      "mean": 2774.386,
+      "std": 0.0,
+      "min": 2774.386,
+      "max": 2774.386,
+      "n_completed": 1
+    },
+    "energy_mj_sampled": {
+      "mean": 12442.904,
+      "std": 0.0,
+      "min": 12442.904,
+      "max": 12442.904,
+      "n_completed": 1
+    },
+    "thermal_states_observed": [
+      "Normal"
+    ],
+    "power_comparison": {
+      "mean_abs_diff_ma": null,
+      "n_completed": 0
+    },
+    "note": "power_ma stats exclude questions where POWER_MA was reported as 'unavailable' or missing; power_ma_monsoon stats exclude questions where the Monsoon reading failed. n_completed is reported per-metric because failed/timed-out questions - and, for these two power metrics specifically, unavailable/failed readings - are silently excluded from that metric's mean otherwise, which can bias results toward easier/luckier questions."
+  }
+}
