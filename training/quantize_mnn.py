@@ -14,8 +14,8 @@ WHAT IS DIFFERENT ABOUT MNN, AND WHY THE CODE CANNOT JUST BE THE GGUF CODE
     Everything downstream that treats the quantized artifact as a path therefore has to accept a
     directory, which is why `quant_backend.py` exists rather than a second `gguf_path` argument.
   * Quantization is PARAMETRIC, not a named preset. llama.cpp ships `Q4_K_M`/`Q8_0` recipes;
-    MNN takes `--quant_bit` (4 or 8 here), `--quant_block` (64 by default — the number of input
-    channels that share one scale/zero-point) and a separate `--lm_quant_bit`. The pool's
+    MNN takes `--quant_bit` (4 or 8 here), `--quant_block` (the number of input channels that
+    share one scale/zero-point; see `export_recipe`), `--hqq` and a separate `--lm_quant_bit`. The pool's
     selector names are kept and mapped onto those numbers, so `@Q4_K_M` means "the 4-bit build
     for this backend" and a run's model ladder, tiering and reporting are untouched by the
     backend choice.
@@ -48,11 +48,35 @@ from training.quantize import (
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-# The quant_block used for every MNN build unless an operator overrides it. 64 is MNN's own
-# default and what the reference harness swept with, so a number produced here is comparable to
-# the ones measured on a phone through MNN-Chat. It is recorded in the validation sidecar because
-# it changes the weights, and therefore the accuracy, as much as the bit width does.
-MNN_QUANT_BLOCK = int(os.environ.get("SLM_MNN_QUANT_BLOCK", "64"))
+# THE EXPORT RECIPE: block size (input channels sharing one scale/zero-point) and whether HQQ
+# searches for those scales instead of taking each block's min/max. Both change the weights, so
+# both are recorded in the validation sidecar and checked on every cache hit.
+#
+# 4-bit defaults to HQQ with 32-weight blocks. MNN's own default — min/max rounding, 64-weight
+# blocks — was measured against llama.cpp's Q4_K_M on the same weights and the same 1,000 clinc150
+# rows (probe jobs 40827151 / 40831903-5) and lost up to 0.108 macro_f1 fine-tuned and 0.186
+# zero-shot. HQQ + block 32 brought the fine-tuned Qwen models within 0.011 of Q4_K_M for ~10% more
+# file than block 64. 8-bit keeps MNN's default: it already matches MNN's FP16 export, and the
+# recipe change was not measured there.
+#
+# SLM_MNN_QUANT_BLOCK / SLM_MNN_HQQ, when set, override the recipe for EVERY width — which is how
+# the probe reproduces MNN's default for comparison.
+_BLOCK_OVERRIDE = os.environ.get("SLM_MNN_QUANT_BLOCK", "")
+_HQQ_OVERRIDE = os.environ.get("SLM_MNN_HQQ", "")
+MNN_QUANT_BLOCK: int | None = int(_BLOCK_OVERRIDE) if _BLOCK_OVERRIDE else None
+MNN_HQQ: bool | None = (_HQQ_OVERRIDE == "1") if _HQQ_OVERRIDE else None
+
+_DEFAULT_RECIPE = {4: (32, True)}
+_FALLBACK_RECIPE = (64, False)
+
+
+def export_recipe(bits: int) -> tuple[int, bool]:
+    """(quant_block, hqq) for an export at ``bits``, honouring any operator override."""
+    block, hqq = _DEFAULT_RECIPE.get(bits, _FALLBACK_RECIPE)
+    return (
+        MNN_QUANT_BLOCK if MNN_QUANT_BLOCK is not None else block,
+        MNN_HQQ if MNN_HQQ is not None else hqq,
+    )
 
 # The lm_head is kept at 8 bits while the body goes to `quant_bit`, because that is what the
 # selector being honoured already means: llama.cpp's `Q4_K_M` is a MIXED-precision recipe that
@@ -327,6 +351,7 @@ def export_from_model_spec(checkpoint_path: str, output_dir: str, quant: str) ->
         quant: A pool selector's quant value — "Q4_K_M" (4-bit) or "Q8_0" (8-bit).
     """
     bits = quant_bit(quant)
+    block, hqq = export_recipe(bits)
     toolchain = resolve_toolchain()
 
     # ABSOLUTE PATHS, NOT THE CALLER'S. `llmexport.py` is launched from its own source directory
@@ -358,16 +383,18 @@ def export_from_model_spec(checkpoint_path: str, output_dir: str, quant: str) ->
         "--path", checkpoint_path,
         "--export", "mnn",
         "--quant_bit", str(bits),
-        "--quant_block", str(MNN_QUANT_BLOCK),
+        "--quant_block", str(block),
         # Never below the body's width: asking for an 8-bit model with a 4-bit lm_head would be
         # strictly worse than the default it overrides.
         "--lm_quant_bit", str(max(MNN_LM_QUANT_BIT, bits)),
         "--dst_path", artifact_dir,
         "--mnnconvert", toolchain.mnnconvert,
     ]
+    if hqq:
+        command.append("--hqq")
     print(
-        f"      [quantize-mnn] llmexport.py → {bits}-bit / block {MNN_QUANT_BLOCK} "
-        f"/ lm_head {max(MNN_LM_QUANT_BIT, bits)}-bit "
+        f"      [quantize-mnn] llmexport.py → {bits}-bit / block {block} "
+        f"/ lm_head {max(MNN_LM_QUANT_BIT, bits)}-bit{' / hqq' if hqq else ''} "
         f"({os.path.basename(checkpoint_path.rstrip(os.sep))} → {artifact_dir})"
     )
     error = _run_quant_tool(
@@ -488,11 +515,18 @@ def validate_and_record_mnn(
             f"MNN artifact changed during validation: {artifact_dir} "
             f"({before['total_size']} → {after['total_size']} bytes)"
         )
+    recorded_bits = _recorded_quant_bit(artifact_dir)
+    expected_block, expected_hqq = export_recipe(recorded_bits or quant_bit(quant or "Q4_K_M"))
+    recorded_block = _recorded_export_arg(artifact_dir, "quant_block")
+    recorded_hqq = _recorded_export_arg(artifact_dir, "hqq")
     record = {
         "schema_version": _MNN_VALIDATION_SCHEMA_VERSION,
         "quant": quant,
-        "quant_bit": _recorded_quant_bit(artifact_dir),
-        "quant_block": MNN_QUANT_BLOCK,
+        "quant_bit": recorded_bits,
+        # What the exporter says it did, falling back to what it was asked for when its args file
+        # predates the key.
+        "quant_block": recorded_block if recorded_block is not None else expected_block,
+        "hqq": bool(recorded_hqq) if recorded_hqq is not None else expected_hqq,
         # Recorded because it changes the weights: two artifacts labelled Q4_K_M with different
         # lm_head widths are different models, and the sidecar is the cache key.
         "lm_quant_bit": _recorded_export_arg(artifact_dir, "lm_quant_bit"),
@@ -801,10 +835,15 @@ def validated_mnn_cache_hit(artifact_dir: str) -> bool:
         # different value of either — so a hit here would silently score the previous setting's
         # model under the new one's name, which is B161 with a different label. The recorded MNN
         # commit is covered by `tool_versions` for the same reason.
-        if record.get("quant_block") != MNN_QUANT_BLOCK:
+        expected_bits = record.get("quant_bit")
+        expected_block, expected_hqq = export_recipe(
+            expected_bits if expected_bits is not None else 4
+        )
+        if record.get("quant_block") != expected_block:
+            return False
+        if bool(record.get("hqq", False)) != expected_hqq:
             return False
         recorded_lm_bits = record.get("lm_quant_bit")
-        expected_bits = record.get("quant_bit")
         if recorded_lm_bits is not None and expected_bits is not None:
             if recorded_lm_bits != max(MNN_LM_QUANT_BIT, expected_bits):
                 return False
@@ -824,6 +863,7 @@ def invalidate_mnn_cache(artifact_dir: str) -> None:
 
 __all__ = [
     "MNN_QUANT_BLOCK",
+    "export_recipe",
     "MnnToolchain",
     "artifact_name",
     "default_mnn_root",

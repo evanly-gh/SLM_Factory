@@ -178,6 +178,8 @@ def cacheable_system_content(text: str) -> str | list[dict]:
 #   "orchestrator_choice" — LLM picks based on task context (no probing)
 #   "single_model"        — NAIVE BASELINE: orchestrator picks one model and the run stays on it.
 #                           No escalation on failure, no downward regression on success.
+#   "size_sweep"          — NAIVE EXHAUSTIVE BASELINE: start on the smallest variant and escalate
+#                           to the next-larger VARIANT (not tier), with no orchestrator model choice.
 MODEL_SELECTION_STRATEGY = os.environ.get(
     "SLM_MODEL_SELECTION_STRATEGY", "smallest_first"
 )
@@ -201,6 +203,14 @@ def model_ladder_enabled(strategy: str | None = None) -> bool:
         "SLM_MODEL_SELECTION_STRATEGY", MODEL_SELECTION_STRATEGY
     )
     return str(name) not in _SINGLE_MODEL_STRATEGIES
+
+
+def size_sweep_enabled(strategy: str | None = None) -> bool:
+    """True when escalation walks the pool one variant at a time instead of one tier at a time."""
+    name = strategy if strategy is not None else os.environ.get(
+        "SLM_MODEL_SELECTION_STRATEGY", MODEL_SELECTION_STRATEGY
+    )
+    return str(name) == "size_sweep"
 
 # --- Data-size targets: floor, ceiling, and per-tier sizing ---
 # Curriculum and eval sizes are per-task caps on `TaskSpec` (`initial_train_cap`, `select_cap`), not
@@ -378,7 +388,8 @@ QUANT_ACCURACY_EVAL = os.environ.get("SLM_QUANT_EVAL", "1") == "1"
 # ONE BACKEND PER RUN, deliberately. The quant variant a run is pinned to (`@Q4_K_M` / `@Q8_0`)
 # describes the artifact that ships, and a run that built both would have to say which of the two
 # scores `best_score` refers to. The selector names are kept for both backends and mapped to MNN's
-# `--quant_bit` (Q4_K_M → 4 bits, Q8_0 → 8 bits, `SLM_MNN_QUANT_BLOCK`-wide blocks), so the
+# `--quant_bit` (Q4_K_M → 4 bits with HQQ and 32-wide blocks, Q8_0 → 8 bits with 64-wide blocks;
+# `training/quantize_mnn.export_recipe`), so the
 # backend is the only thing that changes between two otherwise identical runs — which is what
 # makes a llama.cpp-vs-MNN accuracy comparison meaningful.
 QUANT_BACKENDS = ("llama_cpp", "mnn")

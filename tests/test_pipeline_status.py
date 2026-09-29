@@ -177,3 +177,29 @@ def test_pipeline_runner_uses_shared_progression_and_probe_formatters():
     assert "_final_entry.get('iterations', 0)" in source
     assert '"trajectory_selector"' in source
     assert '"final_selector"' in source
+
+
+def test_a_models_first_iteration_reports_no_intervention():
+    """Tier 1's first train is the initial gold curriculum and a promoted tier's first train is a
+    plain retrain; neither is an intervention, whatever routing label the node carries."""
+    from agent.pipeline_status import format_intervention_detail
+
+    initial = {"iteration": 1, "parent_iteration": None, "intervention": "data_rebuild", "pi": {}}
+    promoted = {"iteration": 1, "parent_iteration": None, "intervention": "hyperparameter"}
+    assert format_intervention_detail(initial) == "N/A"
+    assert format_intervention_detail(promoted) == "N/A"
+
+
+def test_a_later_iteration_still_names_its_intervention():
+    from agent.pipeline_status import format_intervention_detail
+
+    tuned = {"iteration": 2, "parent_iteration": 1, "intervention": "hyperparameter"}
+    rebuilt = {
+        "iteration": 2,
+        "parent_iteration": 1,
+        "intervention": "data_rebuild",
+        "pi": {"D": {"plan": {"strategy": "synthesize"},
+                     "composition": {"n_synth_total": 70, "plan_yield": {"novel_rows": 70}}}},
+    }
+    assert format_intervention_detail(tuned) == "hyperparameter"
+    assert format_intervention_detail(rebuilt) == "data_rebuild/synthesize: +70 synthetic row(s) (70 novel)"

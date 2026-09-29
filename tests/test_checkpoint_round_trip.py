@@ -572,3 +572,45 @@ def test_unknown_keys_are_not_forgiven(tmp_path):
             expected_compatibility=_compat_for(current),
             expected_effective_config=current,
         )
+
+
+# ── An oversized integer in the DATA must not kill the run ───────────────────────────────────
+#
+# xlam run 40315640 died at 1d10h with `TypeError: Integer exceeds 64-bit range`, thrown by
+# `ormsgpack.packb` inside LangGraph's SQLite checkpointer. The value came from the task's own
+# data: a generated function-call argument carried a 20+ digit numeric literal, the row reached
+# graph state, and the next checkpoint write could not serialize it. Python ints are unbounded and
+# msgpack's are not, so the boundary has to convert rather than pass through.
+
+
+def test_oversized_integers_survive_the_sqlite_boundary():
+    from agent.checkpoint import _sqlite_decode, _sqlite_encode
+
+    huge = 12345678901234567890123456789          # 29 digits, far past uint64
+    state = {"rows": [{"answer": {"arguments": {"id": huge}}}], "count": -(2**70)}
+    restored = _sqlite_decode(_sqlite_encode(state))
+    # Exact, not clamped: a resumed run must see the value the run had.
+    assert restored["rows"][0]["answer"]["arguments"]["id"] == huge
+    assert restored["count"] == -(2**70)
+
+
+def test_the_encoded_form_is_actually_msgpack_serializable():
+    """The real invariant. Round-tripping through our own helpers would pass even if msgpack still
+    choked, which is exactly how this reached a 35-hour run."""
+    import ormsgpack
+
+    from agent.checkpoint import _sqlite_encode
+
+    payload = _sqlite_encode({"id": 2**100, "neg": -(2**100)})
+    ormsgpack.packb(payload)  # raises TypeError if an oversized int is still present
+
+    with pytest.raises(TypeError, match="64-bit range"):
+        ormsgpack.packb({"id": 2**100})
+
+
+def test_in_range_integers_are_left_alone():
+    """Tagging every int would bloat every checkpoint and change nothing for the 99.99% case."""
+    from agent.checkpoint import _sqlite_encode
+
+    for v in (0, -1, 1, 2**62, -(2**63), 2**64 - 1, True, False):
+        assert _sqlite_encode({"v": v}) == {"v": v}

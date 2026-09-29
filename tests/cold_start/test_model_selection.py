@@ -311,6 +311,9 @@ class TestRegistry:
             # Added 2026-08-16: the naive-baseline ablation control. Picks one model via the
             # orchestrator and never escalates or regresses, so it isolates what the ladder buys.
             "single_model",
+            # Added 2026-09-28: the naive exhaustive-sweep ablation control. Every variant in size
+            # order, no tiers and no orchestrator model choice.
+            "size_sweep",
         }
 
     def test_get_unknown_raises(self):

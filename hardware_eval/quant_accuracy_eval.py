@@ -127,8 +127,13 @@ def main() -> int:
         )
     elif not os.path.isdir(checkpoint):
         # --checkpoint may name a bare HF model id (base-model sweep, no adapter). Resolve
-        # it to the immutable local snapshot the converter can read.
+        # it to the immutable local snapshot the converter can read. The id, not the snapshot
+        # path, stays the base: the serving prompt is chosen by exact model id, and a path gave
+        # Qwen3-4B-Instruct-2507 the hybrid-Qwen `<think>` prefix, which it answers with a
+        # refusal (job 40827151: 0.4544 against the loop's 0.7427 on identical rows).
         from training.quantize import resolve_hf_snapshot
+        if not args.base:
+            args.base = checkpoint
         print(f"[quant-eval] resolving HF snapshot for base model {checkpoint} ...")
         checkpoint = resolve_hf_snapshot(checkpoint)
         print(f"[quant-eval] snapshot: {checkpoint}")

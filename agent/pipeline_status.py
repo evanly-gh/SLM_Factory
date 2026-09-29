@@ -150,7 +150,14 @@ def format_intervention_detail(node: dict) -> str:
     how many rows the rebuild actually added. Both are recorded on the node
     (``pi.D.composition``, a snapshot of ``state["last_curation"]``), so the column reports the
     sub-strategy, the row count it produced, and for mining the source it came from.
+
+    A model's first iteration has no intervention: tier 1's trains on the initial gold curriculum
+    and a promoted tier's retrains the carried curriculum on the default config. The node still
+    carries a routing label (`data_rebuild` from cold start, `hyperparameter` from escalation, both
+    read by curate and train), so the column says N/A rather than naming an action nobody took.
     """
+    if node.get("iteration") == 1 and node.get("parent_iteration") is None:
+        return "N/A"
     intervention = str(node.get("intervention") or "?")
     if intervention != "data_rebuild":
         return intervention

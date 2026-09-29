@@ -1286,6 +1286,8 @@ atomic_write_json(
 # --------------------------------------------------------------------------
 # DAG summary (what was tried and how well it worked)
 # --------------------------------------------------------------------------
+from agent.pipeline_status import format_intervention_detail as _format_intervention
+
 dag = last_state.get("dag", [])
 dag_lines = ["# DAG Summary — Training Attempts", ""]
 dag_lines.append(f"{'Iter':>4}  {'Model':<30}  {'Score':>7}  {'Pruned':>6}  {'Config':<25}  {'Intervention'}")
@@ -1309,7 +1311,7 @@ for node in dag:
         f"{_score_str}  "
         f"{pruned_str:>6}  "
         f"{node.get('best_config', '?') or '?':<25}  "
-        f"{node.get('intervention', '?') or '?'}"
+        f"{_format_intervention(node)}"
     )
 dag_lines.append("")
 dag_text = "\n".join(dag_lines)

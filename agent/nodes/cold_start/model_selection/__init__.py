@@ -27,12 +27,18 @@ Available strategies (set MODEL_SELECTION_STRATEGY in config.py or env):
                           model and the run stays on it: no escalation on failure,
                           no downward regression on success. Everything else in the
                           loop still runs, so this isolates what the ladder buys.
+
+    "size_sweep"          NAIVE EXHAUSTIVE BASELINE / ablation control. No tiers and no
+                          orchestrator model choice: start on the smallest variant and, on
+                          every escalation, move to the next-larger variant in the pool.
+                          Isolates what the tier grouping and within-tier pick save.
 """
 from agent.nodes.cold_start.model_selection.smallest_first import smallest_first_node
 from agent.nodes.cold_start.model_selection.largest_first import largest_first_node
 from agent.nodes.cold_start.model_selection.interpolation import interpolation_node
 from agent.nodes.cold_start.model_selection.orchestrator_choice import orchestrator_choice_node
 from agent.nodes.cold_start.model_selection.single_model import single_model_node
+from agent.nodes.cold_start.model_selection.size_sweep import size_sweep_node
 
 STRATEGIES = {
     "smallest_first": smallest_first_node,
@@ -40,6 +46,7 @@ STRATEGIES = {
     "interpolation": interpolation_node,
     "orchestrator_choice": orchestrator_choice_node,
     "single_model": single_model_node,
+    "size_sweep": size_sweep_node,
 }
 
 

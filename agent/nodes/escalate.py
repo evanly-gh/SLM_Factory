@@ -263,32 +263,50 @@ def escalate_node(state: AgentState) -> AgentState:
     # rather than terminating on the first empty tier. Exclude variants of the CURRENT
     # model_id at the same tier (no point re-selecting what already stagnated).
     feasible = filter_pool(state["hardware_constraints"])
-    higher = [m for m in feasible if m.tier > current_tier]
-    if not higher:
-        _log(mlabel, f"  No feasible models above tier {current_tier} — TERMINATING")
-        state["next_action"] = "terminate"
-        return state
-    next_tier = min(m.tier for m in higher)
-    next_tier_candidates = [m for m in higher if m.tier == next_tier]
+    from config.config import size_sweep_enabled
 
-    _log(mlabel,
-         f"  Tier {next_tier} candidates ({len(next_tier_candidates)}): "
-         f"{[m.model_id + '/' + str(m.quant) for m in next_tier_candidates]}")
+    if size_sweep_enabled():
+        from agent.nodes.cold_start.model_selection.size_sweep import next_in_sweep, sweep_order
 
-    # LLM picks the best model from the next tier for this task (reason logged via _log).
-    chosen = _llm_choose_model(
-        candidates=next_tier_candidates,
-        task=state.get("task", "classification"),
-        task_plan=state.get("task_plan") or {},
-        current_best_score=state["best_score"],
-        log=lambda m: _log(mlabel, m),
-        direction="up",
-    )
+        chosen = next_in_sweep(feasible, current_model)
+        if chosen is None:
+            _log(mlabel, f"  No feasible variant larger than {current_selector} — sweep "
+                         f"exhausted, TERMINATING")
+            state["next_action"] = "terminate"
+            return state
+        order = [m.selector for m in sweep_order(feasible)]
+        _log(mlabel,
+             f"  SWEEP PROMOTING (no tiers, no orchestrator choice): position "
+             f"{order.index(chosen.selector) + 1}/{len(order)}  |  "
+             f"{current_selector} (best {state['best_score']:.4f}) → {chosen.selector} "
+             f"[tier {chosen.tier}, {chosen.size_mb}MB]")
+    else:
+        higher = [m for m in feasible if m.tier > current_tier]
+        if not higher:
+            _log(mlabel, f"  No feasible models above tier {current_tier} — TERMINATING")
+            state["next_action"] = "terminate"
+            return state
+        next_tier = min(m.tier for m in higher)
+        next_tier_candidates = [m for m in higher if m.tier == next_tier]
 
-    _log(mlabel,
-         f"  PROMOTING: tier {current_tier} → tier {next_tier}  |  "
-         f"{current_id} (best {state['best_score']:.4f}) → {chosen.model_id} "
-         f"[{chosen.quant or 'bf16'}, {chosen.size_mb}MB, size {chosen.size_mb}MB]")
+        _log(mlabel,
+             f"  Tier {next_tier} candidates ({len(next_tier_candidates)}): "
+             f"{[m.model_id + '/' + str(m.quant) for m in next_tier_candidates]}")
+
+        # LLM picks the best model from the next tier for this task (reason logged via _log).
+        chosen = _llm_choose_model(
+            candidates=next_tier_candidates,
+            task=state.get("task", "classification"),
+            task_plan=state.get("task_plan") or {},
+            current_best_score=state["best_score"],
+            log=lambda m: _log(mlabel, m),
+            direction="up",
+        )
+
+        _log(mlabel,
+             f"  PROMOTING: tier {current_tier} → tier {next_tier}  |  "
+             f"{current_id} (best {state['best_score']:.4f}) → {chosen.model_id} "
+             f"[{chosen.quant or 'bf16'}, {chosen.size_mb}MB, size {chosen.size_mb}MB]")
     # CARRY THE DATASET FORWARD — unless the reset ablation is switched on.
     #
     # Reuse is the default because escalation exists to ask what a bigger model is worth on the

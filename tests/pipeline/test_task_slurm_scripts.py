@@ -315,6 +315,31 @@ ABLATION_SCRIPTS = {
         ),
         "removed": ("export SLM_VERIFY_SYNTH=0",),
     },
+    # Ablation 6, MODEL SELECTION: what does the tiering system buy on a task that converges
+    # mid-ladder? Both arms are compared against 39311801, which climbed tiers 1 → 3 and converged.
+    #
+    # size_sweep removes the tiers and the orchestrator's within-tier pick: every one of the 27
+    # variants is trained in on-disk size order. The goal is pinned at the ceiling so the sweep
+    # cannot stop at the first variant to touch 0.80.
+    "run_ner_bc5cdr_ablation_sizesweep_l40s.slurm": {
+        "baseline": "run_ner_bc5cdr_l40s.slurm",
+        "added": (
+            "export SLM_MODEL_SELECTION_STRATEGY=size_sweep",
+            "export SLM_STOP_THRESHOLD=0.99",
+            "unset SLM_SYNTH_API_MODE",
+        ),
+        "removed": (),
+    },
+    # single_model gives the orchestrator one look at the whole pool and pins the run to its pick.
+    # The goal stays calibrated because it is part of the selection prompt.
+    "run_ner_bc5cdr_ablation_singlemodel_l40s.slurm": {
+        "baseline": "run_ner_bc5cdr_l40s.slurm",
+        "added": (
+            "export SLM_MODEL_SELECTION_STRATEGY=single_model",
+            "unset SLM_SYNTH_API_MODE",
+        ),
+        "removed": (),
+    },
 }
 
 # Measurement scripts that are NOT pipeline runs. They stand up a model and record numbers, without
@@ -362,6 +387,9 @@ PROBE_SCRIPTS = {
     # it runs no agent loop and makes no orchestrator call, and ONE GPU is the whole requirement.
     # Long (20h) because it pays 27 MNN exports, which is why it is time-boxed and not requeued.
     "verify_mnn_matrix.slurm",
+    # Can MNN's 4-bit export match Q4_K_M (2026-09-28)? One job per recipe — llama.cpp, MNN default,
+    # MNN --hqq, MNN --hqq with 32-weight blocks — over the same weights and rows. No agent loop.
+    "verify_mnn_hqq_sweep.slurm",
 }
 
 # Bounded verification runs. These DO run the full agent loop, so they are not probes, but they are

@@ -207,6 +207,56 @@ def test_quant_block_is_configurable(tmp_path, monkeypatch):
     assert fake_run.command[fake_run.command.index("--quant_bit") + 1] == "8"
 
 
+def test_4bit_defaults_to_hqq_with_32_wide_blocks_and_8bit_keeps_mnns_default(monkeypatch):
+    """Measured against Q4_K_M by probe jobs 40827151 / 40831903-5; 8-bit was not re-measured."""
+    monkeypatch.setattr(mnn, "MNN_QUANT_BLOCK", None)
+    monkeypatch.setattr(mnn, "MNN_HQQ", None)
+    assert mnn.export_recipe(4) == (32, True)
+    assert mnn.export_recipe(8) == (64, False)
+
+    monkeypatch.setattr(mnn, "MNN_QUANT_BLOCK", 64)
+    monkeypatch.setattr(mnn, "MNN_HQQ", False)
+    assert mnn.export_recipe(4) == (64, False)
+
+
+def test_an_artifact_built_with_the_old_4bit_recipe_is_not_a_cache_hit(tmp_path, monkeypatch):
+    """Every block-64, no-HQQ 4-bit export on disk predates the new default and must be rebuilt."""
+    artifact = _write_artifact(tmp_path / "model-mnn-q4", quant_bit=4)
+    (artifact / "export_args.json").write_text(json.dumps({
+        "quant_bit": 4, "lm_quant_bit": 8, "quant_block": 64, "hqq": False,
+    }))
+    monkeypatch.setattr(mnn, "MNN_QUANT_BLOCK", None)
+    monkeypatch.setattr(mnn, "MNN_HQQ", None)
+    monkeypatch.setattr(mnn, "MNN_LM_QUANT_BIT", 8)
+    with (
+        patch("training.slm_helpers.load_mnn_llm", return_value=MagicMock()),
+        patch("training.slm_helpers.mnn_generate", return_value="accept_reservations"),
+    ):
+        mnn.validate_and_record_mnn(str(artifact), base_model="m", quant="Q4_K_M")
+    assert mnn.validated_mnn_cache_hit(str(artifact)) is False
+
+
+@pytest.mark.parametrize("hqq", [False, True])
+def test_hqq_is_passed_only_when_switched_on(tmp_path, monkeypatch, hqq):
+    monkeypatch.setattr(mnn, "MNN_HQQ", hqq)
+    checkpoint = tmp_path / "merged"
+    checkpoint.mkdir()
+    (checkpoint / "model.safetensors").write_bytes(b"0" * 1024)
+
+    def fake_run(command, timeout_s, partial_output=None, cwd=None):
+        _write_artifact(tmp_path / "out" / "model-mnn-q4")
+        fake_run.command = command
+        return None
+
+    with (
+        patch.object(mnn, "resolve_toolchain", return_value=_fake_toolchain(tmp_path)),
+        patch.object(mnn, "_run_quant_tool", side_effect=fake_run),
+    ):
+        mnn.export_from_model_spec(str(checkpoint), str(tmp_path / "out"), "Q4_K_M")
+
+    assert ("--hqq" in fake_run.command) is hqq
+
+
 def test_exporter_failure_is_an_infrastructure_error(tmp_path):
     checkpoint = tmp_path / "merged"
     checkpoint.mkdir()
@@ -308,7 +358,7 @@ def test_validation_records_a_hash_of_every_file_and_the_cache_hit_checks_it(tmp
         )
 
     assert record["quant_bit"] == 4
-    assert record["quant_block"] == mnn.MNN_QUANT_BLOCK
+    assert (record["quant_block"], record["hqq"]) == mnn.export_recipe(4)
     assert set(record["fingerprint"]["files"]) >= {
         "llm.mnn", "llm.mnn.weight", "tokenizer.mtok", "llm_config.json", "config.json",
     }
@@ -633,6 +683,7 @@ def test_changing_an_export_setting_invalidates_the_cache(tmp_path, monkeypatch)
     """
     artifact = _write_artifact(tmp_path / "model-mnn-q4", quant_bit=4)
     monkeypatch.setattr(mnn, "MNN_QUANT_BLOCK", 64)
+    monkeypatch.setattr(mnn, "MNN_HQQ", False)
     monkeypatch.setattr(mnn, "MNN_LM_QUANT_BIT", 8)
     with (
         patch("training.slm_helpers.load_mnn_llm", return_value=MagicMock()),
@@ -646,6 +697,10 @@ def test_changing_an_export_setting_invalidates_the_cache(tmp_path, monkeypatch)
 
     monkeypatch.setattr(mnn, "MNN_QUANT_BLOCK", 64)
     monkeypatch.setattr(mnn, "MNN_LM_QUANT_BIT", 16)
+    assert mnn.validated_mnn_cache_hit(str(artifact)) is False
+
+    monkeypatch.setattr(mnn, "MNN_LM_QUANT_BIT", 8)
+    monkeypatch.setattr(mnn, "MNN_HQQ", True)
     assert mnn.validated_mnn_cache_hit(str(artifact)) is False
 
 

@@ -155,6 +155,10 @@ _RESUME_ENV_DEFAULTS: dict[str, str] = {
     # `names` so that `_keys_added_since` can forgive a manifest written before the key existed
     # while it is at its default, which is what keeps every run already in flight resumable.
     "SLM_QUANT_BACKEND": "llama_cpp",
+    # Operator overrides of the MNN export recipe (`quantize_mnn.export_recipe`), for the same
+    # reason: a resume that changed either would compare scores from two different sets of weights.
+    "SLM_MNN_QUANT_BLOCK": "",
+    "SLM_MNN_HQQ": "",
 }
 
 
