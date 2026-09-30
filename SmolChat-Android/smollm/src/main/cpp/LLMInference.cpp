@@ -65,6 +65,14 @@ static void redirectStderrToLogcat() {
 // linked in". Kept permanently (not diagnostic-only): this is the
 // authoritative per-run backend confirmation, for every run going forward.
 static void llamaLogToLogcat(ggml_log_level level, const char *text, void * /*user_data*/) {
+    // Only warnings/errors plus two informational lines that verify the backend. OPLUS logd
+    // enforces a per-process quota (persist.logd.flowctrl.quota.rows=300) and silently drops
+    // lines past it; llama.cpp's DEBUG/INFO output during model load (a line per tensor and
+    // per metadata key) exceeded it, so the headless benchmark's result tags were dropped.
+    if (level != GGML_LOG_LEVEL_ERROR && level != GGML_LOG_LEVEL_WARN &&
+        !strstr(text, "offloaded") && !strstr(text, "ggml_opencl: device")) {
+        return;
+    }
     android_LogPriority priority;
     switch (level) {
         case GGML_LOG_LEVEL_ERROR: priority = ANDROID_LOG_ERROR; break;
@@ -203,7 +211,9 @@ LLMInference::loadModel(const char *model_path, float minP, float temperature, b
     ctx_params.n_ctx = contextSize;
     ctx_params.n_batch = contextSize;
     ctx_params.n_threads = nThreads;
-    ctx_params.no_perf = true; // disable performance metrics
+    // Keep llama.cpp's context perf counters on: getPerfMetrics() reports engine-side
+    // prompt/decode timings from them (they only timestamp each decode call).
+    ctx_params.no_perf = false;
     _ctx = llama_init_from_model(_model, ctx_params);
     if (!_ctx) {
         LOGe("llama_new_context_with_model() returned null)");

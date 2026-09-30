@@ -17,6 +17,7 @@
 package io.shubham0204.smollmandroid.llm
 
 import android.content.Context
+import android.os.Process
 import android.util.Log
 import io.shubham0204.smollm.SmolLM
 import io.shubham0204.smollmandroid.data.AppDB
@@ -25,6 +26,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -32,6 +34,7 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import org.koin.core.annotation.Single
 import java.io.File
+import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.locks.ReentrantLock
 import kotlin.concurrent.withLock
@@ -109,6 +112,25 @@ fun readSkinThermalTempC(): Float? {
 @Single
 class SmolLMManager(private val appDB: AppDB, private val context: Context) {
     private val instance = SmolLM()
+
+    // All native model work (load + every decode step) runs on this one thread. llama.cpp's CPU
+    // backend spawns its worker threads from the calling thread, and new threads inherit its
+    // cgroup; shared Dispatchers.Default pool threads could end up in the background cpuset/cpu
+    // cgroup (cores 0-5, low CPU share) while the app itself was foreground, and the resumed
+    // coroutine hopped between such threads token to token. Measured on SM8850: decode fell
+    // from ~180 to ~3.8 tok/s after the first couple of headless runs.
+    private val inferenceDispatcher =
+        Executors.newSingleThreadExecutor { r -> Thread(r, "smollm-inference") }.asCoroutineDispatcher()
+
+    /**
+     * Put the calling thread in the process's own (foreground) scheduling group. Android's
+     * setThreadPriority() only moves a thread back out of the background group when it leaves a
+     * background priority, hence the two calls.
+     */
+    private fun promoteToForeground() {
+        Process.setThreadPriority(Process.THREAD_PRIORITY_BACKGROUND)
+        Process.setThreadPriority(Process.THREAD_PRIORITY_DEFAULT)
+    }
 
     // Use ReentrantLock for thread-safe state management without suspending
     private val stateLock = ReentrantLock()
@@ -219,8 +241,9 @@ class SmolLMManager(private val appDB: AppDB, private val context: Context) {
 
             try {
                 this.chat = chat
-                modelInitJob = CoroutineScope(Dispatchers.Default).launch {
+                modelInitJob = CoroutineScope(inferenceDispatcher).launch {
                     try {
+                        promoteToForeground()
                         previousJob?.join()
                         lastLoadStartEpochMs = System.currentTimeMillis()
                         val loadDuration =
@@ -294,6 +317,9 @@ class SmolLMManager(private val appDB: AppDB, private val context: Context) {
         // the pre-existing CPU-only behavior for every caller that doesn't explicitly pass this
         // (the manual chat UI never does).
         nGpuLayers: Int = 0,
+        // Overrides chat.useMmap for this load only (null = keep the chat's setting). The headless
+        // benchmark passes false so the timed load reads the weights into RAM.
+        useMmapOverride: Boolean? = null,
     ) {
         unload()
         load(
@@ -306,7 +332,7 @@ class SmolLMManager(private val appDB: AppDB, private val context: Context) {
                 contextSizeOverride ?: chat.contextSize.toLong(),
                 chat.chatTemplate.takeIf { it.isNotBlank() && ("{%" in it || "{{" in it) },
                 chat.nThreads,
-                chat.useMmap,
+                useMmapOverride ?: chat.useMmap,
                 chat.useMlock,
                 nGpuLayers,
             ),
@@ -368,8 +394,9 @@ class SmolLMManager(private val appDB: AppDB, private val context: Context) {
             // Cancel any existing response generation
             responseGenerationJob?.cancel()
 
-            responseGenerationJob = CoroutineScope(Dispatchers.Default).launch {
+            responseGenerationJob = CoroutineScope(inferenceDispatcher).launch {
                 try {
+                    promoteToForeground()
                     isInferenceOn = true
                     var response = ""
                     var ttftMs = 0L
@@ -509,7 +536,8 @@ class SmolLMManager(private val appDB: AppDB, private val context: Context) {
     private val BENCH_REPETITION = 3
 
     fun benchmark(onResult: (String) -> Unit) {
-        CoroutineScope(Dispatchers.Default).launch {
+        CoroutineScope(inferenceDispatcher).launch {
+            promoteToForeground()
             val result = instance.benchModel(
                 BENCH_PROMPT_PROCESSING_TOKENS,
                 BENCH_TOKEN_GENERATION_TOKENS,
