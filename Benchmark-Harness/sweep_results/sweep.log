@@ -1,0 +1,62 @@
+=== 16:16:15 sweep start | models: HuggingFaceTB/SmolLM2-135M HuggingFaceTB/SmolLM2-360M google/gemma-3-270m-it | gate 28C | plan=0
+=== 16:16:15 MODEL HuggingFaceTB/SmolLM2-135M  (smollm2-135m)
+=== 16:16:15 GGUF files for smollm2-135m already exist - skipping conversion
+=== 16:16:15 MNN exports for smollm2-135m already exist - skipping conversion
+=== 16:16:17 pushed MNN models for smollm2-135m to /data/local/tmp/mnn_models
+=== 16:16:18 START smollm2-135m SmolChat q4 cpu
+=== 16:41:58 DONE  smollm2-135m SmolChat q4 cpu
+=== 16:43:58 START smollm2-135m SmolChat q8 cpu
+=== 16:46:55 sweep start | models: HuggingFaceTB/SmolLM2-135M HuggingFaceTB/SmolLM2-360M google/gemma-3-270m-it | gate: battery <= start+2C | plan=0
+=== 16:46:55 MODEL HuggingFaceTB/SmolLM2-135M  (smollm2-135m)
+=== 16:46:55 GGUF files for smollm2-135m already exist - skipping conversion
+=== 16:46:55 MNN exports for smollm2-135m already exist - skipping conversion
+=== 16:46:57 pushed MNN models for smollm2-135m to /data/local/tmp/mnn_models
+=== 16:46:58 skip: smollm2-135m SmolChat q4 cpu (result exists)
+=== 16:46:58 START smollm2-135m SmolChat q8 cpu
+=== 16:51:28 DONE  smollm2-135m SmolChat q8 cpu
+=== 16:53:28 START smollm2-135m SmolChat f16 cpu
+=== 16:58:16 DONE  smollm2-135m SmolChat f16 cpu
+=== 17:00:17 START smollm2-135m SmolChat q4 opencl
+=== 17:05:23 DONE  smollm2-135m SmolChat q4 opencl
+=== 17:07:24 START smollm2-135m SmolChat q8 opencl
+=== 17:12:40 DONE  smollm2-135m SmolChat q8 opencl
+=== 17:14:40 START smollm2-135m SmolChat f16 opencl
+=== 17:23:45 DONE  smollm2-135m SmolChat f16 opencl
+=== 17:25:46 START smollm2-135m MNN q4 cpu
+=== 17:29:13 DONE  smollm2-135m MNN q4 cpu
+=== 17:31:13 START smollm2-135m MNN q8 cpu
+=== 17:34:48 DONE  smollm2-135m MNN q8 cpu
+=== 17:36:48 START smollm2-135m MNN q16 cpu
+=== 17:45:32 DONE  smollm2-135m MNN q16 cpu
+=== 17:47:32 START smollm2-135m MNN q4 opencl
+=== 17:52:20 DONE  smollm2-135m MNN q4 opencl
+=== 17:54:20 START smollm2-135m MNN q8 opencl
+=== 18:04:06 DONE  smollm2-135m MNN q8 opencl
+=== 18:06:06 START smollm2-135m MNN q16 opencl
+=== 18:16:53 DONE  smollm2-135m MNN q16 opencl
+=== 18:18:55 MODEL smollm2-135m finished - summary: /Users/ksd/SLM_Factory_Krishna_Personal/Benchmark-Harness/sweep_results/smollm2-135m/SUMMARY.txt
+=== 18:18:55 MODEL HuggingFaceTB/SmolLM2-360M  (smollm2-360m)
+=== 18:18:55 converting HuggingFaceTB/SmolLM2-360M -> GGUF (F16, Q4_K_M, Q8_0)
+=== 18:19:04 main sweep stopped after smollm2-135m; regenerating the 2 old-code MNN CPU configs
+=== 18:19:05 sweep start | models: HuggingFaceTB/SmolLM2-135M | gate: battery <= start+2C | plan=0
+=== 18:19:05 MODEL HuggingFaceTB/SmolLM2-135M  (smollm2-135m)
+=== 18:19:05 GGUF files for smollm2-135m already exist - skipping conversion
+=== 18:19:05 MNN exports for smollm2-135m already exist - skipping conversion
+=== 18:19:07 pushed MNN models for smollm2-135m to /data/local/tmp/mnn_models
+=== 18:19:08 skip: smollm2-135m SmolChat q4 cpu (result exists)
+=== 18:19:08 skip: smollm2-135m SmolChat q8 cpu (result exists)
+=== 18:19:08 skip: smollm2-135m SmolChat f16 cpu (result exists)
+=== 18:19:09 skip: smollm2-135m SmolChat q4 opencl (result exists)
+=== 18:19:09 skip: smollm2-135m SmolChat q8 opencl (result exists)
+=== 18:19:09 skip: smollm2-135m SmolChat f16 opencl (result exists)
+=== 18:19:09 START smollm2-135m MNN q4 cpu
+=== 18:24:06 DONE  smollm2-135m MNN q4 cpu
+=== 18:24:36 START smollm2-135m MNN q8 cpu
+=== 18:28:08 DONE  smollm2-135m MNN q8 cpu
+=== 18:28:38 skip: smollm2-135m MNN q16 cpu (result exists)
+=== 18:28:38 skip: smollm2-135m MNN q4 opencl (result exists)
+=== 18:28:38 skip: smollm2-135m MNN q8 opencl (result exists)
+=== 18:28:38 skip: smollm2-135m MNN q16 opencl (result exists)
+=== 18:28:40 MODEL smollm2-135m finished - summary: /Users/ksd/SLM_Factory_Krishna_Personal/Benchmark-Harness/sweep_results/smollm2-135m/SUMMARY.txt
+=== 18:28:40 ALL DONE | failures: none
+=== 18:28:40 STOPPED-FOR-ANALYSIS

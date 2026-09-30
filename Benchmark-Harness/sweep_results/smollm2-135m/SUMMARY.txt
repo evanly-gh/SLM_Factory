@@ -1,0 +1,17 @@
+12 configuration(s) found under /Users/ksd/SLM_Factory_Krishna_Personal/Benchmark-Harness/sweep_results/smollm2-135m
+12 pass; ranked by Decode (highest first)
+
+MODEL         QUANT   ENGINE    BACKEND  COLD START ms  TTFT ms  TTLT ms  PREFILL t/s  DECODE t/s  MEM MB  mJ/TOK (net)
+------------  ------  --------  -------  -------------  -------  -------  -----------  ----------  ------  ------------
+smollm2-135m  Q4      mnn       cpu      164            14       848      1048         257.7       409     -           
+smollm2-135m  Q8      mnn       cpu      229            12       1039     1218         225.8       473     -           
+smollm2-135m  Q8_0    smolchat  cpu      272            78       1032     344          224.7       409     -           
+smollm2-135m  Q4_K_M  smolchat  cpu      236            95       1138     285          195.5       372     -           
+smollm2-135m  F16     mnn       cpu      392            24       1747     634          148.0       702     -           
+smollm2-135m  F16     smolchat  cpu      367            110      1656     246          140.5       529     -           
+smollm2-135m  Q4      mnn       opencl   4698           30       1703     520          126.2       365     -           
+smollm2-135m  Q4_K_M  smolchat  opencl   1520           39       1770     692          120.8       376     -           
+smollm2-135m  Q8_0    smolchat  opencl   1687           38       1730     707          120.1       373     -           
+smollm2-135m  F16     smolchat  opencl   1611           50       1810     536          118.7       682     -           
+smollm2-135m  Q8      mnn       opencl   3984           31       2146     484          111.9       364     -           
+smollm2-135m  F16     mnn       opencl   4010           26       5186     582          49.4        805     -           

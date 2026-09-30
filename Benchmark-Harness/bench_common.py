@@ -125,25 +125,41 @@ def device_state(adb) -> dict:
 
 
 class ReadinessGate:
-    """Block until battery temperature <= max_temp_c and every CPU policy's frequency cap is at
-    least its session baseline (set_baseline(), taken after an initial rest). The baseline,
+    """Block until the battery temperature is within its limit and every CPU policy's frequency cap
+    is at least its session baseline (set_baseline(), taken after an initial rest).
+    Temperature limit = max_temp_c (absolute) and/or baseline temperature + rise_c (relative to the
+    phone's own temperature when the configuration started; use this on a phone that idles warm, e.g.
+    screen on and charging, where an absolute limit is just room temperature). The baseline,
     not the hardware maximum, is the reference because this phone caps CPU clocks by screen
     state even when cool (screen off 2.0/2.4 GHz, on 2.9/2.9 GHz vs 3.6/4.6 GHz hardware)."""
 
-    def __init__(self, adb, max_temp_c: float | None, timeout_s: int = 900, poll_s: int = 15, log=print):
+    def __init__(self, adb, max_temp_c: float | None, timeout_s: int = 900, poll_s: int = 15, log=print,
+                 rise_c: float | None = None):
         self.adb, self.max_temp_c, self.timeout_s, self.poll_s, self.log = adb, max_temp_c, timeout_s, poll_s, log
+        self.rise_c = rise_c
         self.baseline_caps: dict | None = None
+        self.baseline_temp: float | None = None
+
+    def temp_limit(self) -> float | None:
+        limits = []
+        if self.max_temp_c is not None:
+            limits.append(self.max_temp_c)
+        if self.rise_c is not None and self.baseline_temp is not None:
+            limits.append(self.baseline_temp + self.rise_c)
+        return min(limits) if limits else None
 
     def set_baseline(self, state: dict):
         self.baseline_caps = dict(state["cpu_caps_khz"])
+        self.baseline_temp = state["battery_temp_c"]
         self.log(f"[GATE] baseline CPU caps {self.baseline_caps} "
                  f"(hw max {state['cpu_hw_max_khz']}), screen={state['screen']}, "
                  f"battery {state['battery_temp_c']} C")
 
     def _problems(self, st: dict) -> list:
         issues = []
-        if self.max_temp_c is not None and st["battery_temp_c"] is not None and st["battery_temp_c"] > self.max_temp_c:
-            issues.append(f"battery {st['battery_temp_c']} C > {self.max_temp_c} C")
+        limit = self.temp_limit()
+        if limit is not None and st["battery_temp_c"] is not None and st["battery_temp_c"] > limit:
+            issues.append(f"battery {st['battery_temp_c']} C > {limit:.1f} C")
         for pol, base in (self.baseline_caps or {}).items():
             cur = st["cpu_caps_khz"].get(pol)
             if cur is not None and cur < base:
@@ -229,7 +245,9 @@ class EnergyTrace:
             f.write(PERFETTO_CONFIG)
             cfg = f.name
         self.adb.run(["push", cfg, "/data/local/tmp/bench_perfetto.pbtx"], timeout=30)
-        out = _sh(self.adb, f"perfetto --txt -c /data/local/tmp/bench_perfetto.pbtx -o {self.remote} --background-wait")
+        # Piped via stdin: perfetto (SELinux) may not read a config file in /data/local/tmp.
+        out = _sh(self.adb, f"cat /data/local/tmp/bench_perfetto.pbtx | "
+                            f"perfetto --txt -c - -o {self.remote} --background-wait 2>&1")
         m = re.search(r"^\s*(\d+)\s*$", out, re.M)
         if not m:
             raise RuntimeError(f"perfetto did not start: {out.strip()[:300]}")
@@ -287,6 +305,14 @@ def _integrate_in_process(trace_path, windows: list) -> dict:
         cur, volt = series("batt.current_ua"), series("batt.voltage_uv")
     finally:
         tp.close()
+    return _integrate_series(cur, volt, offset_ns, windows)
+
+
+def _integrate_series(cur: list, volt: list, offset_ns: int, windows: list) -> dict:
+    """Pure integration step (no trace access, so it can be unit-tested).
+    cur/volt: [(boottime_ns, value)] sorted by time; current in mA or uA (auto-detected), positive =
+    charging; voltage in uV. windows: [(key, start_epoch_ms, end_epoch_ms)]; offset_ns converts epoch
+    to trace time (trace_ns = epoch_ms * 1e6 + offset_ns). Zero-order hold between samples."""
     if not cur or not volt:
         return {k: {"error": "no battery counters in trace"} for k, *_ in windows}
 
@@ -426,7 +452,11 @@ def attach_energy(entries: list, trace: "EnergyTrace", idle_window: tuple | None
     integrated = trace.integrate(windows)
     idle = integrated.get("idle", {})
     idle_mw = idle.get("avg_power_mw") if "energy_mj" in idle and idle.get("charging_fraction") == 0 else None
-    log(f"[ENERGY] idle baseline: {idle_mw} mW" + ("" if idle_mw is not None else f" ({idle})"))
+    if idle_mw is not None and any((e.get("state_before") or {}).get("externally_powered") for e in entries):
+        log(f"[ENERGY] idle baseline {idle_mw} mW ignored: the phone was externally powered, so it is not a real idle draw")
+        idle_mw = None
+    else:
+        log(f"[ENERGY] idle baseline: {idle_mw} mW" + ("" if idle_mw is not None else f" ({idle})"))
     for i, e in enumerate(entries):
         if e.get("status") != "success":
             continue
@@ -439,19 +469,107 @@ def attach_energy(entries: list, trace: "EnergyTrace", idle_window: tuple | None
     return idle_mw
 
 
+PROTOCOL = "per_question"
+
+_QUANT_RE = re.compile(r"(?:^|[-_.])(q\d+_k_[sml]|q\d+_\d|q\d+|f16|f32|bf16)$", re.I)
+
+
+def model_and_quant(ref: str, engine: str) -> tuple:
+    """Split a model file/folder name into (model name, quantization label).
+    smolchat: 'smollm2-135m-q4_k_m.gguf' -> ('smollm2-135m', 'Q4_K_M'); 'gemma-3-270m-it-f16' -> (..., 'F16').
+    mnn:      'smollm2-135m-mnn-q4'      -> ('smollm2-135m', 'Q4');     '...-mnn-q16' (fp16) -> 'F16'."""
+    name = Path(str(ref).rstrip("/")).name
+    if name.lower().endswith(".gguf"):
+        name = name[:-5]
+    quant = None
+    m = _QUANT_RE.search(name)
+    if m:
+        token = m.group(1).lower()
+        name = name[:m.start()]
+        quant = "F16" if token in ("q16", "f16", "bf16") else token.upper()
+    if engine == "mnn":
+        name = re.sub(r"[-_.]mnn$", "", name, flags=re.I)
+    return name, quant
+
+
+def backend_label(engine: str, requested: str | None, entries: list) -> str:
+    """cpu | opencl | vulkan. mnn: the requested backend_type. smolchat: what actually registered
+    (BACKEND_CHECK), since a GPU request can silently fall back to CPU."""
+    if engine == "mnn":
+        return requested or "cpu"
+    seen = " ".join((e.get("metrics") or {}).get("backend_verified") or "" for e in entries
+                    if e.get("status") == "success")
+    return "opencl" if "OpenCL" in seen else "vulkan" if "Vulkan" in seen else "cpu"
+
+
+def config_labels(engine: str, model_ref: str, requested_backend: str | None, entries: list) -> dict:
+    """Self-describing labels written into every result file's run_info (read by compare_engines.py)."""
+    model, quant = model_and_quant(model_ref, engine)
+    return {"engine": engine, "backend": backend_label(engine, requested_backend, entries),
+            "model_name": model, "quant_label": quant}
+
+
+def finalize_question(group: list) -> None:
+    """Post-process one question's runs (run 1 = cold, runs 2..N = warm), in place.
+
+    * cold load / cold TTFT / cold start are taken from run 1 and kept constant across the
+      question's runs (the model is only cold once); each run's own measured load time is kept
+      as metrics["load_ms_measured"].
+    * the last successful run is flagged reported=True: its TTFT, TTLT, prefill, decode and
+      energy are the question's headline numbers. All runs stay in the results.
+    """
+    ok = [e for e in group if e.get("status") == "success"]
+    cold = next((e for e in group if e.get("phase") == "cold" and e.get("status") == "success"), None)
+    if cold:
+        c = cold["metrics"]
+        for e in ok:
+            m = e["metrics"]
+            m["load_ms_measured"] = m.get("cold_load_ms")
+            m["cold_load_ms"] = c.get("cold_load_ms")
+            m["cold_ttft_ms"] = c.get("ttft_ms")
+            m["cold_start_ms"] = c.get("cold_start_ms")
+            # Memory is taken from run 1 as well: it is the footprint of a fresh process. Reloading the
+            # model in the same process (SmolChat reloads on every call) leaves freed memory behind, so
+            # later runs' peak RSS creeps up (382 -> 403 -> 508 MB on SmolLM2-135M) without the model
+            # getting any bigger.
+            for key in ("memory_kb", "peak_rss_kb"):
+                if c.get(key) is not None:
+                    m[f"{key}_measured"] = m.get(key)
+                    m[key] = c[key]
+    if ok:
+        ok[-1]["reported"] = True
+
+
+def summary_entries(results: list) -> list:
+    """Runs that count toward the headline summary: per-question protocol -> only the reported
+    (last successful) run of each question; legacy runs -> every run."""
+    if any(r.get("protocol") == PROTOCOL for r in results):
+        return [r for r in results if r.get("reported")]
+    return list(results)
+
+
 def add_common_args(p):
     """Measurement-protocol flags shared by both harnesses."""
     g = p.add_argument_group("measurement protocol (bench_common.py)")
+    g.add_argument("--runs-per-question", type=int, default=3, dest="runs_per_question",
+                   help="Per-question protocol (default). For each question: gate, force-stop the app, evict "
+                        "the model from the page cache, then run this many inferences back to back. Run 1 is "
+                        "the genuinely cold one (its load time is the question's cold load, kept constant "
+                        "for the others); the LAST run is the reported one. All runs are kept in the JSON.")
+    g.add_argument("--legacy-protocol", action="store_true", dest="legacy_protocol",
+                   help="Use the older flow instead (--trials / --warmup-runs / --reboot-before), where the "
+                        "gate runs before every single run and there is no per-question cold start.")
     g.add_argument("--gate-max-temp", type=float, default=None, dest="gate_max_temp",
-                   help="Before each run, wait until battery temperature <= this (C) and CPU frequency "
-                        "caps are back at the session baseline. Default: gate off.")
+                   help="Before each question (each run in --legacy-protocol), wait until battery temperature "
+                        "<= this (C) and CPU frequency caps are back at the session baseline. Default: gate off.")
+    g.add_argument("--gate-temp-rise", type=float, default=None, dest="gate_temp_rise",
+                   help="Like --gate-max-temp but relative: wait while the battery is more than this many C above "
+                        "its temperature when the run started. Better than an absolute limit on a phone that idles "
+                        "warm (screen on, charging). Both may be given; the lower limit applies.")
     g.add_argument("--gate-timeout", type=int, default=900, dest="gate_timeout",
                    help="Max seconds to wait at a gate before running anyway (flagged in results).")
     g.add_argument("--rest-seconds", type=int, default=0, dest="rest_seconds",
-                   help="Fixed pause before each gate check (lets the SoC shed heat between runs).")
-    g.add_argument("--cold-start-runs", type=int, default=0, dest="cold_start_runs",
-                   help="Before the steady-state runs, do this many genuine cold starts: force-stop "
-                        "the app, evict the model from the page cache, then load + answer one question.")
+                   help="Fixed pause before each gate check (lets the SoC shed heat between questions).")
     g.add_argument("--energy", action="store_true",
                    help="Record battery current/voltage with Perfetto for the whole run and integrate "
                         "energy per generation. Valid only when the phone is unplugged (wireless adb).")

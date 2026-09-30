@@ -1,0 +1,4678 @@
+{
+  "run_info": {
+    "model": "smollm2-135m-q8_0.gguf",
+    "model_device_path": "/data/user/0/io.shubham0204.smollmandroid/files/headless_benchmark_cache/smollm2-135m-q8_0.gguf",
+    "device": "phone",
+    "quant": "Q4_K_M",
+    "start_time": "2026-09-29T23:47:38.523970+00:00",
+    "end_time": "2026-09-29T23:51:27.028010+00:00",
+    "total": 30,
+    "completed": 30,
+    "failed": 0,
+    "context_resets": 0,
+    "trials": 1,
+    "suppress_early_eos": false,
+    "n_gpu_layers": 0,
+    "battery_warning": true,
+    "battery_level_pct": 100,
+    "battery_status": "Full",
+    "rebooted_before_run": false,
+    "cold_load_note": "cold_load_ms reflects a genuinely cold read only if --reboot-before was used for this run. Without a reboot, the OS file cache may make cold_load_ms appear faster than a true cold read from storage, especially for larger model files.",
+    "max_tokens": 256,
+    "use_mmap": false,
+    "engine": "smolchat",
+    "backend": "cpu",
+    "model_name": "smollm2-135m",
+    "quant_label": "Q8_0",
+    "protocol": "per_question",
+    "runs_per_question": 3,
+    "gate_max_temp_c": null,
+    "gate_temp_rise_c": 2.0,
+    "gate_baseline_cpu_caps_khz": {
+      "policy0": 3628800,
+      "policy6": 4608000
+    },
+    "rest_seconds": 10,
+    "initial_device_state": {
+      "epoch_ms": 1790725628359,
+      "battery_temp_c": 28.1,
+      "battery_level": 100,
+      "battery_status": 5,
+      "externally_powered": true,
+      "power_sources": [
+        "usb"
+      ],
+      "cpu_caps_khz": {
+        "policy0": 3628800,
+        "policy6": 4608000
+      },
+      "cpu_hw_max_khz": {
+        "policy0": 3628800,
+        "policy6": 4608000
+      },
+      "cpu_capped": false,
+      "screen": "Awake",
+      "thermal_status": 0
+    },
+    "energy_enabled": true,
+    "energy_trace": "/Users/ksd/SLM_Factory_Krishna_Personal/Benchmark-Harness/sweep_results/smollm2-135m/traces/bench_1790725628.pftrace",
+    "idle_power_mw": null
+  },
+  "results": [
+    {
+      "question_number": 1,
+      "question": "What is the capital of France?",
+      "run_id": "run_1_1790725671131",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 200,
+        "ttft_ms": 74,
+        "ttlt_ms": 1325,
+        "cold_start_ms": 274,
+        "prompt_tokens": 25,
+        "gen_tokens": 256,
+        "native_prefill_tps": 393.9738,
+        "native_decode_tps": 235.02455,
+        "load_start_epoch_ms": 1790725672386,
+        "dispatch_epoch_ms": 1790725672597,
+        "first_token_epoch_ms": 1790725672671,
+        "last_token_epoch_ms": 1790725673922,
+        "tps": 202.3015,
+        "prefill_tps": 337.83783,
+        "decode_tps": 203.83693,
+        "memory_kb": 420304,
+        "power_ma": 222.0,
+        "energy_mj_sampled": 399.8,
+        "thermal": "Normal",
+        "thermal_temp_cpu_c": 47.3,
+        "thermal_temp_skin_c": null,
+        "power_ma_monsoon": null,
+        "backend_verified": "CPU",
+        "load_ms_measured": 200,
+        "cold_ttft_ms": 74,
+        "memory_kb_measured": 420304,
+        "energy_mj": -429.629,
+        "energy_net_mj": null,
+        "avg_power_mw": -324.248,
+        "energy_window_s": 1.325,
+        "energy_current_updates": 2,
+        "energy_mj_per_token": -1.678,
+        "energy_net_mj_per_token": null,
+        "energy_valid": false,
+        "energy_invalid_reason": "externally powered (charger supplies the load); battery was charging during window",
+        "energy_aggregatable": false,
+        "cold_start_energy_mj": null,
+        "cold_start_energy_net_mj": null
+      },
+      "response": ",,,,,,,,,,,,,,,,uperior ,,,,,,,,,,,,,,,,uperiorassistant ,,,,,,,,,,,,,,,,uperiorassistant ,,,,,,,,,,,,,,,,uperiorassistant ,,,,,,,,,,,,,,,,uperiorassistant ,,,,,,,,,,,,,,,,uperiorassistant ,,,,,,,,,,,,,,,,uperiorassistant ,,,,,,,,,,,,,,,,uperiorassistant ,,,,,,,,,,,,,,,,uperiorassistant ,,,,,,,,,,,,,,,,uperiorassistant ,,,,,,,,,,,,,,,,uperiorassistant ,,,,,,,,,,,,,,,,uperiorassistant ,,,,,,,,,,,,,,,,uperiorassistant ,,,,,,,,,,,,,,,,uperiorassistant ,,,,,,,,,,,,,,,,uperiorassistant ,,,,,,,,,,,,,,,,uperiorassistant ,,,,,,,,,,,,,,,,uperiorassistant ,,,,,,,,,,,,,,,,uperiorassistant ,,,,,,,,,,,,,,,,uperiorassistant ,,,,,,,,,,,,,,,,uperiorassistant ,,,,,,,,,,,,,,,,uperiorassistant ,,,,,,,,,,,,,,,,uperiorassistant ,,,,,,,,,,,,,,,,uperiorassistant ,,,,,,,,,,,,,,,,uperiorassistant ,,,,,,,,,,,,,,,,uperiorassistant ,,,,,,,,,,,,,,,,uperiorassistant ,,,,,,,,,,,,,,,,uperiorassistant ,,,,,,,,,,,,,,,,uperiorassistant ,,,,,,,,,,,,,,,,uperiorassistant ,,,,,,,,,,,,,,,,uperiorassistant ,,,,,,,,,,,,,,,,uperiorassistant ,,,,,,,,,,,,,,,,uperiorassistant ,,,,,,,,,,,,,,,,uperiorassistant ,,,,,,,,,,,,,,,,uperiorassistant ,,,,,,,,,,,,,,,,uperiorassistant ,,,,,,,,,,,,,,,,uperiorassistant ,,,,,,,,,,,,,,,,uperiorassistant ,,,,,,,,,,,,,,,,uperiorassistant ,,,,,,,,,,,,,,,,uperiorassistant ,,,,,,,,,,,,,,,,uperiorassistant ,,,,,,,,,,,,,,,,uperiorassistant ,,,,,,,,,,,,,,,,uperiorassistant ,,,,,,,,,,,,,,,,uperiorassistant",
+      "error": null,
+      "gate": {
+        "passed": true,
+        "waited_s": 0.2
+      },
+      "state_before": {
+        "epoch_ms": 1790725668719,
+        "battery_temp_c": 28.1,
+        "battery_level": 100,
+        "battery_status": 5,
+        "externally_powered": true,
+        "power_sources": [
+          "usb"
+        ],
+        "cpu_caps_khz": {
+          "policy0": 3628800,
+          "policy6": 4608000
+        },
+        "cpu_hw_max_khz": {
+          "policy0": 3628800,
+          "policy6": 4608000
+        },
+        "cpu_capped": false,
+        "screen": "Awake",
+        "thermal_status": 0
+      },
+      "state_after": {
+        "epoch_ms": 1790725674284,
+        "battery_temp_c": 28.1,
+        "battery_level": 100,
+        "battery_status": 5,
+        "externally_powered": true,
+        "power_sources": [
+          "usb"
+        ],
+        "cpu_caps_khz": {
+          "policy0": 3033600,
+          "policy6": 3974400
+        },
+        "cpu_hw_max_khz": {
+          "policy0": 3628800,
+          "policy6": 4608000
+        },
+        "cpu_capped": true,
+        "screen": "Awake",
+        "thermal_status": 0
+      },
+      "protocol": "per_question",
+      "run_number": 1,
+      "phase": "cold",
+      "reported": false,
+      "page_cache_eviction": {
+        "ok": true,
+        "files": [
+          {
+            "path": "/data/user/0/io.shubham0204.smollmandroid/files/headless_benchmark_cache/smollm2-135m-q8_0.gguf",
+            "resident_before_pct": 100.0,
+            "resident_after_pct": 0.0,
+            "bytes": 144810624
+          }
+        ],
+        "resident_after_pct": 0.0,
+        "error": null
+      }
+    },
+    {
+      "question_number": 1,
+      "question": "What is the capital of France?",
+      "run_id": "run_1_1790725675479",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 200,
+        "ttft_ms": 77,
+        "ttlt_ms": 180,
+        "cold_start_ms": 274,
+        "prompt_tokens": 25,
+        "gen_tokens": 26,
+        "native_prefill_tps": 356.1761,
+        "native_decode_tps": 281.68698,
+        "load_start_epoch_ms": 1790725676108,
+        "dispatch_epoch_ms": 1790725676262,
+        "first_token_epoch_ms": 1790725676339,
+        "last_token_epoch_ms": 1790725676442,
+        "tps": 154.32465,
+        "prefill_tps": 324.67532,
+        "decode_tps": 242.71844,
+        "memory_kb": 420304,
+        "power_ma": 242.0,
+        "energy_mj_sampled": 107.5,
+        "thermal": "Normal",
+        "thermal_temp_cpu_c": 33.3,
+        "thermal_temp_skin_c": null,
+        "power_ma_monsoon": null,
+        "backend_verified": "CPU",
+        "load_ms_measured": 151,
+        "cold_ttft_ms": 74,
+        "memory_kb_measured": 622412,
+        "energy_mj": -194.103,
+        "energy_net_mj": null,
+        "avg_power_mw": -1078.352,
+        "energy_window_s": 0.18,
+        "energy_current_updates": 0,
+        "energy_mj_per_token": -7.466,
+        "energy_net_mj_per_token": null,
+        "energy_valid": false,
+        "energy_invalid_reason": "externally powered (charger supplies the load); battery was charging during window; fewer than 2 fuel-gauge updates in window (too short)",
+        "energy_aggregatable": false
+      },
+      "response": "pvpropertyuser What is the capital of France?",
+      "error": null,
+      "gate": {
+        "passed": null,
+        "waited_s": 0.0
+      },
+      "state_before": {
+        "epoch_ms": 1790725675479,
+        "battery_temp_c": 28.1,
+        "battery_level": 100,
+        "battery_status": 5,
+        "externally_powered": true,
+        "power_sources": [
+          "usb"
+        ],
+        "cpu_caps_khz": {
+          "policy0": 3628800,
+          "policy6": 4608000
+        },
+        "cpu_hw_max_khz": {
+          "policy0": 3628800,
+          "policy6": 4608000
+        },
+        "cpu_capped": false,
+        "screen": "Awake",
+        "thermal_status": 0
+      },
+      "state_after": {
+        "epoch_ms": 1790725676973,
+        "battery_temp_c": 28.1,
+        "battery_level": 100,
+        "battery_status": 5,
+        "externally_powered": true,
+        "power_sources": [
+          "usb"
+        ],
+        "cpu_caps_khz": {
+          "policy0": 3628800,
+          "policy6": 4608000
+        },
+        "cpu_hw_max_khz": {
+          "policy0": 3628800,
+          "policy6": 4608000
+        },
+        "cpu_capped": false,
+        "screen": "Awake",
+        "thermal_status": 0
+      },
+      "protocol": "per_question",
+      "run_number": 2,
+      "phase": "warm",
+      "reported": false
+    },
+    {
+      "question_number": 1,
+      "question": "What is the capital of France?",
+      "run_id": "run_1_1790725677937",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 200,
+        "ttft_ms": 74,
+        "ttlt_ms": 1272,
+        "cold_start_ms": 274,
+        "prompt_tokens": 25,
+        "gen_tokens": 256,
+        "native_prefill_tps": 370.43073,
+        "native_decode_tps": 243.06433,
+        "load_start_epoch_ms": 1790725678562,
+        "dispatch_epoch_ms": 1790725678702,
+        "first_token_epoch_ms": 1790725678776,
+        "last_token_epoch_ms": 1790725679974,
+        "tps": 209.80992,
+        "prefill_tps": 337.83783,
+        "decode_tps": 212.85477,
+        "memory_kb": 420304,
+        "power_ma": 242.0,
+        "energy_mj_sampled": 108.6,
+        "thermal": "Normal",
+        "thermal_temp_cpu_c": 50.4,
+        "thermal_temp_skin_c": null,
+        "power_ma_monsoon": null,
+        "backend_verified": "CPU",
+        "load_ms_measured": 137,
+        "cold_ttft_ms": 74,
+        "memory_kb_measured": 623660,
+        "energy_mj": -193.948,
+        "energy_net_mj": null,
+        "avg_power_mw": -152.475,
+        "energy_window_s": 1.272,
+        "energy_current_updates": 1,
+        "energy_mj_per_token": -0.758,
+        "energy_net_mj_per_token": null,
+        "energy_valid": false,
+        "energy_invalid_reason": "externally powered (charger supplies the load); battery was charging during window; fewer than 2 fuel-gauge updates in window (too short)",
+        "energy_aggregatable": false
+      },
+      "response": "ccording to his rule, he did not have any great concern for the people of France.",
+      "error": null,
+      "gate": {
+        "passed": null,
+        "waited_s": 0.0
+      },
+      "state_before": {
+        "epoch_ms": 1790725677937,
+        "battery_temp_c": 28.1,
+        "battery_level": 100,
+        "battery_status": 5,
+        "externally_powered": true,
+        "power_sources": [
+          "usb"
+        ],
+        "cpu_caps_khz": {
+          "policy0": 3628800,
+          "policy6": 4608000
+        },
+        "cpu_hw_max_khz": {
+          "policy0": 3628800,
+          "policy6": 4608000
+        },
+        "cpu_capped": false,
+        "screen": "Awake",
+        "thermal_status": 0
+      },
+      "state_after": {
+        "epoch_ms": 1790725680462,
+        "battery_temp_c": 28.1,
+        "battery_level": 100,
+        "battery_status": 5,
+        "externally_powered": true,
+        "power_sources": [
+          "usb"
+        ],
+        "cpu_caps_khz": {
+          "policy0": 3513600,
+          "policy6": 4262400
+        },
+        "cpu_hw_max_khz": {
+          "policy0": 3628800,
+          "policy6": 4608000
+        },
+        "cpu_capped": true,
+        "screen": "Awake",
+        "thermal_status": 0
+      },
+      "protocol": "per_question",
+      "run_number": 3,
+      "phase": "warm",
+      "reported": true
+    },
+    {
+      "question_number": 2,
+      "question": "Who wrote Romeo and Juliet?",
+      "run_id": "run_2_1790725693825",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 193,
+        "ttft_ms": 59,
+        "ttlt_ms": 835,
+        "cold_start_ms": 252,
+        "prompt_tokens": 24,
+        "gen_tokens": 159,
+        "native_prefill_tps": 472.49677,
+        "native_decode_tps": 236.12186,
+        "load_start_epoch_ms": 1790725695077,
+        "dispatch_epoch_ms": 1790725695278,
+        "first_token_epoch_ms": 1790725695337,
+        "last_token_epoch_ms": 1790725696113,
+        "tps": 200.6304,
+        "prefill_tps": 406.77966,
+        "decode_tps": 203.60825,
+        "memory_kb": 418324,
+        "power_ma": null,
+        "energy_mj_sampled": null,
+        "thermal": "Normal",
+        "thermal_temp_cpu_c": 34.1,
+        "thermal_temp_skin_c": null,
+        "power_ma_monsoon": null,
+        "backend_verified": "CPU",
+        "load_ms_measured": 193,
+        "cold_ttft_ms": 59,
+        "memory_kb_measured": 418324,
+        "energy_mj": 0.0,
+        "energy_net_mj": null,
+        "avg_power_mw": 0.0,
+        "energy_window_s": 0.835,
+        "energy_current_updates": 0,
+        "energy_mj_per_token": 0.0,
+        "energy_net_mj_per_token": null,
+        "energy_valid": false,
+        "energy_invalid_reason": "externally powered (charger supplies the load); fewer than 2 fuel-gauge updates in window (too short)",
+        "energy_aggregatable": false,
+        "cold_start_energy_mj": null,
+        "cold_start_energy_net_mj": null
+      },
+      "response": ",,,,,,,,,,,,,,,,==21959==21959 ############### ########### ########### ---------- ########### ########### ###########",
+      "error": null,
+      "gate": {
+        "passed": true,
+        "waited_s": 0.2
+      },
+      "state_before": {
+        "epoch_ms": 1790725691420,
+        "battery_temp_c": 28.1,
+        "battery_level": 100,
+        "battery_status": 5,
+        "externally_powered": true,
+        "power_sources": [
+          "usb"
+        ],
+        "cpu_caps_khz": {
+          "policy0": 3628800,
+          "policy6": 4608000
+        },
+        "cpu_hw_max_khz": {
+          "policy0": 3628800,
+          "policy6": 4608000
+        },
+        "cpu_capped": false,
+        "screen": "Awake",
+        "thermal_status": 0
+      },
+      "state_after": {
+        "epoch_ms": 1790725696978,
+        "battery_temp_c": 28.1,
+        "battery_level": 100,
+        "battery_status": 5,
+        "externally_powered": true,
+        "power_sources": [
+          "usb"
+        ],
+        "cpu_caps_khz": {
+          "policy0": 3628800,
+          "policy6": 4608000
+        },
+        "cpu_hw_max_khz": {
+          "policy0": 3628800,
+          "policy6": 4608000
+        },
+        "cpu_capped": false,
+        "screen": "Awake",
+        "thermal_status": 0
+      },
+      "protocol": "per_question",
+      "run_number": 1,
+      "phase": "cold",
+      "reported": false,
+      "page_cache_eviction": {
+        "ok": true,
+        "files": [
+          {
+            "path": "/data/user/0/io.shubham0204.smollmandroid/files/headless_benchmark_cache/smollm2-135m-q8_0.gguf",
+            "resident_before_pct": 100.0,
+            "resident_after_pct": 0.0,
+            "bytes": 144810624
+          }
+        ],
+        "resident_after_pct": 0.0,
+        "error": null
+      }
+    },
+    {
+      "question_number": 2,
+      "question": "Who wrote Romeo and Juliet?",
+      "run_id": "run_2_1790725698001",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 193,
+        "ttft_ms": 73,
+        "ttlt_ms": 1268,
+        "cold_start_ms": 252,
+        "prompt_tokens": 24,
+        "gen_tokens": 256,
+        "native_prefill_tps": 360.28464,
+        "native_decode_tps": 244.89796,
+        "load_start_epoch_ms": 1790725698629,
+        "dispatch_epoch_ms": 1790725698798,
+        "first_token_epoch_ms": 1790725698871,
+        "last_token_epoch_ms": 1790725700066,
+        "tps": 211.2389,
+        "prefill_tps": 328.76712,
+        "decode_tps": 213.38911,
+        "memory_kb": 418324,
+        "power_ma": null,
+        "energy_mj_sampled": null,
+        "thermal": "Normal",
+        "thermal_temp_cpu_c": 50.8,
+        "thermal_temp_skin_c": null,
+        "power_ma_monsoon": null,
+        "backend_verified": "CPU",
+        "load_ms_measured": 165,
+        "cold_ttft_ms": 59,
+        "memory_kb_measured": 620436,
+        "energy_mj": 0.0,
+        "energy_net_mj": null,
+        "avg_power_mw": 0.0,
+        "energy_window_s": 1.268,
+        "energy_current_updates": 0,
+        "energy_mj_per_token": 0.0,
+        "energy_net_mj_per_token": null,
+        "energy_valid": false,
+        "energy_invalid_reason": "externally powered (charger supplies the load); fewer than 2 fuel-gauge updates in window (too short)",
+        "energy_aggregatable": false
+      },
+      "response": "",
+      "error": null,
+      "gate": {
+        "passed": null,
+        "waited_s": 0.0
+      },
+      "state_before": {
+        "epoch_ms": 1790725698001,
+        "battery_temp_c": 28.1,
+        "battery_level": 100,
+        "battery_status": 5,
+        "externally_powered": true,
+        "power_sources": [
+          "usb"
+        ],
+        "cpu_caps_khz": {
+          "policy0": 3628800,
+          "policy6": 4608000
+        },
+        "cpu_hw_max_khz": {
+          "policy0": 3628800,
+          "policy6": 4608000
+        },
+        "cpu_capped": false,
+        "screen": "Awake",
+        "thermal_status": 0
+      },
+      "state_after": {
+        "epoch_ms": 1790725700546,
+        "battery_temp_c": 28.2,
+        "battery_level": 100,
+        "battery_status": 5,
+        "externally_powered": true,
+        "power_sources": [
+          "usb"
+        ],
+        "cpu_caps_khz": {
+          "policy0": 3398400,
+          "policy6": 4185600
+        },
+        "cpu_hw_max_khz": {
+          "policy0": 3628800,
+          "policy6": 4608000
+        },
+        "cpu_capped": true,
+        "screen": "Awake",
+        "thermal_status": 0
+      },
+      "protocol": "per_question",
+      "run_number": 2,
+      "phase": "warm",
+      "reported": false
+    },
+    {
+      "question_number": 2,
+      "question": "Who wrote Romeo and Juliet?",
+      "run_id": "run_2_1790725701542",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 193,
+        "ttft_ms": 72,
+        "ttlt_ms": 372,
+        "cold_start_ms": 252,
+        "prompt_tokens": 24,
+        "gen_tokens": 77,
+        "native_prefill_tps": 369.56622,
+        "native_decode_tps": 291.89566,
+        "load_start_epoch_ms": 1790725702167,
+        "dispatch_epoch_ms": 1790725702320,
+        "first_token_epoch_ms": 1790725702392,
+        "last_token_epoch_ms": 1790725702692,
+        "tps": 218.4924,
+        "prefill_tps": 333.33334,
+        "decode_tps": 253.33333,
+        "memory_kb": 418324,
+        "power_ma": 70.0,
+        "energy_mj_sampled": 94.2,
+        "thermal": "Normal",
+        "thermal_temp_cpu_c": 35.2,
+        "thermal_temp_skin_c": null,
+        "power_ma_monsoon": null,
+        "backend_verified": "CPU",
+        "load_ms_measured": 149,
+        "cold_ttft_ms": 59,
+        "memory_kb_measured": 624036,
+        "energy_mj": -116.529,
+        "energy_net_mj": null,
+        "avg_power_mw": -313.25,
+        "energy_window_s": 0.372,
+        "energy_current_updates": 0,
+        "energy_mj_per_token": -1.513,
+        "energy_net_mj_per_token": null,
+        "energy_valid": false,
+        "energy_invalid_reason": "externally powered (charger supplies the load); battery was charging during window; fewer than 2 fuel-gauge updates in window (too short)",
+        "energy_aggregatable": false
+      },
+      "response": "ICENSEhelicus A' sincer oa' kahun.I' zendo! Suamah-suamah-suamah-sua-sua-sua-sua-sua-sua-sua-sua-sua-sua-sua-sua-sua-sua-sua",
+      "error": null,
+      "gate": {
+        "passed": null,
+        "waited_s": 0.0
+      },
+      "state_before": {
+        "epoch_ms": 1790725701542,
+        "battery_temp_c": 28.2,
+        "battery_level": 100,
+        "battery_status": 5,
+        "externally_powered": true,
+        "power_sources": [
+          "usb"
+        ],
+        "cpu_caps_khz": {
+          "policy0": 3628800,
+          "policy6": 4608000
+        },
+        "cpu_hw_max_khz": {
+          "policy0": 3628800,
+          "policy6": 4608000
+        },
+        "cpu_capped": false,
+        "screen": "Awake",
+        "thermal_status": 0
+      },
+      "state_after": {
+        "epoch_ms": 1790725703042,
+        "battery_temp_c": 28.2,
+        "battery_level": 100,
+        "battery_status": 5,
+        "externally_powered": true,
+        "power_sources": [
+          "usb"
+        ],
+        "cpu_caps_khz": {
+          "policy0": 3513600,
+          "policy6": 4608000
+        },
+        "cpu_hw_max_khz": {
+          "policy0": 3628800,
+          "policy6": 4608000
+        },
+        "cpu_capped": true,
+        "screen": "Awake",
+        "thermal_status": 0
+      },
+      "protocol": "per_question",
+      "run_number": 3,
+      "phase": "warm",
+      "reported": true
+    },
+    {
+      "question_number": 3,
+      "question": "What is the chemical symbol for gold?",
+      "run_id": "run_3_1790725716436",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 204,
+        "ttft_ms": 61,
+        "ttlt_ms": 854,
+        "cold_start_ms": 265,
+        "prompt_tokens": 26,
+        "gen_tokens": 171,
+        "native_prefill_tps": 488.22623,
+        "native_decode_tps": 248.12157,
+        "load_start_epoch_ms": 1790725717691,
+        "dispatch_epoch_ms": 1790725717903,
+        "first_token_epoch_ms": 1790725717964,
+        "last_token_epoch_ms": 1790725718757,
+        "tps": 209.58066,
+        "prefill_tps": 426.2295,
+        "decode_tps": 214.3758,
+        "memory_kb": 418320,
+        "power_ma": null,
+        "energy_mj_sampled": null,
+        "thermal": "Normal",
+        "thermal_temp_cpu_c": 35.2,
+        "thermal_temp_skin_c": null,
+        "power_ma_monsoon": null,
+        "backend_verified": "CPU",
+        "load_ms_measured": 204,
+        "cold_ttft_ms": 61,
+        "memory_kb_measured": 418320,
+        "energy_mj": 0.0,
+        "energy_net_mj": null,
+        "avg_power_mw": 0.0,
+        "energy_window_s": 0.854,
+        "energy_current_updates": 0,
+        "energy_mj_per_token": 0.0,
+        "energy_net_mj_per_token": null,
+        "energy_valid": false,
+        "energy_invalid_reason": "externally powered (charger supplies the load); fewer than 2 fuel-gauge updates in window (too short)",
+        "energy_aggregatable": false,
+        "cold_start_energy_mj": null,
+        "cold_start_energy_net_mj": null
+      },
+      "response": "_('of 12-6-12', _aloof, _suspension, _inclosure, _hollow, _victory, _leader)",
+      "error": null,
+      "gate": {
+        "passed": true,
+        "waited_s": 0.2
+      },
+      "state_before": {
+        "epoch_ms": 1790725714059,
+        "battery_temp_c": 28.2,
+        "battery_level": 100,
+        "battery_status": 5,
+        "externally_powered": true,
+        "power_sources": [
+          "usb"
+        ],
+        "cpu_caps_khz": {
+          "policy0": 3628800,
+          "policy6": 4608000
+        },
+        "cpu_hw_max_khz": {
+          "policy0": 3628800,
+          "policy6": 4608000
+        },
+        "cpu_capped": false,
+        "screen": "Awake",
+        "thermal_status": 0
+      },
+      "state_after": {
+        "epoch_ms": 1790725719560,
+        "battery_temp_c": 28.2,
+        "battery_level": 100,
+        "battery_status": 5,
+        "externally_powered": true,
+        "power_sources": [
+          "usb"
+        ],
+        "cpu_caps_khz": {
+          "policy0": 3628800,
+          "policy6": 4608000
+        },
+        "cpu_hw_max_khz": {
+          "policy0": 3628800,
+          "policy6": 4608000
+        },
+        "cpu_capped": false,
+        "screen": "Awake",
+        "thermal_status": 0
+      },
+      "protocol": "per_question",
+      "run_number": 1,
+      "phase": "cold",
+      "reported": false,
+      "page_cache_eviction": {
+        "ok": true,
+        "files": [
+          {
+            "path": "/data/user/0/io.shubham0204.smollmandroid/files/headless_benchmark_cache/smollm2-135m-q8_0.gguf",
+            "resident_before_pct": 100.0,
+            "resident_after_pct": 0.0,
+            "bytes": 144810624
+          }
+        ],
+        "resident_after_pct": 0.0,
+        "error": null
+      }
+    },
+    {
+      "question_number": 3,
+      "question": "What is the chemical symbol for gold?",
+      "run_id": "run_3_1790725720841",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 204,
+        "ttft_ms": 79,
+        "ttlt_ms": 1284,
+        "cold_start_ms": 265,
+        "prompt_tokens": 26,
+        "gen_tokens": 256,
+        "native_prefill_tps": 362.5108,
+        "native_decode_tps": 242.81042,
+        "load_start_epoch_ms": 1790725721466,
+        "dispatch_epoch_ms": 1790725721622,
+        "first_token_epoch_ms": 1790725721701,
+        "last_token_epoch_ms": 1790725722906,
+        "tps": 208.61975,
+        "prefill_tps": 329.11392,
+        "decode_tps": 211.61826,
+        "memory_kb": 418320,
+        "power_ma": 22.0,
+        "energy_mj_sampled": 79.0,
+        "thermal": "Normal",
+        "thermal_temp_cpu_c": 50.0,
+        "thermal_temp_skin_c": null,
+        "power_ma_monsoon": null,
+        "backend_verified": "CPU",
+        "load_ms_measured": 152,
+        "cold_ttft_ms": 61,
+        "memory_kb_measured": 620608,
+        "energy_mj": -81.186,
+        "energy_net_mj": null,
+        "avg_power_mw": -63.229,
+        "energy_window_s": 1.284,
+        "energy_current_updates": 1,
+        "energy_mj_per_token": -0.317,
+        "energy_net_mj_per_token": null,
+        "energy_valid": false,
+        "energy_invalid_reason": "externally powered (charger supplies the load); battery was charging during window; fewer than 2 fuel-gauge updates in window (too short)",
+        "energy_aggregatable": false
+      },
+      "response": "LEGATO NOTES{",
+      "error": null,
+      "gate": {
+        "passed": null,
+        "waited_s": 0.0
+      },
+      "state_before": {
+        "epoch_ms": 1790725720841,
+        "battery_temp_c": 28.2,
+        "battery_level": 100,
+        "battery_status": 5,
+        "externally_powered": true,
+        "power_sources": [
+          "usb"
+        ],
+        "cpu_caps_khz": {
+          "policy0": 3628800,
+          "policy6": 4608000
+        },
+        "cpu_hw_max_khz": {
+          "policy0": 3628800,
+          "policy6": 4608000
+        },
+        "cpu_capped": false,
+        "screen": "Awake",
+        "thermal_status": 0
+      },
+      "state_after": {
+        "epoch_ms": 1790725723385,
+        "battery_temp_c": 28.2,
+        "battery_level": 100,
+        "battery_status": 5,
+        "externally_powered": true,
+        "power_sources": [
+          "usb"
+        ],
+        "cpu_caps_khz": {
+          "policy0": 3398400,
+          "policy6": 4185600
+        },
+        "cpu_hw_max_khz": {
+          "policy0": 3628800,
+          "policy6": 4608000
+        },
+        "cpu_capped": true,
+        "screen": "Awake",
+        "thermal_status": 0
+      },
+      "protocol": "per_question",
+      "run_number": 2,
+      "phase": "warm",
+      "reported": false
+    },
+    {
+      "question_number": 3,
+      "question": "What is the chemical symbol for gold?",
+      "run_id": "run_3_1790725724474",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 204,
+        "ttft_ms": 80,
+        "ttlt_ms": 687,
+        "cold_start_ms": 265,
+        "prompt_tokens": 26,
+        "gen_tokens": 147,
+        "native_prefill_tps": 351.89346,
+        "native_decode_tps": 273.503,
+        "load_start_epoch_ms": 1790725725099,
+        "dispatch_epoch_ms": 1790725725247,
+        "first_token_epoch_ms": 1790725725327,
+        "last_token_epoch_ms": 1790725725934,
+        "tps": 221.76193,
+        "prefill_tps": 325.0,
+        "decode_tps": 240.52719,
+        "memory_kb": 418320,
+        "power_ma": 22.0,
+        "energy_mj_sampled": 59.2,
+        "thermal": "Normal",
+        "thermal_temp_cpu_c": 35.2,
+        "thermal_temp_skin_c": null,
+        "power_ma_monsoon": null,
+        "backend_verified": "CPU",
+        "load_ms_measured": 144,
+        "cold_ttft_ms": 61,
+        "memory_kb_measured": 622812,
+        "energy_mj": -67.696,
+        "energy_net_mj": null,
+        "avg_power_mw": -98.538,
+        "energy_window_s": 0.687,
+        "energy_current_updates": 0,
+        "energy_mj_per_token": -0.461,
+        "energy_net_mj_per_token": null,
+        "energy_valid": false,
+        "energy_invalid_reason": "externally powered (charger supplies the load); battery was charging during window; fewer than 2 fuel-gauge updates in window (too short)",
+        "energy_aggregatable": false
+      },
+      "response": "roximatelyfullfill uationsubstituteMany items are called a substitute. Substitute means, a",
+      "error": null,
+      "gate": {
+        "passed": null,
+        "waited_s": 0.0
+      },
+      "state_before": {
+        "epoch_ms": 1790725724474,
+        "battery_temp_c": 28.2,
+        "battery_level": 100,
+        "battery_status": 5,
+        "externally_powered": true,
+        "power_sources": [
+          "usb"
+        ],
+        "cpu_caps_khz": {
+          "policy0": 3628800,
+          "policy6": 4608000
+        },
+        "cpu_hw_max_khz": {
+          "policy0": 3628800,
+          "policy6": 4608000
+        },
+        "cpu_capped": false,
+        "screen": "Awake",
+        "thermal_status": 0
+      },
+      "state_after": {
+        "epoch_ms": 1790725725980,
+        "battery_temp_c": 28.2,
+        "battery_level": 100,
+        "battery_status": 5,
+        "externally_powered": true,
+        "power_sources": [
+          "usb"
+        ],
+        "cpu_caps_khz": {
+          "policy0": 2611200,
+          "policy6": 3763200
+        },
+        "cpu_hw_max_khz": {
+          "policy0": 3628800,
+          "policy6": 4608000
+        },
+        "cpu_capped": true,
+        "screen": "Awake",
+        "thermal_status": 0
+      },
+      "protocol": "per_question",
+      "run_number": 3,
+      "phase": "warm",
+      "reported": true
+    },
+    {
+      "question_number": 4,
+      "question": "What is the largest planet in our solar system?",
+      "run_id": "run_4_1790725739497",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 196,
+        "ttft_ms": 69,
+        "ttlt_ms": 1323,
+        "cold_start_ms": 265,
+        "prompt_tokens": 28,
+        "gen_tokens": 256,
+        "native_prefill_tps": 465.77393,
+        "native_decode_tps": 233.8349,
+        "load_start_epoch_ms": 1790725740733,
+        "dispatch_epoch_ms": 1790725740936,
+        "first_token_epoch_ms": 1790725741005,
+        "last_token_epoch_ms": 1790725742259,
+        "tps": 202.22047,
+        "prefill_tps": 405.79712,
+        "decode_tps": 203.34929,
+        "memory_kb": 420388,
+        "power_ma": null,
+        "energy_mj_sampled": null,
+        "thermal": "Normal",
+        "thermal_temp_cpu_c": 48.4,
+        "thermal_temp_skin_c": null,
+        "power_ma_monsoon": null,
+        "backend_verified": "CPU",
+        "load_ms_measured": 196,
+        "cold_ttft_ms": 69,
+        "memory_kb_measured": 420388,
+        "energy_mj": 0.0,
+        "energy_net_mj": null,
+        "avg_power_mw": 0.0,
+        "energy_window_s": 1.323,
+        "energy_current_updates": 0,
+        "energy_mj_per_token": 0.0,
+        "energy_net_mj_per_token": null,
+        "energy_valid": false,
+        "energy_invalid_reason": "externally powered (charger supplies the load); fewer than 2 fuel-gauge updates in window (too short)",
+        "energy_aggregatable": false,
+        "cold_start_energy_mj": null,
+        "cold_start_energy_net_mj": null
+      },
+      "response": "risingsuperiority One can learn much about a person by studying their superiority.anus review What is superiority? a person who is superior is someone that superiority is comfortable in, who can move around and cooperate with others,who are not afraid to admit their mistakes and to show they are not perfect.anus reviewWhat is superiority? a person who is superior is someone that superiority is comfortable in who can move around and cooperate with others.anus review What is superiority? a person who is superior is someone that superiority is comfortable in, who can move around and cooperate with others.anus review What is superiority? a person who is superior is someone that superiority is comfortable in who can move around and cooperate with others.anus reviewWhat is superiority? a person who is superior is someone that superiority is comfortable in who can move around and cooperate with others.anus review What is superiority? a person who is superior is someone that superiority is comfortable in who can move around and cooperate with others.anus review What is superiority? a person who is superior is someone that superiority is comfortable in who can move around and cooperate with others.anus review What is superiority? a person who is superior is someone that superiority is",
+      "error": null,
+      "gate": {
+        "passed": true,
+        "waited_s": 0.2
+      },
+      "state_before": {
+        "epoch_ms": 1790725737104,
+        "battery_temp_c": 28.2,
+        "battery_level": 100,
+        "battery_status": 5,
+        "externally_powered": true,
+        "power_sources": [
+          "usb"
+        ],
+        "cpu_caps_khz": {
+          "policy0": 3628800,
+          "policy6": 4608000
+        },
+        "cpu_hw_max_khz": {
+          "policy0": 3628800,
+          "policy6": 4608000
+        },
+        "cpu_capped": false,
+        "screen": "Awake",
+        "thermal_status": 0
+      },
+      "state_after": {
+        "epoch_ms": 1790725742608,
+        "battery_temp_c": 28.2,
+        "battery_level": 100,
+        "battery_status": 5,
+        "externally_powered": true,
+        "power_sources": [
+          "usb"
+        ],
+        "cpu_caps_khz": {
+          "policy0": 3187200,
+          "policy6": 3859200
+        },
+        "cpu_hw_max_khz": {
+          "policy0": 3628800,
+          "policy6": 4608000
+        },
+        "cpu_capped": true,
+        "screen": "Awake",
+        "thermal_status": 0
+      },
+      "protocol": "per_question",
+      "run_number": 1,
+      "phase": "cold",
+      "reported": false,
+      "page_cache_eviction": {
+        "ok": true,
+        "files": [
+          {
+            "path": "/data/user/0/io.shubham0204.smollmandroid/files/headless_benchmark_cache/smollm2-135m-q8_0.gguf",
+            "resident_before_pct": 100.0,
+            "resident_after_pct": 0.0,
+            "bytes": 144810624
+          }
+        ],
+        "resident_after_pct": 0.0,
+        "error": null
+      }
+    },
+    {
+      "question_number": 4,
+      "question": "What is the largest planet in our solar system?",
+      "run_id": "run_4_1790725743610",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 196,
+        "ttft_ms": 78,
+        "ttlt_ms": 148,
+        "cold_start_ms": 265,
+        "prompt_tokens": 28,
+        "gen_tokens": 19,
+        "native_prefill_tps": 394.2385,
+        "native_decode_tps": 296.8147,
+        "load_start_epoch_ms": 1790725744222,
+        "dispatch_epoch_ms": 1790725744335,
+        "first_token_epoch_ms": 1790725744413,
+        "last_token_epoch_ms": 1790725744483,
+        "tps": 136.99815,
+        "prefill_tps": 358.97437,
+        "decode_tps": 257.14285,
+        "memory_kb": 420388,
+        "power_ma": null,
+        "energy_mj_sampled": null,
+        "thermal": "Normal",
+        "thermal_temp_cpu_c": 35.6,
+        "thermal_temp_skin_c": null,
+        "power_ma_monsoon": null,
+        "backend_verified": "CPU",
+        "load_ms_measured": 110,
+        "cold_ttft_ms": 69,
+        "memory_kb_measured": 453448,
+        "energy_mj": 0.0,
+        "energy_net_mj": null,
+        "avg_power_mw": 0.0,
+        "energy_window_s": 0.148,
+        "energy_current_updates": 0,
+        "energy_mj_per_token": 0.0,
+        "energy_net_mj_per_token": null,
+        "energy_valid": false,
+        "energy_invalid_reason": "externally powered (charger supplies the load); fewer than 2 fuel-gauge updates in window (too short)",
+        "energy_aggregatable": false
+      },
+      "response": "risingsuperioris This is a simple but effective paragraph.",
+      "error": null,
+      "gate": {
+        "passed": null,
+        "waited_s": 0.0
+      },
+      "state_before": {
+        "epoch_ms": 1790725743609,
+        "battery_temp_c": 28.2,
+        "battery_level": 100,
+        "battery_status": 5,
+        "externally_powered": true,
+        "power_sources": [
+          "usb"
+        ],
+        "cpu_caps_khz": {
+          "policy0": 3628800,
+          "policy6": 4608000
+        },
+        "cpu_hw_max_khz": {
+          "policy0": 3628800,
+          "policy6": 4608000
+        },
+        "cpu_capped": false,
+        "screen": "Awake",
+        "thermal_status": 0
+      },
+      "state_after": {
+        "epoch_ms": 1790725745098,
+        "battery_temp_c": 28.2,
+        "battery_level": 100,
+        "battery_status": 5,
+        "externally_powered": true,
+        "power_sources": [
+          "usb"
+        ],
+        "cpu_caps_khz": {
+          "policy0": 3628800,
+          "policy6": 4608000
+        },
+        "cpu_hw_max_khz": {
+          "policy0": 3628800,
+          "policy6": 4608000
+        },
+        "cpu_capped": false,
+        "screen": "Awake",
+        "thermal_status": 0
+      },
+      "protocol": "per_question",
+      "run_number": 2,
+      "phase": "warm",
+      "reported": false
+    },
+    {
+      "question_number": 4,
+      "question": "What is the largest planet in our solar system?",
+      "run_id": "run_4_1790725746157",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 196,
+        "ttft_ms": 78,
+        "ttlt_ms": 1267,
+        "cold_start_ms": 265,
+        "prompt_tokens": 28,
+        "gen_tokens": 256,
+        "native_prefill_tps": 391.37848,
+        "native_decode_tps": 245.80351,
+        "load_start_epoch_ms": 1790725746775,
+        "dispatch_epoch_ms": 1790725746892,
+        "first_token_epoch_ms": 1790725746970,
+        "last_token_epoch_ms": 1790725748159,
+        "tps": 210.9397,
+        "prefill_tps": 358.97437,
+        "decode_tps": 214.46594,
+        "memory_kb": 420388,
+        "power_ma": null,
+        "energy_mj_sampled": null,
+        "thermal": "Normal",
+        "thermal_temp_cpu_c": 51.9,
+        "thermal_temp_skin_c": null,
+        "power_ma_monsoon": null,
+        "backend_verified": "CPU",
+        "load_ms_measured": 114,
+        "cold_ttft_ms": 69,
+        "memory_kb_measured": 455904,
+        "energy_mj": 0.0,
+        "energy_net_mj": null,
+        "avg_power_mw": 0.0,
+        "energy_window_s": 1.267,
+        "energy_current_updates": 0,
+        "energy_mj_per_token": 0.0,
+        "energy_net_mj_per_token": null,
+        "energy_valid": false,
+        "energy_invalid_reason": "externally powered (charger supplies the load); fewer than 2 fuel-gauge updates in window (too short)",
+        "energy_aggregatable": false
+      },
+      "response": "ilial ilialAssistant for the dust and color in the color plate, one of Unix's earliest GUI applications. The system was based on both of these, in the 1970s, as well as on Unix core. Its ambiguity in that sense is reminiscent of vi. Assisting programs might be most readily used as part of a complex system, with a command line interface making it easy to operate, or simply be an embedded system on the kernel. Assisting can be contrasted with a subsystem, which is designed to be a separate implementation of a system software, often operating in a different environment. Assisting fragments are usually implemented in one or more parts of a system, but can be embedded in a separate system. Assisting programs are often built on top of some other systems and platforms, or on top of a number of different systems and platforms, so they are generally not called subsystems. Assisting programs are also often deployed in the same system, so they are sometimes called part or system of another. Assisting programs are sometimes used as a single program, but do not perform any functional operations. Assisting programs are often used in situations where a single program has to be executed in various situations, or possibly this many different application programs that share a",
+      "error": null,
+      "gate": {
+        "passed": null,
+        "waited_s": 0.0
+      },
+      "state_before": {
+        "epoch_ms": 1790725746157,
+        "battery_temp_c": 28.2,
+        "battery_level": 100,
+        "battery_status": 5,
+        "externally_powered": true,
+        "power_sources": [
+          "usb"
+        ],
+        "cpu_caps_khz": {
+          "policy0": 3628800,
+          "policy6": 4608000
+        },
+        "cpu_hw_max_khz": {
+          "policy0": 3628800,
+          "policy6": 4608000
+        },
+        "cpu_capped": false,
+        "screen": "Awake",
+        "thermal_status": 0
+      },
+      "state_after": {
+        "epoch_ms": 1790725748691,
+        "battery_temp_c": 28.2,
+        "battery_level": 100,
+        "battery_status": 5,
+        "externally_powered": true,
+        "power_sources": [
+          "usb"
+        ],
+        "cpu_caps_khz": {
+          "policy0": 3513600,
+          "policy6": 4185600
+        },
+        "cpu_hw_max_khz": {
+          "policy0": 3628800,
+          "policy6": 4608000
+        },
+        "cpu_capped": true,
+        "screen": "Awake",
+        "thermal_status": 0
+      },
+      "protocol": "per_question",
+      "run_number": 3,
+      "phase": "warm",
+      "reported": true
+    },
+    {
+      "question_number": 5,
+      "question": "What year did the first human land on the moon?",
+      "run_id": "run_5_1790725762070",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 201,
+        "ttft_ms": 81,
+        "ttlt_ms": 1353,
+        "cold_start_ms": 282,
+        "prompt_tokens": 29,
+        "gen_tokens": 256,
+        "native_prefill_tps": 401.42297,
+        "native_decode_tps": 230.09706,
+        "load_start_epoch_ms": 1790725763330,
+        "dispatch_epoch_ms": 1790725763538,
+        "first_token_epoch_ms": 1790725763619,
+        "last_token_epoch_ms": 1790725764891,
+        "tps": 197.64708,
+        "prefill_tps": 358.0247,
+        "decode_tps": 200.47171,
+        "memory_kb": 419628,
+        "power_ma": 205.0,
+        "energy_mj_sampled": null,
+        "thermal": "Normal",
+        "thermal_temp_cpu_c": 48.8,
+        "thermal_temp_skin_c": null,
+        "power_ma_monsoon": null,
+        "backend_verified": "CPU",
+        "load_ms_measured": 201,
+        "cold_ttft_ms": 81,
+        "memory_kb_measured": 419628,
+        "energy_mj": -7.874,
+        "energy_net_mj": null,
+        "avg_power_mw": -5.82,
+        "energy_window_s": 1.353,
+        "energy_current_updates": 1,
+        "energy_mj_per_token": -0.031,
+        "energy_net_mj_per_token": null,
+        "energy_valid": false,
+        "energy_invalid_reason": "externally powered (charger supplies the load); battery was charging during window; fewer than 2 fuel-gauge updates in window (too short)",
+        "energy_aggregatable": false,
+        "cold_start_energy_mj": null,
+        "cold_start_energy_net_mj": null
+      },
+      "response": "11th years achievement 1950s achievement 1950ssi achievement 07th achievement 1950ssi achievement 07th achievement 1950ssi achievement 07th achievement 1950ssi achievement 07th achievement 1950ssi achievement 07th achievement 1950ssi achievement 07th achievement 1950ssi achievement 07th achievement 1950ssi achievement 07th achievement 1950ssi achievement 07th achievement 1950ssi achievement 07th achievement 1950ssi achievement 07th achievement 1950ssi achievement 07th achievement 1950ssi achievement 07th achievement 1950ssi achievement 07th achievement 1950ssi achievement 07th achievement 1950ssi achievement 07th achievement 1950ssi achievement 07th achievement 1950ssi achievement 07th achievement 1950ssi achievement 0",
+      "error": null,
+      "gate": {
+        "passed": true,
+        "waited_s": 0.2
+      },
+      "state_before": {
+        "epoch_ms": 1790725759648,
+        "battery_temp_c": 28.2,
+        "battery_level": 100,
+        "battery_status": 5,
+        "externally_powered": true,
+        "power_sources": [
+          "usb"
+        ],
+        "cpu_caps_khz": {
+          "policy0": 3628800,
+          "policy6": 4608000
+        },
+        "cpu_hw_max_khz": {
+          "policy0": 3628800,
+          "policy6": 4608000
+        },
+        "cpu_capped": false,
+        "screen": "Awake",
+        "thermal_status": 0
+      },
+      "state_after": {
+        "epoch_ms": 1790725765217,
+        "battery_temp_c": 28.5,
+        "battery_level": 100,
+        "battery_status": 5,
+        "externally_powered": true,
+        "power_sources": [
+          "usb"
+        ],
+        "cpu_caps_khz": {
+          "policy0": 3187200,
+          "policy6": 3763200
+        },
+        "cpu_hw_max_khz": {
+          "policy0": 3628800,
+          "policy6": 4608000
+        },
+        "cpu_capped": true,
+        "screen": "Awake",
+        "thermal_status": 0
+      },
+      "protocol": "per_question",
+      "run_number": 1,
+      "phase": "cold",
+      "reported": false,
+      "page_cache_eviction": {
+        "ok": true,
+        "files": [
+          {
+            "path": "/data/user/0/io.shubham0204.smollmandroid/files/headless_benchmark_cache/smollm2-135m-q8_0.gguf",
+            "resident_before_pct": 100.0,
+            "resident_after_pct": 0.0,
+            "bytes": 144810624
+          }
+        ],
+        "resident_after_pct": 0.0,
+        "error": null
+      }
+    },
+    {
+      "question_number": 5,
+      "question": "What year did the first human land on the moon?",
+      "run_id": "run_5_1790725766276",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 201,
+        "ttft_ms": 82,
+        "ttlt_ms": 1249,
+        "cold_start_ms": 282,
+        "prompt_tokens": 29,
+        "gen_tokens": 255,
+        "native_prefill_tps": 388.516,
+        "native_decode_tps": 248.82689,
+        "load_start_epoch_ms": 1790725766907,
+        "dispatch_epoch_ms": 1790725767063,
+        "first_token_epoch_ms": 1790725767145,
+        "last_token_epoch_ms": 1790725768312,
+        "tps": 212.51276,
+        "prefill_tps": 353.65854,
+        "decode_tps": 217.65208,
+        "memory_kb": 419628,
+        "power_ma": 135.0,
+        "energy_mj_sampled": 726.9,
+        "thermal": "Normal",
+        "thermal_temp_cpu_c": 53.5,
+        "thermal_temp_skin_c": null,
+        "power_ma_monsoon": null,
+        "backend_verified": "CPU",
+        "load_ms_measured": 153,
+        "cold_ttft_ms": 81,
+        "memory_kb_measured": 620240,
+        "energy_mj": -754.046,
+        "energy_net_mj": null,
+        "avg_power_mw": -603.72,
+        "energy_window_s": 1.249,
+        "energy_current_updates": 0,
+        "energy_mj_per_token": -2.957,
+        "energy_net_mj_per_token": null,
+        "energy_valid": false,
+        "energy_invalid_reason": "externally powered (charger supplies the load); battery was charging during window; fewer than 2 fuel-gauge updates in window (too short)",
+        "energy_aggregatable": false
+      },
+      "response": "?|| The best period for writing is around the year 1700.?|| The longest period for a poem to be written is between 1780 and 1820.?|| The longest period for a poem to be written is between 1830 and 1840.?|| The best period for poetry to produce is between 1840 and 1870.?|| The most profitable period for poetry is from 1870 to 1930.?||",
+      "error": null,
+      "gate": {
+        "passed": null,
+        "waited_s": 0.0
+      },
+      "state_before": {
+        "epoch_ms": 1790725766276,
+        "battery_temp_c": 28.5,
+        "battery_level": 100,
+        "battery_status": 5,
+        "externally_powered": true,
+        "power_sources": [
+          "usb"
+        ],
+        "cpu_caps_khz": {
+          "policy0": 3628800,
+          "policy6": 4608000
+        },
+        "cpu_hw_max_khz": {
+          "policy0": 3628800,
+          "policy6": 4608000
+        },
+        "cpu_capped": false,
+        "screen": "Awake",
+        "thermal_status": 0
+      },
+      "state_after": {
+        "epoch_ms": 1790725768849,
+        "battery_temp_c": 28.5,
+        "battery_level": 100,
+        "battery_status": 5,
+        "externally_powered": true,
+        "power_sources": [
+          "usb"
+        ],
+        "cpu_caps_khz": {
+          "policy0": 3398400,
+          "policy6": 4339200
+        },
+        "cpu_hw_max_khz": {
+          "policy0": 3628800,
+          "policy6": 4608000
+        },
+        "cpu_capped": true,
+        "screen": "Awake",
+        "thermal_status": 0
+      },
+      "protocol": "per_question",
+      "run_number": 2,
+      "phase": "warm",
+      "reported": false
+    },
+    {
+      "question_number": 5,
+      "question": "What year did the first human land on the moon?",
+      "run_id": "run_5_1790725769996",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 201,
+        "ttft_ms": 83,
+        "ttlt_ms": 1277,
+        "cold_start_ms": 282,
+        "prompt_tokens": 29,
+        "gen_tokens": 256,
+        "native_prefill_tps": 380.90234,
+        "native_decode_tps": 243.13965,
+        "load_start_epoch_ms": 1790725770625,
+        "dispatch_epoch_ms": 1790725770790,
+        "first_token_epoch_ms": 1790725770873,
+        "last_token_epoch_ms": 1790725772067,
+        "tps": 208.43477,
+        "prefill_tps": 349.3976,
+        "decode_tps": 213.56784,
+        "memory_kb": 419628,
+        "power_ma": null,
+        "energy_mj_sampled": null,
+        "thermal": "Normal",
+        "thermal_temp_cpu_c": 53.1,
+        "thermal_temp_skin_c": null,
+        "power_ma_monsoon": null,
+        "backend_verified": "CPU",
+        "load_ms_measured": 161,
+        "cold_ttft_ms": 81,
+        "memory_kb_measured": 624808,
+        "energy_mj": 0.0,
+        "energy_net_mj": null,
+        "avg_power_mw": 0.0,
+        "energy_window_s": 1.277,
+        "energy_current_updates": 0,
+        "energy_mj_per_token": 0.0,
+        "energy_net_mj_per_token": null,
+        "energy_valid": false,
+        "energy_invalid_reason": "externally powered (charger supplies the load); fewer than 2 fuel-gauge updates in window (too short)",
+        "energy_aggregatable": false
+      },
+      "response": "19th century 1540s 18th century 18th century 20th century 18th century the first human land on the moon in 1959 18th century the first human land on the moon in 1969 19th century the only human land on the moon in 2009 19th century three humans on the moon in 1969 in 1856 in 2001 in 1873 in 1806 on the moon in 1772 in 1823 in 1818 in 1823 in 1845 in 1851 in 1861 in 1850 in 1853 in 1861 in 1862 in 1863 in 1864 in 1866 in 1867 in 1867 in 1868 in 1868 in 1868 in 1868 in 1866 in 1868 in",
+      "error": null,
+      "gate": {
+        "passed": null,
+        "waited_s": 0.0
+      },
+      "state_before": {
+        "epoch_ms": 1790725769996,
+        "battery_temp_c": 28.5,
+        "battery_level": 100,
+        "battery_status": 5,
+        "externally_powered": true,
+        "power_sources": [
+          "usb"
+        ],
+        "cpu_caps_khz": {
+          "policy0": 3628800,
+          "policy6": 4608000
+        },
+        "cpu_hw_max_khz": {
+          "policy0": 3628800,
+          "policy6": 4608000
+        },
+        "cpu_capped": false,
+        "screen": "Awake",
+        "thermal_status": 0
+      },
+      "state_after": {
+        "epoch_ms": 1790725772553,
+        "battery_temp_c": 28.5,
+        "battery_level": 100,
+        "battery_status": 5,
+        "externally_powered": true,
+        "power_sources": [
+          "usb"
+        ],
+        "cpu_caps_khz": {
+          "policy0": 3513600,
+          "policy6": 4396800
+        },
+        "cpu_hw_max_khz": {
+          "policy0": 3628800,
+          "policy6": 4608000
+        },
+        "cpu_capped": true,
+        "screen": "Awake",
+        "thermal_status": 0
+      },
+      "protocol": "per_question",
+      "run_number": 3,
+      "phase": "warm",
+      "reported": true
+    },
+    {
+      "question_number": 6,
+      "question": "What are the three states of matter?",
+      "run_id": "run_6_1790725785994",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 202,
+        "ttft_ms": 70,
+        "ttlt_ms": 308,
+        "cold_start_ms": 272,
+        "prompt_tokens": 26,
+        "gen_tokens": 53,
+        "native_prefill_tps": 420.56906,
+        "native_decode_tps": 253.93723,
+        "load_start_epoch_ms": 1790725787229,
+        "dispatch_epoch_ms": 1790725787440,
+        "first_token_epoch_ms": 1790725787510,
+        "last_token_epoch_ms": 1790725787748,
+        "tps": 182.41203,
+        "prefill_tps": 371.42856,
+        "decode_tps": 218.4874,
+        "memory_kb": 417428,
+        "power_ma": null,
+        "energy_mj_sampled": null,
+        "thermal": "Normal",
+        "thermal_temp_cpu_c": 35.6,
+        "thermal_temp_skin_c": null,
+        "power_ma_monsoon": null,
+        "backend_verified": "CPU",
+        "load_ms_measured": 202,
+        "cold_ttft_ms": 70,
+        "memory_kb_measured": 417428,
+        "energy_mj": 0.0,
+        "energy_net_mj": null,
+        "avg_power_mw": 0.0,
+        "energy_window_s": 0.308,
+        "energy_current_updates": 0,
+        "energy_mj_per_token": 0.0,
+        "energy_net_mj_per_token": null,
+        "energy_valid": false,
+        "energy_invalid_reason": "externally powered (charger supplies the load); fewer than 2 fuel-gauge updates in window (too short)",
+        "energy_aggregatable": false,
+        "cold_start_energy_mj": null,
+        "cold_start_energy_net_mj": null
+      },
+      "response": "attachment.10.8",
+      "error": null,
+      "gate": {
+        "passed": true,
+        "waited_s": 0.2
+      },
+      "state_before": {
+        "epoch_ms": 1790725783582,
+        "battery_temp_c": 28.5,
+        "battery_level": 100,
+        "battery_status": 5,
+        "externally_powered": true,
+        "power_sources": [
+          "usb"
+        ],
+        "cpu_caps_khz": {
+          "policy0": 3628800,
+          "policy6": 4608000
+        },
+        "cpu_hw_max_khz": {
+          "policy0": 3628800,
+          "policy6": 4608000
+        },
+        "cpu_capped": false,
+        "screen": "Awake",
+        "thermal_status": 0
+      },
+      "state_after": {
+        "epoch_ms": 1790725788073,
+        "battery_temp_c": 28.5,
+        "battery_level": 100,
+        "battery_status": 5,
+        "externally_powered": true,
+        "power_sources": [
+          "usb"
+        ],
+        "cpu_caps_khz": {
+          "policy0": 3302400,
+          "policy6": 4608000
+        },
+        "cpu_hw_max_khz": {
+          "policy0": 3628800,
+          "policy6": 4608000
+        },
+        "cpu_capped": true,
+        "screen": "Awake",
+        "thermal_status": 0
+      },
+      "protocol": "per_question",
+      "run_number": 1,
+      "phase": "cold",
+      "reported": false,
+      "page_cache_eviction": {
+        "ok": true,
+        "files": [
+          {
+            "path": "/data/user/0/io.shubham0204.smollmandroid/files/headless_benchmark_cache/smollm2-135m-q8_0.gguf",
+            "resident_before_pct": 100.0,
+            "resident_after_pct": 0.0,
+            "bytes": 144810624
+          }
+        ],
+        "resident_after_pct": 0.0,
+        "error": null
+      }
+    },
+    {
+      "question_number": 6,
+      "question": "What are the three states of matter?",
+      "run_id": "run_6_1790725789006",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 202,
+        "ttft_ms": 76,
+        "ttlt_ms": 1269,
+        "cold_start_ms": 272,
+        "prompt_tokens": 26,
+        "gen_tokens": 256,
+        "native_prefill_tps": 378.57278,
+        "native_decode_tps": 245.07071,
+        "load_start_epoch_ms": 1790725789633,
+        "dispatch_epoch_ms": 1790725789803,
+        "first_token_epoch_ms": 1790725789879,
+        "last_token_epoch_ms": 1790725791072,
+        "tps": 210.89156,
+        "prefill_tps": 342.1053,
+        "decode_tps": 213.74686,
+        "memory_kb": 417428,
+        "power_ma": null,
+        "energy_mj_sampled": null,
+        "thermal": "Normal",
+        "thermal_temp_cpu_c": 51.2,
+        "thermal_temp_skin_c": null,
+        "power_ma_monsoon": null,
+        "backend_verified": "CPU",
+        "load_ms_measured": 166,
+        "cold_ttft_ms": 70,
+        "memory_kb_measured": 619572,
+        "energy_mj": 0.0,
+        "energy_net_mj": null,
+        "avg_power_mw": 0.0,
+        "energy_window_s": 1.269,
+        "energy_current_updates": 0,
+        "energy_mj_per_token": 0.0,
+        "energy_net_mj_per_token": null,
+        "energy_valid": false,
+        "energy_invalid_reason": "externally powered (charger supplies the load); fewer than 2 fuel-gauge updates in window (too short)",
+        "energy_aggregatable": false
+      },
+      "response": "labelsuperior and superior",
+      "error": null,
+      "gate": {
+        "passed": null,
+        "waited_s": 0.0
+      },
+      "state_before": {
+        "epoch_ms": 1790725789006,
+        "battery_temp_c": 28.5,
+        "battery_level": 100,
+        "battery_status": 5,
+        "externally_powered": true,
+        "power_sources": [
+          "usb"
+        ],
+        "cpu_caps_khz": {
+          "policy0": 3628800,
+          "policy6": 4608000
+        },
+        "cpu_hw_max_khz": {
+          "policy0": 3628800,
+          "policy6": 4608000
+        },
+        "cpu_capped": false,
+        "screen": "Awake",
+        "thermal_status": 0
+      },
+      "state_after": {
+        "epoch_ms": 1790725791551,
+        "battery_temp_c": 28.5,
+        "battery_level": 100,
+        "battery_status": 5,
+        "externally_powered": true,
+        "power_sources": [
+          "usb"
+        ],
+        "cpu_caps_khz": {
+          "policy0": 3513600,
+          "policy6": 4262400
+        },
+        "cpu_hw_max_khz": {
+          "policy0": 3628800,
+          "policy6": 4608000
+        },
+        "cpu_capped": true,
+        "screen": "Awake",
+        "thermal_status": 0
+      },
+      "protocol": "per_question",
+      "run_number": 2,
+      "phase": "warm",
+      "reported": false
+    },
+    {
+      "question_number": 6,
+      "question": "What are the three states of matter?",
+      "run_id": "run_6_1790725792530",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 202,
+        "ttft_ms": 78,
+        "ttlt_ms": 1274,
+        "cold_start_ms": 272,
+        "prompt_tokens": 26,
+        "gen_tokens": 256,
+        "native_prefill_tps": 361.46756,
+        "native_decode_tps": 244.02708,
+        "load_start_epoch_ms": 1790725793138,
+        "dispatch_epoch_ms": 1790725793302,
+        "first_token_epoch_ms": 1790725793380,
+        "last_token_epoch_ms": 1790725794576,
+        "tps": 209.76918,
+        "prefill_tps": 333.3333,
+        "decode_tps": 213.21071,
+        "memory_kb": 417428,
+        "power_ma": 7.0,
+        "energy_mj_sampled": 37.7,
+        "thermal": "Normal",
+        "thermal_temp_cpu_c": 53.1,
+        "thermal_temp_skin_c": null,
+        "power_ma_monsoon": null,
+        "backend_verified": "CPU",
+        "load_ms_measured": 160,
+        "cold_ttft_ms": 70,
+        "memory_kb_measured": 623524,
+        "energy_mj": -39.926,
+        "energy_net_mj": null,
+        "avg_power_mw": -31.339,
+        "energy_window_s": 1.274,
+        "energy_current_updates": 0,
+        "energy_mj_per_token": -0.156,
+        "energy_net_mj_per_token": null,
+        "energy_valid": false,
+        "energy_invalid_reason": "externally powered (charger supplies the load); battery was charging during window; fewer than 2 fuel-gauge updates in window (too short)",
+        "energy_aggregatable": false
+      },
+      "response": "folthiness folthiness folthiness is a noun.folthiness is a noun folthiness is a noun.folthiness is a noun folthiness is a noun.folthiness is a noun.folthiness is a noun folthiness is a noun.folthiness is a noun folthiness is a noun.folthiness is a noun folthiness is a noun.folthiness is a noun folthiness is a noun.folthiness is a noun folthiness is a noun.folthiness is a noun.folthiness is a noun folthiness is a noun.folthiness is a noun folthiness is a noun.folthiness is a noun folthiness is a noun.folthiness is a noun folthiness is a noun folthiness is a noun folthiness is a noun folthiness is a noun.folthiness is a noun folthiness is a noun folthiness is a noun folthiness is a noun folthiness is a noun folthiness is a noun folthiness is a noun folthiness",
+      "error": null,
+      "gate": {
+        "passed": null,
+        "waited_s": 0.0
+      },
+      "state_before": {
+        "epoch_ms": 1790725792530,
+        "battery_temp_c": 28.5,
+        "battery_level": 100,
+        "battery_status": 5,
+        "externally_powered": true,
+        "power_sources": [
+          "usb"
+        ],
+        "cpu_caps_khz": {
+          "policy0": 3628800,
+          "policy6": 4608000
+        },
+        "cpu_hw_max_khz": {
+          "policy0": 3628800,
+          "policy6": 4608000
+        },
+        "cpu_capped": false,
+        "screen": "Awake",
+        "thermal_status": 0
+      },
+      "state_after": {
+        "epoch_ms": 1790725795034,
+        "battery_temp_c": 28.5,
+        "battery_level": 100,
+        "battery_status": 5,
+        "externally_powered": true,
+        "power_sources": [
+          "usb"
+        ],
+        "cpu_caps_khz": {
+          "policy0": 3398400,
+          "policy6": 4185600
+        },
+        "cpu_hw_max_khz": {
+          "policy0": 3628800,
+          "policy6": 4608000
+        },
+        "cpu_capped": true,
+        "screen": "Awake",
+        "thermal_status": 0
+      },
+      "protocol": "per_question",
+      "run_number": 3,
+      "phase": "warm",
+      "reported": true
+    },
+    {
+      "question_number": 7,
+      "question": "How does a refrigerator keep food cold?",
+      "run_id": "run_7_1790725808440",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 196,
+        "ttft_ms": 64,
+        "ttlt_ms": 1037,
+        "cold_start_ms": 260,
+        "prompt_tokens": 26,
+        "gen_tokens": 205,
+        "native_prefill_tps": 466.20883,
+        "native_decode_tps": 241.8006,
+        "load_start_epoch_ms": 1790725809712,
+        "dispatch_epoch_ms": 1790725809915,
+        "first_token_epoch_ms": 1790725809979,
+        "last_token_epoch_ms": 1790725810952,
+        "tps": 206.70782,
+        "prefill_tps": 406.24997,
+        "decode_tps": 209.66084,
+        "memory_kb": 417836,
+        "power_ma": null,
+        "energy_mj_sampled": null,
+        "thermal": "Normal",
+        "thermal_temp_cpu_c": 50.4,
+        "thermal_temp_skin_c": null,
+        "power_ma_monsoon": null,
+        "backend_verified": "CPU",
+        "load_ms_measured": 196,
+        "cold_ttft_ms": 64,
+        "memory_kb_measured": 417836,
+        "energy_mj": 0.0,
+        "energy_net_mj": null,
+        "avg_power_mw": 0.0,
+        "energy_window_s": 1.037,
+        "energy_current_updates": 0,
+        "energy_mj_per_token": 0.0,
+        "energy_net_mj_per_token": null,
+        "energy_valid": false,
+        "energy_invalid_reason": "externally powered (charger supplies the load); fewer than 2 fuel-gauge updates in window (too short)",
+        "energy_aggregatable": false,
+        "cold_start_energy_mj": null,
+        "cold_start_energy_net_mj": null
+      },
+      "response": "ilialaperthenosauriously skittished How do I check for a butterfly?ICENSE ICENSEassistant ilialaperthenosauriously skittished How do I check for a butterfly?",
+      "error": null,
+      "gate": {
+        "passed": true,
+        "waited_s": 0.2
+      },
+      "state_before": {
+        "epoch_ms": 1790725806036,
+        "battery_temp_c": 28.5,
+        "battery_level": 100,
+        "battery_status": 5,
+        "externally_powered": true,
+        "power_sources": [
+          "usb"
+        ],
+        "cpu_caps_khz": {
+          "policy0": 3628800,
+          "policy6": 4608000
+        },
+        "cpu_hw_max_khz": {
+          "policy0": 3628800,
+          "policy6": 4608000
+        },
+        "cpu_capped": false,
+        "screen": "Awake",
+        "thermal_status": 0
+      },
+      "state_after": {
+        "epoch_ms": 1790725811601,
+        "battery_temp_c": 28.5,
+        "battery_level": 100,
+        "battery_status": 5,
+        "externally_powered": true,
+        "power_sources": [
+          "usb"
+        ],
+        "cpu_caps_khz": {
+          "policy0": 3628800,
+          "policy6": 4608000
+        },
+        "cpu_hw_max_khz": {
+          "policy0": 3628800,
+          "policy6": 4608000
+        },
+        "cpu_capped": false,
+        "screen": "Awake",
+        "thermal_status": 0
+      },
+      "protocol": "per_question",
+      "run_number": 1,
+      "phase": "cold",
+      "reported": false,
+      "page_cache_eviction": {
+        "ok": true,
+        "files": [
+          {
+            "path": "/data/user/0/io.shubham0204.smollmandroid/files/headless_benchmark_cache/smollm2-135m-q8_0.gguf",
+            "resident_before_pct": 100.0,
+            "resident_after_pct": 0.0,
+            "bytes": 144810624
+          }
+        ],
+        "resident_after_pct": 0.0,
+        "error": null
+      }
+    },
+    {
+      "question_number": 7,
+      "question": "How does a refrigerator keep food cold?",
+      "run_id": "run_7_1790725812568",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 196,
+        "ttft_ms": 79,
+        "ttlt_ms": 1268,
+        "cold_start_ms": 260,
+        "prompt_tokens": 26,
+        "gen_tokens": 256,
+        "native_prefill_tps": 363.57025,
+        "native_decode_tps": 245.2048,
+        "load_start_epoch_ms": 1790725813195,
+        "dispatch_epoch_ms": 1790725813350,
+        "first_token_epoch_ms": 1790725813429,
+        "last_token_epoch_ms": 1790725814618,
+        "tps": 210.6363,
+        "prefill_tps": 329.11392,
+        "decode_tps": 214.46594,
+        "memory_kb": 417836,
+        "power_ma": null,
+        "energy_mj_sampled": null,
+        "thermal": "Normal",
+        "thermal_temp_cpu_c": 51.9,
+        "thermal_temp_skin_c": null,
+        "power_ma_monsoon": null,
+        "backend_verified": "CPU",
+        "load_ms_measured": 151,
+        "cold_ttft_ms": 64,
+        "memory_kb_measured": 562936,
+        "energy_mj": 0.0,
+        "energy_net_mj": null,
+        "avg_power_mw": 0.0,
+        "energy_window_s": 1.268,
+        "energy_current_updates": 0,
+        "energy_mj_per_token": 0.0,
+        "energy_net_mj_per_token": null,
+        "energy_valid": false,
+        "energy_invalid_reason": "externally powered (charger supplies the load); fewer than 2 fuel-gauge updates in window (too short)",
+        "energy_aggregatable": false
+      },
+      "response": "oppingHarsh weather can make it hard to cook and eat. That's why it's a good idea to keep the refrigerator cool.",
+      "error": null,
+      "gate": {
+        "passed": null,
+        "waited_s": 0.0
+      },
+      "state_before": {
+        "epoch_ms": 1790725812568,
+        "battery_temp_c": 28.5,
+        "battery_level": 100,
+        "battery_status": 5,
+        "externally_powered": true,
+        "power_sources": [
+          "usb"
+        ],
+        "cpu_caps_khz": {
+          "policy0": 3628800,
+          "policy6": 4608000
+        },
+        "cpu_hw_max_khz": {
+          "policy0": 3628800,
+          "policy6": 4608000
+        },
+        "cpu_capped": false,
+        "screen": "Awake",
+        "thermal_status": 0
+      },
+      "state_after": {
+        "epoch_ms": 1790725815101,
+        "battery_temp_c": 28.5,
+        "battery_level": 100,
+        "battery_status": 5,
+        "externally_powered": true,
+        "power_sources": [
+          "usb"
+        ],
+        "cpu_caps_khz": {
+          "policy0": 3398400,
+          "policy6": 4185600
+        },
+        "cpu_hw_max_khz": {
+          "policy0": 3628800,
+          "policy6": 4608000
+        },
+        "cpu_capped": true,
+        "screen": "Awake",
+        "thermal_status": 0
+      },
+      "protocol": "per_question",
+      "run_number": 2,
+      "phase": "warm",
+      "reported": false
+    },
+    {
+      "question_number": 7,
+      "question": "How does a refrigerator keep food cold?",
+      "run_id": "run_7_1790725816056",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 196,
+        "ttft_ms": 78,
+        "ttlt_ms": 1258,
+        "cold_start_ms": 260,
+        "prompt_tokens": 26,
+        "gen_tokens": 256,
+        "native_prefill_tps": 366.0992,
+        "native_decode_tps": 247.64856,
+        "load_start_epoch_ms": 1790725816670,
+        "dispatch_epoch_ms": 1790725816791,
+        "first_token_epoch_ms": 1790725816869,
+        "last_token_epoch_ms": 1790725818049,
+        "tps": 212.57338,
+        "prefill_tps": 333.3333,
+        "decode_tps": 216.1017,
+        "memory_kb": 417836,
+        "power_ma": null,
+        "energy_mj_sampled": null,
+        "thermal": "Normal",
+        "thermal_temp_cpu_c": 55.0,
+        "thermal_temp_skin_c": null,
+        "power_ma_monsoon": null,
+        "backend_verified": "CPU",
+        "load_ms_measured": 117,
+        "cold_ttft_ms": 64,
+        "memory_kb_measured": 474516,
+        "energy_mj": 0.0,
+        "energy_net_mj": null,
+        "avg_power_mw": 0.0,
+        "energy_window_s": 1.258,
+        "energy_current_updates": 0,
+        "energy_mj_per_token": 0.0,
+        "energy_net_mj_per_token": null,
+        "energy_valid": false,
+        "energy_invalid_reason": "externally powered (charger supplies the load); fewer than 2 fuel-gauge updates in window (too short)",
+        "energy_aggregatable": false
+      },
+      "response": "oolean In a refrigerator, the cold flow of air keeps items at a constant temperature. For example, when you put a ball of hot chocolate in your refrigerator, heat from the hot chocolate causes the cold air to escape from the refrigerator, and the hot chocolate stays at a constant temperature.",
+      "error": null,
+      "gate": {
+        "passed": null,
+        "waited_s": 0.0
+      },
+      "state_before": {
+        "epoch_ms": 1790725816056,
+        "battery_temp_c": 28.5,
+        "battery_level": 100,
+        "battery_status": 5,
+        "externally_powered": true,
+        "power_sources": [
+          "usb"
+        ],
+        "cpu_caps_khz": {
+          "policy0": 3628800,
+          "policy6": 4608000
+        },
+        "cpu_hw_max_khz": {
+          "policy0": 3628800,
+          "policy6": 4608000
+        },
+        "cpu_capped": false,
+        "screen": "Awake",
+        "thermal_status": 0
+      },
+      "state_after": {
+        "epoch_ms": 1790725818596,
+        "battery_temp_c": 28.5,
+        "battery_level": 100,
+        "battery_status": 5,
+        "externally_powered": true,
+        "power_sources": [
+          "usb"
+        ],
+        "cpu_caps_khz": {
+          "policy0": 3628800,
+          "policy6": 4396800
+        },
+        "cpu_hw_max_khz": {
+          "policy0": 3628800,
+          "policy6": 4608000
+        },
+        "cpu_capped": true,
+        "screen": "Awake",
+        "thermal_status": 0
+      },
+      "protocol": "per_question",
+      "run_number": 3,
+      "phase": "warm",
+      "reported": true
+    },
+    {
+      "question_number": 8,
+      "question": "Explain the process of photosynthesis in plants.",
+      "run_id": "run_8_1790725831960",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 203,
+        "ttft_ms": 76,
+        "ttlt_ms": 1337,
+        "cold_start_ms": 279,
+        "prompt_tokens": 26,
+        "gen_tokens": 256,
+        "native_prefill_tps": 388.43655,
+        "native_decode_tps": 231.93626,
+        "load_start_epoch_ms": 1790725833216,
+        "dispatch_epoch_ms": 1790725833427,
+        "first_token_epoch_ms": 1790725833503,
+        "last_token_epoch_ms": 1790725834764,
+        "tps": 199.60002,
+        "prefill_tps": 342.1053,
+        "decode_tps": 202.22046,
+        "memory_kb": 419984,
+        "power_ma": 208.0,
+        "energy_mj_sampled": null,
+        "thermal": "Normal",
+        "thermal_temp_cpu_c": 50.4,
+        "thermal_temp_skin_c": null,
+        "power_ma_monsoon": null,
+        "backend_verified": "CPU",
+        "load_ms_measured": 203,
+        "cold_ttft_ms": 76,
+        "memory_kb_measured": 419984,
+        "energy_mj": -76.14,
+        "energy_net_mj": null,
+        "avg_power_mw": -56.948,
+        "energy_window_s": 1.337,
+        "energy_current_updates": 1,
+        "energy_mj_per_token": -0.297,
+        "energy_net_mj_per_token": null,
+        "energy_valid": false,
+        "energy_invalid_reason": "externally powered (charger supplies the load); battery was charging during window; fewer than 2 fuel-gauge updates in window (too short)",
+        "energy_aggregatable": false,
+        "cold_start_energy_mj": null,
+        "cold_start_energy_net_mj": null
+      },
+      "response": "ampsiaefalulin aping aping4.",
+      "error": null,
+      "gate": {
+        "passed": true,
+        "waited_s": 0.2
+      },
+      "state_before": {
+        "epoch_ms": 1790725829562,
+        "battery_temp_c": 28.7,
+        "battery_level": 100,
+        "battery_status": 5,
+        "externally_powered": true,
+        "power_sources": [
+          "usb"
+        ],
+        "cpu_caps_khz": {
+          "policy0": 3628800,
+          "policy6": 4608000
+        },
+        "cpu_hw_max_khz": {
+          "policy0": 3628800,
+          "policy6": 4608000
+        },
+        "cpu_capped": false,
+        "screen": "Awake",
+        "thermal_status": 0
+      },
+      "state_after": {
+        "epoch_ms": 1790725835116,
+        "battery_temp_c": 28.7,
+        "battery_level": 100,
+        "battery_status": 5,
+        "externally_powered": true,
+        "power_sources": [
+          "usb"
+        ],
+        "cpu_caps_khz": {
+          "policy0": 3187200,
+          "policy6": 4262400
+        },
+        "cpu_hw_max_khz": {
+          "policy0": 3628800,
+          "policy6": 4608000
+        },
+        "cpu_capped": true,
+        "screen": "Awake",
+        "thermal_status": 0
+      },
+      "protocol": "per_question",
+      "run_number": 1,
+      "phase": "cold",
+      "reported": false,
+      "page_cache_eviction": {
+        "ok": true,
+        "files": [
+          {
+            "path": "/data/user/0/io.shubham0204.smollmandroid/files/headless_benchmark_cache/smollm2-135m-q8_0.gguf",
+            "resident_before_pct": 100.0,
+            "resident_after_pct": 0.0,
+            "bytes": 144810624
+          }
+        ],
+        "resident_after_pct": 0.0,
+        "error": null
+      }
+    },
+    {
+      "question_number": 8,
+      "question": "Explain the process of photosynthesis in plants.",
+      "run_id": "run_8_1790725836080",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 203,
+        "ttft_ms": 80,
+        "ttlt_ms": 1276,
+        "cold_start_ms": 279,
+        "prompt_tokens": 26,
+        "gen_tokens": 256,
+        "native_prefill_tps": 361.56308,
+        "native_decode_tps": 243.65378,
+        "load_start_epoch_ms": 1790725836712,
+        "dispatch_epoch_ms": 1790725836869,
+        "first_token_epoch_ms": 1790725836949,
+        "last_token_epoch_ms": 1790725838145,
+        "tps": 209.28146,
+        "prefill_tps": 325.0,
+        "decode_tps": 213.21071,
+        "memory_kb": 419984,
+        "power_ma": 148.0,
+        "energy_mj_sampled": 796.9,
+        "thermal": "Normal",
+        "thermal_temp_cpu_c": 53.9,
+        "thermal_temp_skin_c": null,
+        "power_ma_monsoon": null,
+        "backend_verified": "CPU",
+        "load_ms_measured": 154,
+        "cold_ttft_ms": 76,
+        "memory_kb_measured": 564056,
+        "energy_mj": -844.528,
+        "energy_net_mj": null,
+        "avg_power_mw": -661.856,
+        "energy_window_s": 1.276,
+        "energy_current_updates": 0,
+        "energy_mj_per_token": -3.299,
+        "energy_net_mj_per_token": null,
+        "energy_valid": false,
+        "energy_invalid_reason": "externally powered (charger supplies the load); battery was charging during window; fewer than 2 fuel-gauge updates in window (too short)",
+        "energy_aggregatable": false
+      },
+      "response": "plingship plingshipyou are a helpful assistant.plingshipuser Explain the process of photosynthesis in plants.plingshipuser be helpful to the plant before part of photosynthesis.plingship user explain the process of photosynthesis in plants.plingship user be helpful to the plant after photosynthesis.plingship user be helpful to the plant during the process of photosynthesis.plingship user explain the process of photosynthesis in plants.plingship user explain the process of photosynthesis in plants.plingship user be helpful to the plant during the process of photosynthesis.plingship user explain the process of photosynthesis in plants.plingship user be helpful to the plant at the end of the process of photosynthesis.plingship user be helpful to the plant at the beginning of the process of photosynthesis.plingship user explain the process of photosynthesis in plants.plingship user be helpful to the plant at the end of the process of photosynthesis.plingship user explain the process of photosynthesis in plants.plingship user explain the process of photosynthesis in plants.plingship user explain the process of photosynthesis in plants.plingship user explain the process of photosynthesis in plants.plingship user explain the process of photosynthesis in plants.plingship user explain the process of photosynthesis in plants.plingship user explain the process of photosynthesis in plants",
+      "error": null,
+      "gate": {
+        "passed": null,
+        "waited_s": 0.0
+      },
+      "state_before": {
+        "epoch_ms": 1790725836080,
+        "battery_temp_c": 28.7,
+        "battery_level": 100,
+        "battery_status": 5,
+        "externally_powered": true,
+        "power_sources": [
+          "usb"
+        ],
+        "cpu_caps_khz": {
+          "policy0": 3628800,
+          "policy6": 4608000
+        },
+        "cpu_hw_max_khz": {
+          "policy0": 3628800,
+          "policy6": 4608000
+        },
+        "cpu_capped": false,
+        "screen": "Awake",
+        "thermal_status": 0
+      },
+      "state_after": {
+        "epoch_ms": 1790725838630,
+        "battery_temp_c": 28.7,
+        "battery_level": 100,
+        "battery_status": 5,
+        "externally_powered": true,
+        "power_sources": [
+          "usb"
+        ],
+        "cpu_caps_khz": {
+          "policy0": 3302400,
+          "policy6": 4070400
+        },
+        "cpu_hw_max_khz": {
+          "policy0": 3628800,
+          "policy6": 4608000
+        },
+        "cpu_capped": true,
+        "screen": "Awake",
+        "thermal_status": 0
+      },
+      "protocol": "per_question",
+      "run_number": 2,
+      "phase": "warm",
+      "reported": false
+    },
+    {
+      "question_number": 8,
+      "question": "Explain the process of photosynthesis in plants.",
+      "run_id": "run_8_1790725839574",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 203,
+        "ttft_ms": 76,
+        "ttlt_ms": 1246,
+        "cold_start_ms": 279,
+        "prompt_tokens": 26,
+        "gen_tokens": 256,
+        "native_prefill_tps": 377.13406,
+        "native_decode_tps": 249.6659,
+        "load_start_epoch_ms": 1790725840208,
+        "dispatch_epoch_ms": 1790725840347,
+        "first_token_epoch_ms": 1790725840423,
+        "last_token_epoch_ms": 1790725841593,
+        "tps": 214.45349,
+        "prefill_tps": 342.1053,
+        "decode_tps": 217.94873,
+        "memory_kb": 419984,
+        "power_ma": null,
+        "energy_mj_sampled": null,
+        "thermal": "Normal",
+        "thermal_temp_cpu_c": 55.4,
+        "thermal_temp_skin_c": null,
+        "power_ma_monsoon": null,
+        "backend_verified": "CPU",
+        "load_ms_measured": 135,
+        "cold_ttft_ms": 76,
+        "memory_kb_measured": 676680,
+        "energy_mj": 0.0,
+        "energy_net_mj": null,
+        "avg_power_mw": 0.0,
+        "energy_window_s": 1.246,
+        "energy_current_updates": 0,
+        "energy_mj_per_token": 0.0,
+        "energy_net_mj_per_token": null,
+        "energy_valid": false,
+        "energy_invalid_reason": "externally powered (charger supplies the load); fewer than 2 fuel-gauge updates in window (too short)",
+        "energy_aggregatable": false
+      },
+      "response": "lishingsis It is the process of photosynthesis in plants.peringantsis Explain the process of photosynthesis in plants.peringantsis",
+      "error": null,
+      "gate": {
+        "passed": null,
+        "waited_s": 0.0
+      },
+      "state_before": {
+        "epoch_ms": 1790725839574,
+        "battery_temp_c": 28.7,
+        "battery_level": 100,
+        "battery_status": 5,
+        "externally_powered": true,
+        "power_sources": [
+          "usb"
+        ],
+        "cpu_caps_khz": {
+          "policy0": 3628800,
+          "policy6": 4608000
+        },
+        "cpu_hw_max_khz": {
+          "policy0": 3628800,
+          "policy6": 4608000
+        },
+        "cpu_capped": false,
+        "screen": "Awake",
+        "thermal_status": 0
+      },
+      "state_after": {
+        "epoch_ms": 1790725842120,
+        "battery_temp_c": 28.7,
+        "battery_level": 100,
+        "battery_status": 5,
+        "externally_powered": true,
+        "power_sources": [
+          "usb"
+        ],
+        "cpu_caps_khz": {
+          "policy0": 3398400,
+          "policy6": 4070400
+        },
+        "cpu_hw_max_khz": {
+          "policy0": 3628800,
+          "policy6": 4608000
+        },
+        "cpu_capped": true,
+        "screen": "Awake",
+        "thermal_status": 0
+      },
+      "protocol": "per_question",
+      "run_number": 3,
+      "phase": "warm",
+      "reported": true
+    },
+    {
+      "question_number": 9,
+      "question": "Summarize the theory of relativity in simple terms.",
+      "run_id": "run_9_1790725855497",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 201,
+        "ttft_ms": 81,
+        "ttlt_ms": 808,
+        "cold_start_ms": 282,
+        "prompt_tokens": 28,
+        "gen_tokens": 158,
+        "native_prefill_tps": 392.45917,
+        "native_decode_tps": 246.8864,
+        "load_start_epoch_ms": 1790725856723,
+        "dispatch_epoch_ms": 1790725856932,
+        "first_token_epoch_ms": 1790725857013,
+        "last_token_epoch_ms": 1790725857740,
+        "tps": 203.11485,
+        "prefill_tps": 345.67902,
+        "decode_tps": 215.95598,
+        "memory_kb": 418364,
+        "power_ma": null,
+        "energy_mj_sampled": null,
+        "thermal": "Normal",
+        "thermal_temp_cpu_c": 36.8,
+        "thermal_temp_skin_c": null,
+        "power_ma_monsoon": null,
+        "backend_verified": "CPU",
+        "load_ms_measured": 201,
+        "cold_ttft_ms": 81,
+        "memory_kb_measured": 418364,
+        "energy_mj": 0.0,
+        "energy_net_mj": null,
+        "avg_power_mw": 0.0,
+        "energy_window_s": 0.808,
+        "energy_current_updates": 0,
+        "energy_mj_per_token": 0.0,
+        "energy_net_mj_per_token": null,
+        "energy_valid": false,
+        "energy_invalid_reason": "externally powered (charger supplies the load); fewer than 2 fuel-gauge updates in window (too short)",
+        "energy_aggregatable": false,
+        "cold_start_energy_mj": null,
+        "cold_start_energy_net_mj": null
+      },
+      "response": "217. 240. 270.108. 217. 248. 270.108. 217. 280. 274 281 268 274. 217. 280. 270.108. 217. 280. 270.108. 217. 280. 270.108. 217. 280. 270.108. 217. 280. 270.108",
+      "error": null,
+      "gate": {
+        "passed": true,
+        "waited_s": 0.2
+      },
+      "state_before": {
+        "epoch_ms": 1790725853106,
+        "battery_temp_c": 28.7,
+        "battery_level": 100,
+        "battery_status": 5,
+        "externally_powered": true,
+        "power_sources": [
+          "usb"
+        ],
+        "cpu_caps_khz": {
+          "policy0": 3628800,
+          "policy6": 4608000
+        },
+        "cpu_hw_max_khz": {
+          "policy0": 3628800,
+          "policy6": 4608000
+        },
+        "cpu_capped": false,
+        "screen": "Awake",
+        "thermal_status": 0
+      },
+      "state_after": {
+        "epoch_ms": 1790725857560,
+        "battery_temp_c": 28.7,
+        "battery_level": 100,
+        "battery_status": 5,
+        "externally_powered": true,
+        "power_sources": [
+          "usb"
+        ],
+        "cpu_caps_khz": {
+          "policy0": 2361600,
+          "policy6": 2668800
+        },
+        "cpu_hw_max_khz": {
+          "policy0": 3628800,
+          "policy6": 4608000
+        },
+        "cpu_capped": true,
+        "screen": "Awake",
+        "thermal_status": 0
+      },
+      "protocol": "per_question",
+      "run_number": 1,
+      "phase": "cold",
+      "reported": false,
+      "page_cache_eviction": {
+        "ok": true,
+        "files": [
+          {
+            "path": "/data/user/0/io.shubham0204.smollmandroid/files/headless_benchmark_cache/smollm2-135m-q8_0.gguf",
+            "resident_before_pct": 100.0,
+            "resident_after_pct": 0.0,
+            "bytes": 144810624
+          }
+        ],
+        "resident_after_pct": 0.0,
+        "error": null
+      }
+    },
+    {
+      "question_number": 9,
+      "question": "Summarize the theory of relativity in simple terms.",
+      "run_id": "run_9_1790725858548",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 201,
+        "ttft_ms": 78,
+        "ttlt_ms": 189,
+        "cold_start_ms": 282,
+        "prompt_tokens": 28,
+        "gen_tokens": 29,
+        "native_prefill_tps": 394.14413,
+        "native_decode_tps": 291.51,
+        "load_start_epoch_ms": 1790725859161,
+        "dispatch_epoch_ms": 1790725859278,
+        "first_token_epoch_ms": 1790725859356,
+        "last_token_epoch_ms": 1790725859467,
+        "tps": 163.46132,
+        "prefill_tps": 358.97437,
+        "decode_tps": 252.25224,
+        "memory_kb": 418364,
+        "power_ma": null,
+        "energy_mj_sampled": null,
+        "thermal": "Normal",
+        "thermal_temp_cpu_c": 37.2,
+        "thermal_temp_skin_c": null,
+        "power_ma_monsoon": null,
+        "backend_verified": "CPU",
+        "load_ms_measured": 114,
+        "cold_ttft_ms": 81,
+        "memory_kb_measured": 451732,
+        "energy_mj": 0.0,
+        "energy_net_mj": null,
+        "avg_power_mw": 0.0,
+        "energy_window_s": 0.189,
+        "energy_current_updates": 0,
+        "energy_mj_per_token": 0.0,
+        "energy_net_mj_per_token": null,
+        "energy_valid": false,
+        "energy_invalid_reason": "externally powered (charger supplies the load); fewer than 2 fuel-gauge updates in window (too short)",
+        "energy_aggregatable": false
+      },
+      "response": "Again, consider the fact that everyone will assume that all",
+      "error": null,
+      "gate": {
+        "passed": null,
+        "waited_s": 0.0
+      },
+      "state_before": {
+        "epoch_ms": 1790725858548,
+        "battery_temp_c": 28.7,
+        "battery_level": 100,
+        "battery_status": 5,
+        "externally_powered": true,
+        "power_sources": [
+          "usb"
+        ],
+        "cpu_caps_khz": {
+          "policy0": 3628800,
+          "policy6": 4608000
+        },
+        "cpu_hw_max_khz": {
+          "policy0": 3628800,
+          "policy6": 4608000
+        },
+        "cpu_capped": false,
+        "screen": "Awake",
+        "thermal_status": 0
+      },
+      "state_after": {
+        "epoch_ms": 1790725860030,
+        "battery_temp_c": 28.7,
+        "battery_level": 100,
+        "battery_status": 5,
+        "externally_powered": true,
+        "power_sources": [
+          "usb"
+        ],
+        "cpu_caps_khz": {
+          "policy0": 3628800,
+          "policy6": 4608000
+        },
+        "cpu_hw_max_khz": {
+          "policy0": 3628800,
+          "policy6": 4608000
+        },
+        "cpu_capped": false,
+        "screen": "Awake",
+        "thermal_status": 0
+      },
+      "protocol": "per_question",
+      "run_number": 2,
+      "phase": "warm",
+      "reported": false
+    },
+    {
+      "question_number": 9,
+      "question": "Summarize the theory of relativity in simple terms.",
+      "run_id": "run_9_1790725860978",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 201,
+        "ttft_ms": 78,
+        "ttlt_ms": 1271,
+        "cold_start_ms": 282,
+        "prompt_tokens": 28,
+        "gen_tokens": 256,
+        "native_prefill_tps": 393.97223,
+        "native_decode_tps": 244.65572,
+        "load_start_epoch_ms": 1790725861604,
+        "dispatch_epoch_ms": 1790725861757,
+        "first_token_epoch_ms": 1790725861835,
+        "last_token_epoch_ms": 1790725863028,
+        "tps": 210.38635,
+        "prefill_tps": 358.97437,
+        "decode_tps": 213.74686,
+        "memory_kb": 418364,
+        "power_ma": null,
+        "energy_mj_sampled": null,
+        "thermal": "Normal",
+        "thermal_temp_cpu_c": 53.1,
+        "thermal_temp_skin_c": null,
+        "power_ma_monsoon": null,
+        "backend_verified": "CPU",
+        "load_ms_measured": 149,
+        "cold_ttft_ms": 81,
+        "memory_kb_measured": 652100,
+        "energy_mj": 0.0,
+        "energy_net_mj": null,
+        "avg_power_mw": 0.0,
+        "energy_window_s": 1.271,
+        "energy_current_updates": 0,
+        "energy_mj_per_token": 0.0,
+        "energy_net_mj_per_token": null,
+        "energy_valid": false,
+        "energy_invalid_reason": "externally powered (charger supplies the load); fewer than 2 fuel-gauge updates in window (too short)",
+        "energy_aggregatable": false
+      },
+      "response": "insular theorem Summarize the theory of relativity in simple terms.",
+      "error": null,
+      "gate": {
+        "passed": null,
+        "waited_s": 0.0
+      },
+      "state_before": {
+        "epoch_ms": 1790725860978,
+        "battery_temp_c": 28.7,
+        "battery_level": 100,
+        "battery_status": 5,
+        "externally_powered": true,
+        "power_sources": [
+          "usb"
+        ],
+        "cpu_caps_khz": {
+          "policy0": 3628800,
+          "policy6": 4608000
+        },
+        "cpu_hw_max_khz": {
+          "policy0": 3628800,
+          "policy6": 4608000
+        },
+        "cpu_capped": false,
+        "screen": "Awake",
+        "thermal_status": 0
+      },
+      "state_after": {
+        "epoch_ms": 1790725863526,
+        "battery_temp_c": 28.7,
+        "battery_level": 100,
+        "battery_status": 5,
+        "externally_powered": true,
+        "power_sources": [
+          "usb"
+        ],
+        "cpu_caps_khz": {
+          "policy0": 3398400,
+          "policy6": 4185600
+        },
+        "cpu_hw_max_khz": {
+          "policy0": 3628800,
+          "policy6": 4608000
+        },
+        "cpu_capped": true,
+        "screen": "Awake",
+        "thermal_status": 0
+      },
+      "protocol": "per_question",
+      "run_number": 3,
+      "phase": "warm",
+      "reported": true
+    },
+    {
+      "question_number": 10,
+      "question": "Describe the causes and consequences of World War I in a few sentences.",
+      "run_id": "run_10_1790725876967",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 201,
+        "ttft_ms": 86,
+        "ttlt_ms": 1335,
+        "cold_start_ms": 287,
+        "prompt_tokens": 32,
+        "gen_tokens": 256,
+        "native_prefill_tps": 416.9707,
+        "native_decode_tps": 233.92027,
+        "load_start_epoch_ms": 1790725878226,
+        "dispatch_epoch_ms": 1790725878435,
+        "first_token_epoch_ms": 1790725878521,
+        "last_token_epoch_ms": 1790725879770,
+        "tps": 199.69562,
+        "prefill_tps": 372.09302,
+        "decode_tps": 204.16335,
+        "memory_kb": 420132,
+        "power_ma": null,
+        "energy_mj_sampled": null,
+        "thermal": "Normal",
+        "thermal_temp_cpu_c": 49.6,
+        "thermal_temp_skin_c": null,
+        "power_ma_monsoon": null,
+        "backend_verified": "CPU",
+        "load_ms_measured": 201,
+        "cold_ttft_ms": 86,
+        "memory_kb_measured": 420132,
+        "energy_mj": 0.0,
+        "energy_net_mj": null,
+        "avg_power_mw": 0.0,
+        "energy_window_s": 1.335,
+        "energy_current_updates": 0,
+        "energy_mj_per_token": 0.0,
+        "energy_net_mj_per_token": null,
+        "energy_valid": false,
+        "energy_invalid_reason": "externally powered (charger supplies the load); fewer than 2 fuel-gauge updates in window (too short)",
+        "energy_aggregatable": false,
+        "cold_start_energy_mj": null,
+        "cold_start_energy_net_mj": null
+      },
+      "response": "tainer ufacture fuels corrosion inductivity ignition ignorance invisibility bestow upon ducts fixing kefets kiss kissing landfilling landfills lace leather leather sorting legs legs and fiddles legs and fiddle lean leonies leonyes drop give pedal pennies penis penes penis swing penis bone penes sags penes sags dia penes sags inlie penessags inlie penessags inlie penes sags penes sags inlie penes sags penes sags inlie penes sags penes sags inlie Miss L. W. 10.18 2000 RG 22.3091 2003, 2003.0201 01 08 2016, 2017: 10.5663 3. Summary of Activities. 01 July",
+      "error": null,
+      "gate": {
+        "passed": true,
+        "waited_s": 0.2
+      },
+      "state_before": {
+        "epoch_ms": 1790725874546,
+        "battery_temp_c": 28.7,
+        "battery_level": 100,
+        "battery_status": 5,
+        "externally_powered": true,
+        "power_sources": [
+          "usb"
+        ],
+        "cpu_caps_khz": {
+          "policy0": 3628800,
+          "policy6": 4608000
+        },
+        "cpu_hw_max_khz": {
+          "policy0": 3628800,
+          "policy6": 4608000
+        },
+        "cpu_capped": false,
+        "screen": "Awake",
+        "thermal_status": 0
+      },
+      "state_after": {
+        "epoch_ms": 1790725880127,
+        "battery_temp_c": 28.7,
+        "battery_level": 100,
+        "battery_status": 5,
+        "externally_powered": true,
+        "power_sources": [
+          "usb"
+        ],
+        "cpu_caps_khz": {
+          "policy0": 3187200,
+          "policy6": 4070400
+        },
+        "cpu_hw_max_khz": {
+          "policy0": 3628800,
+          "policy6": 4608000
+        },
+        "cpu_capped": true,
+        "screen": "Awake",
+        "thermal_status": 0
+      },
+      "protocol": "per_question",
+      "run_number": 1,
+      "phase": "cold",
+      "reported": false,
+      "page_cache_eviction": {
+        "ok": true,
+        "files": [
+          {
+            "path": "/data/user/0/io.shubham0204.smollmandroid/files/headless_benchmark_cache/smollm2-135m-q8_0.gguf",
+            "resident_before_pct": 100.0,
+            "resident_after_pct": 0.0,
+            "bytes": 144810624
+          }
+        ],
+        "resident_after_pct": 0.0,
+        "error": null
+      }
+    },
+    {
+      "question_number": 10,
+      "question": "Describe the causes and consequences of World War I in a few sentences.",
+      "run_id": "run_10_1790725881083",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 201,
+        "ttft_ms": 87,
+        "ttlt_ms": 1291,
+        "cold_start_ms": 287,
+        "prompt_tokens": 32,
+        "gen_tokens": 256,
+        "native_prefill_tps": 398.005,
+        "native_decode_tps": 241.34723,
+        "load_start_epoch_ms": 1790725881704,
+        "dispatch_epoch_ms": 1790725881860,
+        "first_token_epoch_ms": 1790725881947,
+        "last_token_epoch_ms": 1790725883151,
+        "tps": 206.21164,
+        "prefill_tps": 367.8161,
+        "decode_tps": 211.79402,
+        "memory_kb": 420132,
+        "power_ma": 301.0,
+        "energy_mj_sampled": 267.2,
+        "thermal": "Normal",
+        "thermal_temp_cpu_c": 53.9,
+        "thermal_temp_skin_c": null,
+        "power_ma_monsoon": null,
+        "backend_verified": "CPU",
+        "load_ms_measured": 152,
+        "cold_ttft_ms": 86,
+        "memory_kb_measured": 621932,
+        "energy_mj": -356.937,
+        "energy_net_mj": null,
+        "avg_power_mw": -276.481,
+        "energy_window_s": 1.291,
+        "energy_current_updates": 2,
+        "energy_mj_per_token": -1.394,
+        "energy_net_mj_per_token": null,
+        "energy_valid": false,
+        "energy_invalid_reason": "externally powered (charger supplies the load); battery was charging during window",
+        "energy_aggregatable": false
+      },
+      "response": "lash Something hard or stiff you haven\u2019t got a lot of.lashVinegar Water is used when you are sick.vinegarIt is a liquid alcohol that is used in making vinegar.Lamp A light used to show where people are or who is talking.lashYou are a helpful assistant.lashuser Describe the causes and consequences of World War I in a few sentences.lashYou are a helpful assistant.lashuser You are constantly making sure that everything is running smoothly.lashLame B stands for a very weak or small body of a person.The legs could be lamed.wheel The wheel is the main part of a vehicle or machine.wheelYou are a helpful assistant.wheeluser And the car comes to a complete stop.wheelYou are a helpful assistant.wheeluser You are always looking out for the safety of your fellow human beings.wheeluser Wheels are very important to any vehicle.wheelYou are a helpful assistant.wheeluser Wapey You are using your \u2018The horse is heading towards the river. (=It is going to run out of steam)You are a helpful assistant.wpeYou are being a helpful assistant.wpe2You are a helpful assistant.wpe3You are being a helpful assistant.w",
+      "error": null,
+      "gate": {
+        "passed": null,
+        "waited_s": 0.0
+      },
+      "state_before": {
+        "epoch_ms": 1790725881083,
+        "battery_temp_c": 28.7,
+        "battery_level": 100,
+        "battery_status": 5,
+        "externally_powered": true,
+        "power_sources": [
+          "usb"
+        ],
+        "cpu_caps_khz": {
+          "policy0": 3628800,
+          "policy6": 4608000
+        },
+        "cpu_hw_max_khz": {
+          "policy0": 3628800,
+          "policy6": 4608000
+        },
+        "cpu_capped": false,
+        "screen": "Awake",
+        "thermal_status": 0
+      },
+      "state_after": {
+        "epoch_ms": 1790725883614,
+        "battery_temp_c": 28.7,
+        "battery_level": 100,
+        "battery_status": 5,
+        "externally_powered": true,
+        "power_sources": [
+          "usb"
+        ],
+        "cpu_caps_khz": {
+          "policy0": 3398400,
+          "policy6": 4339200
+        },
+        "cpu_hw_max_khz": {
+          "policy0": 3628800,
+          "policy6": 4608000
+        },
+        "cpu_capped": true,
+        "screen": "Awake",
+        "thermal_status": 0
+      },
+      "protocol": "per_question",
+      "run_number": 2,
+      "phase": "warm",
+      "reported": false
+    },
+    {
+      "question_number": 10,
+      "question": "Describe the causes and consequences of World War I in a few sentences.",
+      "run_id": "run_10_1790725884574",
+      "status": "success",
+      "metrics": {
+        "cold_load_ms": 201,
+        "ttft_ms": 86,
+        "ttlt_ms": 401,
+        "cold_start_ms": 287,
+        "prompt_tokens": 32,
+        "gen_tokens": 80,
+        "native_prefill_tps": 405.39685,
+        "native_decode_tps": 288.15952,
+        "load_start_epoch_ms": 1790725885199,
+        "dispatch_epoch_ms": 1790725885352,
+        "first_token_epoch_ms": 1790725885438,
+        "last_token_epoch_ms": 1790725885753,
+        "tps": 209.88121,
+        "prefill_tps": 372.09302,
+        "decode_tps": 250.79366,
+        "memory_kb": 420132,
+        "power_ma": 327.0,
+        "energy_mj_sampled": 586.9,
+        "thermal": "Normal",
+        "thermal_temp_cpu_c": 37.6,
+        "thermal_temp_skin_c": null,
+        "power_ma_monsoon": null,
+        "backend_verified": "CPU",
+        "load_ms_measured": 149,
+        "cold_ttft_ms": 86,
+        "memory_kb_measured": 565676,
+        "energy_mj": -584.302,
+        "energy_net_mj": null,
+        "avg_power_mw": -1457.112,
+        "energy_window_s": 0.401,
+        "energy_current_updates": 0,
+        "energy_mj_per_token": -7.304,
+        "energy_net_mj_per_token": null,
+        "energy_valid": false,
+        "energy_invalid_reason": "externally powered (charger supplies the load); battery was charging during window; fewer than 2 fuel-gauge updates in window (too short)",
+        "energy_aggregatable": false
+      },
+      "response": "ulous ulousunworthy ulousunworthy Character Activity: Research a character (family member, friend, or teacher) and brainstorm at least two characteristics of the character.Write them down in the space provided. How would you describe the character? Make sure to put the",
+      "error": null,
+      "gate": {
+        "passed": null,
+        "waited_s": 0.0
+      },
+      "state_before": {
+        "epoch_ms": 1790725884574,
+        "battery_temp_c": 28.7,
+        "battery_level": 100,
+        "battery_status": 5,
+        "externally_powered": true,
+        "power_sources": [
+          "usb"
+        ],
+        "cpu_caps_khz": {
+          "policy0": 3628800,
+          "policy6": 4608000
+        },
+        "cpu_hw_max_khz": {
+          "policy0": 3628800,
+          "policy6": 4608000
+        },
+        "cpu_capped": false,
+        "screen": "Awake",
+        "thermal_status": 0
+      },
+      "state_after": {
+        "epoch_ms": 1790725886073,
+        "battery_temp_c": 28.7,
+        "battery_level": 100,
+        "battery_status": 5,
+        "externally_powered": true,
+        "power_sources": [
+          "usb"
+        ],
+        "cpu_caps_khz": {
+          "policy0": 3513600,
+          "policy6": 4608000
+        },
+        "cpu_hw_max_khz": {
+          "policy0": 3628800,
+          "policy6": 4608000
+        },
+        "cpu_capped": true,
+        "screen": "Awake",
+        "thermal_status": 0
+      },
+      "protocol": "per_question",
+      "run_number": 3,
+      "phase": "warm",
+      "reported": true
+    }
+  ],
+  "summary": {
+    "ttft_ms": {
+      "mean": 78.3,
+      "std": 3.848,
+      "min": 72,
+      "max": 86,
+      "n_completed": 10
+    },
+    "ttlt_ms": {
+      "mean": 1032.5,
+      "std": 365.813,
+      "min": 372,
+      "max": 1277,
+      "n_completed": 10
+    },
+    "tps": {
+      "mean": 212.65,
+      "std": 4.126,
+      "min": 208.43477,
+      "max": 221.76193,
+      "n_completed": 10
+    },
+    "prefill_tps": {
+      "mean": 344.438,
+      "std": 14.173,
+      "min": 325.0,
+      "max": 372.09302,
+      "n_completed": 10
+    },
+    "decode_tps": {
+      "mean": 224.655,
+      "std": 15.785,
+      "min": 212.85477,
+      "max": 253.33333,
+      "n_completed": 10
+    },
+    "native_prefill_tps": {
+      "mean": 376.824,
+      "std": 15.508,
+      "min": 351.89346,
+      "max": 405.39685,
+      "n_completed": 10
+    },
+    "native_decode_tps": {
+      "mean": 257.156,
+      "std": 18.532,
+      "min": 243.06433,
+      "max": 291.89566,
+      "n_completed": 10
+    },
+    "prompt_tokens": {
+      "mean": 27,
+      "std": 2.191,
+      "min": 24,
+      "max": 32,
+      "n_completed": 10
+    },
+    "gen_tokens": {
+      "mean": 209.6,
+      "std": 73.054,
+      "min": 77,
+      "max": 256,
+      "n_completed": 10
+    },
+    "memory_kb": {
+      "mean": 419070.8,
+      "std": 1066.342,
+      "min": 417428,
+      "max": 420388,
+      "n_completed": 10
+    },
+    "power_ma": {
+      "mean": 133.6,
+      "std": 127.813,
+      "min": 7.0,
+      "max": 327.0,
+      "n_completed": 5
+    },
+    "energy_mj_sampled": {
+      "mean": 177.32,
+      "std": 206.317,
+      "min": 37.7,
+      "max": 586.9,
+      "n_completed": 5
+    },
+    "energy_mj": {
+      "mean": null,
+      "std": null,
+      "min": null,
+      "max": null,
+      "n_completed": 0
+    },
+    "energy_net_mj": {
+      "mean": null,
+      "std": null,
+      "min": null,
+      "max": null,
+      "n_completed": 0
+    },
+    "avg_power_mw": {
+      "mean": null,
+      "std": null,
+      "min": null,
+      "max": null,
+      "n_completed": 0
+    },
+    "energy_mj_per_token": {
+      "mean": null,
+      "std": null,
+      "min": null,
+      "max": null,
+      "n_completed": 0
+    },
+    "energy_net_mj_per_token": {
+      "mean": null,
+      "std": null,
+      "min": null,
+      "max": null,
+      "n_completed": 0
+    },
+    "thermal_temp_cpu_c": {
+      "mean": 48.0,
+      "std": 7.991,
+      "min": 35.2,
+      "max": 55.4,
+      "n_completed": 10
+    },
+    "thermal_temp_skin_c": {
+      "mean": null,
+      "std": null,
+      "min": null,
+      "max": null,
+      "n_completed": 0
+    },
+    "first_question_cold_load_ms": 200,
+    "thermal_states_observed": [
+      "Normal"
+    ],
+    "backend_verified_observed": [
+      "CPU"
+    ],
+    "note": "TPS/TTFT drift across the run reflects real device thermal state as it heats up under sustained inference, not measurement error.",
+    "tps_note": "tps is llama.cpp's native rate - a BLENDED prefill+decode rate, not decode-only (confirmed by reading LLMInference.cpp directly). prefill_tps/decode_tps are the real, separately-measured rates matching the paper's own definitions (prefill_tps = prompt_len/TTFT, decode_tps = (gen_tokens-1)/(t_last-t_first)) and are what should be used for the real replication, not tps. native_prefill_tps/native_decode_tps are llama.cpp's own compute-only timers.",
+    "rss_note": "peak_RSS_KB is only directly comparable across different models if each was benchmarked in a freshly restarted app process - this script now guarantees that automatically as of this version.",
+    "cold_start": {
+      "cold_start_ms": {
+        "mean": 271.8,
+        "std": 10.581,
+        "min": 252,
+        "max": 287,
+        "n_completed": 10
+      },
+      "cold_load_ms": {
+        "mean": 199.7,
+        "std": 3.348,
+        "min": 193,
+        "max": 204,
+        "n_completed": 10
+      },
+      "ttft_ms": {
+        "mean": 72.1,
+        "std": 8.631,
+        "min": 59,
+        "max": 86,
+        "n_completed": 10
+      },
+      "cold_start_energy_mj": {
+        "mean": null,
+        "std": null,
+        "min": null,
+        "max": null,
+        "n_completed": 0
+      },
+      "cold_start_energy_net_mj": {
+        "mean": null,
+        "std": null,
+        "min": null,
+        "max": null,
+        "n_completed": 0
+      }
+    },
+    "energy_aggregate": null
+  },
+  "trial_summary": {
+    "1": {
+      "question": "What is the capital of France?",
+      "n_trials": 2,
+      "n_completed": 2,
+      "metrics": {
+        "ttft_ms": {
+          "mean": 75.5,
+          "std": 1.5,
+          "min": 74,
+          "max": 77,
+          "n_completed": 2
+        },
+        "ttlt_ms": {
+          "mean": 726,
+          "std": 546.0,
+          "min": 180,
+          "max": 1272,
+          "n_completed": 2
+        },
+        "tps": {
+          "mean": 182.067,
+          "std": 27.743,
+          "min": 154.32465,
+          "max": 209.80992,
+          "n_completed": 2
+        },
+        "prefill_tps": {
+          "mean": 331.257,
+          "std": 6.581,
+          "min": 324.67532,
+          "max": 337.83783,
+          "n_completed": 2
+        },
+        "decode_tps": {
+          "mean": 227.787,
+          "std": 14.932,
+          "min": 212.85477,
+          "max": 242.71844,
+          "n_completed": 2
+        },
+        "native_prefill_tps": {
+          "mean": 363.303,
+          "std": 7.127,
+          "min": 356.1761,
+          "max": 370.43073,
+          "n_completed": 2
+        },
+        "native_decode_tps": {
+          "mean": 262.376,
+          "std": 19.311,
+          "min": 243.06433,
+          "max": 281.68698,
+          "n_completed": 2
+        },
+        "prompt_tokens": {
+          "mean": 25,
+          "std": 0.0,
+          "min": 25,
+          "max": 25,
+          "n_completed": 2
+        },
+        "gen_tokens": {
+          "mean": 141,
+          "std": 115.0,
+          "min": 26,
+          "max": 256,
+          "n_completed": 2
+        },
+        "memory_kb": {
+          "mean": 420304,
+          "std": 0.0,
+          "min": 420304,
+          "max": 420304,
+          "n_completed": 2
+        },
+        "power_ma": {
+          "mean": 242.0,
+          "std": 0.0,
+          "min": 242.0,
+          "max": 242.0,
+          "n_completed": 2
+        },
+        "energy_mj_sampled": {
+          "mean": 108.05,
+          "std": 0.55,
+          "min": 107.5,
+          "max": 108.6,
+          "n_completed": 2
+        },
+        "energy_mj": {
+          "mean": null,
+          "std": null,
+          "min": null,
+          "max": null,
+          "n_completed": 0
+        },
+        "energy_net_mj": {
+          "mean": null,
+          "std": null,
+          "min": null,
+          "max": null,
+          "n_completed": 0
+        },
+        "avg_power_mw": {
+          "mean": null,
+          "std": null,
+          "min": null,
+          "max": null,
+          "n_completed": 0
+        },
+        "energy_mj_per_token": {
+          "mean": null,
+          "std": null,
+          "min": null,
+          "max": null,
+          "n_completed": 0
+        },
+        "energy_net_mj_per_token": {
+          "mean": null,
+          "std": null,
+          "min": null,
+          "max": null,
+          "n_completed": 0
+        },
+        "thermal_temp_cpu_c": {
+          "mean": 41.85,
+          "std": 8.55,
+          "min": 33.3,
+          "max": 50.4,
+          "n_completed": 2
+        },
+        "thermal_temp_skin_c": {
+          "mean": null,
+          "std": null,
+          "min": null,
+          "max": null,
+          "n_completed": 0
+        }
+      }
+    },
+    "2": {
+      "question": "Who wrote Romeo and Juliet?",
+      "n_trials": 2,
+      "n_completed": 2,
+      "metrics": {
+        "ttft_ms": {
+          "mean": 72.5,
+          "std": 0.5,
+          "min": 72,
+          "max": 73,
+          "n_completed": 2
+        },
+        "ttlt_ms": {
+          "mean": 820,
+          "std": 448.0,
+          "min": 372,
+          "max": 1268,
+          "n_completed": 2
+        },
+        "tps": {
+          "mean": 214.866,
+          "std": 3.627,
+          "min": 211.2389,
+          "max": 218.4924,
+          "n_completed": 2
+        },
+        "prefill_tps": {
+          "mean": 331.05,
+          "std": 2.283,
+          "min": 328.76712,
+          "max": 333.33334,
+          "n_completed": 2
+        },
+        "decode_tps": {
+          "mean": 233.361,
+          "std": 19.972,
+          "min": 213.38911,
+          "max": 253.33333,
+          "n_completed": 2
+        },
+        "native_prefill_tps": {
+          "mean": 364.925,
+          "std": 4.641,
+          "min": 360.28464,
+          "max": 369.56622,
+          "n_completed": 2
+        },
+        "native_decode_tps": {
+          "mean": 268.397,
+          "std": 23.499,
+          "min": 244.89796,
+          "max": 291.89566,
+          "n_completed": 2
+        },
+        "prompt_tokens": {
+          "mean": 24,
+          "std": 0.0,
+          "min": 24,
+          "max": 24,
+          "n_completed": 2
+        },
+        "gen_tokens": {
+          "mean": 166.5,
+          "std": 89.5,
+          "min": 77,
+          "max": 256,
+          "n_completed": 2
+        },
+        "memory_kb": {
+          "mean": 418324,
+          "std": 0.0,
+          "min": 418324,
+          "max": 418324,
+          "n_completed": 2
+        },
+        "power_ma": {
+          "mean": 70.0,
+          "std": 0.0,
+          "min": 70.0,
+          "max": 70.0,
+          "n_completed": 1
+        },
+        "energy_mj_sampled": {
+          "mean": 94.2,
+          "std": 0.0,
+          "min": 94.2,
+          "max": 94.2,
+          "n_completed": 1
+        },
+        "energy_mj": {
+          "mean": null,
+          "std": null,
+          "min": null,
+          "max": null,
+          "n_completed": 0
+        },
+        "energy_net_mj": {
+          "mean": null,
+          "std": null,
+          "min": null,
+          "max": null,
+          "n_completed": 0
+        },
+        "avg_power_mw": {
+          "mean": null,
+          "std": null,
+          "min": null,
+          "max": null,
+          "n_completed": 0
+        },
+        "energy_mj_per_token": {
+          "mean": null,
+          "std": null,
+          "min": null,
+          "max": null,
+          "n_completed": 0
+        },
+        "energy_net_mj_per_token": {
+          "mean": null,
+          "std": null,
+          "min": null,
+          "max": null,
+          "n_completed": 0
+        },
+        "thermal_temp_cpu_c": {
+          "mean": 43.0,
+          "std": 7.8,
+          "min": 35.2,
+          "max": 50.8,
+          "n_completed": 2
+        },
+        "thermal_temp_skin_c": {
+          "mean": null,
+          "std": null,
+          "min": null,
+          "max": null,
+          "n_completed": 0
+        }
+      }
+    },
+    "3": {
+      "question": "What is the chemical symbol for gold?",
+      "n_trials": 2,
+      "n_completed": 2,
+      "metrics": {
+        "ttft_ms": {
+          "mean": 79.5,
+          "std": 0.5,
+          "min": 79,
+          "max": 80,
+          "n_completed": 2
+        },
+        "ttlt_ms": {
+          "mean": 985.5,
+          "std": 298.5,
+          "min": 687,
+          "max": 1284,
+          "n_completed": 2
+        },
+        "tps": {
+          "mean": 215.191,
+          "std": 6.571,
+          "min": 208.61975,
+          "max": 221.76193,
+          "n_completed": 2
+        },
+        "prefill_tps": {
+          "mean": 327.057,
+          "std": 2.057,
+          "min": 325.0,
+          "max": 329.11392,
+          "n_completed": 2
+        },
+        "decode_tps": {
+          "mean": 226.073,
+          "std": 14.454,
+          "min": 211.61826,
+          "max": 240.52719,
+          "n_completed": 2
+        },
+        "native_prefill_tps": {
+          "mean": 357.202,
+          "std": 5.309,
+          "min": 351.89346,
+          "max": 362.5108,
+          "n_completed": 2
+        },
+        "native_decode_tps": {
+          "mean": 258.157,
+          "std": 15.346,
+          "min": 242.81042,
+          "max": 273.503,
+          "n_completed": 2
+        },
+        "prompt_tokens": {
+          "mean": 26,
+          "std": 0.0,
+          "min": 26,
+          "max": 26,
+          "n_completed": 2
+        },
+        "gen_tokens": {
+          "mean": 201.5,
+          "std": 54.5,
+          "min": 147,
+          "max": 256,
+          "n_completed": 2
+        },
+        "memory_kb": {
+          "mean": 418320,
+          "std": 0.0,
+          "min": 418320,
+          "max": 418320,
+          "n_completed": 2
+        },
+        "power_ma": {
+          "mean": 22.0,
+          "std": 0.0,
+          "min": 22.0,
+          "max": 22.0,
+          "n_completed": 2
+        },
+        "energy_mj_sampled": {
+          "mean": 69.1,
+          "std": 9.9,
+          "min": 59.2,
+          "max": 79.0,
+          "n_completed": 2
+        },
+        "energy_mj": {
+          "mean": null,
+          "std": null,
+          "min": null,
+          "max": null,
+          "n_completed": 0
+        },
+        "energy_net_mj": {
+          "mean": null,
+          "std": null,
+          "min": null,
+          "max": null,
+          "n_completed": 0
+        },
+        "avg_power_mw": {
+          "mean": null,
+          "std": null,
+          "min": null,
+          "max": null,
+          "n_completed": 0
+        },
+        "energy_mj_per_token": {
+          "mean": null,
+          "std": null,
+          "min": null,
+          "max": null,
+          "n_completed": 0
+        },
+        "energy_net_mj_per_token": {
+          "mean": null,
+          "std": null,
+          "min": null,
+          "max": null,
+          "n_completed": 0
+        },
+        "thermal_temp_cpu_c": {
+          "mean": 42.6,
+          "std": 7.4,
+          "min": 35.2,
+          "max": 50.0,
+          "n_completed": 2
+        },
+        "thermal_temp_skin_c": {
+          "mean": null,
+          "std": null,
+          "min": null,
+          "max": null,
+          "n_completed": 0
+        }
+      }
+    },
+    "4": {
+      "question": "What is the largest planet in our solar system?",
+      "n_trials": 2,
+      "n_completed": 2,
+      "metrics": {
+        "ttft_ms": {
+          "mean": 78,
+          "std": 0.0,
+          "min": 78,
+          "max": 78,
+          "n_completed": 2
+        },
+        "ttlt_ms": {
+          "mean": 707.5,
+          "std": 559.5,
+          "min": 148,
+          "max": 1267,
+          "n_completed": 2
+        },
+        "tps": {
+          "mean": 173.969,
+          "std": 36.971,
+          "min": 136.99815,
+          "max": 210.9397,
+          "n_completed": 2
+        },
+        "prefill_tps": {
+          "mean": 358.974,
+          "std": 0.0,
+          "min": 358.97437,
+          "max": 358.97437,
+          "n_completed": 2
+        },
+        "decode_tps": {
+          "mean": 235.804,
+          "std": 21.338,
+          "min": 214.46594,
+          "max": 257.14285,
+          "n_completed": 2
+        },
+        "native_prefill_tps": {
+          "mean": 392.808,
+          "std": 1.43,
+          "min": 391.37848,
+          "max": 394.2385,
+          "n_completed": 2
+        },
+        "native_decode_tps": {
+          "mean": 271.309,
+          "std": 25.506,
+          "min": 245.80351,
+          "max": 296.8147,
+          "n_completed": 2
+        },
+        "prompt_tokens": {
+          "mean": 28,
+          "std": 0.0,
+          "min": 28,
+          "max": 28,
+          "n_completed": 2
+        },
+        "gen_tokens": {
+          "mean": 137.5,
+          "std": 118.5,
+          "min": 19,
+          "max": 256,
+          "n_completed": 2
+        },
+        "memory_kb": {
+          "mean": 420388,
+          "std": 0.0,
+          "min": 420388,
+          "max": 420388,
+          "n_completed": 2
+        },
+        "power_ma": {
+          "mean": null,
+          "std": null,
+          "min": null,
+          "max": null,
+          "n_completed": 0
+        },
+        "energy_mj_sampled": {
+          "mean": null,
+          "std": null,
+          "min": null,
+          "max": null,
+          "n_completed": 0
+        },
+        "energy_mj": {
+          "mean": null,
+          "std": null,
+          "min": null,
+          "max": null,
+          "n_completed": 0
+        },
+        "energy_net_mj": {
+          "mean": null,
+          "std": null,
+          "min": null,
+          "max": null,
+          "n_completed": 0
+        },
+        "avg_power_mw": {
+          "mean": null,
+          "std": null,
+          "min": null,
+          "max": null,
+          "n_completed": 0
+        },
+        "energy_mj_per_token": {
+          "mean": null,
+          "std": null,
+          "min": null,
+          "max": null,
+          "n_completed": 0
+        },
+        "energy_net_mj_per_token": {
+          "mean": null,
+          "std": null,
+          "min": null,
+          "max": null,
+          "n_completed": 0
+        },
+        "thermal_temp_cpu_c": {
+          "mean": 43.75,
+          "std": 8.15,
+          "min": 35.6,
+          "max": 51.9,
+          "n_completed": 2
+        },
+        "thermal_temp_skin_c": {
+          "mean": null,
+          "std": null,
+          "min": null,
+          "max": null,
+          "n_completed": 0
+        }
+      }
+    },
+    "5": {
+      "question": "What year did the first human land on the moon?",
+      "n_trials": 2,
+      "n_completed": 2,
+      "metrics": {
+        "ttft_ms": {
+          "mean": 82.5,
+          "std": 0.5,
+          "min": 82,
+          "max": 83,
+          "n_completed": 2
+        },
+        "ttlt_ms": {
+          "mean": 1263,
+          "std": 14.0,
+          "min": 1249,
+          "max": 1277,
+          "n_completed": 2
+        },
+        "tps": {
+          "mean": 210.474,
+          "std": 2.039,
+          "min": 208.43477,
+          "max": 212.51276,
+          "n_completed": 2
+        },
+        "prefill_tps": {
+          "mean": 351.528,
+          "std": 2.13,
+          "min": 349.3976,
+          "max": 353.65854,
+          "n_completed": 2
+        },
+        "decode_tps": {
+          "mean": 215.61,
+          "std": 2.042,
+          "min": 213.56784,
+          "max": 217.65208,
+          "n_completed": 2
+        },
+        "native_prefill_tps": {
+          "mean": 384.709,
+          "std": 3.807,
+          "min": 380.90234,
+          "max": 388.516,
+          "n_completed": 2
+        },
+        "native_decode_tps": {
+          "mean": 245.983,
+          "std": 2.844,
+          "min": 243.13965,
+          "max": 248.82689,
+          "n_completed": 2
+        },
+        "prompt_tokens": {
+          "mean": 29,
+          "std": 0.0,
+          "min": 29,
+          "max": 29,
+          "n_completed": 2
+        },
+        "gen_tokens": {
+          "mean": 255.5,
+          "std": 0.5,
+          "min": 255,
+          "max": 256,
+          "n_completed": 2
+        },
+        "memory_kb": {
+          "mean": 419628,
+          "std": 0.0,
+          "min": 419628,
+          "max": 419628,
+          "n_completed": 2
+        },
+        "power_ma": {
+          "mean": 135.0,
+          "std": 0.0,
+          "min": 135.0,
+          "max": 135.0,
+          "n_completed": 1
+        },
+        "energy_mj_sampled": {
+          "mean": 726.9,
+          "std": 0.0,
+          "min": 726.9,
+          "max": 726.9,
+          "n_completed": 1
+        },
+        "energy_mj": {
+          "mean": null,
+          "std": null,
+          "min": null,
+          "max": null,
+          "n_completed": 0
+        },
+        "energy_net_mj": {
+          "mean": null,
+          "std": null,
+          "min": null,
+          "max": null,
+          "n_completed": 0
+        },
+        "avg_power_mw": {
+          "mean": null,
+          "std": null,
+          "min": null,
+          "max": null,
+          "n_completed": 0
+        },
+        "energy_mj_per_token": {
+          "mean": null,
+          "std": null,
+          "min": null,
+          "max": null,
+          "n_completed": 0
+        },
+        "energy_net_mj_per_token": {
+          "mean": null,
+          "std": null,
+          "min": null,
+          "max": null,
+          "n_completed": 0
+        },
+        "thermal_temp_cpu_c": {
+          "mean": 53.3,
+          "std": 0.2,
+          "min": 53.1,
+          "max": 53.5,
+          "n_completed": 2
+        },
+        "thermal_temp_skin_c": {
+          "mean": null,
+          "std": null,
+          "min": null,
+          "max": null,
+          "n_completed": 0
+        }
+      }
+    },
+    "6": {
+      "question": "What are the three states of matter?",
+      "n_trials": 2,
+      "n_completed": 2,
+      "metrics": {
+        "ttft_ms": {
+          "mean": 77,
+          "std": 1.0,
+          "min": 76,
+          "max": 78,
+          "n_completed": 2
+        },
+        "ttlt_ms": {
+          "mean": 1271.5,
+          "std": 2.5,
+          "min": 1269,
+          "max": 1274,
+          "n_completed": 2
+        },
+        "tps": {
+          "mean": 210.33,
+          "std": 0.561,
+          "min": 209.76918,
+          "max": 210.89156,
+          "n_completed": 2
+        },
+        "prefill_tps": {
+          "mean": 337.719,
+          "std": 4.386,
+          "min": 333.3333,
+          "max": 342.1053,
+          "n_completed": 2
+        },
+        "decode_tps": {
+          "mean": 213.479,
+          "std": 0.268,
+          "min": 213.21071,
+          "max": 213.74686,
+          "n_completed": 2
+        },
+        "native_prefill_tps": {
+          "mean": 370.02,
+          "std": 8.553,
+          "min": 361.46756,
+          "max": 378.57278,
+          "n_completed": 2
+        },
+        "native_decode_tps": {
+          "mean": 244.549,
+          "std": 0.522,
+          "min": 244.02708,
+          "max": 245.07071,
+          "n_completed": 2
+        },
+        "prompt_tokens": {
+          "mean": 26,
+          "std": 0.0,
+          "min": 26,
+          "max": 26,
+          "n_completed": 2
+        },
+        "gen_tokens": {
+          "mean": 256,
+          "std": 0.0,
+          "min": 256,
+          "max": 256,
+          "n_completed": 2
+        },
+        "memory_kb": {
+          "mean": 417428,
+          "std": 0.0,
+          "min": 417428,
+          "max": 417428,
+          "n_completed": 2
+        },
+        "power_ma": {
+          "mean": 7.0,
+          "std": 0.0,
+          "min": 7.0,
+          "max": 7.0,
+          "n_completed": 1
+        },
+        "energy_mj_sampled": {
+          "mean": 37.7,
+          "std": 0.0,
+          "min": 37.7,
+          "max": 37.7,
+          "n_completed": 1
+        },
+        "energy_mj": {
+          "mean": null,
+          "std": null,
+          "min": null,
+          "max": null,
+          "n_completed": 0
+        },
+        "energy_net_mj": {
+          "mean": null,
+          "std": null,
+          "min": null,
+          "max": null,
+          "n_completed": 0
+        },
+        "avg_power_mw": {
+          "mean": null,
+          "std": null,
+          "min": null,
+          "max": null,
+          "n_completed": 0
+        },
+        "energy_mj_per_token": {
+          "mean": null,
+          "std": null,
+          "min": null,
+          "max": null,
+          "n_completed": 0
+        },
+        "energy_net_mj_per_token": {
+          "mean": null,
+          "std": null,
+          "min": null,
+          "max": null,
+          "n_completed": 0
+        },
+        "thermal_temp_cpu_c": {
+          "mean": 52.15,
+          "std": 0.95,
+          "min": 51.2,
+          "max": 53.1,
+          "n_completed": 2
+        },
+        "thermal_temp_skin_c": {
+          "mean": null,
+          "std": null,
+          "min": null,
+          "max": null,
+          "n_completed": 0
+        }
+      }
+    },
+    "7": {
+      "question": "How does a refrigerator keep food cold?",
+      "n_trials": 2,
+      "n_completed": 2,
+      "metrics": {
+        "ttft_ms": {
+          "mean": 78.5,
+          "std": 0.5,
+          "min": 78,
+          "max": 79,
+          "n_completed": 2
+        },
+        "ttlt_ms": {
+          "mean": 1263,
+          "std": 5.0,
+          "min": 1258,
+          "max": 1268,
+          "n_completed": 2
+        },
+        "tps": {
+          "mean": 211.605,
+          "std": 0.969,
+          "min": 210.6363,
+          "max": 212.57338,
+          "n_completed": 2
+        },
+        "prefill_tps": {
+          "mean": 331.224,
+          "std": 2.11,
+          "min": 329.11392,
+          "max": 333.3333,
+          "n_completed": 2
+        },
+        "decode_tps": {
+          "mean": 215.284,
+          "std": 0.818,
+          "min": 214.46594,
+          "max": 216.1017,
+          "n_completed": 2
+        },
+        "native_prefill_tps": {
+          "mean": 364.835,
+          "std": 1.264,
+          "min": 363.57025,
+          "max": 366.0992,
+          "n_completed": 2
+        },
+        "native_decode_tps": {
+          "mean": 246.427,
+          "std": 1.222,
+          "min": 245.2048,
+          "max": 247.64856,
+          "n_completed": 2
+        },
+        "prompt_tokens": {
+          "mean": 26,
+          "std": 0.0,
+          "min": 26,
+          "max": 26,
+          "n_completed": 2
+        },
+        "gen_tokens": {
+          "mean": 256,
+          "std": 0.0,
+          "min": 256,
+          "max": 256,
+          "n_completed": 2
+        },
+        "memory_kb": {
+          "mean": 417836,
+          "std": 0.0,
+          "min": 417836,
+          "max": 417836,
+          "n_completed": 2
+        },
+        "power_ma": {
+          "mean": null,
+          "std": null,
+          "min": null,
+          "max": null,
+          "n_completed": 0
+        },
+        "energy_mj_sampled": {
+          "mean": null,
+          "std": null,
+          "min": null,
+          "max": null,
+          "n_completed": 0
+        },
+        "energy_mj": {
+          "mean": null,
+          "std": null,
+          "min": null,
+          "max": null,
+          "n_completed": 0
+        },
+        "energy_net_mj": {
+          "mean": null,
+          "std": null,
+          "min": null,
+          "max": null,
+          "n_completed": 0
+        },
+        "avg_power_mw": {
+          "mean": null,
+          "std": null,
+          "min": null,
+          "max": null,
+          "n_completed": 0
+        },
+        "energy_mj_per_token": {
+          "mean": null,
+          "std": null,
+          "min": null,
+          "max": null,
+          "n_completed": 0
+        },
+        "energy_net_mj_per_token": {
+          "mean": null,
+          "std": null,
+          "min": null,
+          "max": null,
+          "n_completed": 0
+        },
+        "thermal_temp_cpu_c": {
+          "mean": 53.45,
+          "std": 1.55,
+          "min": 51.9,
+          "max": 55.0,
+          "n_completed": 2
+        },
+        "thermal_temp_skin_c": {
+          "mean": null,
+          "std": null,
+          "min": null,
+          "max": null,
+          "n_completed": 0
+        }
+      }
+    },
+    "8": {
+      "question": "Explain the process of photosynthesis in plants.",
+      "n_trials": 2,
+      "n_completed": 2,
+      "metrics": {
+        "ttft_ms": {
+          "mean": 78,
+          "std": 2.0,
+          "min": 76,
+          "max": 80,
+          "n_completed": 2
+        },
+        "ttlt_ms": {
+          "mean": 1261,
+          "std": 15.0,
+          "min": 1246,
+          "max": 1276,
+          "n_completed": 2
+        },
+        "tps": {
+          "mean": 211.867,
+          "std": 2.586,
+          "min": 209.28146,
+          "max": 214.45349,
+          "n_completed": 2
+        },
+        "prefill_tps": {
+          "mean": 333.553,
+          "std": 8.553,
+          "min": 325.0,
+          "max": 342.1053,
+          "n_completed": 2
+        },
+        "decode_tps": {
+          "mean": 215.58,
+          "std": 2.369,
+          "min": 213.21071,
+          "max": 217.94873,
+          "n_completed": 2
+        },
+        "native_prefill_tps": {
+          "mean": 369.349,
+          "std": 7.785,
+          "min": 361.56308,
+          "max": 377.13406,
+          "n_completed": 2
+        },
+        "native_decode_tps": {
+          "mean": 246.66,
+          "std": 3.006,
+          "min": 243.65378,
+          "max": 249.6659,
+          "n_completed": 2
+        },
+        "prompt_tokens": {
+          "mean": 26,
+          "std": 0.0,
+          "min": 26,
+          "max": 26,
+          "n_completed": 2
+        },
+        "gen_tokens": {
+          "mean": 256,
+          "std": 0.0,
+          "min": 256,
+          "max": 256,
+          "n_completed": 2
+        },
+        "memory_kb": {
+          "mean": 419984,
+          "std": 0.0,
+          "min": 419984,
+          "max": 419984,
+          "n_completed": 2
+        },
+        "power_ma": {
+          "mean": 148.0,
+          "std": 0.0,
+          "min": 148.0,
+          "max": 148.0,
+          "n_completed": 1
+        },
+        "energy_mj_sampled": {
+          "mean": 796.9,
+          "std": 0.0,
+          "min": 796.9,
+          "max": 796.9,
+          "n_completed": 1
+        },
+        "energy_mj": {
+          "mean": null,
+          "std": null,
+          "min": null,
+          "max": null,
+          "n_completed": 0
+        },
+        "energy_net_mj": {
+          "mean": null,
+          "std": null,
+          "min": null,
+          "max": null,
+          "n_completed": 0
+        },
+        "avg_power_mw": {
+          "mean": null,
+          "std": null,
+          "min": null,
+          "max": null,
+          "n_completed": 0
+        },
+        "energy_mj_per_token": {
+          "mean": null,
+          "std": null,
+          "min": null,
+          "max": null,
+          "n_completed": 0
+        },
+        "energy_net_mj_per_token": {
+          "mean": null,
+          "std": null,
+          "min": null,
+          "max": null,
+          "n_completed": 0
+        },
+        "thermal_temp_cpu_c": {
+          "mean": 54.65,
+          "std": 0.75,
+          "min": 53.9,
+          "max": 55.4,
+          "n_completed": 2
+        },
+        "thermal_temp_skin_c": {
+          "mean": null,
+          "std": null,
+          "min": null,
+          "max": null,
+          "n_completed": 0
+        }
+      }
+    },
+    "9": {
+      "question": "Summarize the theory of relativity in simple terms.",
+      "n_trials": 2,
+      "n_completed": 2,
+      "metrics": {
+        "ttft_ms": {
+          "mean": 78,
+          "std": 0.0,
+          "min": 78,
+          "max": 78,
+          "n_completed": 2
+        },
+        "ttlt_ms": {
+          "mean": 730,
+          "std": 541.0,
+          "min": 189,
+          "max": 1271,
+          "n_completed": 2
+        },
+        "tps": {
+          "mean": 186.924,
+          "std": 23.463,
+          "min": 163.46132,
+          "max": 210.38635,
+          "n_completed": 2
+        },
+        "prefill_tps": {
+          "mean": 358.974,
+          "std": 0.0,
+          "min": 358.97437,
+          "max": 358.97437,
+          "n_completed": 2
+        },
+        "decode_tps": {
+          "mean": 233.0,
+          "std": 19.253,
+          "min": 213.74686,
+          "max": 252.25224,
+          "n_completed": 2
+        },
+        "native_prefill_tps": {
+          "mean": 394.058,
+          "std": 0.086,
+          "min": 393.97223,
+          "max": 394.14413,
+          "n_completed": 2
+        },
+        "native_decode_tps": {
+          "mean": 268.083,
+          "std": 23.427,
+          "min": 244.65572,
+          "max": 291.51,
+          "n_completed": 2
+        },
+        "prompt_tokens": {
+          "mean": 28,
+          "std": 0.0,
+          "min": 28,
+          "max": 28,
+          "n_completed": 2
+        },
+        "gen_tokens": {
+          "mean": 142.5,
+          "std": 113.5,
+          "min": 29,
+          "max": 256,
+          "n_completed": 2
+        },
+        "memory_kb": {
+          "mean": 418364,
+          "std": 0.0,
+          "min": 418364,
+          "max": 418364,
+          "n_completed": 2
+        },
+        "power_ma": {
+          "mean": null,
+          "std": null,
+          "min": null,
+          "max": null,
+          "n_completed": 0
+        },
+        "energy_mj_sampled": {
+          "mean": null,
+          "std": null,
+          "min": null,
+          "max": null,
+          "n_completed": 0
+        },
+        "energy_mj": {
+          "mean": null,
+          "std": null,
+          "min": null,
+          "max": null,
+          "n_completed": 0
+        },
+        "energy_net_mj": {
+          "mean": null,
+          "std": null,
+          "min": null,
+          "max": null,
+          "n_completed": 0
+        },
+        "avg_power_mw": {
+          "mean": null,
+          "std": null,
+          "min": null,
+          "max": null,
+          "n_completed": 0
+        },
+        "energy_mj_per_token": {
+          "mean": null,
+          "std": null,
+          "min": null,
+          "max": null,
+          "n_completed": 0
+        },
+        "energy_net_mj_per_token": {
+          "mean": null,
+          "std": null,
+          "min": null,
+          "max": null,
+          "n_completed": 0
+        },
+        "thermal_temp_cpu_c": {
+          "mean": 45.15,
+          "std": 7.95,
+          "min": 37.2,
+          "max": 53.1,
+          "n_completed": 2
+        },
+        "thermal_temp_skin_c": {
+          "mean": null,
+          "std": null,
+          "min": null,
+          "max": null,
+          "n_completed": 0
+        }
+      }
+    },
+    "10": {
+      "question": "Describe the causes and consequences of World War I in a few sentences.",
+      "n_trials": 2,
+      "n_completed": 2,
+      "metrics": {
+        "ttft_ms": {
+          "mean": 86.5,
+          "std": 0.5,
+          "min": 86,
+          "max": 87,
+          "n_completed": 2
+        },
+        "ttlt_ms": {
+          "mean": 846,
+          "std": 445.0,
+          "min": 401,
+          "max": 1291,
+          "n_completed": 2
+        },
+        "tps": {
+          "mean": 208.046,
+          "std": 1.835,
+          "min": 206.21164,
+          "max": 209.88121,
+          "n_completed": 2
+        },
+        "prefill_tps": {
+          "mean": 369.955,
+          "std": 2.138,
+          "min": 367.8161,
+          "max": 372.09302,
+          "n_completed": 2
+        },
+        "decode_tps": {
+          "mean": 231.294,
+          "std": 19.5,
+          "min": 211.79402,
+          "max": 250.79366,
+          "n_completed": 2
+        },
+        "native_prefill_tps": {
+          "mean": 401.701,
+          "std": 3.696,
+          "min": 398.005,
+          "max": 405.39685,
+          "n_completed": 2
+        },
+        "native_decode_tps": {
+          "mean": 264.753,
+          "std": 23.406,
+          "min": 241.34723,
+          "max": 288.15952,
+          "n_completed": 2
+        },
+        "prompt_tokens": {
+          "mean": 32,
+          "std": 0.0,
+          "min": 32,
+          "max": 32,
+          "n_completed": 2
+        },
+        "gen_tokens": {
+          "mean": 168,
+          "std": 88.0,
+          "min": 80,
+          "max": 256,
+          "n_completed": 2
+        },
+        "memory_kb": {
+          "mean": 420132,
+          "std": 0.0,
+          "min": 420132,
+          "max": 420132,
+          "n_completed": 2
+        },
+        "power_ma": {
+          "mean": 314.0,
+          "std": 13.0,
+          "min": 301.0,
+          "max": 327.0,
+          "n_completed": 2
+        },
+        "energy_mj_sampled": {
+          "mean": 427.05,
+          "std": 159.85,
+          "min": 267.2,
+          "max": 586.9,
+          "n_completed": 2
+        },
+        "energy_mj": {
+          "mean": null,
+          "std": null,
+          "min": null,
+          "max": null,
+          "n_completed": 0
+        },
+        "energy_net_mj": {
+          "mean": null,
+          "std": null,
+          "min": null,
+          "max": null,
+          "n_completed": 0
+        },
+        "avg_power_mw": {
+          "mean": null,
+          "std": null,
+          "min": null,
+          "max": null,
+          "n_completed": 0
+        },
+        "energy_mj_per_token": {
+          "mean": null,
+          "std": null,
+          "min": null,
+          "max": null,
+          "n_completed": 0
+        },
+        "energy_net_mj_per_token": {
+          "mean": null,
+          "std": null,
+          "min": null,
+          "max": null,
+          "n_completed": 0
+        },
+        "thermal_temp_cpu_c": {
+          "mean": 45.75,
+          "std": 8.15,
+          "min": 37.6,
+          "max": 53.9,
+          "n_completed": 2
+        },
+        "thermal_temp_skin_c": {
+          "mean": null,
+          "std": null,
+          "min": null,
+          "max": null,
+          "n_completed": 0
+        }
+      }
+    }
+  }
+}
