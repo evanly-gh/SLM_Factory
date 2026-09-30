@@ -81,6 +81,9 @@ import bench_common  # noqa: E402
 # Set in main(): readiness gate + fixed rest applied before every broadcast (see pre_run()).
 _GATE = None
 _REST_SECONDS = 0
+# False = load the model without mmap, so the timed cold load really reads the weights into RAM
+# (see BenchmarkService.kt's use_mmap extra); set from --mmap in main().
+_USE_MMAP = False
 
 CONVERT_SCRIPT = str(Path.home() / "SLM_Factory-SmolChat/Model-Conversion/convert_to_gguf.py")
 # Fallback locations only - the real, guaranteed location is computed
@@ -607,7 +610,9 @@ def fire_broadcast(adb: Adb, model_path: str, question: str, run_id: str, max_to
         # NOT --ei, deliberately (max_tokens above uses --ei but is read via getStringExtra()
         # too, which is a real, separate, pre-existing bug - see run_autobench.py's own notes/
         # conversation; --es is used here specifically to avoid repeating that mismatch).
-        f"--es n_gpu_layers {int(n_gpu_layers)}"
+        f"--es n_gpu_layers {int(n_gpu_layers)} "
+        # Always sent explicitly (self-documenting in logcat); see _USE_MMAP.
+        f"--es use_mmap {'true' if _USE_MMAP else 'false'}"
     )
     adb.run(["shell", cmd], timeout=20)
 
@@ -823,8 +828,8 @@ def pre_run(adb: Adb) -> dict:
     return {"passed": None, "waited_s": 0.0, "state": bench_common.device_state(adb)}
 
 
-def run_one(adb: Adb, model_path: str, question: str, n: int, timeout: int, max_tokens: int, suppress_early_eos: bool = True, n_gpu_layers: int = 0) -> dict:
-    gate = pre_run(adb)
+def run_one(adb: Adb, model_path: str, question: str, n: int, timeout: int, max_tokens: int, suppress_early_eos: bool = True, n_gpu_layers: int = 0, gate: dict = None) -> dict:
+    gate = gate or pre_run(adb)
     run_id = f"run_{n}_{int(time.time() * 1000)}"
     clear_logcat(adb)
     fire_broadcast(adb, model_path, question, run_id, max_tokens, suppress_early_eos, n_gpu_layers)
@@ -833,28 +838,62 @@ def run_one(adb: Adb, model_path: str, question: str, n: int, timeout: int, max_
             "state_after": bench_common.device_state(adb)}
 
 
-def run_cold_start_block(adb: Adb, model_path: str, questions: list, runs: int, timeout: int, max_tokens: int,
-                         suppress_early_eos: bool = True, n_gpu_layers: int = 0) -> list:
-    """Genuine cold starts: for each run, force-stop SmolChat (so no process maps the model),
-    evict the model file from the page cache, then load + answer one question. Cold start is
-    reported as load time + TTFT: with mmap (SmolChat's default) most weight reads happen
-    during the first decode, not inside the timed load call, so load time alone understates it.
-    Every headless call reloads the model, so steady-state trials never measure this."""
+def run_protocol_benchmark(adb: Adb, model_path: str, questions: list, runs: int, timeout: int, max_tokens: int,
+                           suppress_early_eos: bool = True, n_gpu_layers: int = 0) -> tuple:
+    """Per-question protocol. For each question:
+      1. rest + readiness gate (once),
+      2. force-stop SmolChat and evict the model file from the page cache (a genuinely cold start),
+      3. run the question `runs` times back to back (no gate/rest in between): run 1 is cold,
+         runs 2..N are warm.
+    Cold load / cold start come from run 1 and are kept constant for the question's other runs; the
+    LAST successful run is the reported one (see bench_common.finalize_question). Every run is kept.
+    Cold start = load + TTFT: with mmap (SmolChat's default) most weight reads happen during the
+    first decode, not inside the timed load call, so load time alone understates it. Every headless
+    call reloads the model, so runs 2..N pay a (warm-cache) load too; that is load_ms_measured."""
     results = []
-    for i in range(runs):
-        question = questions[i % len(questions)]
-        adb.run(["shell", "am", "force-stop", PACKAGE], timeout=15)
-        time.sleep(2)
-        eviction = bench_common.evict_page_cache(adb, PACKAGE, model_path)
-        qprint(f"\n[COLD {i + 1}/{runs}] evicted page cache: resident after = "
-               f"{eviction.get('resident_after_pct')}%" + (f" ({eviction['error']})" if eviction.get("error") else ""))
-        outcome = run_one(adb, model_path, question, 0, timeout, max_tokens, suppress_early_eos, n_gpu_layers)
-        entry = outcome_to_entry(outcome, 0, question, timeout)
-        entry.update({"phase": "cold", "cold_run": i + 1, "page_cache_eviction": eviction})
+    total = len(questions)
+    for n, question in enumerate(questions, start=1):
+        for attempt in (1, 2):
+            group = _run_question(adb, model_path, question, n, total, runs, timeout, max_tokens,
+                                  suppress_early_eos, n_gpu_layers)
+            if len(group) == runs and all(e["status"] == "success" for e in group):
+                break
+            if attempt == 1:
+                qprint("  a run of this question failed (lost log lines?) - retrying the whole question once")
+        for e in group:
+            e["attempt"] = attempt
+        results.extend(group)
+        bench_common.finalize_question(group)
+    return results, 0
+
+
+def _run_question(adb: Adb, model_path: str, question: str, n: int, total: int, runs: int, timeout: int,
+                  max_tokens: int, suppress_early_eos: bool, n_gpu_layers: int) -> list:
+    """One attempt at a question: gate, force-stop, evict, then `runs` back-to-back runs."""
+    gate = pre_run(adb)
+    adb.run(["shell", "am", "force-stop", PACKAGE], timeout=15)
+    time.sleep(2)
+    eviction = bench_common.evict_page_cache(adb, PACKAGE, model_path)
+    qprint(f"\n[{n}/{total}] \"{question}\" - page cache evicted (model resident after: "
+           f"{eviction.get('resident_after_pct')}%)" + (f" [{eviction['error']}]" if eviction.get("error") else ""))
+    group = []
+    for run in range(1, runs + 1):
+        phase = "cold" if run == 1 else "warm"
+        qprint(f"[{n}/{total}] run {run}/{runs} ({phase})")
+        run_gate = gate if run == 1 else {"passed": None, "waited_s": 0.0, "state": bench_common.device_state(adb)}
+        outcome = run_one(adb, model_path, question, n, timeout, max_tokens, suppress_early_eos, n_gpu_layers,
+                          gate=run_gate)
+        entry = outcome_to_entry(outcome, n, question, timeout)
+        entry.update({"protocol": bench_common.PROTOCOL, "run_number": run, "phase": phase, "reported": False})
+        if run == 1:
+            entry["page_cache_eviction"] = eviction
         if entry["metrics"]:
             print_run_line(entry["metrics"], entry["response"])
-        results.append(entry)
-    return results
+        group.append(entry)
+        if run == 1 and entry["status"] != "success":
+            qprint("  run 1 failed - skipping this attempt's remaining runs")
+            break
+    return group
 
 
 def wait_for_broadcast_receipt(adb: Adb, run_id: str, poll_seconds: int) -> bool:
@@ -1224,7 +1263,7 @@ def compute_cold_summary(cold_results: list) -> dict:
 
 
 def compute_summary(results: list) -> dict:
-    results = [r for r in results if r.get("phase") != "cold"]
+    results = bench_common.summary_entries(results)
 
     def vals(key):
         return metric_values(results, key)
@@ -1298,6 +1337,13 @@ def print_summary_table(summary: dict, run_info: dict):
         qprint(row)
     cold_load_q1 = summary.get("first_question_cold_load_ms")
     qprint(f"{'ColdLoad_Q1':<10}{(cold_load_q1 if cold_load_q1 is not None else 'N/A'):>12}{'N/A':>12}{'N/A':>12}{'N/A':>12}")
+    cold = summary.get("cold_start") or {}
+    if cold.get("cold_start_ms", {}).get("n_completed"):
+        qprint("\nCold starts (run 1 of each question, model evicted from page cache):")
+        for label, key in [("ColdStart_ms", "cold_start_ms"), ("ColdLoad_ms", "cold_load_ms"), ("ColdTTFT_ms", "ttft_ms")]:
+            s_ = cold[key]
+            qprint(f"{label:<13}" + "".join(f"{(s_[k] if s_[k] is not None else 'N/A'):>12}" for k in ("mean", "std", "min", "max"))
+                   + f"   n={s_['n_completed']}")
     qprint(f"\nThermal states observed: {', '.join(summary['thermal_states_observed']) or 'none'}")
     qprint(f"Backend(s) verified registered: {', '.join(summary['backend_verified_observed']) or 'none'}")
     qprint(summary["note"])
@@ -1321,10 +1367,7 @@ def compute_trial_summary(results: list, questions: list) -> dict:
         question_results = [r for r in results if r["question_number"] == n]
 
         def vals(key):
-            return [
-                r["metrics"][key] for r in question_results
-                if r["status"] == "success" and r["metrics"] and r["metrics"].get(key) is not None
-            ]
+            return metric_values(question_results, key)   # same rules as the headline (energy only if valid)
 
         summary_by_question[str(n)] = {
             "question": question,
@@ -1385,9 +1428,9 @@ def parse_args():
                          "own DEFAULT_MAX_TOKENS, which is what every run used before the --ei/--es fix "
                          "made this flag take effect.")
     p.add_argument("--reboot-before", action="store_true",
-                    help="Reboot the device before benchmarking for a genuine cold-load read (adds ~30-60s)")
+                    help="[--legacy-protocol only] Reboot the device before benchmarking for a genuine cold-load read (adds ~30-60s)")
     p.add_argument("--trials", type=int, default=1, dest="trials",
-                    help="Paper-exact protocol: for each question, run ONCE as a discarded warmup, then run "
+                    help="[--legacy-protocol only] Paper-exact protocol: for each question, run ONCE as a discarded warmup, then run "
                          "this many SEPARATE, real times, recording EVERY one as its own full result (not "
                          "collapsed into a single kept entry). Adds a new 'trial_summary' section to the "
                          "output JSON: mean/std (and min/max/n) per metric, per question, across that "
@@ -1418,6 +1461,12 @@ def parse_args():
     p.add_argument("--quiet", action="store_true",
                     help="Suppress routine per-question and pre-flight progress output. [ERROR]/[WARN] lines "
                          "and the final 'Results saved'/'DONE' confirmation are still always printed.")
+    p.add_argument("--mmap", action="store_true", dest="mmap",
+                    help="Load the model with mmap (the chat app's default) instead of the benchmark default of "
+                         "NO mmap. The default reads the weights into the process's own memory at load, the same "
+                         "kind of load MNN does (use_mmap=false), so cold load means the same thing in both engines. "
+                         "With mmap, load() maps the file (llama.cpp prefetches it with MAP_POPULATE) and skips the "
+                         "copy, so cold load is shorter and not comparable to MNN's.")
     bench_common.add_common_args(p)
     return p.parse_args()
 
@@ -1450,18 +1499,25 @@ def main():
     model_path, model_name = resolve_model(args.model, args.quant, adb)
     questions = load_questions(args.questions)
 
-    if args.trials > 1:
-        qprint(f"  Trials: {args.trials} (1 discarded warmup + {args.trials} SEPARATE recorded trials per question)")
+    if args.legacy_protocol:
+        qprint("  Protocol: legacy (--trials / --warmup / --reboot-before flow)")
+        if args.trials > 1:
+            qprint(f"  Trials: {args.trials} (1 discarded warmup + {args.trials} SEPARATE recorded trials per question)")
+    else:
+        qprint(f"  Protocol: per-question - {args.runs_per_question} back-to-back runs after a force-stop + page-cache eviction; run 1 = cold, last run reported")
     suppress_early_eos = not args.no_eos_suppress
+    qprint(f"  use_mmap: {args.mmap}" + ("" if args.mmap else " (default: weights are read into RAM at load; pass --mmap for the app default)"))
     qprint(f"  suppress_early_eos: {suppress_early_eos}" + (" (--no-eos-suppress)" if args.no_eos_suppress else " (default)"))
     if args.n_gpu_layers > 0:
         qprint(f"  n_gpu_layers: {args.n_gpu_layers}")
 
-    global _GATE, _REST_SECONDS
+    global _GATE, _REST_SECONDS, _USE_MMAP
     _REST_SECONDS = args.rest_seconds
+    _USE_MMAP = args.mmap
     initial_state = bench_common.device_state(adb)
-    if args.gate_max_temp is not None:
-        _GATE = bench_common.ReadinessGate(adb, args.gate_max_temp, args.gate_timeout, log=qprint)
+    if args.gate_max_temp is not None or args.gate_temp_rise is not None:
+        _GATE = bench_common.ReadinessGate(adb, args.gate_max_temp, args.gate_timeout, log=qprint,
+                                           rise_c=args.gate_temp_rise)
         _GATE.set_baseline(initial_state)
     if args.energy and initial_state["externally_powered"]:
         print(f"[WARN] --energy: phone is externally powered ({', '.join(initial_state['power_sources'])}) - "
@@ -1475,23 +1531,22 @@ def main():
 
     start_time = datetime.now(timezone.utc).isoformat()
     try:
-        cold_results = []
-        if args.cold_start_runs > 0:
-            cold_results = run_cold_start_block(
-                adb, model_path, questions, args.cold_start_runs, args.timeout, args.max_tokens,
-                suppress_early_eos=suppress_early_eos, n_gpu_layers=args.n_gpu_layers,
-            )
-        if args.trials > 1:
-            results, context_resets = run_trials_benchmark(
-                adb, model_path, questions, args.timeout, args.max_tokens, trials=args.trials,
-                suppress_early_eos=suppress_early_eos, n_gpu_layers=args.n_gpu_layers,
-            )
+        if args.legacy_protocol:
+            if args.trials > 1:
+                results, context_resets = run_trials_benchmark(
+                    adb, model_path, questions, args.timeout, args.max_tokens, trials=args.trials,
+                    suppress_early_eos=suppress_early_eos, n_gpu_layers=args.n_gpu_layers,
+                )
+            else:
+                results, context_resets = run_benchmark(
+                    adb, model_path, questions, args.timeout, args.max_tokens, reboot_before=args.reboot_before,
+                    suppress_early_eos=suppress_early_eos, n_gpu_layers=args.n_gpu_layers,
+                )
         else:
-            results, context_resets = run_benchmark(
-                adb, model_path, questions, args.timeout, args.max_tokens, reboot_before=args.reboot_before,
+            results, context_resets = run_protocol_benchmark(
+                adb, model_path, questions, args.runs_per_question, args.timeout, args.max_tokens,
                 suppress_early_eos=suppress_early_eos, n_gpu_layers=args.n_gpu_layers,
             )
-        results = cold_results + results
     finally:
         if energy_trace is not None:
             energy_trace.stop()
@@ -1527,8 +1582,12 @@ def main():
         "rebooted_before_run": args.reboot_before,
         "cold_load_note": COLD_LOAD_NOTE,
         "max_tokens": args.max_tokens,
-        "cold_start_runs": args.cold_start_runs,
+        "use_mmap": args.mmap,
+        **bench_common.config_labels("smolchat", model_name, None, results),
+        "protocol": "legacy" if args.legacy_protocol else bench_common.PROTOCOL,
+        "runs_per_question": None if args.legacy_protocol else args.runs_per_question,
         "gate_max_temp_c": args.gate_max_temp,
+        "gate_temp_rise_c": args.gate_temp_rise,
         "gate_baseline_cpu_caps_khz": _GATE.baseline_caps if _GATE else None,
         "rest_seconds": args.rest_seconds,
         "initial_device_state": initial_state,
@@ -1540,7 +1599,12 @@ def main():
     summary = compute_summary(results)
     summary["cold_start"] = compute_cold_summary([r for r in results if r.get("phase") == "cold"])
     summary["energy_aggregate"] = bench_common.aggregate_energy(results) if args.energy else None
-    trial_summary = compute_trial_summary(results, questions) if args.trials > 1 else None
+    if args.legacy_protocol:
+        trial_summary = compute_trial_summary(results, questions) if args.trials > 1 else None
+    else:
+        # consistency check across each question's warm runs (runs 2..N); the headline uses the last run
+        trial_summary = (compute_trial_summary([r for r in results if r.get("phase") == "warm"], questions)
+                         if args.runs_per_question > 2 else None)
     save_results(args.output, run_info, summary, results, trial_summary=trial_summary)
     print_summary_table(summary, run_info)
     if trial_summary is not None:

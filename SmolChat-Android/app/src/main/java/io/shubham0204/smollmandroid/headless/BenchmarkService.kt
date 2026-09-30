@@ -121,6 +121,11 @@ class BenchmarkService : Service() {
         // Optional broadcast extra; defaults to 0 (CPU-only, the pre-existing behavior — see
         // SmolLM.InferenceParams.nGpuLayers's kdoc) when absent or not a valid int.
         val nGpuLayers = intent?.getStringExtra("n_gpu_layers")?.toIntOrNull() ?: 0
+        // Optional broadcast extra. "false" loads the model without memory-mapping so the timed load
+        // actually reads the weights into RAM (a "cold load from scratch"); with mmap (the chat
+        // setting's default) load() only maps the file and the weights are faulted in during the
+        // first decode, i.e. inside TTFT. Absent/invalid = null = keep the chat's own useMmap.
+        val useMmap = intent?.getStringExtra("use_mmap")?.toBooleanStrictOrNull()
 
         if (modelPath == null || prompt == null || runId == null) {
             Log.d("RUN_ERROR", "run_id=${runId ?: "unknown"} reason=missing_extras")
@@ -160,7 +165,7 @@ class BenchmarkService : Service() {
         }
 
         serviceScope.launch(exceptionHandler) {
-            runBenchmark(modelPath, prompt, runId, maxTokens, suppressEarlyEos, nGpuLayers)
+            runBenchmark(modelPath, prompt, runId, maxTokens, suppressEarlyEos, nGpuLayers, useMmap)
             stopSelf(startId)
         }
 
@@ -176,10 +181,10 @@ class BenchmarkService : Service() {
 
     private suspend fun runBenchmark(
         modelPath: String, prompt: String, runId: String, maxTokens: Int, suppressEarlyEos: Boolean,
-        nGpuLayers: Int = 0,
+        nGpuLayers: Int = 0, useMmap: Boolean? = null,
     ) {
         try {
-            runBenchmarkInternal(modelPath, prompt, runId, maxTokens, suppressEarlyEos, nGpuLayers)
+            runBenchmarkInternal(modelPath, prompt, runId, maxTokens, suppressEarlyEos, nGpuLayers, useMmap)
         } catch (e: Exception) {
             Log.e("RUN_ERROR", "run_id=$runId reason=unexpected_error message=${e.message}", e)
         }
@@ -187,7 +192,7 @@ class BenchmarkService : Service() {
 
     private suspend fun runBenchmarkInternal(
         rawModelPath: String, prompt: String, runId: String, maxTokens: Int, suppressEarlyEos: Boolean,
-        nGpuLayers: Int = 0,
+        nGpuLayers: Int = 0, useMmap: Boolean? = null,
     ) {
         val modelPath = resolveReadableModelPath(rawModelPath, runId) ?: return
 
@@ -225,6 +230,7 @@ class BenchmarkService : Service() {
             onSuccess = {    loadDeferred.complete(Result.success(Unit)) },
             contextSizeOverride = CONTEXT_SIZE,
             nGpuLayers = nGpuLayers,
+            useMmapOverride = useMmap,
         )
         loadDeferred.await().getOrElse { e ->
             Log.d("RUN_ERROR", "run_id=$runId reason=model_load_failed message=${e.message}")
@@ -286,11 +292,10 @@ class BenchmarkService : Service() {
         // covers llama_model_load_from_file()/llama_init_from_model() (mmap() the GGUF file and
         // allocate the context) — see LLMInference.cpp's loadModel(). The actual llama_decode()
         // call that touches every weight tensor only happens inside completionLoop(), i.e. on the
-        // FIRST real prompt. Because the model is loaded with useMmap=true by default, the OS
-        // only pages in each weight tensor's memory from storage/page cache on first access,
-        // which happens during that first decode — not during the mmap() call itself. So the
-        // page-fault cost of "warming up" the mmap'd weights lands entirely on the first
-        // inference's timing, not on cold load. A clean fix would require a native-side warmup
+        // FIRST real prompt. (Old note, measured wrong on this llama.cpp build: with useMmap=true
+        // llama.cpp maps the file with MAP_POPULATE, so the weights are already read during
+        // load and cold TTFT ~= warm TTFT. The benchmark now loads with useMmap=false by default,
+        // see the use_mmap extra above.) A clean fix would require a native-side warmup
         // pass (e.g. a bounded single-token dummy completion run right after loadModel(), calling
         // llama_decode() once outside the timed path) — that needs a new native entry point in
         // LLMInference.cpp/SmolLM.kt and rebuilding all native ABI variants, which is out of scope

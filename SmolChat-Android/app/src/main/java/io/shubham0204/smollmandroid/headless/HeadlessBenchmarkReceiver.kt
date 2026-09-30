@@ -58,6 +58,8 @@ class HeadlessBenchmarkReceiver : BroadcastReceiver() {
         // Forwards to BenchmarkService's own nGpuLayers parsing; see SmolLM.InferenceParams.nGpuLayers's
         // kdoc for why this previously had no effect anywhere even before this receiver-side gap.
         val nGpuLayers = intent.getStringExtra("n_gpu_layers")
+        // Forwards to BenchmarkService's use_mmap parsing (see there): "false" loads without mmap.
+        val useMmap = intent.getStringExtra("use_mmap")
 
         if (modelPath == null || prompt == null || runId == null) {
             Log.d("RUN_ERROR", "run_id=${runId ?: "unknown"} reason=missing_extras" +
@@ -113,6 +115,7 @@ class HeadlessBenchmarkReceiver : BroadcastReceiver() {
             if (maxTokens != null) putExtra("max_tokens", maxTokens)
             if (suppressEarlyEos != null) putExtra("suppress_early_eos", suppressEarlyEos)
             if (nGpuLayers != null) putExtra("n_gpu_layers", nGpuLayers)
+            if (useMmap != null) putExtra("use_mmap", useMmap)
         }
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
