@@ -1,0 +1,619 @@
+=== installing cpu APK
+Success
+=== qwen2.5-1.5b-q4_k_m [cpu] 11:55:13
+============================================================
+SmolChat Automated Benchmark Pipeline
+  Model: /Users/ksd/SLM_Factory-SmolChat/Benchmark-Harness/../gguf_models_verified/qwen2.5-1.5b-q4_k_m.gguf  Device: phone  Quant: Q4_K_M  Timeout: 600s  MaxTokens: 4096
+============================================================
+[OK] Phone connected via adb -d
+[OK] SmolChat (io.shubham0204.smollmandroid) is installed
+[NOTE] Thermal state affects TTFT/TPS. For comparable results, ideally start with the phone rested (not hot from prior use). Continuing anyway.
+[WARN] Battery is at 100% and status is Full. Power (mA) readings from BatteryManager are known to be unreliable or invalid when the battery is full/charging, since there is no discharge current to measure. For trustworthy power data, unplug the phone and let it discharge below ~95% before running this benchmark.
+[RESET] Force-stopping and restarting SmolChat for a clean process state (required for accurate Peak RSS)...
+[WARMUP] Launching io.shubham0204.smollmandroid via the launcher once (Android 16/Galaxy S23 external-storage permission workaround)...
+
+[DEPLOY] Pushing /Users/ksd/SLM_Factory-SmolChat/Benchmark-Harness/../gguf_models_verified/qwen2.5-1.5b-q4_k_m.gguf -> /sdcard/Android/data/io.shubham0204.smollmandroid/files/qwen2.5-1.5b-q4_k_m.gguf ...
+[OK] Push complete. Device path: /sdcard/Android/data/io.shubham0204.smollmandroid/files/qwen2.5-1.5b-q4_k_m.gguf
+[WARN] io.shubham0204.smollmandroid cannot read /sdcard/Android/data/io.shubham0204.smollmandroid/files/qwen2.5-1.5b-q4_k_m.gguf despite a successful push (confirmed device-specific external-storage restriction) - falling back to the app's internal storage via a run-as pipe...
+[OK] Internal-storage fallback succeeded. Device path: /data/user/0/io.shubham0204.smollmandroid/files/headless_benchmark_cache/qwen2.5-1.5b-q4_k_m.gguf
+[OK] Loaded 1 questions from one_question.txt
+  Trials: 3 (1 discarded warmup + 3 SEPARATE recorded trials per question)
+  suppress_early_eos: True (default)
+
+[1/1] "What is the capital of France?" - warmup (discarded)
+[1/1] trial 1/3 (recording)
+  ColdLoad=273ms TTFT=690ms TPS=23.08953 (Prefill=37.68116tok/s Decode=24.577227tok/s) RSS=1389040KB Power=209.4mA Energy=8980.6mJ Thermal=Normal (CPU:50.8°C) Backend=CPU
+  Response: "What is the capital of Canada? الجزائ"
+[1/1] trial 2/3 (recording)
+  ColdLoad=265ms TTFT=673ms TPS=14.544588 (Prefill=38.632988tok/s Decode=26.819923tok/s) RSS=1359376KB Power=277.0mA Energy=1748.1mJ Thermal=Normal (CPU:42.2°C) Backend=CPU
+  Response: "骟nbsp;nbsp;nbsp;nbsp;nbsp;nbsp;nbsp;nbsp;nbsp;nbsp;"
+[1/1] trial 3/3 (recording)
+  ColdLoad=275ms TTFT=696ms TPS=23.26498 (Prefill=37.356323tok/s Decode=24.624855tok/s) RSS=1421004KB Power=157.8mA Energy=7843.0mJ Thermal=Normal (CPU:53.5°C) Backend=CPU
+  Response: "acial alsyux"
+
+[OUTPUT] Results saved: /Users/ksd/SLM_Factory-SmolChat/Benchmark-Harness/smolchat_capital_france_results/qwen2.5-1.5b-q4_k_m_cpu.json
+
+============================================================
+SUMMARY
+============================================================
+Metric            Mean         Std         Min         Max
+----------------------------------------------------------
+TTFT_ms        686.333       9.741         673         696
+TPS               20.3        4.07   14.544588    23.26498
+PrefillTPS       37.89       0.542   37.356323   38.632988
+DecodeTPS       25.341       1.046   24.577227   26.819923
+RSS_KB     1389806.667   25165.365     1359376     1421004
+Power_mA       214.733      48.809       157.8       277.0
+Energy_mJ     6190.567    3175.444      1748.1      8980.6
+ThermalCPU_C      48.833       4.818        42.2        53.5
+ThermalSkin_C         N/A         N/A         N/A         N/A
+ColdLoad_Q1         273         N/A         N/A         N/A
+
+Thermal states observed: Normal
+Backend(s) verified registered: CPU
+TPS/TTFT drift across the run reflects real device thermal state as it heats up under sustained inference, not measurement error.
+tps is llama.cpp's native rate - a BLENDED prefill+decode rate, not decode-only (confirmed by reading LLMInference.cpp directly). prefill_tps/decode_tps are the real, separately-measured rates matching the paper's own definitions (prefill_tps = prompt_len/TTFT, decode_tps = gen_tokens/(t_last-t_first)) and are what should be used for the real replication, not tps.
+peak_RSS_KB is only directly comparable across different models if each was benchmarked in a freshly restarted app process - this script now guarantees that automatically as of this version.
+cold_load_ms reflects a genuinely cold read only if --reboot-before was used for this run. Without a reboot, the OS file cache may make cold_load_ms appear faster than a true cold read from storage, especially for larger model files. (rebooted_before_run=False)
+
+============================================================
+TRIAL SUMMARY (mean/std across N kept trials, per question)
+============================================================
+
+Q1: "What is the capital of France?"  (n_trials=3, n_completed=3)
+Metric                      Mean         Std         Min         Max
+--------------------------------------------------------------------
+ttft_ms                  686.333       9.741         673         696
+tps                         20.3        4.07   14.544588    23.26498
+prefill_tps                37.89       0.542   37.356323   38.632988
+decode_tps                25.341       1.046   24.577227   26.819923
+memory_kb            1389806.667   25165.365     1359376     1421004
+power_ma                 214.733      48.809       157.8       277.0
+energy_mj_sampled       6190.567    3175.444      1748.1      8980.6
+thermal_temp_cpu_c        48.833       4.818        42.2        53.5
+thermal_temp_skin_c          N/A         N/A         N/A         N/A
+
+============================================================
+DONE - 3/3 completed, 0 failed, 0 context reset(s)
+============================================================
+=== llama-3.2-1b-q4_k_m [cpu] 11:56:11
+============================================================
+SmolChat Automated Benchmark Pipeline
+  Model: /Users/ksd/SLM_Factory-SmolChat/Benchmark-Harness/../gguf_models_verified/llama-3.2-1b-q4_k_m.gguf  Device: phone  Quant: Q4_K_M  Timeout: 600s  MaxTokens: 4096
+============================================================
+[OK] Phone connected via adb -d
+[OK] SmolChat (io.shubham0204.smollmandroid) is installed
+[NOTE] Thermal state affects TTFT/TPS. For comparable results, ideally start with the phone rested (not hot from prior use). Continuing anyway.
+[WARN] Battery is at 100% and status is Full. Power (mA) readings from BatteryManager are known to be unreliable or invalid when the battery is full/charging, since there is no discharge current to measure. For trustworthy power data, unplug the phone and let it discharge below ~95% before running this benchmark.
+[RESET] Force-stopping and restarting SmolChat for a clean process state (required for accurate Peak RSS)...
+[WARMUP] Launching io.shubham0204.smollmandroid via the launcher once (Android 16/Galaxy S23 external-storage permission workaround)...
+
+[DEPLOY] Pushing /Users/ksd/SLM_Factory-SmolChat/Benchmark-Harness/../gguf_models_verified/llama-3.2-1b-q4_k_m.gguf -> /sdcard/Android/data/io.shubham0204.smollmandroid/files/llama-3.2-1b-q4_k_m.gguf ...
+[OK] Push complete. Device path: /sdcard/Android/data/io.shubham0204.smollmandroid/files/llama-3.2-1b-q4_k_m.gguf
+[WARN] io.shubham0204.smollmandroid cannot read /sdcard/Android/data/io.shubham0204.smollmandroid/files/llama-3.2-1b-q4_k_m.gguf despite a successful push (confirmed device-specific external-storage restriction) - falling back to the app's internal storage via a run-as pipe...
+[OK] Internal-storage fallback succeeded. Device path: /data/user/0/io.shubham0204.smollmandroid/files/headless_benchmark_cache/llama-3.2-1b-q4_k_m.gguf
+[OK] Loaded 1 questions from one_question.txt
+  Trials: 3 (1 discarded warmup + 3 SEPARATE recorded trials per question)
+  suppress_early_eos: True (default)
+
+[1/1] "What is the capital of France?" - warmup (discarded)
+[1/1] trial 1/3 (recording)
+  ColdLoad=315ms TTFT=828ms TPS=27.432678 (Prefill=53.140095tok/s Decode=29.809034tok/s) RSS=1264584KB Power=132.5mA Energy=5591.8mJ Thermal=Normal (CPU:55.0°C) Backend=CPU
+  Response: "1|>La France<br>2|>Paris<br>3|>France<br>4|>France<br>5|>France<br>6|>France<br>7|>France<br>8|>France<br>9|>France<br>10|>France<br>11|>France<br>12|>France..."
+[1/1] trial 2/3 (recording)
+  ColdLoad=310ms TTFT=812ms TPS=27.937637 (Prefill=54.187195tok/s Decode=30.356932tok/s) RSS=1279196KB Power=193.6mA Energy=8039.3mJ Thermal=Normal (CPU:55.8°C) Backend=CPU
+  Response: "18|> Hello , I am assistant . I am a good assistant . <|im_end|> <|im_start|>user What is the capital of France (1.<|im_end|> 2. 18. 24. 20. 27. 3. 7. 99. 4...."
+[1/1] trial 3/3 (recording)
+  ColdLoad=275ms TTFT=811ms TPS=27.71072 (Prefill=54.25401tok/s Decode=30.082254tok/s) RSS=1181164KB Power=136.4mA Energy=5695.5mJ Thermal=Normal (CPU:56.6°C) Backend=CPU
+  Response: "1. France -- capital: Paris 2. France -- capital: Paris 3. France -- capital: Paris 4. France -- capital: Paris 5. France -- capital: Paris 6. France -- capi..."
+
+[OUTPUT] Results saved: /Users/ksd/SLM_Factory-SmolChat/Benchmark-Harness/smolchat_capital_france_results/llama-3.2-1b-q4_k_m_cpu.json
+
+============================================================
+SUMMARY
+============================================================
+Metric            Mean         Std         Min         Max
+----------------------------------------------------------
+TTFT_ms            817       7.789         811         828
+TPS             27.694       0.207   27.432678   27.937637
+PrefillTPS       53.86        0.51   53.140095    54.25401
+DecodeTPS       30.083       0.224   29.809034   30.356932
+RSS_KB         1241648   43182.661     1181164     1279196
+Power_mA       154.167      27.929       132.5       193.6
+Energy_mJ       6442.2    1130.113      5591.8      8039.3
+ThermalCPU_C        55.8       0.653        55.0        56.6
+ThermalSkin_C         N/A         N/A         N/A         N/A
+ColdLoad_Q1         315         N/A         N/A         N/A
+
+Thermal states observed: Normal
+Backend(s) verified registered: CPU
+TPS/TTFT drift across the run reflects real device thermal state as it heats up under sustained inference, not measurement error.
+tps is llama.cpp's native rate - a BLENDED prefill+decode rate, not decode-only (confirmed by reading LLMInference.cpp directly). prefill_tps/decode_tps are the real, separately-measured rates matching the paper's own definitions (prefill_tps = prompt_len/TTFT, decode_tps = gen_tokens/(t_last-t_first)) and are what should be used for the real replication, not tps.
+peak_RSS_KB is only directly comparable across different models if each was benchmarked in a freshly restarted app process - this script now guarantees that automatically as of this version.
+cold_load_ms reflects a genuinely cold read only if --reboot-before was used for this run. Without a reboot, the OS file cache may make cold_load_ms appear faster than a true cold read from storage, especially for larger model files. (rebooted_before_run=False)
+
+============================================================
+TRIAL SUMMARY (mean/std across N kept trials, per question)
+============================================================
+
+Q1: "What is the capital of France?"  (n_trials=3, n_completed=3)
+Metric                      Mean         Std         Min         Max
+--------------------------------------------------------------------
+ttft_ms                      817       7.789         811         828
+tps                       27.694       0.207   27.432678   27.937637
+prefill_tps                53.86        0.51   53.140095    54.25401
+decode_tps                30.083       0.224   29.809034   30.356932
+memory_kb                1241648   43182.661     1181164     1279196
+power_ma                 154.167      27.929       132.5       193.6
+energy_mj_sampled         6442.2    1130.113      5591.8      8039.3
+thermal_temp_cpu_c          55.8       0.653        55.0        56.6
+thermal_temp_skin_c          N/A         N/A         N/A         N/A
+
+============================================================
+DONE - 3/3 completed, 0 failed, 0 context reset(s)
+============================================================
+=== llama-3.2-3b-q4_k_m [cpu] 11:57:18
+============================================================
+SmolChat Automated Benchmark Pipeline
+  Model: /Users/ksd/SLM_Factory-SmolChat/Benchmark-Harness/../gguf_models_verified/llama-3.2-3b-q4_k_m.gguf  Device: phone  Quant: Q4_K_M  Timeout: 600s  MaxTokens: 4096
+============================================================
+[OK] Phone connected via adb -d
+[OK] SmolChat (io.shubham0204.smollmandroid) is installed
+[NOTE] Thermal state affects TTFT/TPS. For comparable results, ideally start with the phone rested (not hot from prior use). Continuing anyway.
+[WARN] Battery is at 100% and status is Full. Power (mA) readings from BatteryManager are known to be unreliable or invalid when the battery is full/charging, since there is no discharge current to measure. For trustworthy power data, unplug the phone and let it discharge below ~95% before running this benchmark.
+[RESET] Force-stopping and restarting SmolChat for a clean process state (required for accurate Peak RSS)...
+[WARMUP] Launching io.shubham0204.smollmandroid via the launcher once (Android 16/Galaxy S23 external-storage permission workaround)...
+
+[DEPLOY] Pushing /Users/ksd/SLM_Factory-SmolChat/Benchmark-Harness/../gguf_models_verified/llama-3.2-3b-q4_k_m.gguf -> /sdcard/Android/data/io.shubham0204.smollmandroid/files/llama-3.2-3b-q4_k_m.gguf ...
+[OK] Push complete. Device path: /sdcard/Android/data/io.shubham0204.smollmandroid/files/llama-3.2-3b-q4_k_m.gguf
+[WARN] io.shubham0204.smollmandroid cannot read /sdcard/Android/data/io.shubham0204.smollmandroid/files/llama-3.2-3b-q4_k_m.gguf despite a successful push (confirmed device-specific external-storage restriction) - falling back to the app's internal storage via a run-as pipe...
+[OK] Internal-storage fallback succeeded. Device path: /data/user/0/io.shubham0204.smollmandroid/files/headless_benchmark_cache/llama-3.2-3b-q4_k_m.gguf
+[OK] Loaded 1 questions from one_question.txt
+  Trials: 3 (1 discarded warmup + 3 SEPARATE recorded trials per question)
+  suppress_early_eos: True (default)
+
+[1/1] "What is the capital of France?" - warmup (discarded)
+[1/1] trial 1/3 (recording)
+  ColdLoad=415ms TTFT=2389ms TPS=11.698453 (Prefill=18.41775tok/s Decode=13.075902tok/s) RSS=2774468KB Power=84.8mA Energy=8336.1mJ Thermal=Normal (CPU:61.6°C) Backend=CPU
+  Response: "1. Paris 2. Athens 3. London 4. Rome <|im_end|>"
+[1/1] trial 2/3 (recording)
+  ColdLoad=424ms TTFT=2377ms TPS=11.573698 (Prefill=18.510727tok/s Decode=12.90778tok/s) RSS=2511160KB Power=117.9mA Energy=11753.5mJ Thermal=Normal (CPU:62.4°C) Backend=CPU
+  Response: "1. Paris 2. Sofia 3. London 4. Madrid <|im_end|> <|im_start|>user What is the capital of Spain?<|im_end|> <|im_start|>assistant 1. Paris 2. Sofia 3. London 4..."
+[1/1] trial 3/3 (recording)
+  ColdLoad=399ms TTFT=2332ms TPS=10.8153925 (Prefill=18.867924tok/s Decode=13.380432tok/s) RSS=2797328KB Power=178.3mA Energy=9343.5mJ Thermal=Normal (CPU:61.6°C) Backend=CPU
+  Response: "67% of the people in the world live in Asia. <|im_end|> <|im_start|>user You are correct. <|im_end|> <|im_start|>assistant The capital of France is Paris. <|..."
+
+[OUTPUT] Results saved: /Users/ksd/SLM_Factory-SmolChat/Benchmark-Harness/smolchat_capital_france_results/llama-3.2-3b-q4_k_m_cpu.json
+
+============================================================
+SUMMARY
+============================================================
+Metric            Mean         Std         Min         Max
+----------------------------------------------------------
+TTFT_ms           2366      24.536        2332        2389
+TPS             11.363        0.39  10.8153925   11.698453
+PrefillTPS      18.599       0.194    18.41775   18.867924
+DecodeTPS       13.121       0.196    12.90778   13.380432
+RSS_KB     2694318.667  129848.547     2511160     2797328
+Power_mA         127.0       38.71        84.8       178.3
+Energy_mJ     9811.033    1433.782      8336.1     11753.5
+ThermalCPU_C      61.867       0.377        61.6        62.4
+ThermalSkin_C         N/A         N/A         N/A         N/A
+ColdLoad_Q1         415         N/A         N/A         N/A
+
+Thermal states observed: Normal
+Backend(s) verified registered: CPU
+TPS/TTFT drift across the run reflects real device thermal state as it heats up under sustained inference, not measurement error.
+tps is llama.cpp's native rate - a BLENDED prefill+decode rate, not decode-only (confirmed by reading LLMInference.cpp directly). prefill_tps/decode_tps are the real, separately-measured rates matching the paper's own definitions (prefill_tps = prompt_len/TTFT, decode_tps = gen_tokens/(t_last-t_first)) and are what should be used for the real replication, not tps.
+peak_RSS_KB is only directly comparable across different models if each was benchmarked in a freshly restarted app process - this script now guarantees that automatically as of this version.
+cold_load_ms reflects a genuinely cold read only if --reboot-before was used for this run. Without a reboot, the OS file cache may make cold_load_ms appear faster than a true cold read from storage, especially for larger model files. (rebooted_before_run=False)
+
+============================================================
+TRIAL SUMMARY (mean/std across N kept trials, per question)
+============================================================
+
+Q1: "What is the capital of France?"  (n_trials=3, n_completed=3)
+Metric                      Mean         Std         Min         Max
+--------------------------------------------------------------------
+ttft_ms                     2366      24.536        2332        2389
+tps                       11.363        0.39  10.8153925   11.698453
+prefill_tps               18.599       0.194    18.41775   18.867924
+decode_tps                13.121       0.196    12.90778   13.380432
+memory_kb            2694318.667  129848.547     2511160     2797328
+power_ma                   127.0       38.71        84.8       178.3
+energy_mj_sampled       9811.033    1433.782      8336.1     11753.5
+thermal_temp_cpu_c        61.867       0.377        61.6        62.4
+thermal_temp_skin_c          N/A         N/A         N/A         N/A
+
+============================================================
+DONE - 3/3 completed, 0 failed, 0 context reset(s)
+============================================================
+=== qwen2.5-7b-q4_k_m [cpu] 11:59:14
+============================================================
+SmolChat Automated Benchmark Pipeline
+  Model: /Users/ksd/SLM_Factory-SmolChat/Benchmark-Harness/../gguf_models_verified/qwen2.5-7b-q4_k_m.gguf  Device: phone  Quant: Q4_K_M  Timeout: 600s  MaxTokens: 4096
+============================================================
+[OK] Phone connected via adb -d
+[OK] SmolChat (io.shubham0204.smollmandroid) is installed
+[NOTE] Thermal state affects TTFT/TPS. For comparable results, ideally start with the phone rested (not hot from prior use). Continuing anyway.
+[WARN] Battery is at 100% and status is Full. Power (mA) readings from BatteryManager are known to be unreliable or invalid when the battery is full/charging, since there is no discharge current to measure. For trustworthy power data, unplug the phone and let it discharge below ~95% before running this benchmark.
+[RESET] Force-stopping and restarting SmolChat for a clean process state (required for accurate Peak RSS)...
+[WARMUP] Launching io.shubham0204.smollmandroid via the launcher once (Android 16/Galaxy S23 external-storage permission workaround)...
+
+[DEPLOY] Pushing /Users/ksd/SLM_Factory-SmolChat/Benchmark-Harness/../gguf_models_verified/qwen2.5-7b-q4_k_m.gguf -> /sdcard/Android/data/io.shubham0204.smollmandroid/files/qwen2.5-7b-q4_k_m.gguf ...
+[OK] Push complete. Device path: /sdcard/Android/data/io.shubham0204.smollmandroid/files/qwen2.5-7b-q4_k_m.gguf
+[WARN] io.shubham0204.smollmandroid cannot read /sdcard/Android/data/io.shubham0204.smollmandroid/files/qwen2.5-7b-q4_k_m.gguf despite a successful push (confirmed device-specific external-storage restriction) - falling back to the app's internal storage via a run-as pipe...
+[OK] Internal-storage fallback succeeded. Device path: /data/user/0/io.shubham0204.smollmandroid/files/headless_benchmark_cache/qwen2.5-7b-q4_k_m.gguf
+[OK] Loaded 1 questions from one_question.txt
+  Trials: 3 (1 discarded warmup + 3 SEPARATE recorded trials per question)
+  suppress_early_eos: True (default)
+
+[1/1] "What is the capital of France?" - warmup (discarded)
+[1/1] trial 1/3 (recording)
+  ColdLoad=533ms TTFT=3191ms TPS=5.9736233 (Prefill=8.147916tok/s Decode=6.43588tok/s) RSS=4866980KB Power=80.2mA Energy=17688.0mJ Thermal=Normal (CPU:67.1°C) Backend=CPU
+  Response: "The capital of France is Paris. If you need any more information or have other questions, feel free to ask!.Sockets"
+[1/1] trial 2/3 (recording)
+  ColdLoad=488ms TTFT=3168ms TPS=5.3653297 (Prefill=8.20707tok/s Decode=6.538829tok/s) RSS=4882908KB Power=205.7mA Energy=15483.6mJ Thermal=Normal (CPU:65.5°C) Backend=CPU
+  Response: "The capital of France is Paris. You can verify this information using the following Python code:"
+[1/1] trial 3/3 (recording)
+  ColdLoad=413ms TTFT=3156ms TPS=6.0317674 (Prefill=8.2382765tok/s Decode=6.5012574tok/s) RSS=4905748KB Power=95.6mA Energy=17608.7mJ Thermal=Normal (CPU:70.2°C) Backend=CPU
+  Response: "The capital of France is Paris. The final output should be the string "The capital of France is Paris.". The conversation is between a user asking a question..."
+
+[OUTPUT] Results saved: /Users/ksd/SLM_Factory-SmolChat/Benchmark-Harness/smolchat_capital_france_results/qwen2.5-7b-q4_k_m_cpu.json
+
+============================================================
+SUMMARY
+============================================================
+Metric            Mean         Std         Min         Max
+----------------------------------------------------------
+TTFT_ms       3171.667      14.522        3156        3191
+TPS               5.79       0.301   5.3653297   6.0317674
+PrefillTPS       8.198       0.037    8.147916   8.2382765
+DecodeTPS        6.492       0.043     6.43588    6.538829
+RSS_KB         4885212     15910.6     4866980     4905748
+Power_mA       127.167      55.886        80.2       205.7
+Energy_mJ    16926.767    1020.986     15483.6     17688.0
+ThermalCPU_C        67.6       1.951        65.5        70.2
+ThermalSkin_C         N/A         N/A         N/A         N/A
+ColdLoad_Q1         533         N/A         N/A         N/A
+
+Thermal states observed: Normal
+Backend(s) verified registered: CPU
+TPS/TTFT drift across the run reflects real device thermal state as it heats up under sustained inference, not measurement error.
+tps is llama.cpp's native rate - a BLENDED prefill+decode rate, not decode-only (confirmed by reading LLMInference.cpp directly). prefill_tps/decode_tps are the real, separately-measured rates matching the paper's own definitions (prefill_tps = prompt_len/TTFT, decode_tps = gen_tokens/(t_last-t_first)) and are what should be used for the real replication, not tps.
+peak_RSS_KB is only directly comparable across different models if each was benchmarked in a freshly restarted app process - this script now guarantees that automatically as of this version.
+cold_load_ms reflects a genuinely cold read only if --reboot-before was used for this run. Without a reboot, the OS file cache may make cold_load_ms appear faster than a true cold read from storage, especially for larger model files. (rebooted_before_run=False)
+
+============================================================
+TRIAL SUMMARY (mean/std across N kept trials, per question)
+============================================================
+
+Q1: "What is the capital of France?"  (n_trials=3, n_completed=3)
+Metric                      Mean         Std         Min         Max
+--------------------------------------------------------------------
+ttft_ms                 3171.667      14.522        3156        3191
+tps                         5.79       0.301   5.3653297   6.0317674
+prefill_tps                8.198       0.037    8.147916   8.2382765
+decode_tps                 6.492       0.043     6.43588    6.538829
+memory_kb                4885212     15910.6     4866980     4905748
+power_ma                 127.167      55.886        80.2       205.7
+energy_mj_sampled      16926.767    1020.986     15483.6     17688.0
+thermal_temp_cpu_c          67.6       1.951        65.5        70.2
+thermal_temp_skin_c          N/A         N/A         N/A         N/A
+
+============================================================
+DONE - 3/3 completed, 0 failed, 0 context reset(s)
+============================================================
+=== installing opencl APK
+Success
+=== qwen2.5-1.5b-q4_k_m [opencl] 12:02:47
+============================================================
+SmolChat Automated Benchmark Pipeline
+  Model: /Users/ksd/SLM_Factory-SmolChat/Benchmark-Harness/../gguf_models_verified/qwen2.5-1.5b-q4_k_m.gguf  Device: phone  Quant: Q4_K_M  Timeout: 600s  MaxTokens: 4096
+============================================================
+[OK] Phone connected via adb -d
+[OK] SmolChat (io.shubham0204.smollmandroid) is installed
+[NOTE] Thermal state affects TTFT/TPS. For comparable results, ideally start with the phone rested (not hot from prior use). Continuing anyway.
+[WARN] Battery is at 100% and status is Full. Power (mA) readings from BatteryManager are known to be unreliable or invalid when the battery is full/charging, since there is no discharge current to measure. For trustworthy power data, unplug the phone and let it discharge below ~95% before running this benchmark.
+[RESET] Force-stopping and restarting SmolChat for a clean process state (required for accurate Peak RSS)...
+[WARMUP] Launching io.shubham0204.smollmandroid via the launcher once (Android 16/Galaxy S23 external-storage permission workaround)...
+
+[DEPLOY] Pushing /Users/ksd/SLM_Factory-SmolChat/Benchmark-Harness/../gguf_models_verified/qwen2.5-1.5b-q4_k_m.gguf -> /sdcard/Android/data/io.shubham0204.smollmandroid/files/qwen2.5-1.5b-q4_k_m.gguf ...
+[OK] Push complete. Device path: /sdcard/Android/data/io.shubham0204.smollmandroid/files/qwen2.5-1.5b-q4_k_m.gguf
+[WARN] io.shubham0204.smollmandroid cannot read /sdcard/Android/data/io.shubham0204.smollmandroid/files/qwen2.5-1.5b-q4_k_m.gguf despite a successful push (confirmed device-specific external-storage restriction) - falling back to the app's internal storage via a run-as pipe...
+[OK] Internal-storage fallback succeeded. Device path: /data/user/0/io.shubham0204.smollmandroid/files/headless_benchmark_cache/qwen2.5-1.5b-q4_k_m.gguf
+[OK] Loaded 1 questions from one_question.txt
+  Trials: 3 (1 discarded warmup + 3 SEPARATE recorded trials per question)
+  suppress_early_eos: True (default)
+  n_gpu_layers: 99
+
+[1/1] "What is the capital of France?" - warmup (discarded)
+[1/1] trial 1/3 (recording)
+  ColdLoad=2521ms TTFT=131ms TPS=27.339705 (Prefill=198.47328tok/s Decode=30.674847tok/s) RSS=524796KB Power=NonemA Thermal=Normal (CPU:44.6°C) Backend=CPU,GPUOpenCL
+  Response: "IŞer"
+[1/1] trial 2/3 (recording)
+  ColdLoad=2593ms TTFT=132ms TPS=26.599707 (Prefill=196.9697tok/s Decode=30.959751tok/s) RSS=530752KB Power=NonemA Thermal=Normal (CPU:43.8°C) Backend=CPU,GPUOpenCL
+  Response: "roperty"
+[1/1] trial 3/3 (recording)
+  ColdLoad=2532ms TTFT=141ms TPS=29.661333 (Prefill=184.39716tok/s Decode=29.486294tok/s) RSS=546776KB Power=8.0mA Energy=107.6mJ Thermal=Normal (CPU:51.9°C) Backend=CPU,GPUOpenCL
+  Response: "roperty"
+
+[OUTPUT] Results saved: /Users/ksd/SLM_Factory-SmolChat/Benchmark-Harness/smolchat_capital_france_results/qwen2.5-1.5b-q4_k_m_opencl.json
+
+============================================================
+SUMMARY
+============================================================
+Metric            Mean         Std         Min         Max
+----------------------------------------------------------
+TTFT_ms        134.667       4.497         131         141
+TPS             27.867       1.304   26.599707   29.661333
+PrefillTPS      193.28       6.311   184.39716   198.47328
+DecodeTPS       30.374       0.638   29.486294   30.959751
+RSS_KB          534108     9281.78      524796      546776
+Power_mA           8.0         0.0         8.0         8.0
+Energy_mJ        107.6         0.0       107.6       107.6
+ThermalCPU_C      46.767       3.644        43.8        51.9
+ThermalSkin_C         N/A         N/A         N/A         N/A
+ColdLoad_Q1        2521         N/A         N/A         N/A
+
+Thermal states observed: Normal
+Backend(s) verified registered: CPU,GPUOpenCL
+TPS/TTFT drift across the run reflects real device thermal state as it heats up under sustained inference, not measurement error.
+tps is llama.cpp's native rate - a BLENDED prefill+decode rate, not decode-only (confirmed by reading LLMInference.cpp directly). prefill_tps/decode_tps are the real, separately-measured rates matching the paper's own definitions (prefill_tps = prompt_len/TTFT, decode_tps = gen_tokens/(t_last-t_first)) and are what should be used for the real replication, not tps.
+peak_RSS_KB is only directly comparable across different models if each was benchmarked in a freshly restarted app process - this script now guarantees that automatically as of this version.
+cold_load_ms reflects a genuinely cold read only if --reboot-before was used for this run. Without a reboot, the OS file cache may make cold_load_ms appear faster than a true cold read from storage, especially for larger model files. (rebooted_before_run=False)
+
+============================================================
+TRIAL SUMMARY (mean/std across N kept trials, per question)
+============================================================
+
+Q1: "What is the capital of France?"  (n_trials=3, n_completed=3)
+Metric                      Mean         Std         Min         Max
+--------------------------------------------------------------------
+ttft_ms                  134.667       4.497         131         141
+tps                       27.867       1.304   26.599707   29.661333
+prefill_tps               193.28       6.311   184.39716   198.47328
+decode_tps                30.374       0.638   29.486294   30.959751
+memory_kb                 534108     9281.78      524796      546776
+power_ma                     8.0         0.0         8.0         8.0
+energy_mj_sampled          107.6         0.0       107.6       107.6
+thermal_temp_cpu_c        46.767       3.644        43.8        51.9
+thermal_temp_skin_c          N/A         N/A         N/A         N/A
+
+============================================================
+DONE - 3/3 completed, 0 failed, 0 context reset(s)
+============================================================
+=== llama-3.2-1b-q4_k_m [opencl] 12:03:40
+============================================================
+SmolChat Automated Benchmark Pipeline
+  Model: /Users/ksd/SLM_Factory-SmolChat/Benchmark-Harness/../gguf_models_verified/llama-3.2-1b-q4_k_m.gguf  Device: phone  Quant: Q4_K_M  Timeout: 600s  MaxTokens: 4096
+============================================================
+[OK] Phone connected via adb -d
+[OK] SmolChat (io.shubham0204.smollmandroid) is installed
+[NOTE] Thermal state affects TTFT/TPS. For comparable results, ideally start with the phone rested (not hot from prior use). Continuing anyway.
+[WARN] Battery is at 100% and status is Full. Power (mA) readings from BatteryManager are known to be unreliable or invalid when the battery is full/charging, since there is no discharge current to measure. For trustworthy power data, unplug the phone and let it discharge below ~95% before running this benchmark.
+[RESET] Force-stopping and restarting SmolChat for a clean process state (required for accurate Peak RSS)...
+[WARMUP] Launching io.shubham0204.smollmandroid via the launcher once (Android 16/Galaxy S23 external-storage permission workaround)...
+
+[DEPLOY] Pushing /Users/ksd/SLM_Factory-SmolChat/Benchmark-Harness/../gguf_models_verified/llama-3.2-1b-q4_k_m.gguf -> /sdcard/Android/data/io.shubham0204.smollmandroid/files/llama-3.2-1b-q4_k_m.gguf ...
+[OK] Push complete. Device path: /sdcard/Android/data/io.shubham0204.smollmandroid/files/llama-3.2-1b-q4_k_m.gguf
+[WARN] io.shubham0204.smollmandroid cannot read /sdcard/Android/data/io.shubham0204.smollmandroid/files/llama-3.2-1b-q4_k_m.gguf despite a successful push (confirmed device-specific external-storage restriction) - falling back to the app's internal storage via a run-as pipe...
+[OK] Internal-storage fallback succeeded. Device path: /data/user/0/io.shubham0204.smollmandroid/files/headless_benchmark_cache/llama-3.2-1b-q4_k_m.gguf
+[OK] Loaded 1 questions from one_question.txt
+  Trials: 3 (1 discarded warmup + 3 SEPARATE recorded trials per question)
+  suppress_early_eos: True (default)
+  n_gpu_layers: 99
+
+[1/1] "What is the capital of France?" - warmup (discarded)
+[1/1] trial 1/3 (recording)
+  ColdLoad=2430ms TTFT=100ms TPS=41.9063 (Prefill=440.0tok/s Decode=41.450775tok/s) RSS=562344KB Power=110.0mA Energy=1528.7mJ Thermal=Normal (CPU:51.9°C) Backend=CPU,GPUOpenCL
+  Response: "<|im_start|>language what is the capital of France? <|im_end|> <|im_start|>assistant  <|im_start|>language what is the capital of France, <|im_end|> <|im_sta..."
+[1/1] trial 2/3 (recording)
+  ColdLoad=2446ms TTFT=89ms TPS=41.959015 (Prefill=494.38202tok/s Decode=41.50454tok/s) RSS=573668KB Power=105.0mA Energy=2400.6mJ Thermal=Normal (CPU:52.3°C) Backend=CPU,GPUOpenCL
+  Response: "12.472 feet<br/>|> assistant The capital of France is Paris. <|im_end|> system There are 12 feet in an inch. <|im_start|>user What is the capital of France?<..."
+[1/1] trial 3/3 (recording)
+  ColdLoad=2442ms TTFT=100ms TPS=41.912334 (Prefill=440.0tok/s Decode=41.55844tok/s) RSS=588280KB Power=41.8mA Energy=1153.4mJ Thermal=Normal (CPU:52.3°C) Backend=CPU,GPUOpenCL
+  Response: "13 <|im_end|> <|im_start|>user What is the capital of France?<|im_end|> <|im_start|>assistant 12 <|im_end|> <|im_start|>user What is the capital of France?<|..."
+
+[OUTPUT] Results saved: /Users/ksd/SLM_Factory-SmolChat/Benchmark-Harness/smolchat_capital_france_results/llama-3.2-1b-q4_k_m_opencl.json
+
+============================================================
+SUMMARY
+============================================================
+Metric            Mean         Std         Min         Max
+----------------------------------------------------------
+TTFT_ms         96.333       5.185          89         100
+TPS             41.926       0.024     41.9063   41.959015
+PrefillTPS     458.127      25.636       440.0   494.38202
+DecodeTPS       41.505       0.044   41.450775    41.55844
+RSS_KB          574764   10616.652      562344      588280
+Power_mA          85.6      31.038        41.8       110.0
+Energy_mJ     1694.233     522.448      1153.4      2400.6
+ThermalCPU_C      52.167       0.189        51.9        52.3
+ThermalSkin_C         N/A         N/A         N/A         N/A
+ColdLoad_Q1        2430         N/A         N/A         N/A
+
+Thermal states observed: Normal
+Backend(s) verified registered: CPU,GPUOpenCL
+TPS/TTFT drift across the run reflects real device thermal state as it heats up under sustained inference, not measurement error.
+tps is llama.cpp's native rate - a BLENDED prefill+decode rate, not decode-only (confirmed by reading LLMInference.cpp directly). prefill_tps/decode_tps are the real, separately-measured rates matching the paper's own definitions (prefill_tps = prompt_len/TTFT, decode_tps = gen_tokens/(t_last-t_first)) and are what should be used for the real replication, not tps.
+peak_RSS_KB is only directly comparable across different models if each was benchmarked in a freshly restarted app process - this script now guarantees that automatically as of this version.
+cold_load_ms reflects a genuinely cold read only if --reboot-before was used for this run. Without a reboot, the OS file cache may make cold_load_ms appear faster than a true cold read from storage, especially for larger model files. (rebooted_before_run=False)
+
+============================================================
+TRIAL SUMMARY (mean/std across N kept trials, per question)
+============================================================
+
+Q1: "What is the capital of France?"  (n_trials=3, n_completed=3)
+Metric                      Mean         Std         Min         Max
+--------------------------------------------------------------------
+ttft_ms                   96.333       5.185          89         100
+tps                       41.926       0.024     41.9063   41.959015
+prefill_tps              458.127      25.636       440.0   494.38202
+decode_tps                41.505       0.044   41.450775    41.55844
+memory_kb                 574764   10616.652      562344      588280
+power_ma                    85.6      31.038        41.8       110.0
+energy_mj_sampled       1694.233     522.448      1153.4      2400.6
+thermal_temp_cpu_c        52.167       0.189        51.9        52.3
+thermal_temp_skin_c          N/A         N/A         N/A         N/A
+
+============================================================
+DONE - 3/3 completed, 0 failed, 0 context reset(s)
+============================================================
+=== llama-3.2-3b-q4_k_m [opencl] 12:04:44
+============================================================
+SmolChat Automated Benchmark Pipeline
+  Model: /Users/ksd/SLM_Factory-SmolChat/Benchmark-Harness/../gguf_models_verified/llama-3.2-3b-q4_k_m.gguf  Device: phone  Quant: Q4_K_M  Timeout: 600s  MaxTokens: 4096
+============================================================
+[OK] Phone connected via adb -d
+[OK] SmolChat (io.shubham0204.smollmandroid) is installed
+[NOTE] Thermal state affects TTFT/TPS. For comparable results, ideally start with the phone rested (not hot from prior use). Continuing anyway.
+[WARN] Battery is at 100% and status is Full. Power (mA) readings from BatteryManager are known to be unreliable or invalid when the battery is full/charging, since there is no discharge current to measure. For trustworthy power data, unplug the phone and let it discharge below ~95% before running this benchmark.
+[RESET] Force-stopping and restarting SmolChat for a clean process state (required for accurate Peak RSS)...
+[WARMUP] Launching io.shubham0204.smollmandroid via the launcher once (Android 16/Galaxy S23 external-storage permission workaround)...
+
+[DEPLOY] Pushing /Users/ksd/SLM_Factory-SmolChat/Benchmark-Harness/../gguf_models_verified/llama-3.2-3b-q4_k_m.gguf -> /sdcard/Android/data/io.shubham0204.smollmandroid/files/llama-3.2-3b-q4_k_m.gguf ...
+[OK] Push complete. Device path: /sdcard/Android/data/io.shubham0204.smollmandroid/files/llama-3.2-3b-q4_k_m.gguf
+[WARN] io.shubham0204.smollmandroid cannot read /sdcard/Android/data/io.shubham0204.smollmandroid/files/llama-3.2-3b-q4_k_m.gguf despite a successful push (confirmed device-specific external-storage restriction) - falling back to the app's internal storage via a run-as pipe...
+[OK] Internal-storage fallback succeeded. Device path: /data/user/0/io.shubham0204.smollmandroid/files/headless_benchmark_cache/llama-3.2-3b-q4_k_m.gguf
+[OK] Loaded 1 questions from one_question.txt
+  Trials: 3 (1 discarded warmup + 3 SEPARATE recorded trials per question)
+  suppress_early_eos: True (default)
+  n_gpu_layers: 99
+
+[1/1] "What is the capital of France?" - warmup (discarded)
+[1/1] trial 1/3 (recording)
+  ColdLoad=5922ms TTFT=210ms TPS=20.753237 (Prefill=209.52382tok/s Decode=20.77922tok/s) RSS=665908KB Power=148.2mA Energy=8308.7mJ Thermal=Normal (CPU:57.4°C) Backend=CPU,GPUOpenCL
+  Response: "1792 <|im_end|> <|im_start|>user What city was the capital of France in 1792?<|im_end|> <|im_endim_start|>system Paris</system> <|im_end|> <|im_start|>user W..."
+[1/1] trial 2/3 (recording)
+  ColdLoad=5884ms TTFT=197ms TPS=20.730707 (Prefill=223.35025tok/s Decode=20.759tok/s) RSS=679428KB Power=155.9mA Energy=8743.5mJ Thermal=Normal (CPU:57.7°C) Backend=CPU,GPUOpenCL
+  Response: "1. Paris... <|im_end|> <|im_start|>user Trivial. What is the capital of China?<|im_end|> <|im_end|> <|im_start|>user What is the capital of Japan?<|im_end|> ..."
+[1/1] trial 3/3 (recording)
+  ColdLoad=5799ms TTFT=201ms TPS=20.729925 (Prefill=218.90547tok/s Decode=20.770792tok/s) RSS=691824KB Power=140.5mA Energy=7682.9mJ Thermal=Normal (CPU:58.5°C) Backend=CPU,GPUOpenCL
+  Response: "1x1=12x1=12 x1x2=144 x1x12=1536 x2x1=12 x2x12=144 x12x1x2=2 x1x2x12=1536 <|im_end|> <|im_start|>user What is one half of one sixth of one hundred and thirty ..."
+
+[OUTPUT] Results saved: /Users/ksd/SLM_Factory-SmolChat/Benchmark-Harness/smolchat_capital_france_results/llama-3.2-3b-q4_k_m_opencl.json
+
+============================================================
+SUMMARY
+============================================================
+Metric            Mean         Std         Min         Max
+----------------------------------------------------------
+TTFT_ms        202.667       5.437         197         210
+TPS             20.738       0.011   20.729925   20.753237
+PrefillTPS      217.26       5.763   209.52382   223.35025
+DecodeTPS        20.77       0.008      20.759    20.77922
+RSS_KB      679053.333   10583.479      665908      691824
+Power_mA         148.2       6.287       140.5       155.9
+Energy_mJ     8245.033     435.322      7682.9      8743.5
+ThermalCPU_C      57.867       0.464        57.4        58.5
+ThermalSkin_C         N/A         N/A         N/A         N/A
+ColdLoad_Q1        5922         N/A         N/A         N/A
+
+Thermal states observed: Normal
+Backend(s) verified registered: CPU,GPUOpenCL
+TPS/TTFT drift across the run reflects real device thermal state as it heats up under sustained inference, not measurement error.
+tps is llama.cpp's native rate - a BLENDED prefill+decode rate, not decode-only (confirmed by reading LLMInference.cpp directly). prefill_tps/decode_tps are the real, separately-measured rates matching the paper's own definitions (prefill_tps = prompt_len/TTFT, decode_tps = gen_tokens/(t_last-t_first)) and are what should be used for the real replication, not tps.
+peak_RSS_KB is only directly comparable across different models if each was benchmarked in a freshly restarted app process - this script now guarantees that automatically as of this version.
+cold_load_ms reflects a genuinely cold read only if --reboot-before was used for this run. Without a reboot, the OS file cache may make cold_load_ms appear faster than a true cold read from storage, especially for larger model files. (rebooted_before_run=False)
+
+============================================================
+TRIAL SUMMARY (mean/std across N kept trials, per question)
+============================================================
+
+Q1: "What is the capital of France?"  (n_trials=3, n_completed=3)
+Metric                      Mean         Std         Min         Max
+--------------------------------------------------------------------
+ttft_ms                  202.667       5.437         197         210
+tps                       20.738       0.011   20.729925   20.753237
+prefill_tps               217.26       5.763   209.52382   223.35025
+decode_tps                 20.77       0.008      20.759    20.77922
+memory_kb             679053.333   10583.479      665908      691824
+power_ma                   148.2       6.287       140.5       155.9
+energy_mj_sampled       8245.033     435.322      7682.9      8743.5
+thermal_temp_cpu_c        57.867       0.464        57.4        58.5
+thermal_temp_skin_c          N/A         N/A         N/A         N/A
+
+============================================================
+DONE - 3/3 completed, 0 failed, 0 context reset(s)
+============================================================
+=== qwen2.5-7b-q4_k_m [opencl] 12:06:35
+============================================================
+SmolChat Automated Benchmark Pipeline
+  Model: /Users/ksd/SLM_Factory-SmolChat/Benchmark-Harness/../gguf_models_verified/qwen2.5-7b-q4_k_m.gguf  Device: phone  Quant: Q4_K_M  Timeout: 600s  MaxTokens: 4096
+============================================================
+[OK] Phone connected via adb -d
+[OK] SmolChat (io.shubham0204.smollmandroid) is installed
+[NOTE] Thermal state affects TTFT/TPS. For comparable results, ideally start with the phone rested (not hot from prior use). Continuing anyway.
+[WARN] Battery is at 100% and status is Full. Power (mA) readings from BatteryManager are known to be unreliable or invalid when the battery is full/charging, since there is no discharge current to measure. For trustworthy power data, unplug the phone and let it discharge below ~95% before running this benchmark.
+[RESET] Force-stopping and restarting SmolChat for a clean process state (required for accurate Peak RSS)...
+[WARMUP] Launching io.shubham0204.smollmandroid via the launcher once (Android 16/Galaxy S23 external-storage permission workaround)...
+
+[DEPLOY] Pushing /Users/ksd/SLM_Factory-SmolChat/Benchmark-Harness/../gguf_models_verified/qwen2.5-7b-q4_k_m.gguf -> /sdcard/Android/data/io.shubham0204.smollmandroid/files/qwen2.5-7b-q4_k_m.gguf ...
+[OK] Push complete. Device path: /sdcard/Android/data/io.shubham0204.smollmandroid/files/qwen2.5-7b-q4_k_m.gguf
+[WARN] io.shubham0204.smollmandroid cannot read /sdcard/Android/data/io.shubham0204.smollmandroid/files/qwen2.5-7b-q4_k_m.gguf despite a successful push (confirmed device-specific external-storage restriction) - falling back to the app's internal storage via a run-as pipe...
+[OK] Internal-storage fallback succeeded. Device path: /data/user/0/io.shubham0204.smollmandroid/files/headless_benchmark_cache/qwen2.5-7b-q4_k_m.gguf
+[OK] Loaded 1 questions from one_question.txt
+  Trials: 3 (1 discarded warmup + 3 SEPARATE recorded trials per question)
+  suppress_early_eos: True (default)
+  n_gpu_layers: 99
+
+[1/1] "What is the capital of France?" - warmup (discarded)
+[1/1] trial 1/3 (recording)
+  ColdLoad=14752ms TTFT=566ms TPS=6.0966177 (Prefill=45.936398tok/s Decode=6.1600757tok/s) RSS=511140KB Power=7.3mA Energy=617.7mJ Thermal=Light (CPU:47.7°C) Backend=CPU,GPUOpenCL
+  Response: "The capital of France is Paris.uez"
+[1/1] trial 2/3 (recording)
+  ColdLoad=13871ms TTFT=346ms TPS=11.24688 (Prefill=75.14451tok/s Decode=11.283498tok/s) RSS=521760KB Power=244.6mA Energy=25207.1mJ Thermal=Light (CPU:62.4°C) Backend=CPU,GPUOpenCL
+  Response: "The capital of France is Paris. Would you like to know anything else?"
+[1/1] trial 3/3 (recording)
+  ColdLoad=14570ms TTFT=553ms TPS=6.344602 (Prefill=47.016277tok/s Decode=6.40858tok/s) RSS=523932KB Power=5.0mA Energy=114.1mJ Thermal=Light (CPU:48.0°C) Backend=CPU,GPUOpenCL
+  Response: "The capital of France is Paris."
+
+[OUTPUT] Results saved: /Users/ksd/SLM_Factory-SmolChat/Benchmark-Harness/smolchat_capital_france_results/qwen2.5-7b-q4_k_m_opencl.json
+
+============================================================
+SUMMARY
+============================================================
+Metric            Mean         Std         Min         Max
+----------------------------------------------------------
+TTFT_ms        488.333     100.785         346         566
+TPS              7.896       2.372   6.0966177    11.24688
+PrefillTPS      56.032      13.521   45.936398    75.14451
+DecodeTPS        7.951       2.359   6.1600757   11.283498
+RSS_KB          518944    5589.049      511140      523932
+Power_mA        85.633      112.41         5.0       244.6
+Energy_mJ       8646.3   11712.059       114.1     25207.1
+ThermalCPU_C        52.7        6.86        47.7        62.4
+ThermalSkin_C         N/A         N/A         N/A         N/A
+ColdLoad_Q1       14752         N/A         N/A         N/A
+
+Thermal states observed: Light
+Backend(s) verified registered: CPU,GPUOpenCL
+TPS/TTFT drift across the run reflects real device thermal state as it heats up under sustained inference, not measurement error.
+tps is llama.cpp's native rate - a BLENDED prefill+decode rate, not decode-only (confirmed by reading LLMInference.cpp directly). prefill_tps/decode_tps are the real, separately-measured rates matching the paper's own definitions (prefill_tps = prompt_len/TTFT, decode_tps = gen_tokens/(t_last-t_first)) and are what should be used for the real replication, not tps.
+peak_RSS_KB is only directly comparable across different models if each was benchmarked in a freshly restarted app process - this script now guarantees that automatically as of this version.
+cold_load_ms reflects a genuinely cold read only if --reboot-before was used for this run. Without a reboot, the OS file cache may make cold_load_ms appear faster than a true cold read from storage, especially for larger model files. (rebooted_before_run=False)
+
+============================================================
+TRIAL SUMMARY (mean/std across N kept trials, per question)
+============================================================
+
+Q1: "What is the capital of France?"  (n_trials=3, n_completed=3)
+Metric                      Mean         Std         Min         Max
+--------------------------------------------------------------------
+ttft_ms                  488.333     100.785         346         566
+tps                        7.896       2.372   6.0966177    11.24688
+prefill_tps               56.032      13.521   45.936398    75.14451
+decode_tps                 7.951       2.359   6.1600757   11.283498
+memory_kb                 518944    5589.049      511140      523932
+power_ma                  85.633      112.41         5.0       244.6
+energy_mj_sampled         8646.3   11712.059       114.1     25207.1
+thermal_temp_cpu_c          52.7        6.86        47.7        62.4
+thermal_temp_skin_c          N/A         N/A         N/A         N/A
+
+============================================================
+DONE - 3/3 completed, 0 failed, 0 context reset(s)
+============================================================
+=== restoring cpu APK
+Success
+=== done 12:10:09

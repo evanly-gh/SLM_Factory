@@ -99,6 +99,11 @@ android {
         // on-device, not a guess.
         jniLibs {
             useLegacyPackaging = true
+            // smollm's vendored Khronos ICD loader (vendor/opencl-icd-loader) is a link-time
+            // stub only. AGP auto-packages every .so a CMake target links against, so it must be
+            // excluded here; at runtime libOpenCL.so resolves to the device's vendor driver via
+            // app/src/opencl/AndroidManifest.xml's <uses-native-library>. No other flavor ships it.
+            excludes += "**/libOpenCL.so"
         }
     }
     applicationVariants.configureEach {
