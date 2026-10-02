@@ -10,7 +10,7 @@
 # (run 1 cold, last run reported), with Perfetto energy recording (valid only when unplugged).
 #
 # Usage:
-#   ./run_model_sweep.sh                                        # the three default models
+#   ./run_model_sweep.sh                                        # the nine default models
 #   ./run_model_sweep.sh --models "HuggingFaceTB/SmolLM2-135M"  # any Hugging Face model ids
 #   ./run_model_sweep.sh --plan                                 # show what would run, then exit
 #   options: --gate-rise 2  --rest-between-configs 120
@@ -27,7 +27,10 @@ PY_CONVERT="$HERE/../Model-Conversion/.venv/bin/python"
 MNN_DEVICE=/data/local/tmp/mnn_models
 APK_DIR="$SMOL/SmolChat-Android/app/build/outputs/apk"
 RESULTS="$HERE/sweep_results"
-MODELS="HuggingFaceTB/SmolLM2-135M HuggingFaceTB/SmolLM2-360M google/gemma-3-270m-it"
+# Small to large, so a problem with a big model does not block the small ones.
+MODELS="HuggingFaceTB/SmolLM2-135M HuggingFaceTB/SmolLM2-360M google/gemma-3-270m-it \
+Qwen/Qwen3-0.6B Qwen/Qwen3.5-0.8B Qwen/Qwen3-1.7B Qwen/Qwen3.5-2B \
+Qwen/Qwen3-4B-Instruct-2507 Qwen/Qwen3.5-4B"
 GATE_RISE=2   # wait only while the battery is > 2 C above its temperature when the configuration started
 REST_BETWEEN=120
 PLAN=0

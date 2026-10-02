@@ -1,17 +1,16 @@
-12 configuration(s) found under /Users/ksd/SLM_Factory_Krishna_Personal/Benchmark-Harness/sweep_results/smollm2-135m
-12 pass; ranked by Decode (highest first)
+11 configuration(s) found under /Users/ksd/SLM_Factory_Krishna_Personal/Benchmark-Harness/sweep_results/smollm2-135m
+11 pass; ranked by Decode (highest first)
 
 MODEL         QUANT   ENGINE    BACKEND  COLD START ms  TTFT ms  TTLT ms  PREFILL t/s  DECODE t/s  MEM MB  mJ/TOK (net)
 ------------  ------  --------  -------  -------------  -------  -------  -----------  ----------  ------  ------------
-smollm2-135m  Q4      mnn       cpu      164            14       848      1048         257.7       409     -           
-smollm2-135m  Q8      mnn       cpu      229            12       1039     1218         225.8       473     -           
-smollm2-135m  Q8_0    smolchat  cpu      272            78       1032     344          224.7       409     -           
-smollm2-135m  Q4_K_M  smolchat  cpu      236            95       1138     285          195.5       372     -           
-smollm2-135m  F16     mnn       cpu      392            24       1747     634          148.0       702     -           
-smollm2-135m  F16     smolchat  cpu      367            110      1656     246          140.5       529     -           
-smollm2-135m  Q4      mnn       opencl   4698           30       1703     520          126.2       365     -           
-smollm2-135m  Q4_K_M  smolchat  opencl   1520           39       1770     692          120.8       376     -           
-smollm2-135m  Q8_0    smolchat  opencl   1687           38       1730     707          120.1       373     -           
-smollm2-135m  F16     smolchat  opencl   1611           50       1810     536          118.7       682     -           
-smollm2-135m  Q8      mnn       opencl   3984           31       2146     484          111.9       364     -           
-smollm2-135m  F16     mnn       opencl   4010           26       5186     582          49.4        805     -           
+smollm2-135m  Q4      mnn       cpu      154            14       822      1089         259.8       408     -           
+smollm2-135m  Q8      mnn       cpu      227            12       969      1231         228.5       472     -           
+smollm2-135m  Q8_0    smolchat  cpu      274            80       1201     339          217.9       411     -           
+smollm2-135m  Q4_K_M  smolchat  cpu      239            96       1240     280          193.2       371     -           
+smollm2-135m  F16     mnn       cpu      399            23       1760     673          146.9       706     -           
+smollm2-135m  F16     smolchat  cpu      367            110      1745     245          139.5       528     -           
+smollm2-135m  Q4      mnn       opencl   4833           30       1571     515          126.1       365     -           
+smollm2-135m  Q4_K_M  smolchat  opencl   1520           39       1108     692          121.1       375     -           
+smollm2-135m  Q8_0    smolchat  opencl   1696           38       1725     718          120.2       373     -           
+smollm2-135m  Q8      mnn       opencl   4038           32       2204     471          112.3       364     -           
+smollm2-135m  F16     mnn       opencl   4038           26       5177     583          49.5        809     -           

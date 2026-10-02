@@ -60,3 +60,704 @@
 === 18:28:40 MODEL smollm2-135m finished - summary: /Users/ksd/SLM_Factory_Krishna_Personal/Benchmark-Harness/sweep_results/smollm2-135m/SUMMARY.txt
 === 18:28:40 ALL DONE | failures: none
 === 18:28:40 STOPPED-FOR-ANALYSIS
+=== 19:29:19 sweep start | models: HuggingFaceTB/SmolLM2-135M HuggingFaceTB/SmolLM2-360M google/gemma-3-270m-it Qwen/Qwen3-0.6B Qwen/Qwen3.5-0.8B Qwen/Qwen3-1.7B Qwen/Qwen3.5-2B Qwen/Qwen3-4B-Instruct-2507 Qwen/Qwen3.5-4B | gate: battery <= start+2C | plan=1
+=== 19:29:19 MODEL HuggingFaceTB/SmolLM2-135M  (smollm2-135m)
+=== 19:29:19 skip: smollm2-135m SmolChat q4 cpu (result exists)
+=== 19:29:19 skip: smollm2-135m SmolChat q8 cpu (result exists)
+=== 19:29:19 skip: smollm2-135m SmolChat f16 cpu (result exists)
+=== 19:29:19 skip: smollm2-135m SmolChat q4 opencl (result exists)
+=== 19:29:19 skip: smollm2-135m SmolChat q8 opencl (result exists)
+=== 19:29:19 skip: smollm2-135m SmolChat f16 opencl (result exists)
+=== 19:29:19 skip: smollm2-135m MNN q4 cpu (result exists)
+=== 19:29:19 skip: smollm2-135m MNN q8 cpu (result exists)
+=== 19:29:19 skip: smollm2-135m MNN q16 cpu (result exists)
+=== 19:29:19 skip: smollm2-135m MNN q4 opencl (result exists)
+=== 19:29:19 skip: smollm2-135m MNN q8 opencl (result exists)
+=== 19:29:19 skip: smollm2-135m MNN q16 opencl (result exists)
+=== 19:29:19 MODEL HuggingFaceTB/SmolLM2-360M  (smollm2-360m)
+=== 19:29:19 would run: smollm2-360m SmolChat q4 cpu
+=== 19:29:19 would run: smollm2-360m SmolChat q8 cpu
+=== 19:29:19 would run: smollm2-360m SmolChat f16 cpu
+=== 19:29:19 would run: smollm2-360m SmolChat q4 opencl
+=== 19:29:19 would run: smollm2-360m SmolChat q8 opencl
+=== 19:29:19 would run: smollm2-360m SmolChat f16 opencl
+=== 19:29:19 would run: smollm2-360m MNN q4 cpu
+=== 19:29:19 would run: smollm2-360m MNN q8 cpu
+=== 19:29:19 would run: smollm2-360m MNN q16 cpu
+=== 19:29:19 would run: smollm2-360m MNN q4 opencl
+=== 19:29:19 would run: smollm2-360m MNN q8 opencl
+=== 19:29:19 would run: smollm2-360m MNN q16 opencl
+=== 19:29:19 MODEL google/gemma-3-270m-it  (gemma-3-270m-it)
+=== 19:29:19 would run: gemma-3-270m-it SmolChat q4 cpu
+=== 19:29:19 would run: gemma-3-270m-it SmolChat q8 cpu
+=== 19:29:19 would run: gemma-3-270m-it SmolChat f16 cpu
+=== 19:29:19 would run: gemma-3-270m-it SmolChat q4 opencl
+=== 19:29:19 would run: gemma-3-270m-it SmolChat q8 opencl
+=== 19:29:19 would run: gemma-3-270m-it SmolChat f16 opencl
+=== 19:29:19 would run: gemma-3-270m-it MNN q4 cpu
+=== 19:29:19 would run: gemma-3-270m-it MNN q8 cpu
+=== 19:29:19 would run: gemma-3-270m-it MNN q16 cpu
+=== 19:29:19 would run: gemma-3-270m-it MNN q4 opencl
+=== 19:29:19 would run: gemma-3-270m-it MNN q8 opencl
+=== 19:29:19 would run: gemma-3-270m-it MNN q16 opencl
+=== 19:29:19 MODEL Qwen/Qwen3-0.6B  (qwen3-0.6b)
+=== 19:29:19 would run: qwen3-0.6b SmolChat q4 cpu
+=== 19:29:19 would run: qwen3-0.6b SmolChat q8 cpu
+=== 19:29:19 would run: qwen3-0.6b SmolChat f16 cpu
+=== 19:29:19 would run: qwen3-0.6b SmolChat q4 opencl
+=== 19:29:19 would run: qwen3-0.6b SmolChat q8 opencl
+=== 19:29:19 would run: qwen3-0.6b SmolChat f16 opencl
+=== 19:29:19 would run: qwen3-0.6b MNN q4 cpu
+=== 19:29:19 would run: qwen3-0.6b MNN q8 cpu
+=== 19:29:19 would run: qwen3-0.6b MNN q16 cpu
+=== 19:29:19 would run: qwen3-0.6b MNN q4 opencl
+=== 19:29:19 would run: qwen3-0.6b MNN q8 opencl
+=== 19:29:19 would run: qwen3-0.6b MNN q16 opencl
+=== 19:29:19 MODEL Qwen/Qwen3.5-0.8B  (qwen3.5-0.8b)
+=== 19:29:19 would run: qwen3.5-0.8b SmolChat q4 cpu
+=== 19:29:19 would run: qwen3.5-0.8b SmolChat q8 cpu
+=== 19:29:19 would run: qwen3.5-0.8b SmolChat f16 cpu
+=== 19:29:19 would run: qwen3.5-0.8b SmolChat q4 opencl
+=== 19:29:19 would run: qwen3.5-0.8b SmolChat q8 opencl
+=== 19:29:19 would run: qwen3.5-0.8b SmolChat f16 opencl
+=== 19:29:19 would run: qwen3.5-0.8b MNN q4 cpu
+=== 19:29:19 would run: qwen3.5-0.8b MNN q8 cpu
+=== 19:29:19 would run: qwen3.5-0.8b MNN q16 cpu
+=== 19:29:19 would run: qwen3.5-0.8b MNN q4 opencl
+=== 19:29:19 would run: qwen3.5-0.8b MNN q8 opencl
+=== 19:29:19 would run: qwen3.5-0.8b MNN q16 opencl
+=== 19:29:19 MODEL Qwen/Qwen3-1.7B  (qwen3-1.7b)
+=== 19:29:19 would run: qwen3-1.7b SmolChat q4 cpu
+=== 19:29:19 would run: qwen3-1.7b SmolChat q8 cpu
+=== 19:29:19 would run: qwen3-1.7b SmolChat f16 cpu
+=== 19:29:19 would run: qwen3-1.7b SmolChat q4 opencl
+=== 19:29:19 would run: qwen3-1.7b SmolChat q8 opencl
+=== 19:29:19 would run: qwen3-1.7b SmolChat f16 opencl
+=== 19:29:19 would run: qwen3-1.7b MNN q4 cpu
+=== 19:29:19 would run: qwen3-1.7b MNN q8 cpu
+=== 19:29:19 would run: qwen3-1.7b MNN q16 cpu
+=== 19:29:19 would run: qwen3-1.7b MNN q4 opencl
+=== 19:29:19 would run: qwen3-1.7b MNN q8 opencl
+=== 19:29:19 would run: qwen3-1.7b MNN q16 opencl
+=== 19:29:19 MODEL Qwen/Qwen3.5-2B  (qwen3.5-2b)
+=== 19:29:19 would run: qwen3.5-2b SmolChat q4 cpu
+=== 19:29:19 would run: qwen3.5-2b SmolChat q8 cpu
+=== 19:29:19 would run: qwen3.5-2b SmolChat f16 cpu
+=== 19:29:19 would run: qwen3.5-2b SmolChat q4 opencl
+=== 19:29:19 would run: qwen3.5-2b SmolChat q8 opencl
+=== 19:29:19 would run: qwen3.5-2b SmolChat f16 opencl
+=== 19:29:19 would run: qwen3.5-2b MNN q4 cpu
+=== 19:29:19 would run: qwen3.5-2b MNN q8 cpu
+=== 19:29:19 would run: qwen3.5-2b MNN q16 cpu
+=== 19:29:19 would run: qwen3.5-2b MNN q4 opencl
+=== 19:29:19 would run: qwen3.5-2b MNN q8 opencl
+=== 19:29:19 would run: qwen3.5-2b MNN q16 opencl
+=== 19:29:19 MODEL Qwen/Qwen3-4B-Instruct-2507  (qwen3-4b-instruct-2507)
+=== 19:29:19 would run: qwen3-4b-instruct-2507 SmolChat q4 cpu
+=== 19:29:19 would run: qwen3-4b-instruct-2507 SmolChat q8 cpu
+=== 19:29:19 would run: qwen3-4b-instruct-2507 SmolChat f16 cpu
+=== 19:29:19 would run: qwen3-4b-instruct-2507 SmolChat q4 opencl
+=== 19:29:19 would run: qwen3-4b-instruct-2507 SmolChat q8 opencl
+=== 19:29:19 would run: qwen3-4b-instruct-2507 SmolChat f16 opencl
+=== 19:29:19 would run: qwen3-4b-instruct-2507 MNN q4 cpu
+=== 19:29:19 would run: qwen3-4b-instruct-2507 MNN q8 cpu
+=== 19:29:19 would run: qwen3-4b-instruct-2507 MNN q16 cpu
+=== 19:29:19 would run: qwen3-4b-instruct-2507 MNN q4 opencl
+=== 19:29:19 would run: qwen3-4b-instruct-2507 MNN q8 opencl
+=== 19:29:19 would run: qwen3-4b-instruct-2507 MNN q16 opencl
+=== 19:29:19 MODEL Qwen/Qwen3.5-4B  (qwen3.5-4b)
+=== 19:29:19 would run: qwen3.5-4b SmolChat q4 cpu
+=== 19:29:19 would run: qwen3.5-4b SmolChat q8 cpu
+=== 19:29:19 would run: qwen3.5-4b SmolChat f16 cpu
+=== 19:29:19 would run: qwen3.5-4b SmolChat q4 opencl
+=== 19:29:19 would run: qwen3.5-4b SmolChat q8 opencl
+=== 19:29:19 would run: qwen3.5-4b SmolChat f16 opencl
+=== 19:29:19 would run: qwen3.5-4b MNN q4 cpu
+=== 19:29:19 would run: qwen3.5-4b MNN q8 cpu
+=== 19:29:19 would run: qwen3.5-4b MNN q16 cpu
+=== 19:29:19 would run: qwen3.5-4b MNN q4 opencl
+=== 19:29:19 would run: qwen3.5-4b MNN q8 opencl
+=== 19:29:19 would run: qwen3.5-4b MNN q16 opencl
+=== 19:29:19 ALL DONE | failures: none
+=== 19:29:19 sweep start | models: HuggingFaceTB/SmolLM2-135M HuggingFaceTB/SmolLM2-360M google/gemma-3-270m-it Qwen/Qwen3-0.6B Qwen/Qwen3.5-0.8B Qwen/Qwen3-1.7B Qwen/Qwen3.5-2B Qwen/Qwen3-4B-Instruct-2507 Qwen/Qwen3.5-4B | gate: battery <= start+2C | plan=1
+=== 19:29:19 MODEL HuggingFaceTB/SmolLM2-135M  (smollm2-135m)
+=== 19:29:19 skip: smollm2-135m SmolChat q4 cpu (result exists)
+=== 19:29:19 skip: smollm2-135m SmolChat q8 cpu (result exists)
+=== 19:29:19 skip: smollm2-135m SmolChat f16 cpu (result exists)
+=== 19:29:19 skip: smollm2-135m SmolChat q4 opencl (result exists)
+=== 19:29:19 skip: smollm2-135m SmolChat q8 opencl (result exists)
+=== 19:29:19 skip: smollm2-135m SmolChat f16 opencl (result exists)
+=== 19:29:19 skip: smollm2-135m MNN q4 cpu (result exists)
+=== 19:29:19 skip: smollm2-135m MNN q8 cpu (result exists)
+=== 19:29:19 skip: smollm2-135m MNN q16 cpu (result exists)
+=== 19:29:19 skip: smollm2-135m MNN q4 opencl (result exists)
+=== 19:29:19 skip: smollm2-135m MNN q8 opencl (result exists)
+=== 19:29:19 skip: smollm2-135m MNN q16 opencl (result exists)
+=== 19:29:19 MODEL HuggingFaceTB/SmolLM2-360M  (smollm2-360m)
+=== 19:29:19 would run: smollm2-360m SmolChat q4 cpu
+=== 19:29:19 would run: smollm2-360m SmolChat q8 cpu
+=== 19:29:19 would run: smollm2-360m SmolChat f16 cpu
+=== 19:29:19 would run: smollm2-360m SmolChat q4 opencl
+=== 19:29:19 would run: smollm2-360m SmolChat q8 opencl
+=== 19:29:19 would run: smollm2-360m SmolChat f16 opencl
+=== 19:29:19 would run: smollm2-360m MNN q4 cpu
+=== 19:29:19 would run: smollm2-360m MNN q8 cpu
+=== 19:29:19 would run: smollm2-360m MNN q16 cpu
+=== 19:29:19 would run: smollm2-360m MNN q4 opencl
+=== 19:29:19 would run: smollm2-360m MNN q8 opencl
+=== 19:29:19 would run: smollm2-360m MNN q16 opencl
+=== 19:29:19 MODEL google/gemma-3-270m-it  (gemma-3-270m-it)
+=== 19:29:19 would run: gemma-3-270m-it SmolChat q4 cpu
+=== 19:29:19 would run: gemma-3-270m-it SmolChat q8 cpu
+=== 19:29:19 would run: gemma-3-270m-it SmolChat f16 cpu
+=== 19:29:19 would run: gemma-3-270m-it SmolChat q4 opencl
+=== 19:29:19 would run: gemma-3-270m-it SmolChat q8 opencl
+=== 19:29:19 would run: gemma-3-270m-it SmolChat f16 opencl
+=== 19:29:19 would run: gemma-3-270m-it MNN q4 cpu
+=== 19:29:19 would run: gemma-3-270m-it MNN q8 cpu
+=== 19:29:19 would run: gemma-3-270m-it MNN q16 cpu
+=== 19:29:19 would run: gemma-3-270m-it MNN q4 opencl
+=== 19:29:19 would run: gemma-3-270m-it MNN q8 opencl
+=== 19:29:19 would run: gemma-3-270m-it MNN q16 opencl
+=== 19:29:19 MODEL Qwen/Qwen3-0.6B  (qwen3-0.6b)
+=== 19:29:19 would run: qwen3-0.6b SmolChat q4 cpu
+=== 19:29:19 would run: qwen3-0.6b SmolChat q8 cpu
+=== 19:29:19 would run: qwen3-0.6b SmolChat f16 cpu
+=== 19:29:19 would run: qwen3-0.6b SmolChat q4 opencl
+=== 19:29:19 would run: qwen3-0.6b SmolChat q8 opencl
+=== 19:29:19 would run: qwen3-0.6b SmolChat f16 opencl
+=== 19:29:19 would run: qwen3-0.6b MNN q4 cpu
+=== 19:29:19 would run: qwen3-0.6b MNN q8 cpu
+=== 19:29:19 would run: qwen3-0.6b MNN q16 cpu
+=== 19:29:19 would run: qwen3-0.6b MNN q4 opencl
+=== 19:29:19 would run: qwen3-0.6b MNN q8 opencl
+=== 19:29:19 would run: qwen3-0.6b MNN q16 opencl
+=== 19:29:19 MODEL Qwen/Qwen3.5-0.8B  (qwen3.5-0.8b)
+=== 19:29:19 would run: qwen3.5-0.8b SmolChat q4 cpu
+=== 19:29:19 would run: qwen3.5-0.8b SmolChat q8 cpu
+=== 19:29:19 would run: qwen3.5-0.8b SmolChat f16 cpu
+=== 19:29:19 would run: qwen3.5-0.8b SmolChat q4 opencl
+=== 19:29:19 would run: qwen3.5-0.8b SmolChat q8 opencl
+=== 19:29:19 would run: qwen3.5-0.8b SmolChat f16 opencl
+=== 19:29:19 would run: qwen3.5-0.8b MNN q4 cpu
+=== 19:29:19 would run: qwen3.5-0.8b MNN q8 cpu
+=== 19:29:19 would run: qwen3.5-0.8b MNN q16 cpu
+=== 19:29:19 would run: qwen3.5-0.8b MNN q4 opencl
+=== 19:29:20 would run: qwen3.5-0.8b MNN q8 opencl
+=== 19:29:20 would run: qwen3.5-0.8b MNN q16 opencl
+=== 19:29:20 MODEL Qwen/Qwen3-1.7B  (qwen3-1.7b)
+=== 19:29:20 would run: qwen3-1.7b SmolChat q4 cpu
+=== 19:29:20 would run: qwen3-1.7b SmolChat q8 cpu
+=== 19:29:20 would run: qwen3-1.7b SmolChat f16 cpu
+=== 19:29:20 would run: qwen3-1.7b SmolChat q4 opencl
+=== 19:29:20 would run: qwen3-1.7b SmolChat q8 opencl
+=== 19:29:20 would run: qwen3-1.7b SmolChat f16 opencl
+=== 19:29:20 would run: qwen3-1.7b MNN q4 cpu
+=== 19:29:20 would run: qwen3-1.7b MNN q8 cpu
+=== 19:29:20 would run: qwen3-1.7b MNN q16 cpu
+=== 19:29:20 would run: qwen3-1.7b MNN q4 opencl
+=== 19:29:20 would run: qwen3-1.7b MNN q8 opencl
+=== 19:29:20 would run: qwen3-1.7b MNN q16 opencl
+=== 19:29:20 MODEL Qwen/Qwen3.5-2B  (qwen3.5-2b)
+=== 19:29:20 would run: qwen3.5-2b SmolChat q4 cpu
+=== 19:29:20 would run: qwen3.5-2b SmolChat q8 cpu
+=== 19:29:20 would run: qwen3.5-2b SmolChat f16 cpu
+=== 19:29:20 would run: qwen3.5-2b SmolChat q4 opencl
+=== 19:29:20 would run: qwen3.5-2b SmolChat q8 opencl
+=== 19:29:20 would run: qwen3.5-2b SmolChat f16 opencl
+=== 19:29:20 would run: qwen3.5-2b MNN q4 cpu
+=== 19:29:20 would run: qwen3.5-2b MNN q8 cpu
+=== 19:29:20 would run: qwen3.5-2b MNN q16 cpu
+=== 19:29:20 would run: qwen3.5-2b MNN q4 opencl
+=== 19:29:20 would run: qwen3.5-2b MNN q8 opencl
+=== 19:29:20 would run: qwen3.5-2b MNN q16 opencl
+=== 19:29:20 MODEL Qwen/Qwen3-4B-Instruct-2507  (qwen3-4b-instruct-2507)
+=== 19:29:20 would run: qwen3-4b-instruct-2507 SmolChat q4 cpu
+=== 19:29:20 would run: qwen3-4b-instruct-2507 SmolChat q8 cpu
+=== 19:29:20 would run: qwen3-4b-instruct-2507 SmolChat f16 cpu
+=== 19:29:20 would run: qwen3-4b-instruct-2507 SmolChat q4 opencl
+=== 19:29:20 would run: qwen3-4b-instruct-2507 SmolChat q8 opencl
+=== 19:29:20 would run: qwen3-4b-instruct-2507 SmolChat f16 opencl
+=== 19:29:20 would run: qwen3-4b-instruct-2507 MNN q4 cpu
+=== 19:29:20 would run: qwen3-4b-instruct-2507 MNN q8 cpu
+=== 19:29:20 would run: qwen3-4b-instruct-2507 MNN q16 cpu
+=== 19:29:20 would run: qwen3-4b-instruct-2507 MNN q4 opencl
+=== 19:29:20 would run: qwen3-4b-instruct-2507 MNN q8 opencl
+=== 19:29:20 would run: qwen3-4b-instruct-2507 MNN q16 opencl
+=== 19:29:20 MODEL Qwen/Qwen3.5-4B  (qwen3.5-4b)
+=== 19:29:20 would run: qwen3.5-4b SmolChat q4 cpu
+=== 19:29:20 would run: qwen3.5-4b SmolChat q8 cpu
+=== 19:29:20 would run: qwen3.5-4b SmolChat f16 cpu
+=== 19:29:20 would run: qwen3.5-4b SmolChat q4 opencl
+=== 19:29:20 would run: qwen3.5-4b SmolChat q8 opencl
+=== 19:29:20 would run: qwen3.5-4b SmolChat f16 opencl
+=== 19:29:20 would run: qwen3.5-4b MNN q4 cpu
+=== 19:29:20 would run: qwen3.5-4b MNN q8 cpu
+=== 19:29:20 would run: qwen3.5-4b MNN q16 cpu
+=== 19:29:20 would run: qwen3.5-4b MNN q4 opencl
+=== 19:29:20 would run: qwen3.5-4b MNN q8 opencl
+=== 19:29:20 would run: qwen3.5-4b MNN q16 opencl
+=== 19:29:20 ALL DONE | failures: none
+=== 19:29:20 sweep start | models: HuggingFaceTB/SmolLM2-135M HuggingFaceTB/SmolLM2-360M google/gemma-3-270m-it Qwen/Qwen3-0.6B Qwen/Qwen3.5-0.8B Qwen/Qwen3-1.7B Qwen/Qwen3.5-2B Qwen/Qwen3-4B-Instruct-2507 Qwen/Qwen3.5-4B | gate: battery <= start+2C | plan=1
+=== 19:29:20 MODEL HuggingFaceTB/SmolLM2-135M  (smollm2-135m)
+=== 19:29:20 skip: smollm2-135m SmolChat q4 cpu (result exists)
+=== 19:29:20 skip: smollm2-135m SmolChat q8 cpu (result exists)
+=== 19:29:20 skip: smollm2-135m SmolChat f16 cpu (result exists)
+=== 19:29:20 skip: smollm2-135m SmolChat q4 opencl (result exists)
+=== 19:29:20 skip: smollm2-135m SmolChat q8 opencl (result exists)
+=== 19:29:20 skip: smollm2-135m SmolChat f16 opencl (result exists)
+=== 19:29:20 skip: smollm2-135m MNN q4 cpu (result exists)
+=== 19:29:20 skip: smollm2-135m MNN q8 cpu (result exists)
+=== 19:29:20 skip: smollm2-135m MNN q16 cpu (result exists)
+=== 19:29:20 skip: smollm2-135m MNN q4 opencl (result exists)
+=== 19:29:20 skip: smollm2-135m MNN q8 opencl (result exists)
+=== 19:29:20 skip: smollm2-135m MNN q16 opencl (result exists)
+=== 19:29:20 MODEL HuggingFaceTB/SmolLM2-360M  (smollm2-360m)
+=== 19:29:20 would run: smollm2-360m SmolChat q4 cpu
+=== 19:29:20 would run: smollm2-360m SmolChat q8 cpu
+=== 19:29:20 would run: smollm2-360m SmolChat f16 cpu
+=== 19:29:20 would run: smollm2-360m SmolChat q4 opencl
+=== 19:29:20 would run: smollm2-360m SmolChat q8 opencl
+=== 19:29:20 would run: smollm2-360m SmolChat f16 opencl
+=== 19:29:20 would run: smollm2-360m MNN q4 cpu
+=== 19:29:20 would run: smollm2-360m MNN q8 cpu
+=== 19:29:20 would run: smollm2-360m MNN q16 cpu
+=== 19:29:20 would run: smollm2-360m MNN q4 opencl
+=== 19:29:20 would run: smollm2-360m MNN q8 opencl
+=== 19:29:20 would run: smollm2-360m MNN q16 opencl
+=== 19:29:20 MODEL google/gemma-3-270m-it  (gemma-3-270m-it)
+=== 19:29:20 would run: gemma-3-270m-it SmolChat q4 cpu
+=== 19:29:20 would run: gemma-3-270m-it SmolChat q8 cpu
+=== 19:29:20 would run: gemma-3-270m-it SmolChat f16 cpu
+=== 19:29:20 would run: gemma-3-270m-it SmolChat q4 opencl
+=== 19:29:20 would run: gemma-3-270m-it SmolChat q8 opencl
+=== 19:29:20 would run: gemma-3-270m-it SmolChat f16 opencl
+=== 19:29:20 would run: gemma-3-270m-it MNN q4 cpu
+=== 19:29:20 would run: gemma-3-270m-it MNN q8 cpu
+=== 19:29:20 would run: gemma-3-270m-it MNN q16 cpu
+=== 19:29:20 would run: gemma-3-270m-it MNN q4 opencl
+=== 19:29:20 would run: gemma-3-270m-it MNN q8 opencl
+=== 19:29:20 would run: gemma-3-270m-it MNN q16 opencl
+=== 19:29:20 MODEL Qwen/Qwen3-0.6B  (qwen3-0.6b)
+=== 19:29:20 would run: qwen3-0.6b SmolChat q4 cpu
+=== 19:29:20 would run: qwen3-0.6b SmolChat q8 cpu
+=== 19:29:20 would run: qwen3-0.6b SmolChat f16 cpu
+=== 19:29:20 would run: qwen3-0.6b SmolChat q4 opencl
+=== 19:29:20 would run: qwen3-0.6b SmolChat q8 opencl
+=== 19:29:20 would run: qwen3-0.6b SmolChat f16 opencl
+=== 19:29:20 would run: qwen3-0.6b MNN q4 cpu
+=== 19:29:20 would run: qwen3-0.6b MNN q8 cpu
+=== 19:29:20 would run: qwen3-0.6b MNN q16 cpu
+=== 19:29:20 would run: qwen3-0.6b MNN q4 opencl
+=== 19:29:20 would run: qwen3-0.6b MNN q8 opencl
+=== 19:29:20 would run: qwen3-0.6b MNN q16 opencl
+=== 19:29:20 MODEL Qwen/Qwen3.5-0.8B  (qwen3.5-0.8b)
+=== 19:29:20 would run: qwen3.5-0.8b SmolChat q4 cpu
+=== 19:29:20 would run: qwen3.5-0.8b SmolChat q8 cpu
+=== 19:29:20 would run: qwen3.5-0.8b SmolChat f16 cpu
+=== 19:29:20 would run: qwen3.5-0.8b SmolChat q4 opencl
+=== 19:29:20 would run: qwen3.5-0.8b SmolChat q8 opencl
+=== 19:29:20 would run: qwen3.5-0.8b SmolChat f16 opencl
+=== 19:29:20 would run: qwen3.5-0.8b MNN q4 cpu
+=== 19:29:20 would run: qwen3.5-0.8b MNN q8 cpu
+=== 19:29:20 would run: qwen3.5-0.8b MNN q16 cpu
+=== 19:29:20 would run: qwen3.5-0.8b MNN q4 opencl
+=== 19:29:20 would run: qwen3.5-0.8b MNN q8 opencl
+=== 19:29:20 would run: qwen3.5-0.8b MNN q16 opencl
+=== 19:29:20 MODEL Qwen/Qwen3-1.7B  (qwen3-1.7b)
+=== 19:29:20 would run: qwen3-1.7b SmolChat q4 cpu
+=== 19:29:20 would run: qwen3-1.7b SmolChat q8 cpu
+=== 19:29:20 would run: qwen3-1.7b SmolChat f16 cpu
+=== 19:29:20 would run: qwen3-1.7b SmolChat q4 opencl
+=== 19:29:20 would run: qwen3-1.7b SmolChat q8 opencl
+=== 19:29:20 would run: qwen3-1.7b SmolChat f16 opencl
+=== 19:29:20 would run: qwen3-1.7b MNN q4 cpu
+=== 19:29:20 would run: qwen3-1.7b MNN q8 cpu
+=== 19:29:20 would run: qwen3-1.7b MNN q16 cpu
+=== 19:29:20 would run: qwen3-1.7b MNN q4 opencl
+=== 19:29:20 would run: qwen3-1.7b MNN q8 opencl
+=== 19:29:20 would run: qwen3-1.7b MNN q16 opencl
+=== 19:29:20 MODEL Qwen/Qwen3.5-2B  (qwen3.5-2b)
+=== 19:29:20 would run: qwen3.5-2b SmolChat q4 cpu
+=== 19:29:20 would run: qwen3.5-2b SmolChat q8 cpu
+=== 19:29:20 would run: qwen3.5-2b SmolChat f16 cpu
+=== 19:29:20 would run: qwen3.5-2b SmolChat q4 opencl
+=== 19:29:20 would run: qwen3.5-2b SmolChat q8 opencl
+=== 19:29:20 would run: qwen3.5-2b SmolChat f16 opencl
+=== 19:29:20 would run: qwen3.5-2b MNN q4 cpu
+=== 19:29:20 would run: qwen3.5-2b MNN q8 cpu
+=== 19:29:20 would run: qwen3.5-2b MNN q16 cpu
+=== 19:29:20 would run: qwen3.5-2b MNN q4 opencl
+=== 19:29:20 would run: qwen3.5-2b MNN q8 opencl
+=== 19:29:20 would run: qwen3.5-2b MNN q16 opencl
+=== 19:29:20 MODEL Qwen/Qwen3-4B-Instruct-2507  (qwen3-4b-instruct-2507)
+=== 19:29:20 would run: qwen3-4b-instruct-2507 SmolChat q4 cpu
+=== 19:29:20 would run: qwen3-4b-instruct-2507 SmolChat q8 cpu
+=== 19:29:20 would run: qwen3-4b-instruct-2507 SmolChat f16 cpu
+=== 19:29:20 would run: qwen3-4b-instruct-2507 SmolChat q4 opencl
+=== 19:29:20 would run: qwen3-4b-instruct-2507 SmolChat q8 opencl
+=== 19:29:20 would run: qwen3-4b-instruct-2507 SmolChat f16 opencl
+=== 19:29:20 would run: qwen3-4b-instruct-2507 MNN q4 cpu
+=== 19:29:20 would run: qwen3-4b-instruct-2507 MNN q8 cpu
+=== 19:29:20 would run: qwen3-4b-instruct-2507 MNN q16 cpu
+=== 19:29:20 would run: qwen3-4b-instruct-2507 MNN q4 opencl
+=== 19:29:20 would run: qwen3-4b-instruct-2507 MNN q8 opencl
+=== 19:29:20 would run: qwen3-4b-instruct-2507 MNN q16 opencl
+=== 19:29:20 MODEL Qwen/Qwen3.5-4B  (qwen3.5-4b)
+=== 19:29:20 would run: qwen3.5-4b SmolChat q4 cpu
+=== 19:29:20 would run: qwen3.5-4b SmolChat q8 cpu
+=== 19:29:20 would run: qwen3.5-4b SmolChat f16 cpu
+=== 19:29:20 would run: qwen3.5-4b SmolChat q4 opencl
+=== 19:29:20 would run: qwen3.5-4b SmolChat q8 opencl
+=== 19:29:20 would run: qwen3.5-4b SmolChat f16 opencl
+=== 19:29:20 would run: qwen3.5-4b MNN q4 cpu
+=== 19:29:20 would run: qwen3.5-4b MNN q8 cpu
+=== 19:29:20 would run: qwen3.5-4b MNN q16 cpu
+=== 19:29:20 would run: qwen3.5-4b MNN q4 opencl
+=== 19:29:20 would run: qwen3.5-4b MNN q8 opencl
+=== 19:29:20 would run: qwen3.5-4b MNN q16 opencl
+=== 19:29:20 ALL DONE | failures: none
+=== 19:49:26 sweep start | models: HuggingFaceTB/SmolLM2-135M HuggingFaceTB/SmolLM2-360M google/gemma-3-270m-it Qwen/Qwen3-0.6B Qwen/Qwen3.5-0.8B Qwen/Qwen3-1.7B Qwen/Qwen3.5-2B Qwen/Qwen3-4B-Instruct-2507 Qwen/Qwen3.5-4B | gate: battery <= start+2C | plan=1
+=== 19:49:26 MODEL HuggingFaceTB/SmolLM2-135M  (smollm2-135m)
+=== 19:49:26 skip: smollm2-135m SmolChat q4 cpu (result exists)
+=== 19:49:26 skip: smollm2-135m SmolChat q8 cpu (result exists)
+=== 19:49:26 skip: smollm2-135m SmolChat f16 cpu (result exists)
+=== 19:49:26 skip: smollm2-135m SmolChat q4 opencl (result exists)
+=== 19:49:26 skip: smollm2-135m SmolChat q8 opencl (result exists)
+=== 19:49:26 skip: smollm2-135m SmolChat f16 opencl (result exists)
+=== 19:49:26 skip: smollm2-135m MNN q4 cpu (result exists)
+=== 19:49:26 skip: smollm2-135m MNN q8 cpu (result exists)
+=== 19:49:26 skip: smollm2-135m MNN q16 cpu (result exists)
+=== 19:49:26 skip: smollm2-135m MNN q4 opencl (result exists)
+=== 19:49:26 skip: smollm2-135m MNN q8 opencl (result exists)
+=== 19:49:26 skip: smollm2-135m MNN q16 opencl (result exists)
+=== 19:49:26 MODEL HuggingFaceTB/SmolLM2-360M  (smollm2-360m)
+=== 19:49:26 would run: smollm2-360m SmolChat q4 cpu
+=== 19:49:26 would run: smollm2-360m SmolChat q8 cpu
+=== 19:49:26 would run: smollm2-360m SmolChat f16 cpu
+=== 19:49:26 would run: smollm2-360m SmolChat q4 opencl
+=== 19:49:26 would run: smollm2-360m SmolChat q8 opencl
+=== 19:49:26 would run: smollm2-360m SmolChat f16 opencl
+=== 19:49:26 would run: smollm2-360m MNN q4 cpu
+=== 19:49:26 would run: smollm2-360m MNN q8 cpu
+=== 19:49:26 would run: smollm2-360m MNN q16 cpu
+=== 19:49:26 would run: smollm2-360m MNN q4 opencl
+=== 19:49:26 would run: smollm2-360m MNN q8 opencl
+=== 19:49:26 would run: smollm2-360m MNN q16 opencl
+=== 19:49:26 MODEL google/gemma-3-270m-it  (gemma-3-270m-it)
+=== 19:49:26 would run: gemma-3-270m-it SmolChat q4 cpu
+=== 19:49:26 would run: gemma-3-270m-it SmolChat q8 cpu
+=== 19:49:26 would run: gemma-3-270m-it SmolChat f16 cpu
+=== 19:49:26 would run: gemma-3-270m-it SmolChat q4 opencl
+=== 19:49:26 would run: gemma-3-270m-it SmolChat q8 opencl
+=== 19:49:26 would run: gemma-3-270m-it SmolChat f16 opencl
+=== 19:49:26 would run: gemma-3-270m-it MNN q4 cpu
+=== 19:49:26 would run: gemma-3-270m-it MNN q8 cpu
+=== 19:49:26 would run: gemma-3-270m-it MNN q16 cpu
+=== 19:49:26 would run: gemma-3-270m-it MNN q4 opencl
+=== 19:49:26 would run: gemma-3-270m-it MNN q8 opencl
+=== 19:49:26 would run: gemma-3-270m-it MNN q16 opencl
+=== 19:49:27 MODEL Qwen/Qwen3-0.6B  (qwen3-0.6b)
+=== 19:49:27 would run: qwen3-0.6b SmolChat q4 cpu
+=== 19:49:27 would run: qwen3-0.6b SmolChat q8 cpu
+=== 19:49:27 would run: qwen3-0.6b SmolChat f16 cpu
+=== 19:49:27 would run: qwen3-0.6b SmolChat q4 opencl
+=== 19:49:27 would run: qwen3-0.6b SmolChat q8 opencl
+=== 19:49:27 would run: qwen3-0.6b SmolChat f16 opencl
+=== 19:49:27 would run: qwen3-0.6b MNN q4 cpu
+=== 19:49:27 would run: qwen3-0.6b MNN q8 cpu
+=== 19:49:27 would run: qwen3-0.6b MNN q16 cpu
+=== 19:49:27 would run: qwen3-0.6b MNN q4 opencl
+=== 19:49:27 would run: qwen3-0.6b MNN q8 opencl
+=== 19:49:27 would run: qwen3-0.6b MNN q16 opencl
+=== 19:49:27 MODEL Qwen/Qwen3.5-0.8B  (qwen3.5-0.8b)
+=== 19:49:27 would run: qwen3.5-0.8b SmolChat q4 cpu
+=== 19:49:27 would run: qwen3.5-0.8b SmolChat q8 cpu
+=== 19:49:27 would run: qwen3.5-0.8b SmolChat f16 cpu
+=== 19:49:27 would run: qwen3.5-0.8b SmolChat q4 opencl
+=== 19:49:27 would run: qwen3.5-0.8b SmolChat q8 opencl
+=== 19:49:27 would run: qwen3.5-0.8b SmolChat f16 opencl
+=== 19:49:27 would run: qwen3.5-0.8b MNN q4 cpu
+=== 19:49:27 would run: qwen3.5-0.8b MNN q8 cpu
+=== 19:49:27 would run: qwen3.5-0.8b MNN q16 cpu
+=== 19:49:27 would run: qwen3.5-0.8b MNN q4 opencl
+=== 19:49:27 would run: qwen3.5-0.8b MNN q8 opencl
+=== 19:49:27 would run: qwen3.5-0.8b MNN q16 opencl
+=== 19:49:27 MODEL Qwen/Qwen3-1.7B  (qwen3-1.7b)
+=== 19:49:27 would run: qwen3-1.7b SmolChat q4 cpu
+=== 19:49:27 would run: qwen3-1.7b SmolChat q8 cpu
+=== 19:49:27 would run: qwen3-1.7b SmolChat f16 cpu
+=== 19:49:27 would run: qwen3-1.7b SmolChat q4 opencl
+=== 19:49:27 would run: qwen3-1.7b SmolChat q8 opencl
+=== 19:49:27 would run: qwen3-1.7b SmolChat f16 opencl
+=== 19:49:27 would run: qwen3-1.7b MNN q4 cpu
+=== 19:49:27 would run: qwen3-1.7b MNN q8 cpu
+=== 19:49:27 would run: qwen3-1.7b MNN q16 cpu
+=== 19:49:27 would run: qwen3-1.7b MNN q4 opencl
+=== 19:49:27 would run: qwen3-1.7b MNN q8 opencl
+=== 19:49:27 would run: qwen3-1.7b MNN q16 opencl
+=== 19:49:27 MODEL Qwen/Qwen3.5-2B  (qwen3.5-2b)
+=== 19:49:27 would run: qwen3.5-2b SmolChat q4 cpu
+=== 19:49:27 would run: qwen3.5-2b SmolChat q8 cpu
+=== 19:49:27 would run: qwen3.5-2b SmolChat f16 cpu
+=== 19:49:27 would run: qwen3.5-2b SmolChat q4 opencl
+=== 19:49:27 would run: qwen3.5-2b SmolChat q8 opencl
+=== 19:49:27 would run: qwen3.5-2b SmolChat f16 opencl
+=== 19:49:27 would run: qwen3.5-2b MNN q4 cpu
+=== 19:49:27 would run: qwen3.5-2b MNN q8 cpu
+=== 19:49:27 would run: qwen3.5-2b MNN q16 cpu
+=== 19:49:27 would run: qwen3.5-2b MNN q4 opencl
+=== 19:49:27 would run: qwen3.5-2b MNN q8 opencl
+=== 19:49:27 would run: qwen3.5-2b MNN q16 opencl
+=== 19:49:27 MODEL Qwen/Qwen3-4B-Instruct-2507  (qwen3-4b-instruct-2507)
+=== 19:49:27 would run: qwen3-4b-instruct-2507 SmolChat q4 cpu
+=== 19:49:27 would run: qwen3-4b-instruct-2507 SmolChat q8 cpu
+=== 19:49:27 would run: qwen3-4b-instruct-2507 SmolChat f16 cpu
+=== 19:49:27 would run: qwen3-4b-instruct-2507 SmolChat q4 opencl
+=== 19:49:27 would run: qwen3-4b-instruct-2507 SmolChat q8 opencl
+=== 19:49:27 would run: qwen3-4b-instruct-2507 SmolChat f16 opencl
+=== 19:49:27 would run: qwen3-4b-instruct-2507 MNN q4 cpu
+=== 19:49:27 would run: qwen3-4b-instruct-2507 MNN q8 cpu
+=== 19:49:27 would run: qwen3-4b-instruct-2507 MNN q16 cpu
+=== 19:49:27 would run: qwen3-4b-instruct-2507 MNN q4 opencl
+=== 19:49:27 would run: qwen3-4b-instruct-2507 MNN q8 opencl
+=== 19:49:27 would run: qwen3-4b-instruct-2507 MNN q16 opencl
+=== 19:49:27 MODEL Qwen/Qwen3.5-4B  (qwen3.5-4b)
+=== 19:49:27 would run: qwen3.5-4b SmolChat q4 cpu
+=== 19:49:27 would run: qwen3.5-4b SmolChat q8 cpu
+=== 19:49:27 would run: qwen3.5-4b SmolChat f16 cpu
+=== 19:49:27 would run: qwen3.5-4b SmolChat q4 opencl
+=== 19:49:27 would run: qwen3.5-4b SmolChat q8 opencl
+=== 19:49:27 would run: qwen3.5-4b SmolChat f16 opencl
+=== 19:49:27 would run: qwen3.5-4b MNN q4 cpu
+=== 19:49:27 would run: qwen3.5-4b MNN q8 cpu
+=== 19:49:27 would run: qwen3.5-4b MNN q16 cpu
+=== 19:49:27 would run: qwen3.5-4b MNN q4 opencl
+=== 19:49:27 would run: qwen3.5-4b MNN q8 opencl
+=== 19:49:27 would run: qwen3.5-4b MNN q16 opencl
+=== 19:49:27 ALL DONE | failures: none
+=== 19:50:33 sweep start | models: HuggingFaceTB/SmolLM2-135M | gate: battery <= start+2C | plan=0
+=== 19:50:33 MODEL HuggingFaceTB/SmolLM2-135M  (smollm2-135m)
+=== 19:50:33 GGUF files for smollm2-135m already exist - skipping conversion
+=== 19:50:33 MNN exports for smollm2-135m already exist - skipping conversion
+=== 19:50:35 pushed MNN models for smollm2-135m to /data/local/tmp/mnn_models
+=== 19:50:37 START smollm2-135m SmolChat q4 cpu
+=== 19:53:43 sweep start | models: HuggingFaceTB/SmolLM2-135M HuggingFaceTB/SmolLM2-360M google/gemma-3-270m-it Qwen/Qwen3-0.6B Qwen/Qwen3.5-0.8B Qwen/Qwen3-1.7B Qwen/Qwen3.5-2B Qwen/Qwen3-4B-Instruct-2507 Qwen/Qwen3.5-4B | gate: battery <= start+2C | plan=1
+=== 19:53:43 MODEL HuggingFaceTB/SmolLM2-135M  (smollm2-135m)
+=== 19:53:43 would run: smollm2-135m SmolChat q4 cpu
+=== 19:53:43 would run: smollm2-135m SmolChat q8 cpu
+=== 19:53:43 would run: smollm2-135m SmolChat f16 cpu
+=== 19:53:43 would run: smollm2-135m SmolChat q4 opencl
+=== 19:53:43 would run: smollm2-135m SmolChat q8 opencl
+=== 19:53:43 would run: smollm2-135m SmolChat f16 opencl
+=== 19:53:43 would run: smollm2-135m MNN q4 cpu
+=== 19:53:43 would run: smollm2-135m MNN q8 cpu
+=== 19:53:43 would run: smollm2-135m MNN q16 cpu
+=== 19:53:43 would run: smollm2-135m MNN q4 opencl
+=== 19:53:43 would run: smollm2-135m MNN q8 opencl
+=== 19:53:43 would run: smollm2-135m MNN q16 opencl
+=== 19:53:43 MODEL HuggingFaceTB/SmolLM2-360M  (smollm2-360m)
+=== 19:53:43 would run: smollm2-360m SmolChat q4 cpu
+=== 19:53:43 would run: smollm2-360m SmolChat q8 cpu
+=== 19:53:43 would run: smollm2-360m SmolChat f16 cpu
+=== 19:53:43 would run: smollm2-360m SmolChat q4 opencl
+=== 19:53:43 would run: smollm2-360m SmolChat q8 opencl
+=== 19:53:43 would run: smollm2-360m SmolChat f16 opencl
+=== 19:53:43 would run: smollm2-360m MNN q4 cpu
+=== 19:53:43 would run: smollm2-360m MNN q8 cpu
+=== 19:53:43 would run: smollm2-360m MNN q16 cpu
+=== 19:53:43 would run: smollm2-360m MNN q4 opencl
+=== 19:53:43 would run: smollm2-360m MNN q8 opencl
+=== 19:53:43 would run: smollm2-360m MNN q16 opencl
+=== 19:53:43 MODEL google/gemma-3-270m-it  (gemma-3-270m-it)
+=== 19:53:43 would run: gemma-3-270m-it SmolChat q4 cpu
+=== 19:53:43 would run: gemma-3-270m-it SmolChat q8 cpu
+=== 19:53:43 would run: gemma-3-270m-it SmolChat f16 cpu
+=== 19:53:43 would run: gemma-3-270m-it SmolChat q4 opencl
+=== 19:53:43 would run: gemma-3-270m-it SmolChat q8 opencl
+=== 19:53:43 would run: gemma-3-270m-it SmolChat f16 opencl
+=== 19:53:43 would run: gemma-3-270m-it MNN q4 cpu
+=== 19:53:43 would run: gemma-3-270m-it MNN q8 cpu
+=== 19:53:43 would run: gemma-3-270m-it MNN q16 cpu
+=== 19:53:43 would run: gemma-3-270m-it MNN q4 opencl
+=== 19:53:43 would run: gemma-3-270m-it MNN q8 opencl
+=== 19:53:43 would run: gemma-3-270m-it MNN q16 opencl
+=== 19:53:43 MODEL Qwen/Qwen3-0.6B  (qwen3-0.6b)
+=== 19:53:43 would run: qwen3-0.6b SmolChat q4 cpu
+=== 19:53:43 would run: qwen3-0.6b SmolChat q8 cpu
+=== 19:53:43 would run: qwen3-0.6b SmolChat f16 cpu
+=== 19:53:43 would run: qwen3-0.6b SmolChat q4 opencl
+=== 19:53:43 would run: qwen3-0.6b SmolChat q8 opencl
+=== 19:53:43 would run: qwen3-0.6b SmolChat f16 opencl
+=== 19:53:43 would run: qwen3-0.6b MNN q4 cpu
+=== 19:53:43 would run: qwen3-0.6b MNN q8 cpu
+=== 19:53:43 would run: qwen3-0.6b MNN q16 cpu
+=== 19:53:43 would run: qwen3-0.6b MNN q4 opencl
+=== 19:53:43 would run: qwen3-0.6b MNN q8 opencl
+=== 19:53:43 would run: qwen3-0.6b MNN q16 opencl
+=== 19:53:43 MODEL Qwen/Qwen3.5-0.8B  (qwen3.5-0.8b)
+=== 19:53:43 would run: qwen3.5-0.8b SmolChat q4 cpu
+=== 19:53:43 would run: qwen3.5-0.8b SmolChat q8 cpu
+=== 19:53:43 would run: qwen3.5-0.8b SmolChat f16 cpu
+=== 19:53:43 would run: qwen3.5-0.8b SmolChat q4 opencl
+=== 19:53:43 would run: qwen3.5-0.8b SmolChat q8 opencl
+=== 19:53:43 would run: qwen3.5-0.8b SmolChat f16 opencl
+=== 19:53:43 would run: qwen3.5-0.8b MNN q4 cpu
+=== 19:53:43 would run: qwen3.5-0.8b MNN q8 cpu
+=== 19:53:43 would run: qwen3.5-0.8b MNN q16 cpu
+=== 19:53:43 would run: qwen3.5-0.8b MNN q4 opencl
+=== 19:53:43 would run: qwen3.5-0.8b MNN q8 opencl
+=== 19:53:43 would run: qwen3.5-0.8b MNN q16 opencl
+=== 19:53:43 MODEL Qwen/Qwen3-1.7B  (qwen3-1.7b)
+=== 19:53:43 would run: qwen3-1.7b SmolChat q4 cpu
+=== 19:53:43 would run: qwen3-1.7b SmolChat q8 cpu
+=== 19:53:43 would run: qwen3-1.7b SmolChat f16 cpu
+=== 19:53:43 would run: qwen3-1.7b SmolChat q4 opencl
+=== 19:53:43 would run: qwen3-1.7b SmolChat q8 opencl
+=== 19:53:43 would run: qwen3-1.7b SmolChat f16 opencl
+=== 19:53:43 would run: qwen3-1.7b MNN q4 cpu
+=== 19:53:43 would run: qwen3-1.7b MNN q8 cpu
+=== 19:53:43 would run: qwen3-1.7b MNN q16 cpu
+=== 19:53:43 would run: qwen3-1.7b MNN q4 opencl
+=== 19:53:43 would run: qwen3-1.7b MNN q8 opencl
+=== 19:53:43 would run: qwen3-1.7b MNN q16 opencl
+=== 19:53:43 MODEL Qwen/Qwen3.5-2B  (qwen3.5-2b)
+=== 19:53:43 would run: qwen3.5-2b SmolChat q4 cpu
+=== 19:53:43 would run: qwen3.5-2b SmolChat q8 cpu
+=== 19:53:43 would run: qwen3.5-2b SmolChat f16 cpu
+=== 19:53:43 would run: qwen3.5-2b SmolChat q4 opencl
+=== 19:53:43 would run: qwen3.5-2b SmolChat q8 opencl
+=== 19:53:43 would run: qwen3.5-2b SmolChat f16 opencl
+=== 19:53:43 would run: qwen3.5-2b MNN q4 cpu
+=== 19:53:43 would run: qwen3.5-2b MNN q8 cpu
+=== 19:53:43 would run: qwen3.5-2b MNN q16 cpu
+=== 19:53:43 would run: qwen3.5-2b MNN q4 opencl
+=== 19:53:43 would run: qwen3.5-2b MNN q8 opencl
+=== 19:53:43 would run: qwen3.5-2b MNN q16 opencl
+=== 19:53:43 MODEL Qwen/Qwen3-4B-Instruct-2507  (qwen3-4b-instruct-2507)
+=== 19:53:43 would run: qwen3-4b-instruct-2507 SmolChat q4 cpu
+=== 19:53:43 would run: qwen3-4b-instruct-2507 SmolChat q8 cpu
+=== 19:53:43 would run: qwen3-4b-instruct-2507 SmolChat f16 cpu
+=== 19:53:43 would run: qwen3-4b-instruct-2507 SmolChat q4 opencl
+=== 19:53:43 would run: qwen3-4b-instruct-2507 SmolChat q8 opencl
+=== 19:53:43 would run: qwen3-4b-instruct-2507 SmolChat f16 opencl
+=== 19:53:43 would run: qwen3-4b-instruct-2507 MNN q4 cpu
+=== 19:53:43 would run: qwen3-4b-instruct-2507 MNN q8 cpu
+=== 19:53:43 would run: qwen3-4b-instruct-2507 MNN q16 cpu
+=== 19:53:43 would run: qwen3-4b-instruct-2507 MNN q4 opencl
+=== 19:53:43 would run: qwen3-4b-instruct-2507 MNN q8 opencl
+=== 19:53:43 would run: qwen3-4b-instruct-2507 MNN q16 opencl
+=== 19:53:43 MODEL Qwen/Qwen3.5-4B  (qwen3.5-4b)
+=== 19:53:43 would run: qwen3.5-4b SmolChat q4 cpu
+=== 19:53:44 would run: qwen3.5-4b SmolChat q8 cpu
+=== 19:53:44 would run: qwen3.5-4b SmolChat f16 cpu
+=== 19:53:44 would run: qwen3.5-4b SmolChat q4 opencl
+=== 19:53:44 would run: qwen3.5-4b SmolChat q8 opencl
+=== 19:53:44 would run: qwen3.5-4b SmolChat f16 opencl
+=== 19:53:44 would run: qwen3.5-4b MNN q4 cpu
+=== 19:53:44 would run: qwen3.5-4b MNN q8 cpu
+=== 19:53:44 would run: qwen3.5-4b MNN q16 cpu
+=== 19:53:44 would run: qwen3.5-4b MNN q4 opencl
+=== 19:53:44 would run: qwen3.5-4b MNN q8 opencl
+=== 19:53:44 would run: qwen3.5-4b MNN q16 opencl
+=== 19:53:44 ALL DONE | failures: none
+=== 19:56:14 sweep start | models: HuggingFaceTB/SmolLM2-135M HuggingFaceTB/SmolLM2-360M google/gemma-3-270m-it Qwen/Qwen3-0.6B Qwen/Qwen3.5-0.8B Qwen/Qwen3-1.7B Qwen/Qwen3.5-2B Qwen/Qwen3-4B-Instruct-2507 Qwen/Qwen3.5-4B | gate: battery <= start+2C | plan=0
+=== 19:56:14 phone not connected - waiting (attempt 1/10)
+=== 20:03:11 sweep start | models: HuggingFaceTB/SmolLM2-135M HuggingFaceTB/SmolLM2-360M google/gemma-3-270m-it Qwen/Qwen3-0.6B Qwen/Qwen3.5-0.8B Qwen/Qwen3-1.7B Qwen/Qwen3.5-2B Qwen/Qwen3-4B-Instruct-2507 Qwen/Qwen3.5-4B | gate: battery <= start+2C | plan=0
+=== 20:03:11 MODEL HuggingFaceTB/SmolLM2-135M  (smollm2-135m)
+=== 20:03:11 GGUF files for smollm2-135m already exist - skipping conversion
+=== 20:03:11 MNN exports for smollm2-135m already exist - skipping conversion
+=== 20:03:14 pushed MNN models for smollm2-135m to /data/local/tmp/mnn_models
+=== 20:03:15 START smollm2-135m SmolChat q4 cpu
+=== 20:05:02 sweep start | models: HuggingFaceTB/SmolLM2-135M HuggingFaceTB/SmolLM2-360M google/gemma-3-270m-it Qwen/Qwen3-0.6B Qwen/Qwen3.5-0.8B Qwen/Qwen3-1.7B Qwen/Qwen3.5-2B Qwen/Qwen3-4B-Instruct-2507 Qwen/Qwen3.5-4B | gate: battery <= start+2C | plan=0
+=== 20:05:02 MODEL HuggingFaceTB/SmolLM2-135M  (smollm2-135m)
+=== 20:05:02 GGUF files for smollm2-135m already exist - skipping conversion
+=== 20:05:02 MNN exports for smollm2-135m already exist - skipping conversion
+=== 20:05:04 pushed MNN models for smollm2-135m to /data/local/tmp/mnn_models
+=== 20:05:06 START smollm2-135m SmolChat q4 cpu
+=== 20:09:39 DONE  smollm2-135m SmolChat q4 cpu
+=== 20:11:39 START smollm2-135m SmolChat q8 cpu
+=== 20:16:12 DONE  smollm2-135m SmolChat q8 cpu
+=== 20:18:12 START smollm2-135m SmolChat f16 cpu
+=== 20:23:01 DONE  smollm2-135m SmolChat f16 cpu
+=== 20:25:03 START smollm2-135m SmolChat q4 opencl
+=== 20:30:01 DONE  smollm2-135m SmolChat q4 opencl
+=== 20:32:01 START smollm2-135m SmolChat q8 opencl
+=== 20:37:15 DONE  smollm2-135m SmolChat q8 opencl
+=== 20:39:15 START smollm2-135m SmolChat f16 opencl
+=== 20:44:17 attempt 1 failed: smollm2-135m SmolChat f16 opencl
+=== 20:50:26 attempt 2 failed: smollm2-135m SmolChat f16 opencl
+=== 20:51:26 FAILED smollm2-135m SmolChat f16 opencl (no result file after 2 attempts)
+=== 20:51:26 START smollm2-135m MNN q4 cpu
+=== 21:25:55 DONE  smollm2-135m MNN q4 cpu
+=== 21:27:55 START smollm2-135m MNN q8 cpu
+=== 21:31:28 DONE  smollm2-135m MNN q8 cpu
+=== 21:33:28 START smollm2-135m MNN q16 cpu
+=== 21:37:22 DONE  smollm2-135m MNN q16 cpu
+=== 21:39:22 START smollm2-135m MNN q4 opencl
+=== 21:59:36 DONE  smollm2-135m MNN q4 opencl
+=== 22:01:36 START smollm2-135m MNN q8 opencl
+=== 22:06:37 DONE  smollm2-135m MNN q8 opencl
+=== 22:08:37 START smollm2-135m MNN q16 opencl
+=== 22:15:04 DONE  smollm2-135m MNN q16 opencl
+=== 22:17:06 MODEL smollm2-135m finished - summary: /Users/ksd/SLM_Factory_Krishna_Personal/Benchmark-Harness/sweep_results/smollm2-135m/SUMMARY.txt
+=== 22:17:06 MODEL HuggingFaceTB/SmolLM2-360M  (smollm2-360m)
+=== 22:17:06 converting HuggingFaceTB/SmolLM2-360M -> GGUF (F16, Q4_K_M, Q8_0)
+=== 22:17:28 converting HuggingFaceTB/SmolLM2-360M -> MNN (4/8/16-bit)
+=== 22:18:11 pushed MNN models for smollm2-360m to /data/local/tmp/mnn_models
+=== 22:18:12 START smollm2-360m SmolChat q4 cpu
+=== 22:23:18 attempt 1 failed: smollm2-360m SmolChat q4 cpu
+=== 22:35:11 DONE  smollm2-360m SmolChat q4 cpu
+=== 22:37:11 START smollm2-360m SmolChat q8 cpu
+=== 23:20:09 DONE  smollm2-360m SmolChat q8 cpu
+=== 23:22:10 START smollm2-360m SmolChat f16 cpu
+=== 23:29:35 DONE  smollm2-360m SmolChat f16 cpu
+=== 23:31:36 START smollm2-360m SmolChat q4 opencl
+=== 23:37:07 DONE  smollm2-360m SmolChat q4 opencl
+=== 23:39:07 START smollm2-360m SmolChat q8 opencl
+=== 23:46:36 DONE  smollm2-360m SmolChat q8 opencl
+=== 23:48:36 START smollm2-360m SmolChat f16 opencl
+=== 00:13:50 DONE  smollm2-360m SmolChat f16 opencl
+=== 00:15:50 START smollm2-360m MNN q4 cpu
+=== 00:21:12 DONE  smollm2-360m MNN q4 cpu
+=== 00:23:12 START smollm2-360m MNN q8 cpu
+=== 00:27:23 DONE  smollm2-360m MNN q8 cpu
+=== 00:29:23 START smollm2-360m MNN q16 cpu
+=== 00:45:31 DONE  smollm2-360m MNN q16 cpu
+=== 00:47:31 START smollm2-360m MNN q4 opencl
+=== 00:52:51 DONE  smollm2-360m MNN q4 opencl
+=== 00:54:51 START smollm2-360m MNN q8 opencl
+=== 01:04:11 DONE  smollm2-360m MNN q8 opencl
+=== 01:06:11 START smollm2-360m MNN q16 opencl
+=== 01:21:48 DONE  smollm2-360m MNN q16 opencl
+=== 01:23:49 MODEL smollm2-360m finished - summary: /Users/ksd/SLM_Factory_Krishna_Personal/Benchmark-Harness/sweep_results/smollm2-360m/SUMMARY.txt
+=== 01:23:50 MODEL google/gemma-3-270m-it  (gemma-3-270m-it)
+=== 01:23:50 converting google/gemma-3-270m-it -> GGUF (F16, Q4_K_M, Q8_0)
+=== 01:23:50 FAILED: GGUF conversion of google/gemma-3-270m-it
+=== 01:23:50 MODEL Qwen/Qwen3-0.6B  (qwen3-0.6b)
+=== 01:23:50 converting Qwen/Qwen3-0.6B -> GGUF (F16, Q4_K_M, Q8_0)
+=== 01:23:50 FAILED: GGUF conversion of Qwen/Qwen3-0.6B
+=== 01:23:50 MODEL Qwen/Qwen3.5-0.8B  (qwen3.5-0.8b)
+=== 01:23:50 converting Qwen/Qwen3.5-0.8B -> GGUF (F16, Q4_K_M, Q8_0)
+=== 01:23:51 FAILED: GGUF conversion of Qwen/Qwen3.5-0.8B
+=== 01:23:51 MODEL Qwen/Qwen3-1.7B  (qwen3-1.7b)
+=== 01:23:51 converting Qwen/Qwen3-1.7B -> GGUF (F16, Q4_K_M, Q8_0)
+=== 01:23:51 FAILED: GGUF conversion of Qwen/Qwen3-1.7B
+=== 01:23:51 MODEL Qwen/Qwen3.5-2B  (qwen3.5-2b)
+=== 01:23:51 converting Qwen/Qwen3.5-2B -> GGUF (F16, Q4_K_M, Q8_0)
+=== 01:23:51 FAILED: GGUF conversion of Qwen/Qwen3.5-2B
+=== 01:23:51 MODEL Qwen/Qwen3-4B-Instruct-2507  (qwen3-4b-instruct-2507)
+=== 01:23:51 converting Qwen/Qwen3-4B-Instruct-2507 -> GGUF (F16, Q4_K_M, Q8_0)
+=== 01:23:52 FAILED: GGUF conversion of Qwen/Qwen3-4B-Instruct-2507
+=== 01:23:52 MODEL Qwen/Qwen3.5-4B  (qwen3.5-4b)
+=== 01:23:52 converting Qwen/Qwen3.5-4B -> GGUF (F16, Q4_K_M, Q8_0)
+=== 01:23:52 FAILED: GGUF conversion of Qwen/Qwen3.5-4B
+=== 01:23:52 ALL DONE | failures:
+  smollm2-135m SmolChat f16 opencl
+  gemma-3-270m-it: conversion
+  qwen3-0.6b: conversion
+  qwen3.5-0.8b: conversion
+  qwen3-1.7b: conversion
+  qwen3.5-2b: conversion
+  qwen3-4b-instruct-2507: conversion
+  qwen3.5-4b: conversion

@@ -1,0 +1,5 @@
+/Users/ksd/SLM_Factory_Krishna_Personal/Model-Conversion/.venv/lib/python3.14/site-packages/huggingface_hub/utils/_validators.py:205: UserWarning: The `local_dir_use_symlinks` argument is deprecated and ignored in `snapshot_download`. Downloading to a local directory does not use symlinks anymore.
+  warnings.warn(
+[ERROR] Download failed: Got: ConnectError: [Errno 8] nodename nor servname provided, or not known
+An error happened while trying to locate the files on the Hub, and we cannot find the appropriate snapshot folder for the specified revision on the local disk. Please check your internet connection and try again.
+[DOWNLOAD] Fetching Qwen/Qwen3.5-4B from HuggingFace Hub …
