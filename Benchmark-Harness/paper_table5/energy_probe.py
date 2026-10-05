@@ -126,6 +126,10 @@ def discover(adb: Adb) -> dict:
     info["battery_dir"] = bats[0] if bats else None
     info["power_supply"] = supplies
     info["battery_files"] = [s["file"] for s in supplies if s["dir"] == info["battery_dir"] and s["readable"]]
+    # Why sysfs may be empty: SELinux often hides /sys/class/power_supply from the shell user.
+    info["power_supply_diag"] = adb.sh("ls /sys/class/power_supply/ 2>&1 | head -5; "
+                                       "cat /sys/class/power_supply/battery/current_now 2>&1; "
+                                       "cat /sys/class/power_supply/battery/charge_counter 2>&1").strip()
 
     info["perfetto_version"] = adb.sh("perfetto --version 2>&1 | head -1").strip()
     info["has_timeout"] = bool(adb.sh("command -v timeout").strip())
@@ -146,6 +150,9 @@ def print_discovery(d: dict):
         print("Powercap zones:        none (paper's PowerBench counters not available)")
     print(f"Power Stats HAL:       {d['powerstats']['service'] or 'not present'}")
     print(f"Battery sysfs:         {d['battery_dir']} -> {', '.join(d['battery_files']) or 'nothing readable'}")
+    if not d["battery_files"]:
+        diag = " | ".join(line.strip() for line in d.get("power_supply_diag", "").splitlines()[:4])
+        print(f"   (shell sees: {diag[:200]}); the Perfetto battery methods still work without it")
     st = d["state"]
     print(f"Externally powered:    {st['externally_powered']} {st['power_sources']}  "
           f"battery {st['battery_level']}%  {st['battery_temp_c']} C  screen={st['screen']}")
@@ -162,11 +169,24 @@ def cmd_wireless(args):
         print(f"{adb.serial} is already a wireless connection.")
         return
     ip = None
-    for iface in ("wlan0", "wlan1", "swlan0"):
-        m = re.search(r"inet (\d+\.\d+\.\d+\.\d+)", adb.sh(f"ip -f inet addr show {iface}"))
-        if m:
-            ip = m.group(1)
+    for _ in range(3):
+        for iface in ("wlan0", "wlan1", "swlan0"):
+            m = re.search(r"inet (\d+\.\d+\.\d+\.\d+)", adb.sh(f"ip -f inet addr show {iface}"))
+            if m:
+                ip = m.group(1)
+                break
+        if not ip:
+            # any private IPv4 on a non-cellular interface
+            for line in adb.sh("ip -o -f inet addr show").splitlines():
+                m = re.search(r"^\d+:\s+(\S+)\s+inet (\d+\.\d+\.\d+\.\d+)", line)
+                if m and not m.group(1).startswith(("lo", "rmnet", "ccmni", "dummy")) and \
+                        m.group(2).startswith(("192.168.", "10.", "172.")):
+                    ip = m.group(2)
+                    break
+        if ip:
             break
+        adb.sh("input keyevent 224")  # wake: Wi-Fi can be dozing with the screen off
+        time.sleep(3)
     if not ip:
         sys.exit("Could not find the phone's Wi-Fi IP. Connect the phone to the same Wi-Fi network as this computer.")
     print(f"Phone Wi-Fi IP: {ip}. Restarting adbd in TCP mode on port {args.port}...")
@@ -278,8 +298,11 @@ def cmd_collect(args):
         if z["shell_readable"] or z.get("su_readable"):
             label = re.sub(r"\s+", "_", z["name"] or Path(z["path"]).name)
             columns.append((f"powercap:{label}", f"{z['path']}/energy_uj"))
+    if not columns and args.no_perfetto:
+        sys.exit("Nothing readable to sample (no battery sysfs files, no powercap) and --no-perfetto was given.")
     if not columns:
-        sys.exit("Nothing readable to sample (no battery sysfs files, no powercap).")
+        print("No sysfs/powercap files readable: the phone-side sampler records timestamps only (for sleep "
+              "detection) and energy comes from the Perfetto battery methods.")
 
     adb.sh(f"mkdir -p {DEV_DIR}; rm -f {DEV_DIR}/stop {DEV_DIR}/samples.txt")
     push_text(adb, sampler_script(columns, args.interval), f"{DEV_DIR}/sampler.sh")
@@ -306,6 +329,8 @@ def cmd_collect(args):
         adb.sh(f"{sampler_cmd} </dev/null >/dev/null 2>&1 &")
         if not args.no_perfetto:
             pid = start_perfetto(adb)
+            if pid is None and not columns:
+                raise SystemExit("Perfetto did not start and nothing else is readable; no energy method to test.")
         time.sleep(args.rest)
         for i, (w, rep) in enumerate(plan, 1):
             st = bench_common.device_state(adb)
