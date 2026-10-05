@@ -150,6 +150,17 @@ def patch_mnn(src: Path):
     text = llm.read_text(encoding="utf-8")
     if "#include <cstdlib>" not in text:
         llm.write_text("#include <cstdlib>\n" + text, encoding="utf-8", newline="\n")
+    # Exporter (host side, no effect on speed): transformers >= 4.57 returns False instead of raising when a
+    # model has no slow tokenizer (Llama 3), so llmexport's fall back to the fast tokenizer never triggered.
+    tok = src / "transformers" / "llm" / "export" / "utils" / "tokenizer.py"
+    if tok.is_file():
+        edit(tok, "            self.tokenizer = AutoTokenizer.from_pretrained(tokenizer_path, trust_remote_code=True, use_fast=False)\n"
+                  "        except:\n",
+             "            self.tokenizer = AutoTokenizer.from_pretrained(tokenizer_path, trust_remote_code=True, use_fast=False)\n"
+             "            if isinstance(self.tokenizer, bool):  # PB: no slow tokenizer\n"
+             "                raise ValueError('no slow tokenizer')\n"
+             "        except:\n",
+             "PB: no slow tokenizer")
 
 
 # ---------------------------------------------------------------------------

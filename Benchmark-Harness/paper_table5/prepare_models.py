@@ -72,7 +72,17 @@ def file_map(path: Path) -> dict:
             and not p.name.endswith(".validation.json")}
 
 
+def use_system_certificates():
+    """Trust the OS certificate store (corporate networks that inspect TLS), if truststore is installed."""
+    try:
+        import truststore
+        truststore.inject_into_ssl()
+    except ImportError:
+        pass
+
+
 def download(hf_id: str) -> Path:
+    use_system_certificates()
     os.environ.setdefault("HF_HUB_DISABLE_XET", "1")
     from huggingface_hub import snapshot_download
     dest = MODELS_DIR / "hf" / hf_id.split("/")[-1]
@@ -144,6 +154,7 @@ def prepare_gguf(name: str, hf_id: str, hf_dir: Path, quant: str, args, manifest
 
 def mnn_env(recipe: str) -> dict:
     env = dict(os.environ)
+    env["PYTHONUTF8"] = "1"  # llmexport's spinner prints symbols a redirected Windows console can't encode
     src = THIRD_PARTY / "src" / f"mnn-{REFS['pinned']['mnn'][:12]}"
     if not (src / "transformers" / "llm" / "export" / "llmexport.py").is_file():
         sys.exit(f"{src} missing: run `python build_binaries.py --fetch-only` first")
@@ -152,19 +163,40 @@ def mnn_env(recipe: str) -> dict:
     if recipe == "paper-default":  # llmexport defaults: block 64, min/max (no HQQ), lm_head = body width
         env.update({"SLM_MNN_QUANT_BLOCK": "64", "SLM_MNN_HQQ": "0", "SLM_MNN_LM_QUANT_BIT": "4"})
     if not env.get("SLM_MNN_CONVERT_BIN"):
-        py = Path(env.get("SLM_MNN_PYTHON") or (REPO_ROOT / ".venv_mnn" / ("Scripts/python.exe" if IS_WINDOWS
-                                                                             else "bin/python")))
-        if py.is_file():
-            conv = py.parent / ("mnnconvert.exe" if IS_WINDOWS else "mnnconvert")
-            ver = subprocess.run([str(py), "-c", "import importlib.metadata as m; print(m.version('MNN'))"],
-                                 capture_output=True, text=True).stdout.strip()
-            if conv.is_file():
-                if ver != "3.4.0":
-                    print(f"[WARN] {conv} is from MNN {ver or '?'}; the pinned runtime (510ac8f) matches MNN 3.4.0. "
-                          f"`{py} -m pip install MNN==3.4.0` or set SLM_MNN_CONVERT_BIN to an MNNConvert built at 510ac8f.")
-                env["SLM_MNN_CONVERT_BIN"] = str(conv)
-                env["SLM_MNN_PYTHON"] = str(py)
+        py = Path(env.get("SLM_MNN_PYTHON") or sys.executable)
+        ver = subprocess.run([str(py), "-c", "import importlib.metadata as m; print(m.version('MNN'))"],
+                             capture_output=True, text=True).stdout.strip()
+        if not ver:
+            sys.exit(f"MNN is not installed in {py}: install requirements.txt there (MNN==3.4.0), or set "
+                     f"SLM_MNN_CONVERT_BIN to an MNNConvert built at 510ac8f")
+        if ver != "3.4.0":
+            print(f"[WARN] {py} has MNN {ver}; the pinned runtime (510ac8f) matches MNN 3.4.0 "
+                  f"(`{py} -m pip install MNN==3.4.0`).")
+        env["SLM_MNN_CONVERT_BIN"] = str(nolog_mnnconvert(py))
+        env["SLM_MNN_PYTHON"] = str(py)
     return env
+
+
+def nolog_mnnconvert(py: Path) -> Path:
+    """A launcher for pymnn's compiled converter that bypasses MNN.tools.mnnconvert: that wrapper imports
+    MNN/tools/utils/log.py, which runs a bare `pip install aliyun-log-python-sdk` (whatever pip is first on
+    PATH, i.e. possibly the system Python) and uploads the machine ID and usage to Alibaba Cloud.
+    llmexport runs the converter through the shell, so the launcher path must not contain spaces."""
+    tools = THIRD_PARTY / "tools"
+    tools.mkdir(parents=True, exist_ok=True)
+    script = tools / "mnnconvert_nolog.py"
+    script.write_text("import sys\nimport _tools  # pymnn's compiled converter\n"
+                      "_tools.mnnconvert(sys.argv)\n", encoding="utf-8")
+    if IS_WINDOWS:
+        launcher = tools / "mnnconvert_nolog.cmd"
+        launcher.write_text(f'@"{py}" "{script}" %*\r\n', encoding="utf-8")
+    else:
+        launcher = tools / "mnnconvert_nolog"
+        launcher.write_text(f'#!/bin/sh\nexec "{py}" "{script}" "$@"\n', encoding="utf-8")
+        launcher.chmod(0o755)
+    if " " in str(launcher):
+        sys.exit(f"{launcher} contains a space, which llmexport cannot handle; set PB_WORK to a path without spaces")
+    return launcher
 
 
 def prepare_mnn(name: str, hf_id: str, hf_dir: Path, bits: int, args, manifest: dict):
