@@ -131,9 +131,12 @@ def patch_mnn(src: Path):
          "                llm->response(tokens, nullptr, nullptr, decodeTokens);\n"
          "                " + mark.replace("{mode}", '"kv"').replace("{prompt}", "prompt_tokens"),
          'PB_MARK mnn mode=%s rep=%d begin=%llu end=%llu prefill_us=%lld decode_us=%lld prompt=%d gen=%d\\n", "kv"')
-    edit(bench, "llm->response(tokens, nullptr, nullptr, 1);",
+    pp_call = next((c for c in ("llm->response(tokens, nullptr, nullptr, 1);",   # 510ac8f
+                                "llm->response(tokens, nullptr, nullptr, 0);")   # later upstream
+                    if c in bench.read_text(encoding="utf-8")), "llm->response(tokens, nullptr, nullptr, 1);")
+    edit(bench, pp_call,
          "unsigned long long pb_t0 = pb_boottime_ns();\n"
-         "                    llm->response(tokens, nullptr, nullptr, 1);\n"
+         "                    " + pp_call + "\n"
          "                    " + mark.replace("{mode}", '"pp"').replace("{prompt}", "prompt_tokens"),
          '"pp", i, pb_t0')
     edit(bench, "llm->response(tokens1, nullptr, nullptr, decodeTokens);",
@@ -142,25 +145,43 @@ def patch_mnn(src: Path):
          "                    " + mark.replace("{mode}", '"tg"').replace("{prompt}", "1"),
          '"tg", i, pb_t0')
     llm = src / "transformers" / "llm" / "engine" / "src" / "llm.cpp"
-    edit(llm, "    bool stop = mTokenizer->is_stop(token_id);\n",
-         "    // PB_IGNORE_EOS: decode runs the full requested length (the paper's EOS replacement).\n"
-         "    static const bool pb_ignore_eos = getenv(\"PB_IGNORE_EOS\") != nullptr;\n"
-         "    bool stop = !pb_ignore_eos && mTokenizer->is_stop(token_id);\n",
-         "PB_IGNORE_EOS")
-    text = llm.read_text(encoding="utf-8")
-    if "#include <cstdlib>" not in text:
-        llm.write_text("#include <cstdlib>\n" + text, encoding="utf-8", newline="\n")
+    if "ignore_eos()" in llm.read_text(encoding="utf-8"):
+        print("[EDIT] llm.cpp: upstream has ignore_eos (llm_bench enables it), EOS edit not needed")
+    else:
+        edit(llm, "    bool stop = mTokenizer->is_stop(token_id);\n",
+             "    // PB_IGNORE_EOS: decode runs the full requested length (the paper's EOS replacement).\n"
+             "    static const bool pb_ignore_eos = getenv(\"PB_IGNORE_EOS\") != nullptr;\n"
+             "    bool stop = !pb_ignore_eos && mTokenizer->is_stop(token_id);\n",
+             "PB_IGNORE_EOS")
+        text = llm.read_text(encoding="utf-8")
+        if "#include <cstdlib>" not in text:
+            llm.write_text("#include <cstdlib>\n" + text, encoding="utf-8", newline="\n")
     # Exporter (host side, no effect on speed): transformers >= 4.57 returns False instead of raising when a
     # model has no slow tokenizer (Llama 3), so llmexport's fall back to the fast tokenizer never triggered.
     tok = src / "transformers" / "llm" / "export" / "utils" / "tokenizer.py"
-    if tok.is_file():
-        edit(tok, "            self.tokenizer = AutoTokenizer.from_pretrained(tokenizer_path, trust_remote_code=True, use_fast=False)\n"
-                  "        except:\n",
-             "            self.tokenizer = AutoTokenizer.from_pretrained(tokenizer_path, trust_remote_code=True, use_fast=False)\n"
-             "            if isinstance(self.tokenizer, bool):  # PB: no slow tokenizer\n"
-             "                raise ValueError('no slow tokenizer')\n"
-             "        except:\n",
-             "PB: no slow tokenizer")
+    variants = [  # (anchor, replacement): 510ac8f, then later upstream
+        ("            self.tokenizer = AutoTokenizer.from_pretrained(tokenizer_path, trust_remote_code=True, use_fast=False)\n"
+         "        except:\n",
+         "            self.tokenizer = AutoTokenizer.from_pretrained(tokenizer_path, trust_remote_code=True, use_fast=False)\n"
+         "            if isinstance(self.tokenizer, bool):  # PB: no slow tokenizer\n"
+         "                raise ValueError('no slow tokenizer')\n"
+         "        except:\n"),
+        ("                    tokenizer_path, trust_remote_code=True, use_fast=use_fast\n"
+         "                )\n"
+         "                break\n",
+         "                    tokenizer_path, trust_remote_code=True, use_fast=use_fast\n"
+         "                )\n"
+         "                if isinstance(tokenizer, bool):  # PB: no slow tokenizer\n"
+         "                    tokenizer = None\n"
+         "                    continue\n"
+         "                break\n"),
+    ]
+    text = tok.read_text(encoding="utf-8") if tok.is_file() else ""
+    match = next(((a, r) for a, r in variants if a in text), None)
+    if match:
+        edit(tok, match[0], match[1], "PB: no slow tokenizer")
+    elif "PB: no slow tokenizer" not in text:
+        print(f"[WARN] {tok}: tokenizer layout not recognized; Llama 3 exports may fail with transformers >= 4.57")
 
 
 # ---------------------------------------------------------------------------

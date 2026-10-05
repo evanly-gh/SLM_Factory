@@ -34,7 +34,8 @@ FRAMEWORK_LABEL = {"llama.cpp": "llama.cpp", "mnn": "MNN"}
 
 
 def quant_order(q: str) -> tuple:
-    bits = 16 if q in ("F16", "BF16") else int(q[1]) if q[1:2].isdigit() else 99
+    base = q.split(" @")[0]
+    bits = 16 if base in ("F16", "BF16") else int(base[1]) if base[1:2].isdigit() else 99
     return (bits, q)
 
 
@@ -56,7 +57,8 @@ def load(dirs: list[Path]) -> tuple[dict, dict]:
         for f in sorted((d / "configs").glob("*.json")):
             r = json.loads(f.read_text())
             c = r["config"]
-            key = (c["model"], c["backend"], c["framework"], c["quant"])
+            quant = c["quant"] if c.get("ref", "pinned") == "pinned" else f"{c['quant']} @{c['ref']}"
+            key = (c["model"], c["backend"], c["framework"], quant)
             data.setdefault(prof["id"], {})[key] = r
             if r.get("energy_headline_method"):
                 dev["energy_methods"].add(r["energy_headline_method"])

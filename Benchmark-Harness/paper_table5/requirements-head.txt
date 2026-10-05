@@ -1,0 +1,24 @@
+# Environment for `prepare_models.py --ref head` (architectures newer than the pinned tools, e.g. Qwen3.5):
+# current transformers for upstream convert_hf_to_gguf.py / llmexport.py, and the latest MNN converter.
+#   uv venv .venv_pb_head --python 3.12
+#   uv pip install --python .venv_pb_head -r requirements-head.txt
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch
+numpy
+sentencepiece
+transformers
+protobuf
+safetensors
+huggingface_hub
+gguf
+MNN
+onnx
+onnxslim
+onnxruntime
+peft
+datasets
+Pillow
+requests
+tqdm
+yaspin
+truststore

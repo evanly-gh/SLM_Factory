@@ -44,7 +44,7 @@ import energy_probe  # noqa: E402
 from common import (DEV_MODELS, DEV_ROOT, MODELS_DIR, RESULTS_DIR, DeviceControls, boottime_s,  # noqa: E402
                     dev_bin_dir, device_info, match_profile)
 from devenv import Adb  # noqa: E402
-from energy import EnergyRecorder, is_chip_method  # noqa: E402
+from energy import EnergyRecorder, is_chip_method, probe_recommendation  # noqa: E402
 
 BACKENDS = ("cpu", "gpu")
 FRAMEWORKS = ("llama.cpp", "mnn")
@@ -245,10 +245,14 @@ class Session:
                 continue
             if e["framework"] not in self.args.frameworks:
                 continue
+            if self.args.ref == "pinned" and e.get("ref", "pinned") != "pinned":
+                continue  # converted for the newer runtime; run it in a --ref head session
             for backend in self.args.backends:
-                cid = f"{e['name']}__{e['quant']}__{e['framework']}__{backend}".replace("/", "-")
-                out.append({"id": cid, "model": e["name"], "quant": e["quant"], "bits": e.get("bits"),
-                            "framework": e["framework"], "backend": backend, "entry": e})
+                cid = f"{e['name']}__{e['quant']}__{e['framework']}__{backend}"
+                if self.args.ref != "pinned":
+                    cid += f"__{self.args.ref}"
+                out.append({"id": cid.replace("/", "-"), "model": e["name"], "quant": e["quant"], "bits": e.get("bits"),
+                            "framework": e["framework"], "backend": backend, "ref": self.args.ref, "entry": e})
         return out
 
     def done(self, cfg) -> bool:
@@ -393,7 +397,8 @@ class Session:
     # -- energy --------------------------------------------------------------
     def attach_energy(self):
         self.recorder.load()
-        headline = self.recorder.headline(self.profile.get("energy_method"))
+        preferred = self.profile.get("energy_method") or probe_recommendation(self.info["model"])
+        headline = self.recorder.headline(preferred)
         session = json.loads((self.out / "session.json").read_text())
         session["energy_headline_method"] = headline
         session["energy_methods"] = list(self.recorder.funcs)

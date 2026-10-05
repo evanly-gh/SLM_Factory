@@ -51,6 +51,20 @@ PAPER_MODELS = {
     "llama3.2-3b": "unsloth/Llama-3.2-3B-Instruct",
 }
 
+# Phase 2: the model pool (docs/superpowers/specs/2026-10-02-pool-sweep-design.md). min_ref "head": the
+# architecture postdates the pinned versions (Qwen3.5, early 2026), so convert and run with --ref head.
+POOL_MODELS = {
+    "gemma3-270m": ("google/gemma-3-270m-it", "pinned"),
+    "smollm2-135m": ("HuggingFaceTB/SmolLM2-135M-Instruct", "pinned"),
+    "smollm2-360m": ("HuggingFaceTB/SmolLM2-360M-Instruct", "pinned"),
+    "qwen3-0.6b": ("Qwen/Qwen3-0.6B", "pinned"),
+    "qwen3-1.7b": ("Qwen/Qwen3-1.7B", "pinned"),
+    "qwen3-4b-instruct-2507": ("Qwen/Qwen3-4B-Instruct-2507", "pinned"),
+    "qwen3.5-0.8b": ("Qwen/Qwen3.5-0.8B", "head"),
+    "qwen3.5-2b": ("Qwen/Qwen3.5-2B", "head"),
+    "qwen3.5-4b": ("Qwen/Qwen3.5-4B", "head"),
+}
+
 DEVICES_FILE = HERE / "devices.json"
 
 

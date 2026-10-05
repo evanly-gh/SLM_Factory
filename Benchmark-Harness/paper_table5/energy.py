@@ -14,6 +14,7 @@ BATTERY_PREFERENCE (energy_probe.py measures which one is most repeatable on a g
 
 from __future__ import annotations
 
+import json
 import statistics
 import time
 from pathlib import Path
@@ -26,6 +27,24 @@ BATTERY_PREFERENCE = ("perfetto:charge", "sysfs:charge_counter", "perfetto:curre
 
 def is_chip_method(method: str) -> bool:
     return method.startswith(("powercap:", "rail:"))
+
+
+def probe_recommendation(model: str, results_dir: Path | None = None) -> str | None:
+    """The method energy_probe.py recommended in its newest valid run for this phone model, if any."""
+    results_dir = results_dir or Path(ep.HERE) / "energy_probe_results"
+    best = None
+    for rep in results_dir.glob("*/report.json"):
+        try:
+            meta = json.loads((rep.parent / "meta.json").read_text())
+            data = json.loads(rep.read_text())
+        except (OSError, ValueError):
+            continue
+        if meta.get("discovery", {}).get("model") != model or not data.get("recommended") \
+                or data.get("externally_powered"):
+            continue
+        if best is None or rep.stat().st_mtime > best[0]:
+            best = (rep.stat().st_mtime, data["recommended"])
+    return best[1] if best else None
 
 
 class EnergyRecorder:

@@ -244,6 +244,22 @@ echo "end $t1" >> {dev}/load.log
 """.replace("{dev}", DEV_DIR)
 
 
+def read_cpu_jiffies(adb: Adb) -> tuple[int, int] | None:
+    """(busy, total) jiffies over all CPUs from /proc/stat, to verify a load actually ran."""
+    line = adb.sh("head -1 /proc/stat", timeout=20).split()
+    if len(line) < 5 or line[0] != "cpu":
+        return None
+    vals = [int(x) for x in line[1:] if x.isdigit()]
+    idle = vals[3] + (vals[4] if len(vals) > 4 else 0)  # idle + iowait
+    return sum(vals) - idle, sum(vals)
+
+
+def busy_fraction(a, b) -> float | None:
+    if not a or not b or b[1] <= a[1]:
+        return None
+    return round((b[0] - a[0]) / (b[1] - a[1]), 3)
+
+
 def read_uptime(adb: Adb) -> float | None:
     """Phone CLOCK_BOOTTIME in seconds (/proc/uptime), the clock the sampler and Perfetto use."""
     for _ in range(3):
@@ -319,7 +335,7 @@ def cmd_collect(args):
         print("No sysfs/powercap files readable: the phone-side sampler records timestamps only (for sleep "
               "detection) and energy comes from the Perfetto battery methods.")
 
-    adb.sh(f"mkdir -p {DEV_DIR}; rm -f {DEV_DIR}/stop {DEV_DIR}/samples.txt")
+    adb.sh(f"mkdir -p {DEV_DIR}; rm -f {DEV_DIR}/stop {DEV_DIR}/samples.txt {DEV_DIR}/load.log")
     push_text(adb, sampler_script(columns, args.interval), f"{DEV_DIR}/sampler.sh")
     push_text(adb, LOAD_SCRIPT, f"{DEV_DIR}/load.sh")
     sampler_cmd = f"setsid sh {DEV_DIR}/sampler.sh"
@@ -354,14 +370,19 @@ def cmd_collect(args):
             # No adb call stays open during the window (a long-running `adb shell` is fragile over Wi-Fi):
             # read the phone's clock, start the load detached, wait, read the clock again.
             t0 = read_uptime(adb)
+            j0 = read_cpu_jiffies(adb)
             adb.sh(f"setsid sh {DEV_DIR}/load.sh {workloads[w]} {args.window} </dev/null >/dev/null 2>&1 &")
             time.sleep(args.window)
+            j1 = read_cpu_jiffies(adb)
             t1 = read_uptime(adb)
+            busy = busy_fraction(j0, j1)
+            expected = workloads[w] / info["ncpu"]
+            print(f"   CPU busy {busy if busy is None else f'{busy:.0%}'} (load alone should add ~{expected:.0%})")
             if t0 is None or t1 is None or t1 - t0 < args.window * 0.5:
                 print(f"   !! could not read the phone clock (t0={t0}, t1={t1}); window skipped. "
                       f"load.log: {adb.sh(f'tail -2 {DEV_DIR}/load.log').strip()!r}")
                 continue
-            windows.append({"workload": w, "rep": rep, "t0": t0, "t1": t1,
+            windows.append({"workload": w, "rep": rep, "t0": t0, "t1": t1, "cpu_busy": busy,
                             "battery_temp_c": st["battery_temp_c"], "externally_powered": st["externally_powered"],
                             "battery_level": st["battery_level"]})
             (run_dir / "windows.json").write_text(json.dumps(windows, indent=1))
@@ -375,6 +396,7 @@ def cmd_collect(args):
         if pid is not None:
             meta["trace"] = stop_perfetto(adb, pid, run_dir)
         adb.run(["pull", f"{DEV_DIR}/samples.txt", str(run_dir / "samples.txt")], timeout=120)
+        adb.run(["pull", f"{DEV_DIR}/load.log", str(run_dir / "load.log")], timeout=60)
         if args.screen == "off":
             adb.sh("input keyevent 224")
         meta["end"] = datetime.now().isoformat()
@@ -470,13 +492,21 @@ def perfetto_series(trace: Path) -> dict:
         return {}
     tp = TraceProcessor(trace=str(trace))
     try:
+        # Map trace time onto CLOCK_BOOTTIME (builtin clock id 6), the clock /proc/uptime and PB_MARK use.
+        # Android traces normally use BOOTTIME already (offset 0); the snapshot makes that explicit.
+        offset_ns = 0
+        snap = list(tp.query("select ts - clock_value as o from clock_snapshot where clock_id = 6 limit 1"))
+        if snap:
+            offset_ns = snap[0].o
         rows = tp.query("select t.name as name, c.ts as ts, c.value as v from counter c "
                         "join counter_track t on c.track_id = t.id "
                         "where t.name like 'batt.%' or t.name like 'power.%' order by c.ts")
         out: dict = {}
         for r in rows:
-            out.setdefault(r.name, []).append((r.ts / 1e9, r.v))
-        return out
+            out.setdefault(r.name, []).append(((r.ts - offset_ns) / 1e9, r.v))
+        # A current/charge/rail counter that never changes (e.g. a gauge that does not report charge) carries no
+        # energy information; a steady voltage is legitimate.
+        return {k: v for k, v in out.items() if k == "batt.voltage_uv" or len({x for _, x in v}) > 1}
     finally:
         tp.close()
 
@@ -609,6 +639,14 @@ def analyze(run_dir: Path):
         n = r["net_cpu_all"][0]
         r["agreement"] = n / ref if (n is not None and ref) else None
 
+    if meta.get("trace") and (run_dir / meta["trace"]).exists():
+        series = perfetto_series(run_dir / meta["trace"])
+        with open(run_dir / "battery_timeline.csv", "w", encoding="utf-8") as fh:
+            fh.write("boottime_s,track,value,window\n")
+            for name, pts in series.items():
+                for t, v in pts:
+                    win = next((f"{w['workload']}#{w['rep']}" for w in windows if w["t0"] <= t <= w["t1"]), "")
+                    fh.write(f"{t:.3f},{name},{v},{win}\n")
     _, samples = load_samples(run_dir / "samples.txt")
     times = [r[0] for r in samples]
     gaps = {}
@@ -618,7 +656,17 @@ def analyze(run_dir: Path):
         if g is not None:
             gaps[w["workload"]] = max(gaps.get(w["workload"], 0), g)
 
+    busy = {}
+    for w in windows:
+        if w.get("cpu_busy") is not None:
+            busy.setdefault(w["workload"], []).append(w["cpu_busy"])
+    meta["cpu_busy"] = {k: round(statistics.mean(v), 3) for k, v in busy.items()}
+
     rec, reasons = recommend(rows)
+    if busy and (meta["cpu_busy"].get("cpu_all", 1) - meta["cpu_busy"].get("idle", 0)) < 0.6:
+        rec = None
+        reasons.insert(0, f"the all-core load did not run as intended (CPU busy per workload: {meta['cpu_busy']}); "
+                          "the energy readings cannot be attributed to the workloads, so no method is recommended")
     if gaps.get("idle", 0) > 2.0:
         reasons.append(f"the phone slept during idle windows (largest sample gap {gaps['idle']:.1f} s), so the idle "
                        "baseline is a suspended-phone baseline, lower than the awake idle an inference run sees; "
@@ -686,6 +734,7 @@ def render(meta, windows, rows, rec, reasons, powered) -> str:
         f"{min(w['battery_temp_c'] for w in windows) if windows else '?'} - "
         f"{max(w['battery_temp_c'] for w in windows) if windows else '?'} C",
         f"- Largest gap between phone-side samples (s), per workload: {meta.get('max_sample_gap_s')}",
+        f"- Mean CPU busy fraction per workload (from /proc/stat): {meta.get('cpu_busy') or 'not recorded'}",
     ]
     if powered:
         lines.append("- **WARNING: the phone was externally powered during the run; battery-based methods are invalid.**")
