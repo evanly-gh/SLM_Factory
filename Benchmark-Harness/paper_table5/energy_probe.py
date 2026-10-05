@@ -615,7 +615,7 @@ def render(meta, windows, rows, rec, reasons, powered) -> str:
 
     def f(t, nd=0):
         m, s, _ = t
-        return "n/a" if m is None else f"{m:.{nd}f} ± {s:.{nd}f}"
+        return "n/a" if m is None else f"{m:.{nd}f} +/- {s:.{nd}f}"
 
     lines = [
         f"# Energy-method probe: {d['manufacturer']} {d['model']} ({d['soc']})",
@@ -633,7 +633,7 @@ def render(meta, windows, rows, rec, reasons, powered) -> str:
         lines.append("- **WARNING: the phone was externally powered during the run; battery-based methods are invalid.**")
     lines += [
         "",
-        "Power in mW, mean ± std over repeats. Net = workload minus idle. Load CV = worst coefficient of "
+        "Power in mW, mean +/- std over repeats. Net = workload minus idle. Load CV = worst coefficient of "
         "variation of the two load workloads (lower = more repeatable). Agreement = net all-core power / median "
         "of the battery methods.",
         "",
