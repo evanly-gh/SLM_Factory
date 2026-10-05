@@ -86,13 +86,12 @@ _REST_SECONDS = 0
 # (see BenchmarkService.kt's use_mmap extra); set from --mmap in main().
 _USE_MMAP = False
 
-CONVERT_SCRIPT = str(Path.home() / "SLM_Factory-SmolChat/Model-Conversion/convert_to_gguf.py")
+CONVERT_SCRIPT = str(Path(__file__).resolve().parent.parent / "Model-Conversion" / "convert_to_gguf.py")
 # Fallback locations only - the real, guaranteed location is computed
 # per-call in convert_to_gguf() once the model's output directory is known,
 # since we now pass --output explicitly rather than relying on the tool's
 # own "./output" default.
 CONVERSION_REPORT_CANDIDATES = [
-    str(Path.home() / "SLM_Factory_Krishna_Personal/Model-Conversion/conversion_report.json"),
     str(Path.cwd() / "conversion_report.json"),
 ]
 
@@ -1422,7 +1421,7 @@ def parse_args():
     p.add_argument("--device", choices=["phone", "emulator"], default="phone")
     p.add_argument("--questions", default=None, help="Path to .txt file, one question per line")
     p.add_argument("--output", default="autobench_results.json")
-    p.add_argument("--quant", choices=["Q4_K_M", "Q5_K_M", "Q8_0", "F16"], default="Q4_K_M")
+    p.add_argument("--quant", choices=["Q4_K_M", "Q8_0", "BF16"], default="Q4_K_M")
     p.add_argument("--timeout", type=int, default=180, help="Seconds to wait for RUN_DONE/RUN_ERROR per question")
     p.add_argument("--max-tokens", type=int, default=256, dest="max_tokens",
                     help="Max tokens the receiver should generate per response. Default 256 = the app's "

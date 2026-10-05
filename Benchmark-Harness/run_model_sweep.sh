@@ -3,7 +3,7 @@
 #
 # For each model:  fetch + convert + quantize  ->  push to the phone  ->  benchmark every engine x backend x quant
 #                  ->  save results  ->  ranked summary
-#   SmolChat (llama.cpp GGUF): Q4_K_M, Q8_0, F16     MNN: 4-bit (lm_head 8-bit), 8-bit, 16-bit (fp16)
+#   SmolChat (llama.cpp GGUF): Q4_K_M, Q8_0, BF16    MNN: 4-bit (lm_head 8-bit), 8-bit, 16-bit (fp16)
 #   backends: CPU and OpenCL on both engines            = 12 configurations per model
 # Every configuration uses the per-question protocol: for each of the 10 built-in questions, gate (battery
 # temp + CPU clocks), force-stop the app, evict the model from the page cache, then 3 back-to-back runs
@@ -22,7 +22,7 @@
 #   python3 ../mnn-benchmark-harness/compare_engines.py --where "decode_tps>=30" --where "cold_start_ms<=500"
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
-SMOL="$HOME/SLM_Factory-SmolChat"
+SMOL="$(cd "$HERE/.." && pwd)"   # repo root: Model-Conversion/, SmolChat-Android/ (vendored llama.cpp), Benchmark-Harness/
 PY_CONVERT="$HERE/../Model-Conversion/.venv/bin/python"
 MNN_DEVICE=/data/local/tmp/mnn_models
 APK_DIR="$SMOL/SmolChat-Android/app/build/outputs/apk"
@@ -76,12 +76,12 @@ install_smolchat() {  # cpu | opencl
 convert_model() {  # hf-id prefix
   local hf="$1" m="$2"
   local gg="$SMOL/Model-Conversion/output-$m" mn="$HERE/../Model-Conversion/mnn-output-$m"
-  if [[ -f "$gg/$m-q4_k_m.gguf" && -f "$gg/$m-q8_0.gguf" && -f "$gg/$m-f16.gguf" ]]; then
+  if [[ -f "$gg/$m-q4_k_m.gguf" && -f "$gg/$m-q8_0.gguf" && -f "$gg/$m-bf16.gguf" ]]; then
     log "GGUF files for $m already exist - skipping conversion"
   else
-    log "converting $hf -> GGUF (F16, Q4_K_M, Q8_0)"
+    log "converting $hf -> GGUF (BF16, Q4_K_M, Q8_0)"
     (cd "$SMOL/Model-Conversion" && "$PY_CONVERT" convert_to_gguf.py --model "$hf" --quant ALL --output "output-$m") >>"$LOG_M" 2>&1
-    [[ -f "$gg/$m-q4_k_m.gguf" && -f "$gg/$m-q8_0.gguf" && -f "$gg/$m-f16.gguf" ]] || { log "FAILED: GGUF conversion of $hf"; return 1; }
+    [[ -f "$gg/$m-q4_k_m.gguf" && -f "$gg/$m-q8_0.gguf" && -f "$gg/$m-bf16.gguf" ]] || { log "FAILED: GGUF conversion of $hf"; return 1; }
   fi
   if [[ -f "$mn/$m-mnn-q4/llm.mnn.weight" && -f "$mn/$m-mnn-q8/llm.mnn.weight" && -f "$mn/$m-mnn-q16/llm.mnn.weight" ]]; then
     log "MNN exports for $m already exist - skipping conversion"
@@ -138,12 +138,12 @@ for hf in $MODELS; do
     push_mnn "$m" || { log "FAILED: pushing MNN models for $m"; FAILED="$FAILED"$'\n'"  $m: push"; continue; }
     install_smolchat cpu
   fi
-  for q in "q4_k_m q4" "q8_0 q8" "f16 f16"; do
+  for q in "q4_k_m q4" "q8_0 q8" "bf16 bf16"; do
     set -- $q
     run_config "$m SmolChat $2 cpu" "$OUT/smolchat_${2}_cpu.json" smol_cmd "$GG/$m-$1.gguf" 0 "$OUT/smolchat_${2}_cpu.json"
   done
   [[ $PLAN == 0 ]] && install_smolchat opencl
-  for q in "q4_k_m q4" "q8_0 q8" "f16 f16"; do
+  for q in "q4_k_m q4" "q8_0 q8" "bf16 bf16"; do
     set -- $q
     run_config "$m SmolChat $2 opencl" "$OUT/smolchat_${2}_opencl.json" smol_cmd "$GG/$m-$1.gguf" 99 "$OUT/smolchat_${2}_opencl.json"
   done
