@@ -1,5 +1,5 @@
 {
-  "_doc": "Device profiles, matched top to bottom; every 'match' rule is a case-insensitive regex on a getprop-derived field (manufacturer, model, device, soc, platform). paper_column names the paper's Table 9 column to compare against (null = not in the paper). max_temp_c is the cool-down gate (paper: below 28 C). energy_method is the headline method (null = decided by energy_probe.py / auto: powercap if readable, else the best battery method).",
+  "_doc": "Device profiles, matched top to bottom; every 'match' rule is a case-insensitive regex on a getprop-derived field (manufacturer, model, device, soc, platform). paper_column names the paper's Table 9 column to compare against (null = not in the paper); proxy_column is the closest paper phone for a phone that is not in it (compared and labelled as a proxy; the Galaxy S23's SM8550 is one generation older than the Xiaomi 14's SM8650). max_temp_c is the cool-down gate (paper: below 28 C). energy_method is the headline method (null = decided by energy_probe.py / auto: powercap if readable, else the best battery method).",
   "profiles": [
     {"id": "oneplus15", "label": "OnePlus 15", "match": {"manufacturer": "oneplus", "soc": "SM8850|CPH27"},
      "paper_column": "oneplus15", "max_temp_c": 28.0, "energy_method": null},
@@ -12,6 +12,6 @@
     {"id": "xiaomi14", "label": "Xiaomi 14", "match": {"manufacturer": "xiaomi", "soc": "SM8650"},
      "paper_column": "xiaomi14", "max_temp_c": 28.0, "energy_method": null},
     {"id": "galaxy_s23", "label": "Galaxy S23", "match": {"model": "^SM-S911"},
-     "paper_column": null, "max_temp_c": 28.0, "energy_method": null}
+     "paper_column": null, "proxy_column": "xiaomi14", "max_temp_c": 28.0, "energy_method": "perfetto:current"}
   ]
 }

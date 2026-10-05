@@ -42,10 +42,11 @@ the paper's protocol, and renders a table laid out like the paper's Table 5. Sam
 | 256-token prompt, 256 generated tokens, EOS replaced | llama-bench pp256 and tg256 at depth 256; MNN llm_bench `-kv true -p 256 -n 256` with EOS ignored (`PB_IGNORE_EOS`) |
 | prefill = prompt / time to first token; decode = tokens / first-to-last time | per-repetition timings from the tools' own timed regions |
 | cooled below 28 C | gate before every invocation: battery <= 28 C (per-phone in `devices.json`) and CPU caps at baseline |
-| airplane mode, screen off, background off | airplane mode (Wi-Fi kept only for wireless adb), screen off, Do Not Disturb, `am kill-all` |
+| airplane mode, screen off, background off | airplane mode (Wi-Fi kept only for wireless adb), Do Not Disturb, `am kill-all`; screen off on USB, **on at minimum brightness over wireless adb** (a screen-off phone with no USB wake lock suspends every few seconds and freezes the benchmark: energy probe run `SM-S911U_20261004_233333`) |
 | 1 warm-up + >= 3 trials, mean | 1 discarded repetition + `--trials` (default 3); mean +/- std |
 | framework defaults, w4 | default threads/precision; GGUF Q4_0 and Q4_K_M (paper says only "w4"); MNN llmexport defaults (block 64, no HQQ) |
-| PowerBench: SoC energy from Qualcomm powercap counters | powercap if readable (rooted phones), else Power Stats rails, else battery gauge net of idle (whole phone, needs unplugged) |
+| PowerBench: SoC energy from Qualcomm powercap counters | powercap if readable (rooted phones), else Power Stats rails, else battery gauge net of idle (whole phone, needs unplugged; idle measured for `--pre-idle-seconds` right before every invocation, after the cool-down gate) |
+| Xiaomi 17 / OnePlus 15 / Xiaomi 15 / Xiaomi 14 columns | phones in the paper are compared with their own column; others with `proxy_column` in `devices.json` (Galaxy S23 -> Xiaomi 14, one SoC generation newer). `report.py` passes a cell within 25% of that value |
 | llama.cpp eadc418, MNN 51bac8f (typo; 510ac8f exists) | `build_binaries.py` pins both; `--ref head` builds current upstream for newer model architectures |
 
 Energy from the battery gauge measures the whole phone, so expect it to read higher than the paper's SoC-only

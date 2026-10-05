@@ -309,9 +309,19 @@ class Session:
         time.sleep(self.args.prime_seconds)
         energy_probe.cleanup_loads(self.adb)
 
+    def measure_idle(self) -> list[float] | None:
+        """Battery energy only: idle power right before each invocation, so the net-of-idle subtraction follows
+        drift in temperature, battery level and screen power over a long session."""
+        if self.headline_is_chip or self.args.pre_idle_seconds <= 0:
+            return None
+        t0 = boottime_s(self.adb)
+        time.sleep(self.args.pre_idle_seconds)
+        return [t0 + min(2.0, self.args.pre_idle_seconds / 4), boottime_s(self.adb)]
+
     def invoke(self, cfg, tag, bin_dir, cmd, env, phase_label) -> dict:
         gate = self.wait_ready()
         self.controls.screen_off()
+        idle_window = self.measure_idle()
         self.prime()
         before = bench_common.device_state(self.adb)
         log(f"   {phase_label}: {cmd}")
@@ -319,7 +329,8 @@ class Session:
         res = run_on_device(self.adb, self.controls, bin_dir, cmd, env, tag, self.raw, self.args.timeout)
         busy = energy_probe.busy_fraction(j0, energy_probe.read_cpu_jiffies(self.adb))
         after = bench_common.device_state(self.adb)
-        res.update({"gate": gate, "state_before": before, "state_after": after, "cpu_busy": busy})
+        res.update({"gate": gate, "state_before": before, "state_after": after, "cpu_busy": busy,
+                    "idle_window": idle_window})
         if busy is not None and busy < 0.05 and not failure_reason(res):
             log(f"   [WARN] CPU only {busy:.0%} busy during this run: the process may have been frozen or throttled")
         time.sleep(self.args.rest)
@@ -420,7 +431,8 @@ class Session:
     def _summ(res: dict) -> dict:
         return {"exit": res["exit"], "timed_out": res["timed_out"], "seconds": res["seconds"],
                 "marks": len(res["marks"]), "cpu_busy": res.get("cpu_busy"), "gate": res.get("gate"),
-                "state_before": res.get("state_before"), "state_after": res.get("state_after")}
+                "state_before": res.get("state_before"), "state_after": res.get("state_after"),
+                "idle_window": res.get("idle_window")}
 
     def _fail(self, result, reason) -> dict:
         result["status"] = "failed"
@@ -447,7 +459,9 @@ class Session:
                 continue
             powered = any((inv.get(k) or {}).get("externally_powered")
                           for inv in r["invocations"].values() for k in ("state_before", "state_after"))
-            r["energy"] = self.recorder.phase_energy(r["windows"], self.idle_window, powered)
+            idles = [inv["idle_window"] for inv in r["invocations"].values() if inv.get("idle_window")]
+            r["energy"] = self.recorder.phase_energy(r["windows"], idles or self.idle_window, powered)
+            r["energy_idle"] = "per invocation" if idles else "session start"
             r["energy_session"] = session["started"]
             r["energy_headline_method"] = headline
             h = r["energy"].get(headline, {}) if headline else {}
@@ -570,6 +584,9 @@ def main():
     ap.add_argument("--gate-timeout", type=int, default=1800, help="max seconds to wait at the gate (then flagged)")
     ap.add_argument("--rest", type=int, default=15, help="seconds after each invocation before the next gate check")
     ap.add_argument("--idle-seconds", type=int, default=40, help="idle-power baseline at session start")
+    ap.add_argument("--pre-idle-seconds", type=float, default=12.0,
+                    help="battery energy only: idle-power window before every invocation, after the cool-down "
+                         "gate; the config's energy is net of these (0 = use the session-start baseline)")
     ap.add_argument("--min-energy-seconds", type=float, default=30.0,
                     help="battery energy only: extra repetitions until each phase has this much timed work (0 = off)")
     ap.add_argument("--prime-seconds", type=int, default=0, help="all-core CPU burst before each invocation (off)")

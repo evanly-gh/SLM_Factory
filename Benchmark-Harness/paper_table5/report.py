@@ -9,9 +9,9 @@ phones / sessions; later sessions override earlier ones for the same configurati
 Writes TABLE5.md, TABLE5.html and TABLE5.csv:
   * the main table: model / backend / framework / quantization rows; prefill and decode throughput
     (tokens/s, mean +/- std) and energy (uJ/token) per phone, as in the paper;
-  * a comparison with the paper for phones that are in it: our value, the paper's, and the ratio. A cell
-    passes if it is within --tolerance (default 25%) of the paper's value for that phone, or inside the
-    paper's own spread across its four phones.
+  * a comparison with the paper: our value, the paper's, and the ratio, against the phone's own paper column or,
+    for a phone not in the paper, its proxy_column (devices.json). A cell passes if it is within --tolerance
+    (default 25%) of the paper's value (--spread-passes also accepts the paper's spread across its four phones).
 """
 
 from __future__ import annotations
@@ -51,7 +51,8 @@ def load(dirs: list[Path]) -> tuple[dict, dict]:
         sess = json.loads(sess_file.read_text())
         prof = sess["profile"]
         dev = devices.setdefault(prof["id"], {"label": prof.get("label", prof["id"]),
-                                              "paper_column": prof.get("paper_column"), "sessions": [],
+                                              "paper_column": prof.get("paper_column"),
+                                              "proxy_column": prof.get("proxy_column"), "sessions": [],
                                               "energy_methods": set(), "energy_kinds": set()})
         dev["sessions"].append(d.name)
         for f in sorted((d / "configs").glob("*.json")):
@@ -108,7 +109,7 @@ def paper_value(model, backend, framework, phase, kind, device):
     return (vals[i] if i < len(vals) else None), vals
 
 
-def build(data, devices, tolerance):
+def build(data, devices, tolerance, spread_passes=False):
     keys = sorted({k for dev in data.values() for k in dev},
                   key=lambda k: (k[0], BACKEND_ORDER.get(k[1], 9), FRAMEWORK_ORDER.get(k[2], 9), quant_order(k[3])))
     dev_ids = list(devices)
@@ -132,7 +133,8 @@ def build(data, devices, tolerance):
         main_rows.append((key, cells))
         is_w4 = quant.upper().startswith("Q4")
         for dev in dev_ids:
-            col = devices[dev]["paper_column"]
+            col = devices[dev]["paper_column"] or devices[dev].get("proxy_column")
+            proxy = not devices[dev]["paper_column"]
             r = data.get(dev, {}).get(key)
             if not col or not is_w4 or not r:
                 continue
@@ -142,24 +144,26 @@ def build(data, devices, tolerance):
                 if ours is None or ref is None:
                     continue
                 ratio = ours / ref
-                in_spread = bool(spread) and kind == "tps" and min(spread) <= ours <= max(spread)
+                in_spread = spread_passes and bool(spread) and kind == "tps" and min(spread) <= ours <= max(spread)
                 ok = abs(ratio - 1) <= tolerance or in_spread
                 cmp_rows.append({"model": model, "backend": backend, "framework": framework, "quant": quant,
-                                 "device": devices[dev]["label"], "metric": label, "ours": ours, "paper": ref,
+                                 "device": devices[dev]["label"] + (f" vs {col} (proxy)" if proxy else ""),
+                                 "metric": label, "ours": ours, "paper": ref,
                                  "ratio": ratio, "paper_spread": spread if kind == "tps" else None,
                                  "pass": ok and note != "invalid", "note": note})
     return dev_ids, main_rows, cmp_rows, csv_rows
 
 
-def render_md(dev_ids, devices, main_rows, cmp_rows, tolerance) -> str:
+def render_md(dev_ids, devices, main_rows, cmp_rows, tolerance, spread_passes=False) -> str:
     labels = [devices[d]["label"] for d in dev_ids]
     head = ["Model", "Backend", "Framework", "Quant."] + [f"{m[2]} ({lab})" for m in METRICS for lab in labels]
     lines = [f"# Table 5 replication (arXiv 2607.05475): 256-token prefill and decode",
              "", f"Generated {datetime.now().isoformat(timespec='seconds')}.", ""]
     for d in dev_ids:
         dv = devices[d]
-        lines.append(f"- **{dv['label']}**: sessions {', '.join(dv['sessions'])}; paper column: "
-                     f"{dv['paper_column'] or 'none (not in the paper)'}; energy: "
+        col = dv["paper_column"] or (f"none (not in the paper); compared with {dv['proxy_column']} as the closest "
+                                     "paper phone" if dv.get("proxy_column") else "none (not in the paper)")
+        lines.append(f"- **{dv['label']}**: sessions {', '.join(dv['sessions'])}; paper column: {col}; energy: "
                      f"{', '.join(sorted(dv['energy_kinds'])) or 'n/a'} via {', '.join(sorted(dv['energy_methods'])) or 'n/a'}")
     lines += ["", "Throughput in tokens/s (mean +/- std over the recorded trials); energy in uJ/token. "
               "`*` = energy recorded but invalid (e.g. phone on USB power with no chip counters); "
@@ -175,8 +179,12 @@ def render_md(dev_ids, devices, main_rows, cmp_rows, tolerance) -> str:
     if cmp_rows:
         passed = sum(r["pass"] for r in cmp_rows)
         lines += ["", f"## Comparison with the paper ({passed}/{len(cmp_rows)} cells pass)", "",
-                  f"Pass = within {tolerance:.0%} of the paper's value for the same phone, or (throughput) inside the "
-                  "paper's own spread across its four phones.", "",
+                  f"Pass = within {tolerance:.0%} of the paper's value for the same phone (or the closest paper phone "
+                  "for a phone that is not in the paper)"
+                  + (", or (throughput) inside the paper's own spread across its four phones." if spread_passes else
+                     "; the paper's spread across its four phones is shown for context.")
+                  + " Energy: the paper reports SoC energy; a phone without chip counters reports whole-device energy "
+                    "net of idle, which reads higher.", "",
                   "| Model | Backend | Framework | Quant. | Phone | Metric | Ours | Paper | Ratio | Paper spread | Pass |",
                   "|---|---|---|---|---|---|--:|--:|--:|---|:-:|"]
         for r in cmp_rows:
@@ -232,14 +240,17 @@ def main():
     ap.add_argument("dirs", nargs="+", type=Path)
     ap.add_argument("--out", type=Path, help="output directory (default: the first results directory)")
     ap.add_argument("--tolerance", type=float, default=0.25)
+    ap.add_argument("--spread-passes", action="store_true",
+                    help="also pass throughput cells inside the paper's min-max across its four phones")
     args = ap.parse_args()
     data, devices = load(args.dirs)
     if not data:
         raise SystemExit("no results found")
-    dev_ids, main_rows, cmp_rows, csv_rows = build(data, devices, args.tolerance)
+    dev_ids, main_rows, cmp_rows, csv_rows = build(data, devices, args.tolerance, args.spread_passes)
     out = args.out or args.dirs[0]
     out.mkdir(parents=True, exist_ok=True)
-    (out / "TABLE5.md").write_text(render_md(dev_ids, devices, main_rows, cmp_rows, args.tolerance), encoding="utf-8")
+    (out / "TABLE5.md").write_text(render_md(dev_ids, devices, main_rows, cmp_rows, args.tolerance, args.spread_passes),
+                                   encoding="utf-8")
     (out / "TABLE5.html").write_text(render_html(dev_ids, devices, main_rows, cmp_rows), encoding="utf-8")
     with open(out / "TABLE5.csv", "w", newline="", encoding="utf-8") as fh:
         w = csv.DictWriter(fh, fieldnames=list(csv_rows[0]))

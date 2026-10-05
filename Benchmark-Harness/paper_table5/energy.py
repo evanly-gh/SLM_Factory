@@ -64,6 +64,14 @@ def merge_contiguous(windows: list[dict], max_gap_s: float = 0.5) -> list[dict]:
     return spans
 
 
+def idle_power(fn, idles: list) -> float | None:
+    """Time-weighted mean power over the idle windows that have samples."""
+    vals = [(fn(a, b), b - a) for a, b in idles if b > a]
+    vals = [(p, d) for p, d in vals if p is not None]
+    total = sum(d for _, d in vals)
+    return sum(p * d for p, d in vals) / total if total else None
+
+
 class EnergyRecorder:
     def __init__(self, adb, out_dir: Path, discovery: dict, use_perfetto: bool = True, log=print):
         self.adb, self.out_dir, self.disc, self.log = adb, Path(out_dir), discovery, log
@@ -118,13 +126,15 @@ class EnergyRecorder:
             return "rail:TOTAL"
         return next((m for m in BATTERY_PREFERENCE if m in methods), None)
 
-    def phase_energy(self, windows: list[dict], idle: tuple[float, float] | None, powered: bool) -> dict:
-        """windows: [{"phase", "a", "b", "tokens"}] (CLOCK_BOOTTIME seconds). Returns
+    def phase_energy(self, windows: list[dict], idle, powered: bool) -> dict:
+        """windows: [{"phase", "a", "b", "tokens"}] (CLOCK_BOOTTIME seconds); idle: one (a, b) window or a list of
+        them (time-weighted mean). Returns
         {method: {phase: {uj_per_token, net_uj_per_token, avg_power_mw, seconds, tokens, windows, valid, reason}}}."""
         out = {}
         spans = merge_contiguous(windows)
+        idles = [idle] if idle and not isinstance(idle[0], (list, tuple)) else list(idle or [])
         for method, (fn, _series, note) in (self.funcs or {}).items():
-            idle_mw = fn(*idle) if idle else None
+            idle_mw = idle_power(fn, idles)
             # Battery gauges update every ~0.1-5 s: integrating each sub-second repetition separately would bill
             # every window's first reading to the preceding gap. Back-to-back repetitions are integrated as one span.
             use = windows if is_chip_method(method) else spans
