@@ -1,0 +1,96 @@
+{
+ "discovery": {
+  "serial": "adb-R3CW400L3TV-ceaweg._adb-tls-connect._tcp",
+  "manufacturer": "samsung",
+  "model": "SM-S911U",
+  "soc": "SM8550",
+  "android": "16",
+  "sdk": "36",
+  "cpus_online": "0-7",
+  "ncpu": 8,
+  "root": {
+   "su_output": "/system/bin/sh: su: inaccessible or not found",
+   "rooted": false
+  },
+  "powercap": {
+   "zones": [],
+   "usable": false,
+   "needs_su": false
+  },
+  "powerstats": {
+   "services": [
+    "PowerSolution_Framework_service",
+    "android.hardware.power.IPower/default",
+    "power",
+    "powerstats"
+   ],
+   "service": null,
+   "dump_head": null
+  },
+  "battery_dir": null,
+  "power_supply": [],
+  "battery_files": [],
+  "power_supply_diag": "type: cat: /sys/class/power_supply/battery/type: Permission denied\ncurrent_now: cat: /sys/class/power_supply/battery/current_now: Permission denied\ncharge_counter: cat: /sys/class/power_supply/battery/charge_counter: Permission denied\nvoltage_now: cat: /sys/class/power_supply/battery/voltage_now: Permission denied",
+  "perfetto_version": "Perfetto v51.2 (N/A)",
+  "has_timeout": true,
+  "state": {
+   "epoch_ms": 1791180640378,
+   "battery_temp_c": 34.0,
+   "battery_level": 45,
+   "battery_status": 3,
+   "externally_powered": false,
+   "power_sources": [],
+   "cpu_caps_khz": {
+    "policy0": 1555200,
+    "policy3": 1920000,
+    "policy7": 2227200
+   },
+   "cpu_hw_max_khz": {
+    "policy0": 2016000,
+    "policy3": 2803200,
+    "policy7": 3360000
+   },
+   "cpu_capped": true,
+   "screen": "Dozing",
+   "thermal_status": 0
+  }
+ },
+ "params": {
+  "cmd": "collect",
+  "serial": null,
+  "repeats": 4,
+  "window": 45,
+  "rest": 20,
+  "settle": 5.0,
+  "interval": 0.1,
+  "screen": "off",
+  "no_perfetto": false,
+  "allow_powered": false,
+  "out_dir": "C:\\Users\\evanl\\Documents\\VSCode\\Personal\\SLM_Factory-1\\Benchmark-Harness\\paper_table5\\energy_probe_results"
+ },
+ "columns": [],
+ "start": "2026-10-04T23:10:40.840346",
+ "trace": "trace.pftrace",
+ "end": "2026-10-04T23:24:38.642514",
+ "state_end": {
+  "epoch_ms": 1791181479266,
+  "battery_temp_c": 31.2,
+  "battery_level": 41,
+  "battery_status": 3,
+  "externally_powered": false,
+  "power_sources": [],
+  "cpu_caps_khz": {
+   "policy0": 2016000,
+   "policy3": 2803200,
+   "policy7": 3360000
+  },
+  "cpu_hw_max_khz": {
+   "policy0": 2016000,
+   "policy3": 2803200,
+   "policy7": 3360000
+  },
+  "cpu_capped": false,
+  "screen": "Awake",
+  "thermal_status": 0
+ }
+}
