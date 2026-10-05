@@ -123,13 +123,15 @@ def discover(adb: Adb) -> dict:
                              "readable": bool(re.fullmatch(r"-?\d+", p[3].strip()))})
     bats = sorted({s["dir"] for s in supplies if s["type"] == "Battery"},
                   key=lambda d: (not d.endswith("/battery"), d))
+    if not bats:  # `type` itself may be hidden; the conventional name still identifies the battery
+        bats = sorted({s["dir"] for s in supplies if s["dir"].endswith("/battery")})
     info["battery_dir"] = bats[0] if bats else None
     info["power_supply"] = supplies
     info["battery_files"] = [s["file"] for s in supplies if s["dir"] == info["battery_dir"] and s["readable"]]
     # Why sysfs may be empty: SELinux often hides /sys/class/power_supply from the shell user.
-    info["power_supply_diag"] = adb.sh("ls /sys/class/power_supply/ 2>&1 | head -5; "
-                                       "cat /sys/class/power_supply/battery/current_now 2>&1; "
-                                       "cat /sys/class/power_supply/battery/charge_counter 2>&1").strip()
+    info["power_supply_diag"] = adb.sh(
+        "for f in type current_now charge_counter voltage_now; do "
+        "echo \"$f: $(cat /sys/class/power_supply/battery/$f 2>&1 | head -1)\"; done").strip()
 
     info["perfetto_version"] = adb.sh("perfetto --version 2>&1 | head -1").strip()
     info["has_timeout"] = bool(adb.sh("command -v timeout").strip())
@@ -151,8 +153,9 @@ def print_discovery(d: dict):
     print(f"Power Stats HAL:       {d['powerstats']['service'] or 'not present'}")
     print(f"Battery sysfs:         {d['battery_dir']} -> {', '.join(d['battery_files']) or 'nothing readable'}")
     if not d["battery_files"]:
-        diag = " | ".join(line.strip() for line in d.get("power_supply_diag", "").splitlines()[:4])
-        print(f"   (shell sees: {diag[:200]}); the Perfetto battery methods still work without it")
+        for line in d.get("power_supply_diag", "").splitlines():
+            print(f"   battery/{line.strip()[:120]}")
+        print("   (the Perfetto battery methods still work without these files)")
     st = d["state"]
     print(f"Externally powered:    {st['externally_powered']} {st['power_sources']}  "
           f"battery {st['battery_level']}%  {st['battery_temp_c']} C  screen={st['screen']}")
@@ -227,19 +230,31 @@ done >> $OUT
 
 
 LOAD_SCRIPT = """#!/system/bin/sh
-# usage: load.sh <busy threads> <seconds>; prints "<uptime start> <uptime end>"
-N=$1; D=$2; i=0; pids=""
+# usage: load.sh <busy threads> <seconds>; started detached, each busy loop stops itself via timeout.
+N=$1; D=$2; i=0
 read t0 _ < /proc/uptime
 while [ $i -lt $N ]; do
   timeout $D sh -c 'while :; do :; done' &
-  pids="$pids $!"
   i=$((i+1))
 done
-sleep $D
-kill $pids 2>/dev/null
+echo "start $t0 threads $N seconds $D" >> {dev}/load.log
+wait
 read t1 _ < /proc/uptime
-echo "$t0 $t1"
-"""
+echo "end $t1" >> {dev}/load.log
+""".replace("{dev}", DEV_DIR)
+
+
+def read_uptime(adb: Adb) -> float | None:
+    """Phone CLOCK_BOOTTIME in seconds (/proc/uptime), the clock the sampler and Perfetto use."""
+    for _ in range(3):
+        parts = adb.sh("cat /proc/uptime", timeout=20).split()
+        if parts:
+            try:
+                return float(parts[0])
+            except ValueError:
+                pass
+        time.sleep(1)
+    return None
 
 
 def push_text(adb: Adb, text: str, remote: str):
@@ -336,11 +351,17 @@ def cmd_collect(args):
             st = bench_common.device_state(adb)
             print(f"[{i}/{len(plan)}] {w} rep {rep + 1}: battery {st['battery_temp_c']} C, "
                   f"powered={st['externally_powered']}", flush=True)
-            out = adb.sh(f"sh {DEV_DIR}/load.sh {workloads[w]} {args.window}", timeout=args.window + 120).split()
-            if len(out) != 2:
-                print(f"   !! load script returned {out!r}; window skipped")
+            # No adb call stays open during the window (a long-running `adb shell` is fragile over Wi-Fi):
+            # read the phone's clock, start the load detached, wait, read the clock again.
+            t0 = read_uptime(adb)
+            adb.sh(f"setsid sh {DEV_DIR}/load.sh {workloads[w]} {args.window} </dev/null >/dev/null 2>&1 &")
+            time.sleep(args.window)
+            t1 = read_uptime(adb)
+            if t0 is None or t1 is None or t1 - t0 < args.window * 0.5:
+                print(f"   !! could not read the phone clock (t0={t0}, t1={t1}); window skipped. "
+                      f"load.log: {adb.sh(f'tail -2 {DEV_DIR}/load.log').strip()!r}")
                 continue
-            windows.append({"workload": w, "rep": rep, "t0": float(out[0]), "t1": float(out[1]),
+            windows.append({"workload": w, "rep": rep, "t0": t0, "t1": t1,
                             "battery_temp_c": st["battery_temp_c"], "externally_powered": st["externally_powered"],
                             "battery_level": st["battery_level"]})
             (run_dir / "windows.json").write_text(json.dumps(windows, indent=1))
