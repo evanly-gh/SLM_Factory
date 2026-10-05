@@ -134,7 +134,6 @@ def discover(adb: Adb) -> dict:
         "echo \"$f: $(cat /sys/class/power_supply/battery/$f 2>&1 | head -1)\"; done").strip()
 
     info["perfetto_version"] = adb.sh("perfetto --version 2>&1 | head -1").strip()
-    info["has_timeout"] = bool(adb.sh("command -v timeout").strip())
     info["state"] = bench_common.device_state(adb)
     return info
 
@@ -229,19 +228,42 @@ done >> $OUT
 """
 
 
+# Busy loops stop when a stop file appears (`[` is a shell builtin, so the loop stays CPU-bound without
+# forking). `timeout` is not used: on the Galaxy S23 it did not stop its child, and loops piled up across runs.
+BUSY_SCRIPT = """#!/system/bin/sh
+while [ ! -e {dev}/stop_load ]; do :; done
+""".replace("{dev}", DEV_DIR)
+
 LOAD_SCRIPT = """#!/system/bin/sh
-# usage: load.sh <busy threads> <seconds>; started detached, each busy loop stops itself via timeout.
+# usage: load.sh <busy threads> <seconds>; started detached.
 N=$1; D=$2; i=0
+rm -f {dev}/stop_load
 read t0 _ < /proc/uptime
 while [ $i -lt $N ]; do
-  timeout $D sh -c 'while :; do :; done' &
+  sh {dev}/busy.sh &
   i=$((i+1))
 done
 echo "start $t0 threads $N seconds $D" >> {dev}/load.log
+sleep $D
+touch {dev}/stop_load
 wait
 read t1 _ < /proc/uptime
 echo "end $t1" >> {dev}/load.log
 """.replace("{dev}", DEV_DIR)
+
+def cleanup_loads(adb: Adb):
+    """Stop busy loops from this probe and from earlier versions of it (`timeout ... sh -c 'while :...'`).
+    One adb call per pkill: `pkill -f` also matches the invoking shell's own command line."""
+    adb.sh(f"touch {DEV_DIR}/stop_load")
+    for pattern in (f"{DEV_DIR}/load.sh", f"{DEV_DIR}/busy.sh", "while :; do :; done"):
+        adb.sh(f"pkill -f '{pattern}'")
+
+
+def idle_cpu_check(adb: Adb, seconds: float = 10.0) -> float | None:
+    """CPU busy fraction with nothing of ours running; a high value means something else is loading the phone."""
+    j0 = read_cpu_jiffies(adb)
+    time.sleep(seconds)
+    return busy_fraction(j0, read_cpu_jiffies(adb))
 
 
 def read_cpu_jiffies(adb: Adb) -> tuple[int, int] | None:
@@ -338,12 +360,18 @@ def cmd_collect(args):
     adb.sh(f"mkdir -p {DEV_DIR}; rm -f {DEV_DIR}/stop {DEV_DIR}/samples.txt {DEV_DIR}/load.log")
     push_text(adb, sampler_script(columns, args.interval), f"{DEV_DIR}/sampler.sh")
     push_text(adb, LOAD_SCRIPT, f"{DEV_DIR}/load.sh")
+    push_text(adb, BUSY_SCRIPT, f"{DEV_DIR}/busy.sh")
+    cleanup_loads(adb)
+    busy0 = idle_cpu_check(adb)
+    print(f"CPU busy with nothing running: {busy0 if busy0 is None else f'{busy0:.0%}'}")
+    if busy0 is not None and busy0 > 0.15 and not args.allow_busy:
+        top = adb.sh("top -b -n 1 -m 8 2>/dev/null | tail -9")
+        sys.exit(f"The phone is already {busy0:.0%} busy before the probe starts, so idle and load windows would not "
+                 f"differ. Busiest processes:\n{top}\nStop them (or reboot the phone) and rerun; "
+                 f"--allow-busy runs anyway.")
     sampler_cmd = f"setsid sh {DEV_DIR}/sampler.sh"
     if pc["usable"] and pc["needs_su"]:
         sampler_cmd = f"su -c '{sampler_cmd}'"
-    if not info["has_timeout"]:
-        sys.exit("The phone's shell has no `timeout` command, which the load script needs.")
-
     workloads = {"idle": 0, "cpu1": 1, "cpu_all": info["ncpu"]}
     plan = [(w, r) for r in range(args.repeats) for w in workloads]
     total_min = len(plan) * (args.window + args.rest) / 60
@@ -390,9 +418,7 @@ def cmd_collect(args):
     finally:
         adb.sh(f"touch {DEV_DIR}/stop")
         time.sleep(1)
-        # Separate calls: pkill -f also matches the invoking shell's own command line. Busy loops left
-        # behind die on their own via `timeout`.
-        adb.sh(f"pkill -f {DEV_DIR}/load.sh")
+        cleanup_loads(adb)
         if pid is not None:
             meta["trace"] = stop_perfetto(adb, pid, run_dir)
         adb.run(["pull", f"{DEV_DIR}/samples.txt", str(run_dir / "samples.txt")], timeout=120)
@@ -781,6 +807,7 @@ def main():
     p.add_argument("--screen", choices=("off", "on"), default="off")
     p.add_argument("--no-perfetto", action="store_true")
     p.add_argument("--allow-powered", action="store_true", help="run even while plugged in (results flagged)")
+    p.add_argument("--allow-busy", action="store_true", help="run even if the phone is already busy at the start")
     p.add_argument("--out-dir", type=Path, default=HERE / "energy_probe_results")
 
     p = sub.add_parser("analyze", help="re-analyze a collect run directory")

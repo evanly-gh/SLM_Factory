@@ -282,9 +282,15 @@ class Session:
                 "thermal_status": res["state"]["thermal_status"]}
 
     def prime(self):
-        if self.args.prime_seconds > 0:
-            self.adb.sh(f"timeout {self.args.prime_seconds} sh -c 'for i in 1 2 3 4 5 6 7 8; do "
-                        f"(while :; do :; done) & done; wait'")
+        """Optional all-core burst (stop-file busy loops; `timeout` does not reliably stop children on Samsung)."""
+        if self.args.prime_seconds <= 0:
+            return
+        dev = energy_probe.DEV_DIR
+        self.adb.sh(f"rm -f {dev}/stop_load")
+        for _ in range(self.info["ncpu"]):
+            self.adb.sh(f"setsid sh {dev}/busy.sh </dev/null >/dev/null 2>&1 &")
+        time.sleep(self.args.prime_seconds)
+        energy_probe.cleanup_loads(self.adb)
 
     def invoke(self, cfg, tag, bin_dir, cmd, env, phase_label) -> dict:
         gate = self.wait_ready()
@@ -443,12 +449,20 @@ class Session:
         if a.plan or not todo:
             return
         self.preflight(todo)
+        self.adb.sh(f"mkdir -p {energy_probe.DEV_DIR}")
+        energy_probe.push_text(self.adb, energy_probe.BUSY_SCRIPT, f"{energy_probe.DEV_DIR}/busy.sh")
+        energy_probe.cleanup_loads(self.adb)
+        idle_busy = energy_probe.idle_cpu_check(self.adb, 5.0)
+        if idle_busy is not None and idle_busy > 0.15:
+            log(f"[WARN] the phone is {idle_busy:.0%} busy with nothing running; something else is loading it, "
+                f"which skews throughput and energy (busiest: "
+                f"{' | '.join(self.adb.sh('top -b -n 1 -m 4 2>/dev/null | tail -4').split(chr(10)))[:300]})")
         disc = energy_probe.discover(self.adb)
         session = {"started": datetime.now().isoformat(), "device": self.info, "profile": self.profile,
                    "energy_discovery": {k: disc[k] for k in ("root", "powercap", "powerstats", "battery_dir",
                                                               "battery_files")},
                    "params": {k: v for k, v in vars(a).items() if k not in ("func",)},
-                   "max_temp_c": self.max_temp,
+                   "max_temp_c": self.max_temp, "idle_cpu_busy_at_start": idle_busy,
                    "binaries": {t: self.adb.sh(f"cat {dev_bin_dir(a.ref, t)}/build_info.json 2>/dev/null")
                                 for t in ("llama_cpu", "llama_gpu", "mnn")}}
         for k, v in list(session["binaries"].items()):

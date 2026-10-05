@@ -2,77 +2,9 @@
  "recommended": null,
  "reasons": [
   "the all-core load did not run as intended (CPU busy per workload: {'idle': 0.593, 'cpu1': 0.585, 'cpu_all': 0.636}); the energy readings cannot be attributed to the workloads, so no method is recommended",
-  "most repeatable battery method: load CV 12.3%, updates 1.18 /s, net all-core power 943 mW (0.17x the median of battery methods)",
-  "battery methods measure the whole phone (not SoC-only like the paper): use idle-subtracted values and expect them to read higher than the paper's uJ/token",
+  "no method produced a positive, repeatable load-minus-idle power; see the table",
   "the phone slept during idle windows (largest sample gap 2.6 s), so the idle baseline is a suspended-phone baseline, lower than the awake idle an inference run sees; rerun with --screen on to compare"
  ],
- "methods": {
-  "perfetto:current": {
-   "quality": {
-    "updates_hz": 1.18,
-    "notes": "battery HAL current, unit mA"
-   },
-   "idle": [
-    5458.034252698979,
-    519.5093897967988,
-    0.0951825081603149
-   ],
-   "cpu1": [
-    5905.48740397627,
-    381.81395925590056,
-    0.06465409764464461
-   ],
-   "cpu_all": [
-    6400.569675900035,
-    786.9039642066692,
-    0.12294280103997406
-   ],
-   "net_cpu1": [
-    447.4531512772908,
-    381.81395925590056,
-    0.8533048837984091
-   ],
-   "net_cpu_all": [
-    942.5354232010561,
-    786.9039642066692,
-    0.8348799894800468
-   ],
-   "load_cv": 0.12294280103997406,
-   "agreement": 0.16785682590607467
-  },
-  "perfetto:charge": {
-   "quality": {
-    "updates_hz": 0.0,
-    "notes": "battery HAL charge counter"
-   },
-   "idle": [
-    0.0,
-    0.0,
-    null
-   ],
-   "cpu1": [
-    0.0,
-    0.0,
-    null
-   ],
-   "cpu_all": [
-    10287.69507964972,
-    20575.39015929944,
-    2.0
-   ],
-   "net_cpu1": [
-    0.0,
-    0.0,
-    null
-   ],
-   "net_cpu_all": [
-    10287.69507964972,
-    20575.39015929944,
-    2.0
-   ],
-   "load_cv": 2.0,
-   "agreement": 1.8321431740939254
-  }
- },
+ "methods": {},
  "externally_powered": false
 }
