@@ -1,0 +1,17 @@
+{
+  "_doc": "Device profiles, matched top to bottom; every 'match' rule is a case-insensitive regex on a getprop-derived field (manufacturer, model, device, soc, platform). paper_column names the paper's Table 9 column to compare against (null = not in the paper). max_temp_c is the cool-down gate (paper: below 28 C). energy_method is the headline method (null = decided by energy_probe.py / auto: powercap if readable, else the best battery method).",
+  "profiles": [
+    {"id": "oneplus15", "label": "OnePlus 15", "match": {"manufacturer": "oneplus", "soc": "SM8850|CPH27"},
+     "paper_column": "oneplus15", "max_temp_c": 28.0, "energy_method": null},
+    {"id": "oneplus15_by_model", "label": "OnePlus 15", "match": {"model": "^CPH274\\d"},
+     "paper_column": "oneplus15", "max_temp_c": 28.0, "energy_method": null},
+    {"id": "xiaomi17", "label": "Xiaomi 17", "match": {"manufacturer": "xiaomi", "soc": "SM8850"},
+     "paper_column": "xiaomi17", "max_temp_c": 28.0, "energy_method": null},
+    {"id": "xiaomi15", "label": "Xiaomi 15", "match": {"manufacturer": "xiaomi", "soc": "SM8750"},
+     "paper_column": "xiaomi15", "max_temp_c": 28.0, "energy_method": null},
+    {"id": "xiaomi14", "label": "Xiaomi 14", "match": {"manufacturer": "xiaomi", "soc": "SM8650"},
+     "paper_column": "xiaomi14", "max_temp_c": 28.0, "energy_method": null},
+    {"id": "galaxy_s23", "label": "Galaxy S23", "match": {"model": "^SM-S911"},
+     "paper_column": null, "max_temp_c": 28.0, "energy_method": null}
+  ]
+}

@@ -460,9 +460,11 @@ def perfetto_series(trace: Path) -> dict:
         tp.close()
 
 
-def method_rates(run_dir: Path, meta: dict, windows: list, settle: float) -> tuple[dict, dict]:
-    """Returns ({method: {workload: [mean power mW per window]}}, {method: {"updates_hz": .., "notes": ..}})."""
-    header, rows = load_samples(run_dir / "samples.txt")
+def power_functions(samples_path: Path, trace_path: Path | None, zones: list) -> dict:
+    """{method: (fn(a_s, b_s) -> mean power in mW over [a, b] or None, series for update counting, note)}
+    for every energy source present in a phone-side samples file and/or Perfetto trace. Signs are raw
+    (gauges differ in their charge/discharge convention); callers orient them against an idle reference."""
+    header, rows = load_samples(samples_path) if samples_path.exists() else ([], [])
     idx = {name: i for i, name in enumerate(header)}
     col = {name: [(r[0], r[i]) for r in rows if r[i] is not None] for i, name in enumerate(header) if i}
 
@@ -470,18 +472,10 @@ def method_rates(run_dir: Path, meta: dict, windows: list, settle: float) -> tup
         """[(t, a, b)] from rows where both columns were read in the same sample."""
         ia, ib = idx[a_name], idx[b_name]
         return [(r[0], r[ia], r[ib]) for r in rows if r[ia] is not None and r[ib] is not None]
-    spans = [(w, w["t0"] + settle, w["t1"] - 0.5) for w in windows]
-    powers: dict = {}
-    quality: dict = {}
+    funcs: dict = {}
 
     def add(method, fn, series_for_updates, note=""):
-        raw = {}
-        for w, a, b in spans:
-            raw.setdefault(w["workload"], []).append(fn(a, b))
-        sign = sign_from_load(raw)
-        powers[method] = {k: [None if v is None else sign * v for v in vs] for k, vs in raw.items()}
-        upd = [updates_per_s(series_for_updates, a, b) for _, a, b in spans] if series_for_updates else []
-        quality[method] = {"updates_hz": round(statistics.median(upd), 3) if upd else None, "notes": note}
+        funcs[method] = (fn, series_for_updates, note)
 
     vname = next((n for n in ("sysfs:voltage_now", "sysfs:voltage_avg") if col.get(n)), None)
     volt = col.get(vname) if vname else None
@@ -505,15 +499,15 @@ def method_rates(run_dir: Path, meta: dict, windows: list, settle: float) -> tup
             v = time_weighted_mean(volt, a, b)
             return None if r is None or v is None else r * 3.6e-3 * v * vs * 1e3  # uAh/s -> C/s, x V -> W -> mW
         add("sysfs:charge_counter", charge_power, q, "coulomb counter (uAh)")
-    zones = {z["name"]: z for z in meta["discovery"]["powercap"]["zones"]}
+    zones = {z["name"]: z for z in zones}
     for name, series in col.items():
         if name.startswith("powercap:"):
             wrap = (zones.get(name.split(":", 1)[1]) or {}).get("max_range_uj")
             add(name, lambda a, b, s=series, w=wrap: (lambda r: None if r is None else r / 1e3)(counter_rate(s, a, b, w)),
                 series, "energy_uj counter (uJ)")
 
-    if meta.get("trace") and (run_dir / meta["trace"]).exists():
-        ps = perfetto_series(run_dir / meta["trace"])
+    if trace_path is not None and trace_path.exists():
+        ps = perfetto_series(trace_path)
         pc, pv, pq = ps.get("batt.current_ua"), ps.get("batt.voltage_uv"), ps.get("batt.charge_uah")
         if pc and pv:
             cs, pvs = current_scale([v for _, v in pc]), voltage_scale([v for _, v in pv])
@@ -538,6 +532,24 @@ def method_rates(run_dir: Path, meta: dict, windows: list, settle: float) -> tup
                 rs = [counter_rate(s, a, b) for s in rails.values()]
                 return None if any(r is None for r in rs) else sum(rs) / 1e3
             add("rail:TOTAL", rails_total, None, f"sum of {len(rails)} rails")
+    return funcs
+
+
+def method_rates(run_dir: Path, meta: dict, windows: list, settle: float) -> tuple[dict, dict]:
+    """Returns ({method: {workload: [mean power mW per window]}}, {method: {"updates_hz": .., "notes": ..}})."""
+    trace = run_dir / meta["trace"] if meta.get("trace") else None
+    funcs = power_functions(run_dir / "samples.txt", trace, meta["discovery"]["powercap"]["zones"])
+    spans = [(w, w["t0"] + settle, w["t1"] - 0.5) for w in windows]
+    powers: dict = {}
+    quality: dict = {}
+    for method, (fn, series_for_updates, note) in funcs.items():
+        raw = {}
+        for w, a, b in spans:
+            raw.setdefault(w["workload"], []).append(fn(a, b))
+        sign = sign_from_load(raw)
+        powers[method] = {k: [None if v is None else sign * v for v in vs] for k, vs in raw.items()}
+        upd = [updates_per_s(series_for_updates, a, b) for _, a, b in spans] if series_for_updates else []
+        quality[method] = {"updates_hz": round(statistics.median(upd), 3) if upd else None, "notes": note}
     return powers, quality
 
 

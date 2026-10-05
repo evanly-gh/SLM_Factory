@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import os
 import platform
+import re
 import shutil
 import subprocess
 import sys
@@ -42,6 +43,40 @@ def find_adb() -> str:
         if cand.is_file():
             return str(cand)
     sys.exit("adb not found: put platform-tools on PATH, or set ADB=<path to adb> or ANDROID_HOME=<sdk dir>")
+
+
+def _version_key(p: Path):
+    return [int(x) if x.isdigit() else x for x in re.split(r"[.\-]", p.name)]
+
+
+def find_ndk() -> Path:
+    for k in ("ANDROID_NDK_HOME", "ANDROID_NDK_ROOT", "ANDROID_NDK", "NDK_ROOT"):
+        v = os.environ.get(k)
+        if v and (Path(v) / "build" / "cmake" / "android.toolchain.cmake").is_file():
+            return Path(v)
+    for root in sdk_roots():
+        ndks = sorted((p for p in (root / "ndk").glob("*") if (p / "build/cmake/android.toolchain.cmake").is_file()),
+                      key=_version_key)
+        if ndks:
+            return ndks[-1]
+        legacy = root / "ndk-bundle"
+        if (legacy / "build/cmake/android.toolchain.cmake").is_file():
+            return legacy
+    sys.exit("Android NDK not found: install it from Android Studio (SDK Manager > SDK Tools > NDK) "
+             "or set ANDROID_NDK_HOME")
+
+
+def find_build_tool(name: str) -> str:
+    """cmake / ninja: PATH first, then the newest SDK cmake package (which ships both)."""
+    on_path = shutil.which(name)
+    if on_path:
+        return on_path
+    for root in sdk_roots():
+        for d in sorted((root / "cmake").glob("*"), key=_version_key, reverse=True):
+            cand = d / "bin" / f"{name}{EXE}"
+            if cand.is_file():
+                return str(cand)
+    sys.exit(f"{name} not found: install CMake from Android Studio (SDK Manager > SDK Tools > CMake) or put it on PATH")
 
 
 def list_devices(adb_bin: str) -> list[tuple[str, str]]:
