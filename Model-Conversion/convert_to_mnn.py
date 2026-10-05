@@ -791,7 +791,11 @@ def validate_and_report(
 # Virtual environments inherit a restricted PATH that often omits the Android
 # SDK's platform-tools directory, so we fall back to these known paths.
 ADB_SEARCH_PATHS = [
+    *(Path(p) / "platform-tools" / ("adb.exe" if os.name == "nt" else "adb")
+      for p in (os.environ.get("ANDROID_HOME"), os.environ.get("ANDROID_SDK_ROOT")) if p),
     Path.home() / "Library" / "Android" / "sdk" / "platform-tools" / "adb",
+    Path.home() / "Android" / "Sdk" / "platform-tools" / "adb",
+    Path(os.environ.get("LOCALAPPDATA", Path.home() / "AppData" / "Local")) / "Android" / "Sdk" / "platform-tools" / "adb.exe",
     Path("/usr/local/bin/adb"),
     Path("/opt/homebrew/bin/adb"),
 ]
@@ -902,6 +906,9 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> None:
     """Orchestrate the full download → export/quantize → validate → deploy pipeline."""
+    # Windows encodes redirected output as cp1252, which can't print the progress symbols.
+    for stream in (sys.stdout, sys.stderr):
+        stream.reconfigure(encoding="utf-8", errors="replace")
     args = parse_args()
 
     output_dir = Path(args.output).expanduser().resolve()

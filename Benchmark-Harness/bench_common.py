@@ -27,6 +27,7 @@ CLI (runs under the repo .venv, which has the perfetto package):
 from __future__ import annotations
 
 import json
+import os
 import re
 import statistics
 import subprocess
@@ -36,9 +37,39 @@ import time
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-VENV_PYTHON = HERE.parent / ".venv" / "bin" / "python"
-NDK_CLANG = (Path.home() / "Library/Android/sdk/ndk/27.2.12479018/toolchains/llvm/prebuilt/darwin-x86_64/bin"
-             / "aarch64-linux-android28-clang")
+NDK_VERSION = "27.2.12479018"
+
+
+def android_sdk_roots() -> list[Path]:
+    """Android SDK locations: $ANDROID_HOME / $ANDROID_SDK_ROOT, then Android Studio's default for this OS."""
+    roots = [Path(p) for p in (os.environ.get("ANDROID_HOME"), os.environ.get("ANDROID_SDK_ROOT")) if p]
+    if sys.platform == "win32":
+        roots.append(Path(os.environ.get("LOCALAPPDATA", Path.home() / "AppData" / "Local")) / "Android" / "Sdk")
+    elif sys.platform == "darwin":
+        roots.append(Path.home() / "Library" / "Android" / "sdk")
+    else:
+        roots.append(Path.home() / "Android" / "Sdk")
+    return roots
+
+
+def adb_candidates() -> list[Path]:
+    """Where adb lives inside each known Android SDK, for when it isn't on PATH."""
+    exe = "adb.exe" if sys.platform == "win32" else "adb"
+    return [root / "platform-tools" / exe for root in android_sdk_roots()]
+
+
+def _ndk_clang() -> Path:
+    """The NDK's aarch64 / API 28 clang: $ANDROID_NDK_HOME or $ANDROID_NDK_ROOT, else the SDK's NDK_VERSION."""
+    host = {"win32": "windows-x86_64", "darwin": "darwin-x86_64"}.get(sys.platform, "linux-x86_64")
+    name = "aarch64-linux-android28-clang" + (".cmd" if sys.platform == "win32" else "")
+    ndk_roots = [Path(p) for p in (os.environ.get("ANDROID_NDK_HOME"), os.environ.get("ANDROID_NDK_ROOT")) if p]
+    ndk_roots += [root / "ndk" / NDK_VERSION for root in android_sdk_roots()]
+    candidates = [root / "toolchains" / "llvm" / "prebuilt" / host / "bin" / name for root in ndk_roots]
+    return next((c for c in candidates if c.exists()), candidates[-1])
+
+
+VENV_PYTHON = HERE.parent / ".venv" / ("Scripts/python.exe" if sys.platform == "win32" else "bin/python")
+NDK_CLANG = _ndk_clang()
 TOOL_SRC = HERE / "tools" / "page_cache_tool.c"
 TOOL_BIN = HERE / "tools" / "bin" / "page_cache_tool"
 DEVICE_TOOL = "/data/local/tmp/page_cache_tool"
@@ -191,6 +222,9 @@ class ReadinessGate:
 
 def _ensure_tool(adb) -> None:
     if not TOOL_BIN.exists() or TOOL_BIN.stat().st_mtime < TOOL_SRC.stat().st_mtime:
+        if not NDK_CLANG.exists():
+            raise RuntimeError(f"Android NDK clang not found at {NDK_CLANG}: install NDK {NDK_VERSION} with "
+                               f"Android Studio's SDK Manager, or set ANDROID_NDK_HOME")
         TOOL_BIN.parent.mkdir(parents=True, exist_ok=True)
         subprocess.run([str(NDK_CLANG), "-O2", "-o", str(TOOL_BIN), str(TOOL_SRC)], check=True)
     adb.run(["push", str(TOOL_BIN), DEVICE_TOOL], timeout=60)

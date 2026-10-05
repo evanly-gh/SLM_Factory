@@ -69,14 +69,11 @@ KNOWN_AFFECTED_DEVICES = {
     # producing a 0-byte "model" that the app fails to load.
 }
 
-FALLBACK_ADB = str(Path.home() / "Library/Android/sdk/platform-tools/adb")
-
-MONSOON_SCRIPT = str(Path.home() / "SLM_Factory_Krishna_Personal/Power-Monitor/monsoon_single_reading.py")
+MONSOON_SCRIPT = str(Path(__file__).resolve().parent.parent / "Power-Monitor" / "monsoon_single_reading.py")
 
 # Shared measurement protocol (readiness gate, page-cache eviction, Perfetto energy) - the same
 # module run_mnn_autobench.py uses, so both engines are measured identically.
-sys.path.insert(0, str(Path.home() / "SLM_Factory_Krishna_Personal/Benchmark-Harness"))
-sys.path.insert(0, str(Path(__file__).resolve().parent))  # in a full checkout, the sibling bench_common.py wins
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 import bench_common  # noqa: E402
 
 # Set in main(): readiness gate + fixed rest applied before every broadcast (see pre_run()).
@@ -194,9 +191,11 @@ def find_adb() -> str:
     on_path = shutil.which("adb")
     if on_path:
         return on_path
-    if os.path.exists(FALLBACK_ADB):
-        return FALLBACK_ADB
-    print("[ERROR] adb not found on PATH or at ~/Library/Android/sdk/platform-tools/adb")
+    candidates = bench_common.adb_candidates()
+    for candidate in candidates:
+        if candidate.exists():
+            return str(candidate)
+    print(f"[ERROR] adb not found on PATH or at any of: {', '.join(map(str, candidates))}")
     sys.exit(1)
 
 
@@ -1472,6 +1471,9 @@ def parse_args():
 
 
 def main():
+    # Windows encodes redirected output as cp1252, which can't print every symbol used here.
+    for stream in (sys.stdout, sys.stderr):
+        stream.reconfigure(encoding="utf-8", errors="replace")
     args = parse_args()
 
     global _QUIET
