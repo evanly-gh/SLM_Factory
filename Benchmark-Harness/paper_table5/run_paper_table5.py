@@ -228,7 +228,7 @@ class Session:
             RESULTS_DIR / f"{self.profile['id']}_{args.ref}_{datetime.now().strftime('%Y%m%d_%H%M%S')}")
         (self.out / "configs").mkdir(parents=True, exist_ok=True)
         self.raw = self.out / "raw"
-        self.controls = DeviceControls(self.adb, log)
+        self.controls = DeviceControls(self.adb, log, screen=args.screen)
         self.gate = None
         self.recorder = None
         self.idle_window = None
@@ -463,6 +463,7 @@ class Session:
                                                               "battery_files")},
                    "params": {k: v for k, v in vars(a).items() if k not in ("func",)},
                    "max_temp_c": self.max_temp, "idle_cpu_busy_at_start": idle_busy,
+                   "screen_on": self.controls.screen_on, "wireless_adb": self.controls.wireless,
                    "binaries": {t: self.adb.sh(f"cat {dev_bin_dir(a.ref, t)}/build_info.json 2>/dev/null")
                                 for t in ("llama_cpu", "llama_gpu", "mnn")}}
         for k, v in list(session["binaries"].items()):
@@ -551,6 +552,9 @@ def main():
     ap.add_argument("--llama-threads", type=int, default=None, help="llama-bench -t (default: its own default)")
     ap.add_argument("--mnn-threads", type=int, default=None, help="llm_bench -t (default: its own default, 4)")
     ap.add_argument("--no-controls", action="store_true", help="skip airplane mode / screen off / DND")
+    ap.add_argument("--screen", choices=["auto", "off", "on"], default="auto",
+                    help="screen during runs: off = the paper; on = minimum brightness, needed over wireless adb "
+                         "where a screen-off phone suspends mid-run; auto = off on USB, on over Wi-Fi")
     ap.add_argument("--no-perfetto", action="store_true")
     ap.add_argument("--results-dir", help="resume into an existing results directory")
     ap.add_argument("--force", action="store_true", help="rerun configurations that already have results")

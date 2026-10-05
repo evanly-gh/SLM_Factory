@@ -152,6 +152,8 @@ class FakeAdb:
         m = re.fullmatch(r"getprop (\S+)", cmd)
         if m:
             return props.get(m.group(1), "") + "\n"
+        if cmd == "echo ok":
+            return "ok\n"
         if cmd == "cat /proc/uptime":
             return f"{p.now():.2f} 0.00\n"
         if cmd == "head -1 /proc/stat":
@@ -220,7 +222,7 @@ def main():
     args = Namespace(serial="FAKE123", ref="pinned", models=None, quants=None, frameworks=["llama.cpp", "mnn"],
                      backends=["cpu", "gpu"], trials=3, n_prompt=256, n_gen=256, max_temp=None, gate_timeout=60,
                      rest=0, idle_seconds=1, min_energy_seconds=30.0, prime_seconds=0, timeout=600,
-                     llama_threads=None, mnn_threads=None, no_controls=False, no_perfetto=False,
+                     llama_threads=None, mnn_threads=None, no_controls=False, no_perfetto=False, screen="auto",
                      results_dir=str(tmp / "results"), force=False, plan=False)
     rpt.Session(args).run()
 

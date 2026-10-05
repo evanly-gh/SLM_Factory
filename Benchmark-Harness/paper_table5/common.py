@@ -113,6 +113,36 @@ def device_info(adb) -> dict:
 # Phone-side protocol controls
 # ---------------------------------------------------------------------------
 
+class ScreenKeeper:
+    """Keeps the phone awake with the screen on at minimum brightness, restoring the settings afterwards.
+    Needed over wireless adb: with the screen off nothing holds a wake lock (a USB connection does), so
+    Android suspends the whole system every few seconds and freezes the benchmark mid-run."""
+
+    KEYS = (("system", "screen_off_timeout"), ("system", "screen_brightness_mode"), ("system", "screen_brightness"))
+
+    def __init__(self, adb):
+        self.adb = adb
+        self.saved: dict = {}
+
+    def apply(self):
+        for ns, key in self.KEYS:
+            v = self.adb.sh(f"settings get {ns} {key}").strip()
+            self.saved[(ns, key)] = None if v in ("", "null") else v
+        self.adb.sh("settings put system screen_off_timeout 2147483647")
+        self.adb.sh("settings put system screen_brightness_mode 0")
+        self.adb.sh("settings put system screen_brightness 1")
+        self.wake()
+
+    def wake(self):
+        self.adb.sh("input keyevent 224")  # KEYCODE_WAKEUP; no-op when already awake
+        self.adb.sh("wm dismiss-keyguard")
+
+    def restore(self):
+        for (ns, key), v in self.saved.items():
+            if v is not None:
+                self.adb.sh(f"settings put {ns} {key} {v}")
+
+
 def is_wireless_serial(serial: str) -> bool:
     """ip:port (adb tcpip / adb connect) or an mDNS name from Android 11+ Wireless debugging
     (adb-<serial>-<id>._adb-tls-connect._tcp)."""
@@ -124,9 +154,12 @@ class DeviceControls:
     Over wireless adb, Wi-Fi is switched back on right after airplane mode (the command runs detached on
     the phone so it survives the adb connection dropping), then adb reconnects."""
 
-    def __init__(self, adb, log=print):
+    def __init__(self, adb, log=print, screen: str = "auto"):
         self.adb, self.log = adb, log
         self.wireless = is_wireless_serial(adb.serial)
+        # Paper: screen off. Over wireless adb that lets the phone suspend mid-run (see ScreenKeeper).
+        self.screen_on = screen == "on" or (screen == "auto" and self.wireless)
+        self.keeper = ScreenKeeper(adb) if self.screen_on else None
         self.saved: dict = {}
 
     def _setting(self, ns, key):
@@ -158,16 +191,28 @@ class DeviceControls:
             self.reconnect()
         else:
             self.adb.sh("cmd connectivity airplane-mode enable")
-        self.screen_off()
+        if self.keeper:
+            self.keeper.apply()
+        self.ensure_screen()
         self.log("[DEVICE] airplane mode on" + (" (Wi-Fi kept for adb)" if self.wireless else "")
-                 + ", Do Not Disturb on, background apps killed, screen off")
+                 + ", Do Not Disturb on, background apps killed, screen "
+                 + ("on at minimum brightness (wireless adb: keeps the phone from suspending)" if self.screen_on
+                    else "off"))
+
+    def ensure_screen(self):
+        if self.keeper:
+            self.keeper.wake()
+        else:
+            self.adb.sh("input keyevent 223")  # KEYCODE_SLEEP
 
     def screen_off(self):
-        self.adb.sh("input keyevent 223")
+        self.ensure_screen()
 
     def restore(self):
         try:
             self.adb.sh("input keyevent 224")
+            if self.keeper:
+                self.keeper.restore()
             if self.saved.get("airplane") != "1":
                 self.adb.sh("cmd connectivity airplane-mode disable")
                 if self.wireless:

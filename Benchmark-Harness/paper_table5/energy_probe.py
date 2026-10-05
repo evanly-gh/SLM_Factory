@@ -42,6 +42,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parent))
 import bench_common  # noqa: E402
+from common import ScreenKeeper, is_wireless_serial  # noqa: E402
 from devenv import Adb, list_devices  # noqa: E402
 
 DEV_DIR = "/data/local/tmp/energy_probe"
@@ -382,8 +383,16 @@ def cmd_collect(args):
                                           if k != "func"},
             "columns": [c[0] for c in columns], "start": datetime.now().isoformat()}
     windows, pid = [], None
+    if args.screen == "auto":
+        args.screen = "on" if is_wireless_serial(adb.serial) else "off"
+        meta["params"]["screen"] = args.screen
+    keeper = ScreenKeeper(adb) if args.screen == "on" else None
+    print(f"Screen: {args.screen}" + (" (minimum brightness; over wireless adb a screen-off phone suspends and "
+                                      "freezes the load)" if keeper else ""))
     try:
-        if args.screen == "off":
+        if keeper:
+            keeper.apply()
+        else:
             adb.sh("input keyevent 223")
         adb.sh(f"{sampler_cmd} </dev/null >/dev/null 2>&1 &")
         if not args.no_perfetto:
@@ -423,8 +432,9 @@ def cmd_collect(args):
             meta["trace"] = stop_perfetto(adb, pid, run_dir)
         adb.run(["pull", f"{DEV_DIR}/samples.txt", str(run_dir / "samples.txt")], timeout=120)
         adb.run(["pull", f"{DEV_DIR}/load.log", str(run_dir / "load.log")], timeout=60)
-        if args.screen == "off":
-            adb.sh("input keyevent 224")
+        if keeper:
+            keeper.restore()
+        adb.sh("input keyevent 224")
         meta["end"] = datetime.now().isoformat()
         meta["state_end"] = bench_common.device_state(adb)
         (run_dir / "meta.json").write_text(json.dumps(meta, indent=1))
@@ -804,7 +814,8 @@ def main():
     p.add_argument("--rest", type=int, default=20, help="seconds between windows")
     p.add_argument("--settle", type=float, default=5.0, help="seconds dropped from the start of each window")
     p.add_argument("--interval", type=float, default=0.1, help="sysfs sampling interval on the phone (s)")
-    p.add_argument("--screen", choices=("off", "on"), default="off")
+    p.add_argument("--screen", choices=("auto", "off", "on"), default="auto",
+                   help="auto: on (minimum brightness) over wireless adb, where a screen-off phone suspends; off on USB")
     p.add_argument("--no-perfetto", action="store_true")
     p.add_argument("--allow-powered", action="store_true", help="run even while plugged in (results flagged)")
     p.add_argument("--allow-busy", action="store_true", help="run even if the phone is already busy at the start")
