@@ -81,6 +81,12 @@ def value(r: dict | None, phase: str, kind: str):
     return p["uj_per_token"], None, (None if p.get("energy_valid") else "invalid")
 
 
+def not_cooled(r: dict | None) -> bool:
+    """True if any benchmark invocation of the configuration started before the cool-down gate passed."""
+    return bool(r) and any((inv.get("gate") or {}).get("passed") is False
+                           for inv in (r.get("invocations") or {}).values())
+
+
 def fmt_tps(m, s):
     if m is None:
         return "-"
@@ -118,6 +124,8 @@ def build(data, devices, tolerance):
                     text = "FAIL"
                 elif note == "invalid":
                     text += "*"
+                if text not in ("-", "FAIL") and not_cooled(data.get(dev, {}).get(key)):
+                    text += "^"
                 cells.append(text)
                 csv_rows.append({"model": model, "backend": backend, "framework": framework, "quant": quant,
                                  "device": dev, "metric": f"{phase}_{kind}", "value": m, "std": s, "note": note})
@@ -155,6 +163,7 @@ def render_md(dev_ids, devices, main_rows, cmp_rows, tolerance) -> str:
                      f"{', '.join(sorted(dv['energy_kinds'])) or 'n/a'} via {', '.join(sorted(dv['energy_methods'])) or 'n/a'}")
     lines += ["", "Throughput in tokens/s (mean +/- std over the recorded trials); energy in uJ/token. "
               "`*` = energy recorded but invalid (e.g. phone on USB power with no chip counters); "
+              "`^` = started before the phone cooled to its gate temperature (gate timed out; see the result JSON); "
               "FAIL = configuration did not run (see the result JSON).", "",
               "| " + " | ".join(head) + " |", "|" + "---|" * 4 + "--:|" * (len(head) - 4)]
     prev = None
