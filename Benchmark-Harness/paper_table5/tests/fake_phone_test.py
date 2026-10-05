@@ -208,14 +208,16 @@ def main():
     manifest = {"models": [
         {"name": "llama3.2-1b", "framework": "llama.cpp", "quant": "Q4_0", "bits": 4,
          "path": "gguf/llama3.2-1b-q4_0.gguf", "files": {"llama3.2-1b-q4_0.gguf": 123}},
+        {"name": "llama3.2-1b", "framework": "llama.cpp", "quant": "Q4_K_M", "bits": 4,
+         "path": "gguf/llama3.2-1b-q4_k_m.gguf", "files": {"llama3.2-1b-q4_k_m.gguf": 123}},
         {"name": "llama3.2-1b", "framework": "mnn", "quant": "Q4", "bits": 4,
          "path": "mnn/m1-mnn-q4", "files": {"config.json": 123}},
         {"name": "qwen2.5-7b", "framework": "llama.cpp", "quant": "Q4_0", "bits": 4,
          "path": "gguf/qwen2.5-7b-q4_0.gguf", "files": {"qwen2.5-7b-q4_0.gguf": 123}},
     ]}
     (models / "manifest.json").write_text(json.dumps(manifest))
-    FakeAdb.phone = FakePhone({"llama3.2-1b-q4_0.gguf": 123, "config.json": 123, "qwen2.5-7b-q4_0.gguf": 123},
-                              fail_model="qwen2.5-7b")
+    FakeAdb.phone = FakePhone({"llama3.2-1b-q4_0.gguf": 123, "llama3.2-1b-q4_k_m.gguf": 123, "config.json": 123,
+                               "qwen2.5-7b-q4_0.gguf": 123}, fail_model="qwen2.5-7b")
     rpt.Adb = FakeAdb
     rpt.MODELS_DIR = models
     rpt.POLL_S = 0.05
@@ -236,7 +238,11 @@ def main():
         if not cond:
             failures.append(msg)
 
-    check(len(results) == 6, f"6 configurations recorded (got {len(results)})")
+    check(len(results) == 8, f"8 configurations recorded (got {len(results)})")
+    check(results["llama3.2-1b__Q4_K_M__llama.cpp__gpu"].get("gpu_partial_offload") is True,
+          "Q4_K_M on the pinned OpenCL backend flagged as partly on the CPU")
+    check(not results["llama3.2-1b__Q4_0__llama.cpp__gpu"].get("gpu_partial_offload"),
+          "Q4_0 on the pinned OpenCL backend not flagged")
     for cid, r in sorted(results.items()):
         c = r["config"]
         if c["model"] == "qwen2.5-7b":

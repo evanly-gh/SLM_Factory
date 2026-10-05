@@ -51,6 +51,9 @@ FRAMEWORKS = ("llama.cpp", "mnn")
 MARK_RE = re.compile(r"^PB_MARK (\w+) (.*)$", re.M)
 DEV_RUN = f"{DEV_ROOT}/run"
 POLL_S = 10  # seconds between completion checks of a detached benchmark
+# GGUF types whose matmuls ggml-opencl's supports_op accepts at the pinned llama.cpp (eadc418). Q4_K_M/Q4_K_S are
+# mostly Q4_K, which it lacks, so those matmuls fall back to the CPU.
+OPENCL_MATMUL_PINNED = {"F16", "F32", "Q4_0", "Q8_0", "Q6_K", "MXFP4"}
 
 
 def log(msg: str):
@@ -367,6 +370,10 @@ class Session:
             backend_seen = (result["invocations"]["prefill"].get("llama_bench") or {}).get("backends", "")
             if cfg["backend"] == "gpu" and "OpenCL" not in str(backend_seen):
                 result["warning"] = f"GPU requested but llama-bench reports backends={backend_seen!r}"
+            elif cfg["backend"] == "gpu" and a.ref == "pinned" and cfg["quant"].upper() not in OPENCL_MATMUL_PINNED:
+                result["gpu_partial_offload"] = True
+                result["warning"] = (f"{cfg['quant']}: the pinned OpenCL backend has no matmul kernel for this type "
+                                     f"(supported: {', '.join(sorted(OPENCL_MATMUL_PINNED))}), so most matmuls run on the CPU")
         else:
             bin_dir = dev_bin_dir(a.ref, "mnn")
             env = "LD_LIBRARY_PATH=. PB_IGNORE_EOS=1"

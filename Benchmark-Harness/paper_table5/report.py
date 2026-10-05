@@ -127,6 +127,8 @@ def build(data, devices, tolerance, spread_passes=False):
                     text += "*"
                 if text not in ("-", "FAIL") and not_cooled(data.get(dev, {}).get(key)):
                     text += "^"
+                if text not in ("-", "FAIL") and (data.get(dev, {}).get(key) or {}).get("gpu_partial_offload"):
+                    text += "~"
                 cells.append(text)
                 csv_rows.append({"model": model, "backend": backend, "framework": framework, "quant": quant,
                                  "device": dev, "metric": f"{phase}_{kind}", "value": m, "std": s, "note": note})
@@ -168,6 +170,8 @@ def render_md(dev_ids, devices, main_rows, cmp_rows, tolerance, spread_passes=Fa
     lines += ["", "Throughput in tokens/s (mean +/- std over the recorded trials); energy in uJ/token. "
               "`*` = energy recorded but invalid (e.g. phone on USB power with no chip counters); "
               "`^` = started before the phone cooled to its gate temperature (gate timed out; see the result JSON); "
+              "`~` = GPU row whose weight type has no OpenCL matmul kernel in that llama.cpp build (e.g. Q4_K at "
+              "eadc418), so most matmuls ran on the CPU; "
               "FAIL = configuration did not run (see the result JSON).", "",
               "| " + " | ".join(head) + " |", "|" + "---|" * 4 + "--:|" * (len(head) - 4)]
     prev = None

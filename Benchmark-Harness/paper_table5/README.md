@@ -35,6 +35,28 @@ the paper's protocol, and renders a table laid out like the paper's Table 5. Sam
 
 `python tests/fake_phone_test.py` checks the harness end to end against a simulated phone.
 
+## Validation, then the model pool
+
+1. **Validate against the paper** with its models at 4 bits (the comparison section of `TABLE5.md` passes a cell
+   within 25% of the phone's paper column, or its `proxy_column`):
+   ```
+   python prepare_models.py --models llama3.2-1b qwen2.5-1.5b llama3.2-3b --gguf Q4_0 Q4_K_M --mnn 4 --serial S
+   python run_paper_table5.py --serial S --models llama3.2-1b qwen2.5-1.5b llama3.2-3b
+   ```
+2. **The pool** at Q4 / Q8 / F16 (F16 rather than BF16: llama.cpp's OpenCL backend and MNN's fp16 path have no
+   BF16 kernels). Qwen3.5 postdates the pinned versions, so it is converted and run with `--ref head`
+   (build those binaries with `python build_binaries.py --ref head --push --serial S`):
+   ```
+   python prepare_models.py --pool --gguf Q4_0 Q8_0 F16 --mnn 4 8 16 --serial S
+   python run_paper_table5.py --serial S --models gemma3-270m smollm2-135m smollm2-360m qwen3-0.6b qwen3-1.7b qwen3-4b-instruct-2507
+   python prepare_models.py --ref head --models qwen3.5-0.8b qwen3.5-2b qwen3.5-4b --gguf Q4_0 Q8_0 F16 --mnn 4 8 16 --serial S
+   python run_paper_table5.py --serial S --ref head --models qwen3.5-0.8b qwen3.5-2b qwen3.5-4b
+   python report.py results/<validation dir> results/<pool dir> results/<head dir>
+   ```
+   Q4_0 is the llama.cpp 4-bit type for the pool: at eadc418 the OpenCL backend has no Q4_K matmul, so a Q4_K_M
+   GPU row runs most of its matmuls on the CPU (marked `~` in the report). Variants that do not fit in the phone's
+   memory (F16 4B on 8 GB) are recorded as failures.
+
 ## Protocol and how it maps to the paper
 
 | Paper | Here |
