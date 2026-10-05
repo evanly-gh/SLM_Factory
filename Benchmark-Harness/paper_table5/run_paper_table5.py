@@ -292,9 +292,13 @@ class Session:
         self.prime()
         before = bench_common.device_state(self.adb)
         log(f"   {phase_label}: {cmd}")
+        j0 = energy_probe.read_cpu_jiffies(self.adb)
         res = run_on_device(self.adb, self.controls, bin_dir, cmd, env, tag, self.raw, self.args.timeout)
+        busy = energy_probe.busy_fraction(j0, energy_probe.read_cpu_jiffies(self.adb))
         after = bench_common.device_state(self.adb)
-        res.update({"gate": gate, "state_before": before, "state_after": after})
+        res.update({"gate": gate, "state_before": before, "state_after": after, "cpu_busy": busy})
+        if busy is not None and busy < 0.05 and not failure_reason(res):
+            log(f"   [WARN] CPU only {busy:.0%} busy during this run: the process may have been frozen or throttled")
         time.sleep(self.args.rest)
         return res
 
@@ -384,7 +388,7 @@ class Session:
     @staticmethod
     def _summ(res: dict) -> dict:
         return {"exit": res["exit"], "timed_out": res["timed_out"], "seconds": res["seconds"],
-                "marks": len(res["marks"]), "gate": res.get("gate"),
+                "marks": len(res["marks"]), "cpu_busy": res.get("cpu_busy"), "gate": res.get("gate"),
                 "state_before": res.get("state_before"), "state_after": res.get("state_after")}
 
     def _fail(self, result, reason) -> dict:

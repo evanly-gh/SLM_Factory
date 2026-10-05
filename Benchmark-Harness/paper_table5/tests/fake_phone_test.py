@@ -154,6 +154,9 @@ class FakeAdb:
             return props.get(m.group(1), "") + "\n"
         if cmd == "cat /proc/uptime":
             return f"{p.now():.2f} 0.00\n"
+        if cmd == "head -1 /proc/stat":
+            busy = int(p.extra * 100 * 8)  # busy jiffies grow while benchmarks run
+            return f"cpu  {busy} 0 0 {int(p.now() * 100 * 8) - busy} 0 0 0 0 0 0\n"
         if cmd == "cat /proc/meminfo":
             return "MemTotal:        7654321 kB\n"
         if "cpufreq/policy*; do echo $(basename $p) $(cat $p/cpuinfo_max_freq) $(cat $p/related_cpus)" in cmd:
