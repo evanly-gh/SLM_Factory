@@ -47,6 +47,23 @@ def probe_recommendation(model: str, results_dir: Path | None = None) -> str | N
     return best[1] if best else None
 
 
+def merge_contiguous(windows: list[dict], max_gap_s: float = 0.5) -> list[dict]:
+    """Merge consecutive same-phase windows separated by less than max_gap_s into one span (tokens summed);
+    a window of another phase in between breaks the span."""
+    spans: list[dict] = []
+    for w in sorted(windows, key=lambda w: w["a"]):
+        last = spans[-1] if spans else None
+        if last and last["phase"] == w["phase"] and 0 <= w["a"] - last["b"] < max_gap_s:
+            last["b"] = max(last["b"], w["b"])
+            last["tokens"] += w["tokens"]
+            last["covered"] += w["b"] - w["a"]
+            last["n"] += 1
+        else:
+            spans.append({"phase": w["phase"], "a": w["a"], "b": w["b"], "tokens": w["tokens"],
+                          "covered": w["b"] - w["a"], "n": 1})
+    return spans
+
+
 class EnergyRecorder:
     def __init__(self, adb, out_dir: Path, discovery: dict, use_perfetto: bool = True, log=print):
         self.adb, self.out_dir, self.disc, self.log = adb, Path(out_dir), discovery, log
@@ -105,9 +122,13 @@ class EnergyRecorder:
         """windows: [{"phase", "a", "b", "tokens"}] (CLOCK_BOOTTIME seconds). Returns
         {method: {phase: {uj_per_token, net_uj_per_token, avg_power_mw, seconds, tokens, windows, valid, reason}}}."""
         out = {}
+        spans = merge_contiguous(windows)
         for method, (fn, _series, note) in (self.funcs or {}).items():
             idle_mw = fn(*idle) if idle else None
-            load = [fn(w["a"], w["b"]) for w in windows]
+            # Battery gauges update every ~0.1-5 s: integrating each sub-second repetition separately would bill
+            # every window's first reading to the preceding gap. Back-to-back repetitions are integrated as one span.
+            use = windows if is_chip_method(method) else spans
+            load = [fn(w["a"], w["b"]) for w in use]
             usable = [p for p in load if p is not None]
             sign = 1.0
             if idle_mw is not None and usable and statistics.mean(usable) < idle_mw:
@@ -115,13 +136,15 @@ class EnergyRecorder:
             if idle_mw is not None:
                 idle_mw *= sign
             per_phase: dict = {}
-            for w, p in zip(windows, load):
+            for w, p in zip(use, load):
                 d = per_phase.setdefault(w["phase"], {"mj": 0.0, "net_mj": 0.0, "s": 0.0, "tokens": 0, "n": 0,
                                                       "missing": 0})
                 if p is None:
                     d["missing"] += 1
                     continue
-                dur = w["b"] - w["a"]
+                # a span's average power applies to the time spent in its own windows, not to the gaps between
+                # them (which can hold other work, e.g. the token MNN generates after each prefill)
+                dur = w.get("covered", w["b"] - w["a"])
                 d["mj"] += sign * p * dur
                 d["net_mj"] += (sign * p - (idle_mw or 0.0)) * dur
                 d["s"] += dur

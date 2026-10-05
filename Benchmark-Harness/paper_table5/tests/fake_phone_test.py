@@ -35,6 +35,7 @@ SPEEDS = {  # (framework, backend): (prefill t/s, decode t/s)
     ("mnn", "cpu"): (228.0, 47.0), ("mnn", "gpu"): (434.0, 12.0),
 }
 IDLE_MW, LOAD_MW, V = 700.0, 5000.0, 4.0
+REP_GAP_S = 0.002  # idle time between timed repetitions (llama-bench: a KV-cache clear, ~ms)
 TIME_SCALE = 0.01  # real seconds per simulated benchmark second (the virtual clock jumps ahead)
 
 
@@ -72,7 +73,7 @@ class FakePhone:
                 self.jobs.append((t, t + dur))
                 err.append(f"PB_MARK llama rep={i} begin={int(t * 1e9)} end={int((t + dur) * 1e9)} "
                            f"n_prompt={p} n_gen={n} n_depth={d}")
-                t += dur + 0.05
+                t += dur + REP_GAP_S
             ts = (p or n) / (p / pp if p else n / tg)
             out = json.dumps([{"build_commit": "eadc418", "backends": "OpenCL" if backend == "gpu" else "CPU",
                                "n_threads": 8, "avg_ts": ts, "stddev_ts": 0.1, "samples_ts": [ts] * r}])
@@ -90,7 +91,7 @@ class FakePhone:
                 err.append(f"PB_MARK mnn mode={'kv' if kv else 'pp'} rep={i} begin={int(t * 1e9)} "
                            f"end={int((t + pre + dec) * 1e9)} prefill_us={int(pre * 1e6)} decode_us={int(dec * 1e6)} "
                            f"prompt={p} gen={n if kv else 1}")
-                t += pre + dec + 0.05
+                t += pre + dec + REP_GAP_S
         self.extra += t - start
         time.sleep((t - start) * TIME_SCALE)
         self.files[f"{work}/stdout.txt"] = out
