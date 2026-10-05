@@ -205,6 +205,23 @@ def mnn_windows(marks: list[dict], source: str) -> list[dict]:
     return out
 
 
+def suspend_ratio(marks: list[dict], llama_json: dict | None = None) -> float | None:
+    """Largest ratio of a repetition's CLOCK_BOOTTIME duration (PB_MARK, counts suspend) to the tool's own
+    monotonic timing (does not count suspend). Above ~1.05 the phone slept during the timed work."""
+    ratios = []
+    for i, m in enumerate(marks):
+        wall = (m["end"] - m["begin"]) / 1e9
+        if m.get("tool") == "llama" and llama_json and i < len(llama_json.get("samples_ns") or []):
+            mono = llama_json["samples_ns"][i] / 1e9
+        elif m.get("tool") == "mnn":
+            mono = (m["prefill_us"] + m["decode_us"]) / 1e6
+        else:
+            continue
+        if mono > 0.05:
+            ratios.append(wall / mono)
+    return round(max(ratios), 3) if ratios else None
+
+
 def throughput(windows: list[dict], phase: str) -> dict:
     tps = [w["tokens"] / (w["b"] - w["a"]) for w in windows
            if w["phase"] == phase and w["source"] == "main" and w["b"] > w["a"]]
@@ -334,7 +351,8 @@ class Session:
                         "build_commit", "backends", "n_threads", "flash_attn", "type_k", "type_v", "n_batch",
                         "n_ubatch", "use_mmap", "avg_ts", "stddev_ts", "samples_ts", "model_type", "model_size")}
                 except (ValueError, IndexError, KeyError):
-                    pass
+                    j = None
+                result["invocations"][phase]["suspend_ratio"] = suspend_ratio(res["marks"], j)
             backend_seen = (result["invocations"]["prefill"].get("llama_bench") or {}).get("backends", "")
             if cfg["backend"] == "gpu" and "OpenCL" not in str(backend_seen):
                 result["warning"] = f"GPU requested but llama-bench reports backends={backend_seen!r}"
@@ -348,12 +366,19 @@ class Session:
             if err:
                 return self._fail(result, err)
             result["windows"] += mnn_windows(res["marks"], "main")
+            result["invocations"]["kv"]["suspend_ratio"] = suspend_ratio(res["marks"])
             short = [w for w in result["windows"] if w["phase"] == "decode" and w["tokens"] != a.n_gen]
             if short:
                 result["warning"] = f"{len(short)} decode run(s) stopped early (EOS not suppressed?)"
 
         result["prefill"] = throughput(result["windows"], "prefill")
         result["decode"] = throughput(result["windows"], "decode")
+        worst = max((inv.get("suspend_ratio") or 0) for inv in result["invocations"].values())
+        if worst > 1.05:
+            result["suspended"] = worst
+            result["warning"] = ((result.get("warning") or "") + f" phone suspended during timed work (boottime/monotonic "
+                                 f"up to {worst:.2f}x): keep it awake (--screen on over wireless adb)").strip()
+            log(f"   [WARN] {result['warning']}")
         self._extend_for_energy(cfg, result, model_path)
         result["status"] = "ok"
         result["finished"] = datetime.now().isoformat()

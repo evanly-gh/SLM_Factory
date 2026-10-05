@@ -76,7 +76,8 @@ class FakePhone:
                 t += dur + REP_GAP_S
             ts = (p or n) / (p / pp if p else n / tg)
             out = json.dumps([{"build_commit": "eadc418", "backends": "OpenCL" if backend == "gpu" else "CPU",
-                               "n_threads": 8, "avg_ts": ts, "stddev_ts": 0.1, "samples_ts": [ts] * r}])
+                               "n_threads": 8, "avg_ts": ts, "stddev_ts": 0.1, "samples_ts": [ts] * r,
+                               "samples_ns": [int((p / pp if p else n / tg) * 1e9)] * r}])
         elif "llm_bench" in cmd:
             p = int(re.search(r"-p (\d+)", cmd).group(1))
             n = int(re.search(r"-n (\d+)", cmd).group(1))
@@ -244,6 +245,8 @@ def main():
         fw = "llama" if c["framework"] == "llama.cpp" else "mnn"
         pp, tg = SPEEDS[(fw, c["backend"])]
         check(r["status"] == "ok", f"{cid}: status ok")
+        check(not r.get("suspended"), f"{cid}: no suspend detected (ratios "
+              f"{[inv.get('suspend_ratio') for inv in r['invocations'].values()]})")
         check(abs(r["prefill"]["tps"] - pp) / pp < 0.01, f"{cid}: prefill {r['prefill']['tps']} ~ {pp}")
         check(abs(r["decode"]["tps"] - tg) / tg < 0.01, f"{cid}: decode {r['decode']['tps']} ~ {tg}")
         check(len(r["prefill"]["reps"]) == 3, f"{cid}: 3 recorded prefill trials (warm-up dropped)")
