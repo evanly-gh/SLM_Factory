@@ -113,6 +113,12 @@ def device_info(adb) -> dict:
 # Phone-side protocol controls
 # ---------------------------------------------------------------------------
 
+def is_wireless_serial(serial: str) -> bool:
+    """ip:port (adb tcpip / adb connect) or an mDNS name from Android 11+ Wireless debugging
+    (adb-<serial>-<id>._adb-tls-connect._tcp)."""
+    return ":" in serial or "._adb-tls-connect." in serial or serial.endswith("._tcp")
+
+
 class DeviceControls:
     """Airplane mode, screen off, Do Not Disturb, background kill. Original state restored by restore().
     Over wireless adb, Wi-Fi is switched back on right after airplane mode (the command runs detached on
@@ -120,7 +126,7 @@ class DeviceControls:
 
     def __init__(self, adb, log=print):
         self.adb, self.log = adb, log
-        self.wireless = ":" in adb.serial
+        self.wireless = is_wireless_serial(adb.serial)
         self.saved: dict = {}
 
     def _setting(self, ns, key):
@@ -132,7 +138,8 @@ class DeviceControls:
             return
         t0 = time.time()
         while time.time() - t0 < timeout_s:
-            subprocess.run([self.adb.bin, "connect", self.adb.serial], capture_output=True, text=True, timeout=30)
+            if ":" in self.adb.serial:  # mDNS (Wireless debugging) devices reconnect on their own
+                subprocess.run([self.adb.bin, "connect", self.adb.serial], capture_output=True, text=True, timeout=30)
             if self.adb.sh("echo ok", timeout=15).strip() == "ok":
                 return
             time.sleep(3)

@@ -168,7 +168,7 @@ def print_discovery(d: dict):
 
 def cmd_wireless(args):
     adb = Adb(args.serial)
-    if ":" in adb.serial:
+    if ":" in adb.serial or "._adb-tls-connect." in adb.serial:
         print(f"{adb.serial} is already a wireless connection.")
         return
     ip = None
