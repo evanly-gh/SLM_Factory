@@ -10,7 +10,8 @@ the frameworks' native benchmark tools built by build_binaries.py and models fro
   python run_paper_table5.py --serial S --results-dir results/<dir>   # resume a session
 
 Protocol (paper Section 3.4, plus what its measurement definitions imply):
-  * phone in airplane mode (Wi-Fi kept on only for wireless adb), screen off, Do Not Disturb, background
+  * phone in airplane mode (over wireless adb: mobile data, Bluetooth and location off, Wi-Fi kept), screen off,
+    Do Not Disturb, background
     apps killed; only the benchmark process runs.
   * before every benchmark invocation: wait until battery temperature <= the profile's limit (paper: 28 C)
     and CPU frequency caps are back at the session baseline (bench_common.ReadinessGate).
@@ -104,12 +105,16 @@ def ensure_model_on_device(adb: Adb, entry: dict) -> str:
         return remote
     if not local.exists():
         sys.exit(f"{entry['name']} {entry['quant']}: not on the phone and not on this computer ({local})")
-    log(f"pushing {local.name} ({sum(expected.values()) / 2**30:.2f} GiB) to the phone...")
-    adb.sh(f"mkdir -p {DEV_MODELS}; rm -rf {remote}")
-    r = adb.run(["push", str(local), remote if local.is_file() else f"{DEV_MODELS}/"], timeout=7200)
-    if r.returncode != 0:
-        sys.exit(f"adb push failed: {r.stderr.strip()[-500:]}")
-    return remote
+    for attempt in range(1, 4):  # wireless adb pushes of GB-sized files occasionally break mid-transfer
+        log(f"pushing {local.name} ({sum(expected.values()) / 2**30:.2f} GiB) to the phone..."
+            + (f" (attempt {attempt})" if attempt > 1 else ""))
+        adb.sh(f"mkdir -p {DEV_MODELS}; rm -rf {remote}")
+        r = adb.run(["push", str(local), remote if local.is_file() else f"{DEV_MODELS}/"], timeout=7200)
+        if r.returncode == 0:
+            return remote
+        log(f"   adb push failed: {r.stderr.strip()[-300:]}")
+        time.sleep(30)
+    sys.exit(f"adb push of {local.name} failed 3 times")
 
 
 # ---------------------------------------------------------------------------
@@ -289,8 +294,9 @@ class Session:
                 sys.exit(f"{dev_bin_dir(self.args.ref, t)}/{exe} missing on the phone: "
                          f"python build_binaries.py --ref {self.args.ref} --push --serial {self.adb.serial}")
         if "llama_gpu" in needed:
+            # Compiling the embedded Adreno kernels takes ~85 s on the Galaxy S23 (no binary cache).
             listing = self.adb.sh(f"cd {dev_bin_dir(self.args.ref, 'llama_gpu')} && "
-                                  f"LD_LIBRARY_PATH=.:/vendor/lib64 ./llama-bench --list-devices 2>&1")
+                                  f"LD_LIBRARY_PATH=.:/vendor/lib64 ./llama-bench --list-devices 2>&1", timeout=600)
             if "OpenCL" not in listing:
                 sys.exit(f"llama.cpp OpenCL build sees no OpenCL device:\n{listing[-800:]}")
 

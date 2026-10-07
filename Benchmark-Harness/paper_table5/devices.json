@@ -12,6 +12,7 @@
     {"id": "xiaomi14", "label": "Xiaomi 14", "match": {"manufacturer": "xiaomi", "soc": "SM8650"},
      "paper_column": "xiaomi14", "max_temp_c": 28.0, "energy_method": null},
     {"id": "galaxy_s23", "label": "Galaxy S23", "match": {"model": "^SM-S911"},
-     "paper_column": null, "proxy_column": "xiaomi14", "max_temp_c": 28.0, "energy_method": "perfetto:current"}
+     "paper_column": null, "proxy_column": "xiaomi14", "max_temp_c": 30.5, "energy_method": "perfetto:current",
+     "_max_temp_note": "30.5 C, not the paper's 28: over wireless adb the screen stays on, and the idle phone settles at 29.9 C battery (all sensors 29.8-30.5 C) (2026-10-06), so 28 C is unreachable; the gate still requires every invocation to start from the same rested state"}
   ]
 }

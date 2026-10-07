@@ -185,16 +185,19 @@ class DeviceControls:
         self.adb.sh("am kill-all")
         self.adb.sh("cmd notification set_dnd priority")
         if self.wireless:
-            self.adb.sh("setsid sh -c 'cmd connectivity airplane-mode enable; sleep 2; svc wifi enable' "
-                        "</dev/null >/dev/null 2>&1 &")
-            time.sleep(8)
-            self.reconnect()
+            # Airplane mode drops Wi-Fi, and Android turns Wireless debugging off with it (its port changes
+            # when re-enabled), so the session cannot reconnect. Switch off the other radios one by one instead.
+            self.saved["radios"] = {"mobile_data": self._setting("global", "mobile_data"),
+                                    "bluetooth_on": self._setting("global", "bluetooth_on"),
+                                    "location": self.adb.sh("cmd location is-location-enabled").strip()}
+            self.adb.sh("svc data disable; svc bluetooth disable; cmd location set-location-enabled false")
         else:
             self.adb.sh("cmd connectivity airplane-mode enable")
         if self.keeper:
             self.keeper.apply()
         self.ensure_screen()
-        self.log("[DEVICE] airplane mode on" + (" (Wi-Fi kept for adb)" if self.wireless else "")
+        self.log(("[DEVICE] mobile data, Bluetooth and location off (Wi-Fi kept for adb; airplane mode would end "
+                  "Wireless debugging)" if self.wireless else "[DEVICE] airplane mode on")
                  + ", Do Not Disturb on, background apps killed, screen "
                  + ("on at minimum brightness (wireless adb: keeps the phone from suspending)" if self.screen_on
                     else "off"))
@@ -213,11 +216,16 @@ class DeviceControls:
             self.adb.sh("input keyevent 224")
             if self.keeper:
                 self.keeper.restore()
-            if self.saved.get("airplane") != "1":
+            radios = self.saved.get("radios")
+            if radios is not None:
+                if radios["mobile_data"] != "0":
+                    self.adb.sh("svc data enable")
+                if radios["bluetooth_on"] not in (None, "0"):
+                    self.adb.sh("svc bluetooth enable")
+                if radios["location"] == "true":
+                    self.adb.sh("cmd location set-location-enabled true")
+            elif self.saved.get("airplane") != "1":
                 self.adb.sh("cmd connectivity airplane-mode disable")
-                if self.wireless:
-                    time.sleep(5)
-                    self.reconnect()
             if self.saved.get("zen") in (None, "0"):
                 self.adb.sh("cmd notification set_dnd off")
             self.log("[DEVICE] settings restored")
