@@ -28,7 +28,6 @@ sys.path.insert(0, str(HERE.parent))
 
 import run_paper_table5 as rpt  # noqa: E402
 import report  # noqa: E402
-from perfetto.protos.perfetto.trace import perfetto_trace_pb2 as pb  # noqa: E402
 
 SPEEDS = {  # (framework, backend): (prefill t/s, decode t/s)
     ("llama", "cpu"): (300.0, 55.0), ("llama", "gpu"): (750.0, 50.0),
@@ -37,6 +36,27 @@ SPEEDS = {  # (framework, backend): (prefill t/s, decode t/s)
 IDLE_MW, LOAD_MW, V = 700.0, 5000.0, 4.0
 REP_GAP_S = 0.002  # idle time between timed repetitions (llama-bench: a KV-cache clear, ~ms)
 TIME_SCALE = 0.01  # real seconds per simulated benchmark second (the virtual clock jumps ahead)
+
+
+# Perfetto trace protobuf written by hand (Trace.packet=1; TracePacket timestamp=8, trusted_packet_sequence_id=10,
+# battery=38; BatteryCounters charge_counter_uah=1, current_ua=3, voltage_uv=7): the generated perfetto_trace_pb2
+# needs protobuf >= 6, while requirements.txt pins protobuf < 5 for the llama.cpp converter.
+def _varint(n: int) -> bytes:
+    n &= (1 << 64) - 1  # int64 two's complement
+    out = bytearray()
+    while True:
+        b, n = n & 0x7F, n >> 7
+        out.append(b | (0x80 if n else 0))
+        if not n:
+            return bytes(out)
+
+
+def _pb_varint(field: int, value: int) -> bytes:
+    return _varint(field << 3) + _varint(value)
+
+
+def _pb_bytes(field: int, payload: bytes) -> bytes:
+    return _varint(field << 3 | 2) + _varint(len(payload)) + payload
 
 
 class FakePhone:
@@ -100,21 +120,18 @@ class FakePhone:
         self.files[f"{work}/exit"] = str(code)
 
     def write_trace(self, path: Path):
-        trace = pb.Trace()
+        trace = bytearray()
         t, end = self.trace_start, self.now()
         q = 4_000_000.0
         while t < end:
             mw = LOAD_MW if any(a <= t < b for a, b in self.jobs) else IDLE_MW
             ua = mw / V * 1000
             q -= ua * 0.1 / 3600
-            pkt = trace.packet.add()
-            pkt.timestamp = int(t * 1e9)
-            pkt.trusted_packet_sequence_id = 1
-            pkt.battery.current_ua = int(-ua)
-            pkt.battery.voltage_uv = int(V * 1e6)
-            pkt.battery.charge_counter_uah = int(q)
+            battery = _pb_varint(3, int(-ua)) + _pb_varint(7, int(V * 1e6)) + _pb_varint(1, int(q))
+            pkt = _pb_varint(8, int(t * 1e9)) + _pb_varint(10, 1) + _pb_bytes(38, battery)
+            trace += _pb_bytes(1, pkt)
             t += 0.1
-        path.write_bytes(trace.SerializeToString())
+        path.write_bytes(bytes(trace))
 
 
 class FakeAdb:
