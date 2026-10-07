@@ -165,9 +165,14 @@ class ReadinessGate:
     state even when cool (screen off 2.0/2.4 GHz, on 2.9/2.9 GHz vs 3.6/4.6 GHz hardware)."""
 
     def __init__(self, adb, max_temp_c: float | None, timeout_s: int = 900, poll_s: int = 15, log=print,
-                 rise_c: float | None = None):
+                 rise_c: float | None = None, plateau_s: int = 0, plateau_drop_c: float = 0.2,
+                 plateau_max_c: float | None = None):
         self.adb, self.max_temp_c, self.timeout_s, self.poll_s, self.log = adb, max_temp_c, timeout_s, poll_s, log
         self.rise_c = rise_c
+        # Plateau: also accept a temperature above the limit once the phone has stopped cooling (dropped
+        # <= plateau_drop_c over the last plateau_s seconds, and at most plateau_max_c), i.e. it is back at
+        # its resting temperature, for a phone whose resting temperature is above the limit (warm room).
+        self.plateau_s, self.plateau_drop_c, self.plateau_max_c = plateau_s, plateau_drop_c, plateau_max_c
         self.baseline_caps: dict | None = None
         self.baseline_temp: float | None = None
 
@@ -186,11 +191,22 @@ class ReadinessGate:
                  f"(hw max {state['cpu_hw_max_khz']}), screen={state['screen']}, "
                  f"battery {state['battery_temp_c']} C")
 
-    def _problems(self, st: dict) -> list:
+    def _plateaued(self, history: list, temp: float) -> bool:
+        """history: [(time, battery C)] since this wait began."""
+        if not self.plateau_s or (self.plateau_max_c is not None and temp > self.plateau_max_c):
+            return False
+        now = history[-1][0]
+        if now - history[0][0] < self.plateau_s:
+            return False
+        window = [t for ts, t in history if now - ts <= self.plateau_s]
+        return max(window) - temp <= self.plateau_drop_c
+
+    def _problems(self, st: dict, history: list | None = None) -> list:
         issues = []
         limit = self.temp_limit()
-        if limit is not None and st["battery_temp_c"] is not None and st["battery_temp_c"] > limit:
-            issues.append(f"battery {st['battery_temp_c']} C > {limit:.1f} C")
+        temp = st["battery_temp_c"]
+        if limit is not None and temp is not None and temp > limit and not (history and self._plateaued(history, temp)):
+            issues.append(f"battery {temp} C > {limit:.1f} C")
         for pol, base in (self.baseline_caps or {}).items():
             cur = st["cpu_caps_khz"].get(pol)
             if cur is not None and cur < base:
@@ -200,12 +216,20 @@ class ReadinessGate:
     def wait(self) -> dict:
         t0 = time.time()
         last_msg, last_log = None, 0.0
+        history = []
         while True:
             st = device_state(self.adb)
-            issues = self._problems(st)
+            if st["battery_temp_c"] is not None:
+                history.append((time.time(), st["battery_temp_c"]))
+            issues = self._problems(st, history)
             waited = time.time() - t0
             if not issues:
-                return {"passed": True, "waited_s": round(waited, 1), "state": st}
+                limit, temp = self.temp_limit(), st["battery_temp_c"]
+                how = ("plateau" if limit is not None and temp is not None and temp > limit else "limit")
+                if how == "plateau":
+                    self.log(f"[GATE] passed at {temp} C: above {limit:.1f} C but no longer cooling "
+                             f"(<= {self.plateau_drop_c} C drop over {self.plateau_s}s)")
+                return {"passed": True, "passed_by": how, "waited_s": round(waited, 1), "state": st}
             if waited >= self.timeout_s:
                 self.log(f"[GATE] WARNING: not ready after {self.timeout_s}s ({'; '.join(issues)}) - running anyway")
                 return {"passed": False, "waited_s": round(waited, 1), "state": st, "issues": issues}

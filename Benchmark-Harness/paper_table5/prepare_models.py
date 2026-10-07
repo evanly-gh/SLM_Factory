@@ -6,6 +6,7 @@ record every artifact in models/manifest.json (read by run_paper_table5.py).
   python prepare_models.py                                   # the paper's 4 models, paper quantizations
   python prepare_models.py --models llama3.2-1b --gguf Q4_0 --mnn 4
   python prepare_models.py --model smollm2-135m=HuggingFaceTB/SmolLM2-135M-Instruct --gguf Q4_K_M Q8_0 F16 --mnn 4 8 16
+  python prepare_models.py --pool-file ../SLM_Factory/config/android_pool.py --gguf Q4_0 Q8_0 F16 --mnn 4 8 16
 
 GGUF: the pinned llama.cpp's convert_hf_to_gguf.py writes F16 and Q8_0 directly; Q4_0 / Q4_K_M come from
 llama-quantize over the F16 file. llama-quantize is looked up on this computer (--quantize-bin, PATH, the
@@ -110,7 +111,7 @@ def find_host_quantize(explicit: str | None) -> Path | None:
     return None
 
 
-def quantize_on_phone(serial: str | None, f16: Path, out: Path, qtype: str, ref: str):
+def quantize_on_phone(serial: str | None, f16: Path, out: Path, qtype: str, ref: str, pure: bool = False):
     adb = Adb(serial)
     qdir = dev_bin_dir(ref, "llama_cpu")
     if adb.sh(f"test -x {qdir}/llama-quantize && echo ok").strip() != "ok":
@@ -121,7 +122,8 @@ def quantize_on_phone(serial: str | None, f16: Path, out: Path, qtype: str, ref:
         print(f"[PHONE] pushing {f16.name} for on-device quantization")
         adb.run(["push", str(f16), rf16], timeout=7200)
     print(f"[PHONE] llama-quantize {qtype} on the phone")
-    log = adb.sh(f"cd {qdir} && ./llama-quantize {rf16} {rout} {qtype} 2>&1 | tail -3; rm -f {rf16}", timeout=7200)
+    log = adb.sh(f"cd {qdir} && ./llama-quantize {'--pure ' if pure else ''}{rf16} {rout} {qtype} 2>&1 | tail -3; "
+                 f"rm -f {rf16}", timeout=7200)
     print(log.strip())
     r = adb.run(["pull", rout, str(out)], timeout=7200)
     if r.returncode != 0 or not out.is_file():
@@ -134,26 +136,30 @@ def prepare_gguf(name: str, hf_id: str, hf_dir: Path, quant: str, args, manifest
     gdir.mkdir(parents=True, exist_ok=True)
     suffix = "" if args.ref == "pinned" else f"-{args.ref}"
     out = gdir / f"{name}-{quant.lower()}{suffix}.gguf"
+    # "-PURE": every tensor in the base type (llama-quantize --pure). By default llama-quantize keeps the output /
+    # tied-embedding matrix at Q6_K, which llama.cpp's OpenCL docs list as supported but not optimized; Qualcomm's
+    # instructions for the Adreno backend quantize Q4_0 with --pure.
+    base, pure = (quant[:-5], True) if quant.endswith("-PURE") else (quant, False)
     if out.is_file() and not args.force:
         print(f"[GGUF] {out.name} exists")
-    elif quant in GGUF_DIRECT:
+    elif base in GGUF_DIRECT and not pure:
         run([sys.executable, src / "convert_hf_to_gguf.py", hf_dir, "--outtype", GGUF_DIRECT[quant], "--outfile", out])
-    elif quant in GGUF_QUANTIZED:
+    elif base in GGUF_QUANTIZED:
         f16 = gdir / f"{name}-f16{suffix}.gguf"
         if not f16.is_file():
             run([sys.executable, src / "convert_hf_to_gguf.py", hf_dir, "--outtype", "f16", "--outfile", f16])
         qbin = find_host_quantize(args.quantize_bin)
         if qbin:
-            run([qbin, f16, out, quant])
+            run([qbin, *(["--pure"] if pure else []), f16, out, base])
         else:
-            quantize_on_phone(args.serial, f16, out, quant, args.ref)
+            quantize_on_phone(args.serial, f16, out, base, args.ref, pure)
     else:
         sys.exit(f"unsupported GGUF quant {quant}")
-    bits = 16 if quant in ("F16", "BF16") else int(quant[1])
+    bits = 16 if base in ("F16", "BF16") else int(base[1])
     record(manifest, {"name": name, "hf_id": hf_id, "framework": "llama.cpp", "quant": quant, "bits": bits,
                       "ref": args.ref, "path": out.relative_to(MODELS_DIR).as_posix(), "files": file_map(out),
                       "converter": f"llama.cpp {sha[:12]} convert_hf_to_gguf"
-                                   + ("" if quant in GGUF_DIRECT else " + llama-quantize")})
+                                   + ("" if quant in GGUF_DIRECT else " + llama-quantize" + (" --pure" if pure else ""))})
     print(f"[GGUF] {name} {quant}: {out.stat().st_size / 2**30:.2f} GiB")
 
 
@@ -232,10 +238,14 @@ def main():
     ap.add_argument("--pool", action="store_true",
                     help="the Phase 2 pool; models whose architecture needs --ref head are skipped under --ref pinned")
     ap.add_argument("--model", action="append", default=[], metavar="NAME=HF_ID", help="extra model, repeatable")
+    ap.add_argument("--pool-file", help="a model pool file (e.g. SLM_Factory's config/android_pool.py, JSON or a "
+                    "list of Hugging Face ids; see pool.py): its models whose build ref matches --ref")
     ap.add_argument("--ref", choices=list(REFS), default="pinned",
                     help="converter versions: pinned (paper) or head (newer architectures; pair with run --ref head)")
     ap.add_argument("--gguf", nargs="*", default=["Q4_0", "Q4_K_M"],
-                    help="GGUF quants (F16 Q8_0 Q4_0 Q4_K_M ...); the paper says only 'w4', so both 4-bit types")
+                    help="GGUF quants (F16 Q8_0 Q4_0 Q4_K_M ...; a -PURE suffix, e.g. Q4_0-PURE, quantizes every "
+                         "tensor including the output layer, as Qualcomm recommends for the OpenCL backend); the paper "
+                         "says only 'w4', so both 4-bit types by default")
     ap.add_argument("--mnn", nargs="*", type=int, default=[4], help="MNN quant_bit levels (4 8 16)")
     ap.add_argument("--mnn-recipe", choices=["paper-default", "pool"], default="paper-default")
     ap.add_argument("--quantize-bin", help="host llama-quantize to use")
@@ -247,7 +257,7 @@ def main():
     names = list(args.models or [])
     if args.pool:
         names += list(POOL_MODELS)
-    if not names and not args.model:
+    if not names and not args.model and not args.pool_file:
         names = list(PAPER_MODELS)
     todo = {}
     for n in dict.fromkeys(names):
@@ -255,6 +265,13 @@ def main():
             print(f"[SKIP] {n}: its architecture is newer than the pinned versions; rerun with --ref head")
             continue
         todo[n] = catalog[n]
+    if args.pool_file:
+        from pool import load_pool
+        for name, (hf_id, ref) in load_pool(args.pool_file).items():
+            if ref != args.ref:
+                print(f"[SKIP] {name} ({hf_id}): needs --ref {ref}")
+                continue
+            todo[name] = hf_id
     for spec in args.model:
         name, _, hf = spec.partition("=")
         if not hf:

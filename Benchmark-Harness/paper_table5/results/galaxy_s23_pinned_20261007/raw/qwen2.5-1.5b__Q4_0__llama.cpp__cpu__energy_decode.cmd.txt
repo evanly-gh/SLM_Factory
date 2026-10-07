@@ -1,0 +1,1 @@
+LD_LIBRARY_PATH=.:/vendor/lib64 ./llama-bench -m /data/local/tmp/paper_bench/models/qwen2.5-1.5b-q4_0.gguf -p 0 -n 256 -r 2 -ngl 0 -o json -d 256 -t 4

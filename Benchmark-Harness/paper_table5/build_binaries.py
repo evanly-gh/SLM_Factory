@@ -259,6 +259,30 @@ def build_mnn(ref: str, ndk: Path, cmake: str, ninja: str, jobs: int) -> dict:
     return info
 
 
+def build_pbwake() -> Path:
+    """tools/PbWake.java -> a dex jar run with app_process on the phone (holds a partial wake lock as the shell
+    user, so the screen can stay off over wireless adb). Needs a JDK and the Android SDK (android.jar, d8)."""
+    from devenv import sdk_roots, _version_key
+    out = BUILD / "pbwake" / "pbwake.jar"
+    src = HERE / "tools" / "PbWake.java"
+    if out.is_file() and out.stat().st_mtime >= src.stat().st_mtime:
+        return out
+    jars = sorted((j for r in sdk_roots() for j in (r / "platforms").glob("*/android.jar")),
+                  key=lambda j: _version_key(j.parent))
+    d8s = sorted((d for r in sdk_roots() for d in (r / "build-tools").glob(f"*/d8{'.bat' if IS_WINDOWS else ''}")),
+                 key=lambda d: _version_key(d.parent))
+    javac = shutil.which("javac")
+    if not (jars and d8s and javac):
+        sys.exit("building the wake-lock helper needs javac (a JDK) and the Android SDK's platforms/*/android.jar "
+                 "and build-tools/*/d8 (Android Studio > SDK Manager)")
+    classes = out.parent / "classes"
+    classes.mkdir(parents=True, exist_ok=True)
+    run([javac, "--release", "11", "-cp", jars[-1], "-d", classes, src], quiet=True)
+    run([d8s[-1], "--release", "--min-api", "28", "--output", out, "--lib", jars[-1], classes / "PbWake.class"],
+        quiet=True)
+    return out
+
+
 def push(ref: str, serial: str | None, targets: list[str]):
     adb = Adb(serial)
     for target in targets:

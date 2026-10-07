@@ -42,7 +42,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parent))
 import bench_common  # noqa: E402
-from common import ScreenKeeper, is_wireless_serial  # noqa: E402
+from common import ScreenKeeper, WakeHolder, is_wireless_serial  # noqa: E402
 from devenv import Adb, list_devices  # noqa: E402
 
 DEV_DIR = "/data/local/tmp/energy_probe"
@@ -68,7 +68,7 @@ data_sources {
 write_into_file: true
 file_write_period_ms: 5000
 max_file_size_bytes: 500000000
-duration_ms: 10800000
+duration_ms: 86400000
 """
 
 
@@ -384,11 +384,20 @@ def cmd_collect(args):
             "columns": [c[0] for c in columns], "start": datetime.now().isoformat()}
     windows, pid = [], None
     if args.screen == "auto":
-        args.screen = "on" if is_wireless_serial(adb.serial) else "off"
-        meta["params"]["screen"] = args.screen
+        args.screen = "off"
+    # Over wireless adb a screen-off phone suspends and freezes the load unless something holds a wake lock.
+    waker = WakeHolder(adb) if args.screen == "off" and is_wireless_serial(adb.serial) else None
+    if waker:
+        try:
+            waker.apply()
+        except Exception as e:  # noqa: BLE001
+            print(f"wake lock failed ({e}); keeping the screen on at minimum brightness instead")
+            waker, args.screen = None, "on"
+    meta["params"]["screen"] = args.screen
+    meta["wake_lock"] = bool(waker)
     keeper = ScreenKeeper(adb) if args.screen == "on" else None
-    print(f"Screen: {args.screen}" + (" (minimum brightness; over wireless adb a screen-off phone suspends and "
-                                      "freezes the load)" if keeper else ""))
+    print(f"Screen: {args.screen}" + (" (minimum brightness)" if keeper else
+                                      ", CPU kept awake by a partial wake lock" if waker else ""))
     try:
         if keeper:
             keeper.apply()
@@ -434,6 +443,8 @@ def cmd_collect(args):
         adb.run(["pull", f"{DEV_DIR}/load.log", str(run_dir / "load.log")], timeout=60)
         if keeper:
             keeper.restore()
+        if waker:
+            waker.restore()
         adb.sh("input keyevent 224")
         meta["end"] = datetime.now().isoformat()
         meta["state_end"] = bench_common.device_state(adb)
@@ -481,8 +492,12 @@ def series_window(series: list[tuple[float, float]], a: float, b: float) -> list
     return [(t, v) for t, v in series if a <= t <= b]
 
 
-def time_weighted_mean(series, a, b):
-    """Zero-order hold mean of series over [a, b]; None if no samples in range."""
+def time_weighted_mean(series, a, b, max_hold_s=5.0):
+    """Zero-order hold mean of series over [a, b]; None if no samples in range or [a, b] is not covered by the
+    series (starts before its first sample, or ends more than max_hold_s after its last: the hold would otherwise
+    carry the last value past the end of the recording, e.g. after a Perfetto trace's duration_ms ran out)."""
+    if not series or a < series[0][0] or b > series[-1][0] + max_hold_s:
+        return None
     prev = [(t, v) for t, v in series if t <= a]
     pts = ([(a, prev[-1][1])] if prev else []) + [(t, v) for t, v in series if a < t < b]
     if not pts:

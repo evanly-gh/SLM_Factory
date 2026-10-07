@@ -143,6 +143,43 @@ class ScreenKeeper:
                 self.adb.sh(f"settings put {ns} {key} {v}")
 
 
+class WakeHolder:
+    """Keeps the CPU awake with the screen OFF over wireless adb: a partial wake lock held by tools/PbWake.java,
+    run with app_process as the shell user (no app install). Replaces ScreenKeeper's screen-on workaround."""
+
+    JAR = f"{DEV_ROOT}/pbwake.jar"
+    STOP = f"{DEV_ROOT}/pbwake.stop"
+    LOG = f"{DEV_ROOT}/pbwake.log"
+
+    def __init__(self, adb):
+        self.adb = adb
+
+    def apply(self):
+        from build_binaries import build_pbwake
+        jar = build_pbwake()
+        self.adb.sh(f"mkdir -p {DEV_ROOT}; rm -f {self.STOP} {self.LOG}; pkill -f 'PbWak[e]'")
+        r = self.adb.run(["push", str(jar), self.JAR], timeout=120)
+        if r.returncode != 0:
+            raise RuntimeError(f"pushing the wake-lock helper failed: {r.stderr.strip()}")
+        self.adb.sh(f"CLASSPATH={self.JAR} setsid app_process / PbWake {self.STOP} </dev/null >{self.LOG} 2>&1 &")
+        for _ in range(20):
+            time.sleep(0.5)
+            if "PB_WAKELOCK held" in self.adb.sh(f"cat {self.LOG}"):
+                break
+        else:
+            raise RuntimeError(f"the wake-lock helper did not start: {self.adb.sh(f'cat {self.LOG}')[-500:]}")
+        if "pb:benchmark" not in self.adb.sh("dumpsys power | grep -i 'pb:benchmark'"):
+            raise RuntimeError("the wake-lock helper runs but dumpsys power lists no pb:benchmark wake lock")
+
+    def held(self) -> bool:
+        return "pb:benchmark" in self.adb.sh("dumpsys power | grep -i 'pb:benchmark'")
+
+    def restore(self):
+        self.adb.sh(f"touch {self.STOP}")
+        time.sleep(2)
+        self.adb.sh("pkill -f 'PbWak[e]'")
+
+
 def is_wireless_serial(serial: str) -> bool:
     """ip:port (adb tcpip / adb connect) or an mDNS name from Android 11+ Wireless debugging
     (adb-<serial>-<id>._adb-tls-connect._tcp)."""
@@ -151,16 +188,19 @@ def is_wireless_serial(serial: str) -> bool:
 
 class DeviceControls:
     """Airplane mode, screen off, Do Not Disturb, background kill. Original state restored by restore().
-    Over wireless adb, Wi-Fi is switched back on right after airplane mode (the command runs detached on
-    the phone so it survives the adb connection dropping), then adb reconnects."""
+    Over wireless adb: airplane mode only if Wi-Fi stays on in it (Android remembers Wi-Fi turned back on in airplane
+    mode: secure wifi_apm_state = 1), since dropping Wi-Fi ends Wireless debugging; else mobile data, Bluetooth and
+    location are switched off one by one. Screen off as in the paper; over wireless adb a partial wake lock
+    (WakeHolder) keeps the CPU running, falling back to screen on at minimum brightness (ScreenKeeper)."""
 
     def __init__(self, adb, log=print, screen: str = "auto"):
         self.adb, self.log = adb, log
         self.wireless = is_wireless_serial(adb.serial)
-        # Paper: screen off. Over wireless adb that lets the phone suspend mid-run (see ScreenKeeper).
-        self.screen_on = screen == "on" or (screen == "auto" and self.wireless)
+        self.screen_on = screen == "on"
         self.keeper = ScreenKeeper(adb) if self.screen_on else None
+        self.waker = WakeHolder(adb) if self.wireless and not self.screen_on else None
         self.saved: dict = {}
+        self.radio_mode = None
 
     def _setting(self, ns, key):
         v = self.adb.sh(f"settings get {ns} {key}").strip()
@@ -184,23 +224,38 @@ class DeviceControls:
                       "stay_on": self._setting("global", "stay_on_while_plugged_in")}
         self.adb.sh("am kill-all")
         self.adb.sh("cmd notification set_dnd priority")
-        if self.wireless:
-            # Airplane mode drops Wi-Fi, and Android turns Wireless debugging off with it (its port changes
-            # when re-enabled), so the session cannot reconnect. Switch off the other radios one by one instead.
+        if not self.wireless:
+            self.adb.sh("cmd connectivity airplane-mode enable")
+            self.radio_mode = "airplane mode on"
+        elif self.saved["airplane"] == "1":
+            self.radio_mode = "airplane mode already on (Wi-Fi kept on in it)"
+        elif self._setting("secure", "wifi_apm_state") == "1":
+            # Wi-Fi stays on in airplane mode on this phone; detached so a brief drop cannot kill the command
+            self.adb.sh("setsid sh -c 'cmd connectivity airplane-mode enable' </dev/null >/dev/null 2>&1 &")
+            time.sleep(6)
+            self.reconnect(60)
+            self.radio_mode = "airplane mode on (Wi-Fi stays on in it)"
+        else:
+            # Airplane mode would drop Wi-Fi, and Android turns Wireless debugging off with it (its port changes when
+            # re-enabled), so the session could not reconnect. Switch off the other radios one by one instead.
             self.saved["radios"] = {"mobile_data": self._setting("global", "mobile_data"),
                                     "bluetooth_on": self._setting("global", "bluetooth_on"),
                                     "location": self.adb.sh("cmd location is-location-enabled").strip()}
             self.adb.sh("svc data disable; svc bluetooth disable; cmd location set-location-enabled false")
-        else:
-            self.adb.sh("cmd connectivity airplane-mode enable")
+            self.radio_mode = ("mobile data, Bluetooth and location off (Wi-Fi kept for adb; airplane mode would end "
+                               "Wireless debugging: turn Wi-Fi back on once while in airplane mode to change that)")
+        if self.waker:
+            try:
+                self.waker.apply()
+            except Exception as e:  # noqa: BLE001 - fall back to the screen-on workaround
+                self.log(f"[DEVICE] WARNING: wake lock failed ({e}); keeping the screen on at minimum brightness")
+                self.waker, self.screen_on, self.keeper = None, True, ScreenKeeper(self.adb)
         if self.keeper:
             self.keeper.apply()
         self.ensure_screen()
-        self.log(("[DEVICE] mobile data, Bluetooth and location off (Wi-Fi kept for adb; airplane mode would end "
-                  "Wireless debugging)" if self.wireless else "[DEVICE] airplane mode on")
-                 + ", Do Not Disturb on, background apps killed, screen "
-                 + ("on at minimum brightness (wireless adb: keeps the phone from suspending)" if self.screen_on
-                    else "off"))
+        screen = ("on at minimum brightness (wireless adb: keeps the phone from suspending)" if self.screen_on else
+                  "off, CPU kept awake by a partial wake lock (wireless adb)" if self.waker else "off")
+        self.log(f"[DEVICE] {self.radio_mode}, Do Not Disturb on, background apps killed, screen {screen}")
 
     def ensure_screen(self):
         if self.keeper:
@@ -213,6 +268,8 @@ class DeviceControls:
 
     def restore(self):
         try:
+            if self.waker:
+                self.waker.restore()
             self.adb.sh("input keyevent 224")
             if self.keeper:
                 self.keeper.restore()
@@ -226,6 +283,9 @@ class DeviceControls:
                     self.adb.sh("cmd location set-location-enabled true")
             elif self.saved.get("airplane") != "1":
                 self.adb.sh("cmd connectivity airplane-mode disable")
+                if self.wireless:
+                    time.sleep(5)
+                    self.reconnect(60)
             if self.saved.get("zen") in (None, "0"):
                 self.adb.sh("cmd notification set_dnd off")
             self.log("[DEVICE] settings restored")

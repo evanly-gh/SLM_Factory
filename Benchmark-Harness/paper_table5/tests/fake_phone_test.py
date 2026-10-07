@@ -240,7 +240,7 @@ def main():
     rpt.POLL_S = 0.05
     rpt.bench_common.ReadinessGate.wait.__defaults__  # noqa: B018 - gate polls a fake state that is always ready
     args = Namespace(serial="FAKE123", ref="pinned", models=None, quants=None, frameworks=["llama.cpp", "mnn"],
-                     backends=["cpu", "gpu"], trials=3, n_prompt=256, n_gen=256, max_temp=None, gate_timeout=60,
+                     backends=["cpu", "gpu"], trials=3, n_prompt=256, n_gen=256, max_temp=None, gate_timeout=60, gate_plateau=None,
                      rest=0, idle_seconds=1, pre_idle_seconds=0.5, min_energy_seconds=30.0, prime_seconds=0, timeout=600,
                      llama_threads=None, mnn_threads=None, no_controls=False, no_perfetto=False, screen="auto",
                      results_dir=str(tmp / "results"), force=False, plan=False)

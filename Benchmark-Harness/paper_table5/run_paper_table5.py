@@ -7,6 +7,7 @@ the frameworks' native benchmark tools built by build_binaries.py and models fro
   python run_paper_table5.py --serial S --models llama3.2-1b --quants Q4_0 Q4
   python run_paper_table5.py --serial S                    # every model/quant in models/manifest.json
   python run_paper_table5.py --serial S --plan             # list the configurations and exit
+  python run_paper_table5.py --serial S --pool-file ../SLM_Factory/config/android_pool.py   # a model pool
   python run_paper_table5.py --serial S --results-dir results/<dir>   # resume a session
 
 Protocol (paper Section 3.4, plus what its measurement definitions imply):
@@ -376,7 +377,7 @@ class Session:
             backend_seen = (result["invocations"]["prefill"].get("llama_bench") or {}).get("backends", "")
             if cfg["backend"] == "gpu" and "OpenCL" not in str(backend_seen):
                 result["warning"] = f"GPU requested but llama-bench reports backends={backend_seen!r}"
-            elif cfg["backend"] == "gpu" and a.ref == "pinned" and cfg["quant"].upper() not in OPENCL_MATMUL_PINNED:
+            elif cfg["backend"] == "gpu" and a.ref == "pinned" and cfg["quant"].upper().removesuffix("-PURE") not in OPENCL_MATMUL_PINNED:
                 result["gpu_partial_offload"] = True
                 result["warning"] = (f"{cfg['quant']}: the pinned OpenCL backend has no matmul kernel for this type "
                                      f"(supported: {', '.join(sorted(OPENCL_MATMUL_PINNED))}), so most matmuls run on the CPU")
@@ -401,7 +402,7 @@ class Session:
         if worst > 1.05:
             result["suspended"] = worst
             result["warning"] = ((result.get("warning") or "") + f" phone suspended during timed work (boottime/monotonic "
-                                 f"up to {worst:.2f}x): keep it awake (--screen on over wireless adb)").strip()
+                                 f"up to {worst:.2f}x): keep it awake (--screen on)").strip()
             log(f"   [WARN] {result['warning']}")
         self._extend_for_energy(cfg, result, model_path)
         result["status"] = "ok"
@@ -523,8 +524,15 @@ class Session:
                 session["binaries"][k] = json.loads(v)
             except ValueError:
                 session["binaries"][k] = None
+        # One energy folder per session: a later session resuming into this directory must not overwrite the
+        # trace that earlier configurations' energy was computed from.
+        stamp = session["started"][:19].replace("-", "").replace(":", "").replace("T", "_")
+        session["energy_dir"] = f"energy/{stamp}"
+        (self.out / "sessions").mkdir(exist_ok=True)
         (self.out / "session.json").write_text(json.dumps(session, indent=1, default=str))
-        self.recorder = EnergyRecorder(self.adb, self.out / "energy", disc, use_perfetto=not a.no_perfetto, log=log)
+        (self.out / "sessions" / f"{stamp}.json").write_text(json.dumps(session, indent=1, default=str))
+        self.recorder = EnergyRecorder(self.adb, self.out / "energy" / stamp, disc, use_perfetto=not a.no_perfetto,
+                                       log=log)
         self.headline_is_chip = disc["powercap"]["usable"]
         if disc["state"]["externally_powered"] and not self.headline_is_chip:
             log("[WARN] the phone is externally powered and has no chip counters: throughput is fine, but energy "
@@ -532,7 +540,14 @@ class Session:
         try:
             if not a.no_controls:
                 self.controls.apply()
-            self.gate = bench_common.ReadinessGate(self.adb, self.max_temp, timeout_s=a.gate_timeout, log=log)
+                session.update({"screen_on": self.controls.screen_on, "wake_lock": bool(self.controls.waker),
+                                "radio_mode": self.controls.radio_mode})
+                for f in (self.out / "session.json", self.out / "sessions" / f"{stamp}.json"):
+                    f.write_text(json.dumps(session, indent=1, default=str))
+            plateau_s = a.gate_plateau if a.gate_plateau is not None else self.profile.get("gate_plateau_s", 0)
+            self.gate = bench_common.ReadinessGate(self.adb, self.max_temp, timeout_s=a.gate_timeout, log=log,
+                                                   plateau_s=plateau_s,
+                                                   plateau_max_c=self.profile.get("gate_plateau_max_c"))
             self.gate.set_baseline(bench_common.device_state(self.adb))
             self.recorder.start()
             self.wait_ready()
@@ -587,6 +602,8 @@ def main():
     ap.add_argument("--serial")
     ap.add_argument("--ref", choices=["pinned", "head"], default="pinned", help="which build_binaries.py build to use")
     ap.add_argument("--models", nargs="+", help="model names from models/manifest.json (default: all)")
+    ap.add_argument("--pool-file", help="a model pool file (e.g. SLM_Factory's config/android_pool.py; see pool.py): run "
+                    "its models whose build ref matches --ref, as prepared by prepare_models.py --pool-file")
     ap.add_argument("--quants", nargs="+", help="quant labels, e.g. Q4_0 Q4_K_M Q8_0 F16 (llama.cpp), Q4 Q8 F16 (MNN)")
     ap.add_argument("--frameworks", nargs="+", choices=FRAMEWORKS, default=list(FRAMEWORKS))
     ap.add_argument("--backends", nargs="+", choices=BACKENDS, default=list(BACKENDS))
@@ -595,6 +612,8 @@ def main():
     ap.add_argument("--n-gen", type=int, default=256)
     ap.add_argument("--max-temp", type=float, default=None, help="cool-down gate in C (default: device profile, 28)")
     ap.add_argument("--gate-timeout", type=int, default=1800, help="max seconds to wait at the gate (then flagged)")
+    ap.add_argument("--gate-plateau", type=int, default=None,
+                    help="also pass the gate once the battery has stopped cooling over this many seconds, for a phone whose resting temperature is above --max-temp (default: device profile gate_plateau_s, else off)")
     ap.add_argument("--rest", type=int, default=15, help="seconds after each invocation before the next gate check")
     ap.add_argument("--idle-seconds", type=int, default=40, help="idle-power baseline at session start")
     ap.add_argument("--pre-idle-seconds", type=float, default=12.0,
@@ -608,13 +627,29 @@ def main():
     ap.add_argument("--mnn-threads", type=int, default=None, help="llm_bench -t (default: its own default, 4)")
     ap.add_argument("--no-controls", action="store_true", help="skip airplane mode / screen off / DND")
     ap.add_argument("--screen", choices=["auto", "off", "on"], default="auto",
-                    help="screen during runs: off = the paper; on = minimum brightness, needed over wireless adb "
-                         "where a screen-off phone suspends mid-run; auto = off on USB, on over Wi-Fi")
+                    help="screen during runs: auto/off = off, as in the paper (over wireless adb a partial wake lock "
+                         "keeps the CPU running; if it cannot be held, the screen stays on instead); on = minimum "
+                         "brightness")
     ap.add_argument("--no-perfetto", action="store_true")
     ap.add_argument("--results-dir", help="resume into an existing results directory")
     ap.add_argument("--force", action="store_true", help="rerun configurations that already have results")
     ap.add_argument("--plan", action="store_true", help="list configurations and exit")
     args = ap.parse_args()
+    if args.pool_file:
+        from pool import load_pool
+        pool = load_pool(args.pool_file)
+        names = [n for n, (_, ref) in pool.items() if ref == args.ref]
+        other = [n for n in pool if n not in names]
+        if other:
+            log(f"pool: {', '.join(other)} need --ref {'head' if args.ref == 'pinned' else 'pinned'}; not in this session")
+        prepared = {e["name"] for e in load_manifest()}
+        missing = [n for n in names if n not in prepared]
+        if missing:
+            log(f"[WARN] pool models not prepared yet (prepare_models.py --pool-file ... --ref {args.ref}): "
+                f"{', '.join(missing)}")
+        args.models = (args.models or []) + [n for n in names if n in prepared]
+        if not args.models:
+            sys.exit("no prepared pool models for this --ref")
     if args.trials < 3:
         print("[WARN] the paper uses at least 3 recorded trials")
     Session(args).run()
