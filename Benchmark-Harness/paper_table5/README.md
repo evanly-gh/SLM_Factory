@@ -19,7 +19,9 @@ the paper's protocol, and renders a table laid out like the paper's Table 5. Sam
 - Optional, saves pushing F16 files to the phone for quantization: a host `llama-quantize` built from the pinned
   llama.cpp checkout (`build_binaries.py` fetches it to `%USERPROFILE%\.pb\src` / `third_party/src`), passed as
   `--quantize-bin`. On Windows with MSYS2: configure with `-DCMAKE_C_COMPILER=gcc -DCMAKE_CXX_COMPILER=g++
-  -DCMAKE_EXE_LINKER_FLAGS="-static -static-libgcc -static-libstdc++"` and build the `llama-quantize` target.
+  -DCMAKE_EXE_LINKER_FLAGS="-static -static-libgcc -static-libstdc++"` (current llama.cpp, for `--ref head`, also
+  needs `-DCMAKE_C_FLAGS=-D_WIN32_WINNT=0x0A00 -DCMAKE_CXX_FLAGS=-D_WIN32_WINNT=0x0A00`) and build the
+  `llama-quantize` target. Build one per ref and pass the matching one.
 - Set `SLM_MNN_PYTHON` to that Python so the MNN exporter uses it and its MNN 3.4.0 converter.
 
 ## Per phone

@@ -1,0 +1,1 @@
+LD_LIBRARY_PATH=.:/vendor/lib64 ./llama-bench -m /data/local/tmp/paper_bench/models/smollm2-135m-q4_0.gguf -p 0 -n 256 -r 19 -ngl 99 -o json -d 256 -t 4

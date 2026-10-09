@@ -1,0 +1,35 @@
+ggml_opencl: selected platform: 'QUALCOMM Snapdragon(TM)'
+
+ggml_opencl: device: 'QUALCOMM Adreno(TM) (OpenCL 3.0 Adreno(TM) 740)'
+ggml_opencl: default device: 'QUALCOMM Adreno(TM) (OpenCL 3.0 Adreno(TM) 740)'
+PB_MARK llama rep=0 begin=333934848359468 end=333936423040405 n_prompt=256 n_gen=0 n_depth=0
+PB_MARK llama rep=1 begin=333936423454624 end=333937975126186 n_prompt=256 n_gen=0 n_depth=0
+PB_MARK llama rep=2 begin=333937975646134 end=333939560009571 n_prompt=256 n_gen=0 n_depth=0
+PB_MARK llama rep=3 begin=333939560278268 end=333941136510403 n_prompt=256 n_gen=0 n_depth=0
+PB_MARK llama rep=4 begin=333941136991132 end=333942721148996 n_prompt=256 n_gen=0 n_depth=0
+PB_MARK llama rep=5 begin=333942721565871 end=333944303057225 n_prompt=256 n_gen=0 n_depth=0
+PB_MARK llama rep=6 begin=333944303538735 end=333945890279672 n_prompt=256 n_gen=0 n_depth=0
+PB_MARK llama rep=7 begin=333945890740662 end=333947463246286 n_prompt=256 n_gen=0 n_depth=0
+PB_MARK llama rep=8 begin=333947463720140 end=333949040149879 n_prompt=256 n_gen=0 n_depth=0
+PB_MARK llama rep=9 begin=333949041026338 end=333950605065608 n_prompt=256 n_gen=0 n_depth=0
+PB_MARK llama rep=10 begin=333950605508525 end=333952170584722 n_prompt=256 n_gen=0 n_depth=0
+PB_MARK llama rep=11 begin=333952171125712 end=333953747334669 n_prompt=256 n_gen=0 n_depth=0
+PB_MARK llama rep=12 begin=333953747780867 end=333955350769148 n_prompt=256 n_gen=0 n_depth=0
+PB_MARK llama rep=13 begin=333955351193419 end=333956921426335 n_prompt=256 n_gen=0 n_depth=0
+PB_MARK llama rep=14 begin=333956922694356 end=333958491371022 n_prompt=256 n_gen=0 n_depth=0
+PB_MARK llama rep=15 begin=333958491833886 end=333960045166386 n_prompt=256 n_gen=0 n_depth=0
+PB_MARK llama rep=16 begin=333960045774146 end=333961606264718 n_prompt=256 n_gen=0 n_depth=0
+PB_MARK llama rep=17 begin=333961606739979 end=333963198647114 n_prompt=256 n_gen=0 n_depth=0
+PB_MARK llama rep=18 begin=333963199150655 end=333964764975550 n_prompt=256 n_gen=0 n_depth=0
+PB_MARK llama rep=19 begin=333964765451905 end=333966360366592 n_prompt=256 n_gen=0 n_depth=0
+PB_MARK llama rep=20 begin=333966360848258 end=333967952803987 n_prompt=256 n_gen=0 n_depth=0
+PB_MARK llama rep=21 begin=333967953308049 end=333969538350080 n_prompt=256 n_gen=0 n_depth=0
+PB_MARK llama rep=22 begin=333969538806122 end=333971123227579 n_prompt=256 n_gen=0 n_depth=0
+PB_MARK llama rep=23 begin=333971123680392 end=333972711623100 n_prompt=256 n_gen=0 n_depth=0
+PB_MARK llama rep=24 begin=333972712120495 end=333974276464609 n_prompt=256 n_gen=0 n_depth=0
+PB_MARK llama rep=25 begin=333974276921172 end=333975845030078 n_prompt=256 n_gen=0 n_depth=0
+PB_MARK llama rep=26 begin=333975845475859 end=333977431495181 n_prompt=256 n_gen=0 n_depth=0
+PB_MARK llama rep=27 begin=333977431991587 end=333979024840753 n_prompt=256 n_gen=0 n_depth=0
+PB_MARK llama rep=28 begin=333979025305024 end=333980627822263 n_prompt=256 n_gen=0 n_depth=0
+PB_MARK llama rep=29 begin=333980628311013 end=333982195138721 n_prompt=256 n_gen=0 n_depth=0
+PB_MARK llama rep=30 begin=333982195546742 end=333983791163616 n_prompt=256 n_gen=0 n_depth=0

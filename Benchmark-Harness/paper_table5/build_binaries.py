@@ -156,6 +156,19 @@ def patch_mnn(src: Path):
         text = llm.read_text(encoding="utf-8")
         if "#include <cstdlib>" not in text:
             llm.write_text("#include <cstdlib>\n" + text, encoding="utf-8", newline="\n")
+    # Exporter: PB_TEXT_ONLY exports a vision-language model (e.g. Qwen3.5) as its text decoder only. The vision
+    # encoder's ONNX export needs > 15 GB of host RAM for the 4B model, and the benchmarks never use images.
+    llmx = src / "transformers" / "llm" / "export" / "llmexport.py"
+    anchor = "        # Pass properties from model to exporter\n        self.visual = self.model.visual\n"
+    if llmx.is_file() and (anchor in llmx.read_text(encoding="utf-8")
+                           or "PB: text decoder only" in llmx.read_text(encoding="utf-8")):
+        edit(llmx, anchor,
+             anchor + "        if os.environ.get('PB_TEXT_ONLY'):  # PB: text decoder only\n"
+                      "            self.visual = self.model.visual = None\n",
+             "PB: text decoder only")
+        text = llmx.read_text(encoding="utf-8")
+        if "\nimport os\n" not in text and not text.startswith("import os\n"):
+            llmx.write_text("import os\n" + text, encoding="utf-8", newline="\n")
     # Exporter (host side, no effect on speed): transformers >= 4.57 returns False instead of raising when a
     # model has no slow tokenizer (Llama 3), so llmexport's fall back to the fast tokenizer never triggered.
     tok = src / "transformers" / "llm" / "export" / "utils" / "tokenizer.py"

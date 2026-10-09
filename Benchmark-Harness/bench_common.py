@@ -199,12 +199,14 @@ class ReadinessGate:
         if now - history[0][0] < self.plateau_s:
             return False
         window = [t for ts, t in history if now - ts <= self.plateau_s]
-        return max(window) - temp <= self.plateau_drop_c
+        return max(window) - min(window) <= self.plateau_drop_c  # flat: neither still cooling nor warming up
 
     def _problems(self, st: dict, history: list | None = None) -> list:
         issues = []
         limit = self.temp_limit()
         temp = st["battery_temp_c"]
+        if temp is None or (self.baseline_caps and not st["cpu_caps_khz"]):
+            return ["no reading from the phone (adb not answering?)"]
         if limit is not None and temp is not None and temp > limit and not (history and self._plateaued(history, temp)):
             issues.append(f"battery {temp} C > {limit:.1f} C")
         for pol, base in (self.baseline_caps or {}).items():

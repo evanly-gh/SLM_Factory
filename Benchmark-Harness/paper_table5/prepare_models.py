@@ -166,6 +166,7 @@ def prepare_gguf(name: str, hf_id: str, hf_dir: Path, quant: str, args, manifest
 def mnn_env(recipe: str, ref: str) -> dict:
     env = dict(os.environ)
     env["PYTHONUTF8"] = "1"  # llmexport's spinner prints symbols a redirected Windows console can't encode
+    env["PB_TEXT_ONLY"] = "1"  # text decoder only for vision-language models (build_binaries.patch_mnn)
     src, _ = checkout("mnn", ref)
     env["SLM_MNN_ROOT"] = str(src)
     env.pop("SLM_MNN_LLMEXPORT", None)
@@ -214,15 +215,28 @@ def nolog_mnnconvert(py: Path) -> Path:
 def prepare_mnn(name: str, hf_id: str, hf_dir: Path, bits: int, args, manifest: dict):
     env = mnn_env(args.mnn_recipe, args.ref)
     suffix = "" if args.ref == "pinned" else f"-{args.ref}"
-    outdir = MODELS_DIR / "mnn" / f"{args.mnn_recipe}{suffix}"
-    run([sys.executable, CONVERT_TO_MNN, "--model", hf_dir, "--output", outdir, "--quant", str(bits)], env=env)
-    folder = outdir / f"{hf_dir.name.lower().replace('_', '-').replace(' ', '-')}-mnn-q{bits}"
-    if not (folder / "config.json").is_file():
-        sys.exit(f"expected MNN export at {folder}")
     dest = MODELS_DIR / "mnn" / f"{name}-mnn-{args.mnn_recipe}-q{bits}{suffix}"
-    if dest.resolve() != folder.resolve():
-        shutil.rmtree(dest, ignore_errors=True)
-        shutil.copytree(folder, dest)
+    if (dest / "config.json").is_file() and not args.force:
+        print(f"[MNN] {dest.name} exists")
+    else:
+        outdir = MODELS_DIR / "mnn" / f"{args.mnn_recipe}{suffix}"
+        run([sys.executable, CONVERT_TO_MNN, "--model", hf_dir, "--output", outdir, "--quant", str(bits)], env=env)
+        folder = outdir / f"{hf_dir.name.lower().replace('_', '-').replace(' ', '-')}-mnn-q{bits}"
+        if not (folder / "config.json").is_file():
+            sys.exit(f"expected MNN export at {folder}")
+        if dest.resolve() != folder.resolve():  # move, not copy: an MNN export is up to ~8 GB (16-bit 4B)
+            shutil.rmtree(dest, ignore_errors=True)
+            shutil.move(str(folder), str(dest))
+    # Text-only export (PB_TEXT_ONLY) of a vision-language model: the vision encoder was not exported, but the
+    # model's own config still says is_visual, which would make the runtime load it as multimodal (Omni) and
+    # look for visual.mnn. The plain Llm class handles the text path, including M-RoPE position ids.
+    cfg_path = dest / "llm_config.json"
+    if env.get("PB_TEXT_ONLY") and cfg_path.is_file() and not (dest / "visual.mnn").exists():
+        cfg = json.loads(cfg_path.read_text(encoding="utf-8"))
+        if cfg.get("is_visual"):
+            cfg["is_visual"] = False
+            cfg_path.write_text(json.dumps(cfg, indent=4, ensure_ascii=False), encoding="utf-8")
+            print(f"[MNN] {dest.name}: text decoder only (is_visual set to false; no vision encoder exported)")
     quant = "F16" if bits == 16 else f"Q{bits}"
     record(manifest, {"name": name, "hf_id": hf_id, "framework": "mnn", "quant": quant, "bits": bits,
                       "ref": args.ref, "path": dest.relative_to(MODELS_DIR).as_posix(), "files": file_map(dest),

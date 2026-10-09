@@ -60,13 +60,15 @@ def _pb_bytes(field: int, payload: bytes) -> bytes:
 
 
 class FakePhone:
-    def __init__(self, sizes: dict, fail_model: str | None = None):
+    def __init__(self, sizes: dict, fail_model: str | None = None, swap_model: str | None = None):
         self.t0 = time.time()
         self.extra = 0.0
         self.files: dict = {}
         self.jobs: list = []  # (start, end) virtual windows of benchmark activity
         self.sizes = sizes
         self.fail_model = fail_model
+        self.swap_model = swap_model  # its benchmark never finishes and has 900 MB swapped out until killed
+        self.swapping = False
         self.trace_start = None
 
     def now(self) -> float:
@@ -78,6 +80,9 @@ class FakePhone:
         out, err, code = "", [], 0
         start = self.now()
         t = start + 0.5  # model load
+        if self.swap_model and self.swap_model in cmd:
+            self.swapping = True
+            return
         if self.fail_model and self.fail_model in cmd:
             code, err = 137, ["Killed"]
         elif "llama-bench" in cmd:
@@ -203,6 +208,10 @@ class FakeAdb:
         if m:
             p.run_job(p.files[m.group(1)])
             return ""
+        if "grep VmSwap" in cmd:
+            return "VmSwap:\t  921600 kB\n" if p.swapping else ""
+        if cmd.startswith("pkill") or "; pkill " in cmd:
+            p.swapping = False
         if "perfetto --txt" in cmd:
             p.trace_start = p.now()
             return "4242\n"
@@ -231,16 +240,19 @@ def main():
          "path": "mnn/m1-mnn-q4", "files": {"config.json": 123}},
         {"name": "qwen2.5-7b", "framework": "llama.cpp", "quant": "Q4_0", "bits": 4,
          "path": "gguf/qwen2.5-7b-q4_0.gguf", "files": {"qwen2.5-7b-q4_0.gguf": 123}},
+        {"name": "llama3.2-3b", "framework": "llama.cpp", "quant": "Q4_0", "bits": 4,
+         "path": "gguf/llama3.2-3b-q4_0.gguf", "files": {"llama3.2-3b-q4_0.gguf": 123}},
     ]}
     (models / "manifest.json").write_text(json.dumps(manifest))
     FakeAdb.phone = FakePhone({"llama3.2-1b-q4_0.gguf": 123, "llama3.2-1b-q4_k_m.gguf": 123, "config.json": 123,
-                               "qwen2.5-7b-q4_0.gguf": 123}, fail_model="qwen2.5-7b")
+                               "qwen2.5-7b-q4_0.gguf": 123, "llama3.2-3b-q4_0.gguf": 123}, fail_model="qwen2.5-7b",
+                              swap_model="llama3.2-3b")
     rpt.Adb = FakeAdb
     rpt.MODELS_DIR = models
     rpt.POLL_S = 0.05
     rpt.bench_common.ReadinessGate.wait.__defaults__  # noqa: B018 - gate polls a fake state that is always ready
     args = Namespace(serial="FAKE123", ref="pinned", models=None, quants=None, frameworks=["llama.cpp", "mnn"],
-                     backends=["cpu", "gpu"], trials=3, n_prompt=256, n_gen=256, max_temp=None, gate_timeout=60, gate_plateau=None,
+                     backends=["cpu", "gpu"], trials=3, n_prompt=256, n_gen=256, max_temp=None, gate_timeout=60, gate_plateau=None, min_battery=0, smallest_first=True,
                      rest=0, idle_seconds=1, pre_idle_seconds=0.5, min_energy_seconds=30.0, prime_seconds=0, timeout=600,
                      llama_threads=None, mnn_threads=None, no_controls=False, no_perfetto=False, screen="auto",
                      results_dir=str(tmp / "results"), force=False, plan=False)
@@ -255,7 +267,7 @@ def main():
         if not cond:
             failures.append(msg)
 
-    check(len(results) == 8, f"8 configurations recorded (got {len(results)})")
+    check(len(results) == 10, f"10 configurations recorded (got {len(results)})")
     check(results["llama3.2-1b__Q4_K_M__llama.cpp__gpu"].get("gpu_partial_offload") is True,
           "Q4_K_M on the pinned OpenCL backend flagged as partly on the CPU")
     check(not results["llama3.2-1b__Q4_0__llama.cpp__gpu"].get("gpu_partial_offload"),
@@ -264,6 +276,10 @@ def main():
         c = r["config"]
         if c["model"] == "qwen2.5-7b":
             check(r["status"] == "failed" and "oom" in r["error"], f"{cid}: failure recorded ({r.get('error')})")
+            continue
+        if c["model"] == "llama3.2-3b":
+            check(r["status"] == "failed" and "does not fit in RAM" in r["error"],
+                  f"{cid}: swapping benchmark stopped and recorded ({r.get('error')})")
             continue
         fw = "llama" if c["framework"] == "llama.cpp" else "mnn"
         pp, tg = SPEEDS[(fw, c["backend"])]

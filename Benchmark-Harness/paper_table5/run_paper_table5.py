@@ -33,6 +33,7 @@ import json
 import math
 import re
 import statistics
+import subprocess
 import sys
 import time
 from datetime import datetime
@@ -44,7 +45,7 @@ sys.path.insert(0, str(HERE.parent))
 import bench_common  # noqa: E402
 import energy_probe  # noqa: E402
 from common import (DEV_MODELS, DEV_ROOT, MODELS_DIR, RESULTS_DIR, DeviceControls, boottime_s,  # noqa: E402
-                    dev_bin_dir, device_info, match_profile)
+                    WakeHolder, dev_bin_dir, device_info, match_profile)
 from devenv import Adb  # noqa: E402
 from energy import EnergyRecorder, is_chip_method, probe_recommendation  # noqa: E402
 
@@ -53,6 +54,16 @@ FRAMEWORKS = ("llama.cpp", "mnn")
 MARK_RE = re.compile(r"^PB_MARK (\w+) (.*)$", re.M)
 DEV_RUN = f"{DEV_ROOT}/run"
 POLL_S = 10  # seconds between completion checks of a detached benchmark
+# A benchmark whose own memory is swapped out beyond this measures swapping, not the model (e.g. Qwen2.5-7B Q4_0 on
+# an 8 GB Galaxy S23: 3 GB of llama-bench in swap, decode ~10x slower): stop it and record "does not fit in RAM".
+SWAP_LIMIT_MB = 512
+# Weights above this share of MemTotal are recorded as not fitting, without running. On the 8 GB Galaxy S23, 4.0-4.2 GB
+# models (Qwen3.5-4B Q8_0) swapped hard enough that adb stopped responding until the phone recovered or rebooted.
+RAM_FIT_FRACTION = 0.55
+# MNN's CPU backend holds 16-bit weights at roughly twice their file size (Qwen3.5-2B F16: 3.5 GiB file, 3.9 GB of
+# the process in swap on an 8 GB phone; the 0.8B F16 at 1.4 GiB ran), so count them double for the fit check.
+MNN_F16_RAM_FACTOR = 2.0
+AVAIL_HEADROOM_BYTES = 300 * 2**20  # KV cache, runtime and binaries on top of the weights
 # GGUF types whose matmuls ggml-opencl's supports_op accepts at the pinned llama.cpp (eadc418). Q4_K_M/Q4_K_S are
 # mostly Q4_K, which it lacks, so those matmuls fall back to the CPU.
 OPENCL_MATMUL_PINNED = {"F16", "F32", "Q4_0", "Q8_0", "Q6_K", "MXFP4"}
@@ -115,12 +126,30 @@ def ensure_model_on_device(adb: Adb, entry: dict) -> str:
             return remote
         log(f"   adb push failed: {r.stderr.strip()[-300:]}")
         time.sleep(30)
-    sys.exit(f"adb push of {local.name} failed 3 times")
+        if ":" in adb.serial:  # adb tcpip / adb connect serial: re-establish the connection after a Wi-Fi drop
+            subprocess.run([adb.bin, "connect", adb.serial], capture_output=True, text=True, timeout=30)
+    # RuntimeError, not sys.exit: the session stops cleanly (settings restored, energy recoverable) when the
+    # phone has dropped off adb
+    raise RuntimeError(f"adb push of {local.name} failed 3 times")
 
 
 # ---------------------------------------------------------------------------
 # Running one benchmark invocation on the phone
 # ---------------------------------------------------------------------------
+
+def stop_benchmark(adb: Adb, work: str, exe: str):
+    """Kill a detached benchmark and its wrapper, one adb call per kill: `pkill -f <pattern>` also matches the
+    invoking shell's own command line and would kill that shell before a following command ran (the benchmark then
+    kept running, e.g. swapping after the swap guard 'stopped' it). Verified, escalating to SIGKILL."""
+    adb.sh(f"pkill {exe}")  # by process name: cannot match a shell
+    adb.sh(f"pkill -f '{work}/run[.]sh'")  # the [.] keeps the pattern from matching this command itself
+    for _ in range(10):
+        time.sleep(1)
+        if not adb.sh(f"pidof {exe}").strip():
+            return
+        adb.sh(f"pkill -9 {exe}")
+    log(f"   [WARN] {exe} still running after kill attempts")
+
 
 def run_on_device(adb: Adb, controls: DeviceControls, bin_dir: str, cmd: str, env: str, tag: str,
                   raw_dir: Path, timeout_s: int) -> dict:
@@ -133,6 +162,8 @@ def run_on_device(adb: Adb, controls: DeviceControls, bin_dir: str, cmd: str, en
     adb.sh(f"setsid sh {work}/run.sh </dev/null >/dev/null 2>&1 &")
     t0 = time.time()
     exit_code = None
+    exe = Path(cmd.split()[0]).name
+    swapped_mb = 0
     while time.time() - t0 < timeout_s:
         time.sleep(POLL_S)
         out = adb.sh(f"cat {work}/exit 2>/dev/null", timeout=30).strip()
@@ -142,8 +173,15 @@ def run_on_device(adb: Adb, controls: DeviceControls, bin_dir: str, cmd: str, en
         if out.lstrip("-").isdigit():
             exit_code = int(out)
             break
+        kb = [int(x) for x in re.findall(r"VmSwap:\s+(\d+)", adb.sh(
+            f"for p in $(pidof {exe}); do grep VmSwap /proc/$p/status; done", timeout=30))]
+        swapped_mb = max([swapped_mb] + [k // 1024 for k in kb])
+        if swapped_mb > SWAP_LIMIT_MB:
+            stop_benchmark(adb, work, exe)
+            exit_code = -9
+            break
     else:
-        adb.sh(f"pkill -f {work}/run.sh; pkill -f {cmd.split()[0]}")
+        stop_benchmark(adb, work, exe)
     stdout = adb.sh(f"cat {work}/stdout.txt", timeout=120)
     stderr = adb.sh(f"cat {work}/stderr.txt", timeout=120)
     raw_dir.mkdir(parents=True, exist_ok=True)
@@ -151,10 +189,13 @@ def run_on_device(adb: Adb, controls: DeviceControls, bin_dir: str, cmd: str, en
     (raw_dir / f"{tag}.stderr.txt").write_text(stderr, encoding="utf-8")
     (raw_dir / f"{tag}.cmd.txt").write_text(f"{env} {cmd}\n", encoding="utf-8")
     return {"exit": exit_code, "timed_out": exit_code is None, "stdout": stdout, "stderr": stderr,
-            "seconds": round(time.time() - t0, 1), "marks": parse_marks(stderr)}
+            "seconds": round(time.time() - t0, 1), "marks": parse_marks(stderr), "swapped_mb": swapped_mb}
 
 
 def failure_reason(res: dict) -> str | None:
+    if (res.get("swapped_mb") or 0) > SWAP_LIMIT_MB:
+        return (f"does not fit in RAM: {res['swapped_mb']} MB of the benchmark process was swapped out "
+                f"(stopped at > {SWAP_LIMIT_MB} MB)")
     if res["timed_out"]:
         return "timeout"
     if res["exit"] != 0:
@@ -179,6 +220,23 @@ def llama_cmd(model_path: str, backend: str, n_p: int, n_g: int, depth: int, rep
     return cmd
 
 
+# Rough per-repetition timing for llama-bench, from the Galaxy S23 measurements of 2026-10-07 (4 threads): decode
+# reads every weight once per token (effective bandwidth), prefill is compute bound (FLOP rate, 2 x params per
+# token). Only used to size a run so it already holds --min-energy-seconds of timed work; a wrong guess costs time
+# (too many repetitions) or falls back to a separate energy extension (too few), never correctness.
+DECODE_GBPS = {"cpu": 25.0, "gpu": 14.0}
+PREFILL_TFLOPS = {"cpu": 0.42, "gpu": 0.40}
+BYTES_PER_WEIGHT = {"Q4_0": 0.5625, "Q4_K_M": 0.6, "Q8_0": 1.0625, "F16": 2.0, "BF16": 2.0}
+
+
+def est_llama_rep_seconds(entry: dict, backend: str, phase: str, n_prompt: int, n_gen: int) -> float:
+    size = sum(entry["files"].values())
+    if phase == "decode":
+        return n_gen * size / (DECODE_GBPS[backend] * 1e9)
+    params = size / BYTES_PER_WEIGHT.get(entry["quant"].upper().removesuffix("-PURE"), 1.0)
+    return n_prompt * 2 * params / (PREFILL_TFLOPS[backend] * 1e12)
+
+
 def llama_windows(marks: list[dict], phase: str, source: str) -> list[dict]:
     out = []
     for m in marks:
@@ -199,7 +257,10 @@ def mnn_cmd(model_dir: str, backend: str, n_p: int, n_g: int, reps: int, kv: boo
 
 
 def mnn_windows(marks: list[dict], source: str) -> list[dict]:
-    """kv: prefill = [begin, begin + prefill_us], decode = [end - decode_us, end]; pp: prefill only."""
+    """kv: prefill = [begin, begin + prefill_us], decode = [begin + prefill_us, end]; pp: prefill only.
+    Decode is wall clock, not llm_bench's decode_us: at MNN head decode_us leaves out the per-token sampling and the
+    read-back of the GPU's logits (~8% of an OpenCL decode); the wall window matches llm_bench's own "decode wall
+    speed (incl. sampling)", llama-bench (whose timed region includes them) and the paper's first-to-last time."""
     out = []
     for m in marks:
         if m.get("tool") != "mnn" or m["rep"] == 0:  # llm_bench discards its first response too
@@ -209,7 +270,7 @@ def mnn_windows(marks: list[dict], source: str) -> list[dict]:
             out.append({"phase": "prefill", "source": source, "rep": m["rep"], "a": a,
                         "b": a + m["prefill_us"] / 1e6, "tokens": m["prompt"]})
         if m["mode"] == "kv":
-            out.append({"phase": "decode", "source": source, "rep": m["rep"], "a": b - m["decode_us"] / 1e6,
+            out.append({"phase": "decode", "source": source, "rep": m["rep"], "a": a + m["prefill_us"] / 1e6,
                         "b": b, "tokens": m["gen"]})
     return out
 
@@ -279,21 +340,34 @@ class Session:
                     cid += f"__{self.args.ref}"
                 out.append({"id": cid.replace("/", "-"), "model": e["name"], "quant": e["quant"], "bits": e.get("bits"),
                             "framework": e["framework"], "backend": backend, "ref": self.args.ref, "entry": e})
+        if self.args.smallest_first:  # stable: a variant's CPU and GPU runs stay together
+            out.sort(key=lambda c: sum(c["entry"]["files"].values()))
         return out
 
     def done(self, cfg) -> bool:
-        return (self.out / "configs" / f"{cfg['id']}.json").exists() and not self.args.force
+        """A result counts as done if it succeeded or the model can never fit this phone; transient failures (not
+        enough free RAM right now, timeouts, crashes, a lost connection) are retried on the next run."""
+        f = self.out / "configs" / f"{cfg['id']}.json"
+        if self.args.force or not f.exists():
+            return False
+        r = json.loads(f.read_text())
+        return r.get("status") == "ok" or str(r.get("error", "")).startswith("does not fit in RAM:")
 
     # -- preflight ---------------------------------------------------------
     def preflight(self, cfgs):
         needed = set()
         for c in cfgs:
             needed.add("mnn" if c["framework"] == "mnn" else f"llama_{c['backend']}")
+        # Leftovers of an aborted earlier session would compete with (and be charged to) this one
+        self.adb.sh("pkill llama-bench")
+        self.adb.sh("pkill llm_bench")
         for t in sorted(needed):
             exe = "llm_bench" if t == "mnn" else "llama-bench"
             if self.adb.sh(f"test -x {dev_bin_dir(self.args.ref, t)}/{exe} && echo ok").strip() != "ok":
                 sys.exit(f"{dev_bin_dir(self.args.ref, t)}/{exe} missing on the phone: "
                          f"python build_binaries.py --ref {self.args.ref} --push --serial {self.adb.serial}")
+        if "mnn" in needed:  # llm_bench keeps its OpenCL tuning cache in ./tmp; without it every run re-tunes
+            self.adb.sh(f"mkdir -p {dev_bin_dir(self.args.ref, 'mnn')}/tmp")
         if "llama_gpu" in needed:
             # Compiling the embedded Adreno kernels takes ~85 s on the Galaxy S23 (no binary cache).
             listing = self.adb.sh(f"cd {dev_bin_dir(self.args.ref, 'llama_gpu')} && "
@@ -349,23 +423,57 @@ class Session:
     # -- one configuration -------------------------------------------------
     def run_config(self, cfg) -> dict:
         a = self.args
-        model_path = ensure_model_on_device(self.adb, cfg["entry"])
         result = {"config": {k: v for k, v in cfg.items() if k != "entry"}, "model_file": cfg["entry"],
                   "started": datetime.now().isoformat(), "invocations": {}, "windows": []}
+        # Weights larger than this share of the phone's RAM cannot be resident next to Android itself: record it
+        # without pushing a multi-GB file (models just under it are still caught by the swap guard while running).
+        model_bytes = sum(cfg["entry"]["files"].values())
+        if cfg["framework"] == "mnn" and cfg["quant"].upper() == "F16" and cfg["backend"] == "cpu":
+            model_bytes = int(model_bytes * MNN_F16_RAM_FACTOR)
+        ram_bytes = (self.info.get("mem_total_kb") or 0) * 1024
+        if ram_bytes and model_bytes > RAM_FIT_FRACTION * ram_bytes:
+            return self._fail(result, f"does not fit in RAM: {model_bytes / 2**30:.2f} GiB of weights in memory on a phone with "
+                                      f"{ram_bytes / 2**30:.2f} GiB RAM (limit {RAM_FIT_FRACTION:.0%}); not run")
+        # What is actually free now: background apps hold ~3.5 GB of the S23's 8 GB, and a model that does not fit
+        # pushes the phone into swap (with RAM Plus on, until the hardware watchdog resets it). Best of two reads,
+        # since memory freed by the previous run is returned with a short delay.
+        avail = []
+        for i in range(2):
+            m = re.search(r"MemAvailable:\s+(\d+)", self.adb.sh("cat /proc/meminfo"))
+            avail.append(int(m.group(1)) * 1024 if m else 0)
+            if i == 0:
+                time.sleep(10)
+        if max(avail) and model_bytes + AVAIL_HEADROOM_BYTES > max(avail):
+            return self._fail(result, f"does not fit in free RAM: {model_bytes / 2**30:.2f} GiB of weights in memory, "
+                                      f"{max(avail) / 2**30:.2f} GiB available on the phone; not run")
+        model_path = ensure_model_on_device(self.adb, cfg["entry"])
         reps = a.trials + 1
         if cfg["framework"] == "llama.cpp":
             target = f"llama_{cfg['backend']}"
             bin_dir = dev_bin_dir(a.ref, target)
             env = "LD_LIBRARY_PATH=.:/vendor/lib64"
-            plan = [("prefill", llama_cmd(model_path, cfg["backend"], a.n_prompt, 0, 0, reps, a.llama_threads)),
-                    ("decode", llama_cmd(model_path, cfg["backend"], 0, a.n_gen, a.n_prompt, reps, a.llama_threads))]
+            # Battery energy needs >= --min-energy-seconds of timed work per phase: run those repetitions in this
+            # invocation (sized from the model) instead of a second gated one. Only the first --trials recorded
+            # repetitions are the paper-protocol throughput; the rest are labelled "energy".
+            n = {"prefill": reps, "decode": reps}
+            if not self.headline_is_chip and a.min_energy_seconds > 0:
+                for ph in n:
+                    per = est_llama_rep_seconds(cfg["entry"], cfg["backend"], ph, a.n_prompt, a.n_gen)
+                    # at most 40: the estimate can be 50x too fast on an unoptimized path (SmolLM2-135M Q8_0 on the
+                    # pinned OpenCL backend: 9.9 s per prefill repetition, estimated 0.17 s); a short run is topped
+                    # up by _extend_for_energy from the measured speed
+                    n[ph] = 1 + max(a.trials, min(40, math.ceil(a.min_energy_seconds / max(per, 0.05))))
+            plan = [("prefill", llama_cmd(model_path, cfg["backend"], a.n_prompt, 0, 0, n["prefill"], a.llama_threads)),
+                    ("decode", llama_cmd(model_path, cfg["backend"], 0, a.n_gen, a.n_prompt, n["decode"],
+                                         a.llama_threads))]
             for phase, cmd in plan:
                 res = self.invoke(cfg, f"{cfg['id']}__{phase}", bin_dir, cmd, env, phase)
                 result["invocations"][phase] = self._summ(res)
                 err = failure_reason(res)
                 if err:
                     return self._fail(result, err)
-                result["windows"] += llama_windows(res["marks"], phase, "main")
+                result["windows"] += [dict(w, source="main" if w["rep"] <= a.trials else "energy")
+                                      for w in llama_windows(res["marks"], phase, "main")]
                 try:
                     j = json.loads(res["stdout"])[0]
                     result["invocations"][phase]["llama_bench"] = {k: j.get(k) for k in (
@@ -399,7 +507,9 @@ class Session:
         result["prefill"] = throughput(result["windows"], "prefill")
         result["decode"] = throughput(result["windows"], "decode")
         worst = max((inv.get("suspend_ratio") or 0) for inv in result["invocations"].values())
-        if worst > 1.05:
+        # MNN has no independent monotonic timing: its ratio compares wall time to llm_bench's prefill_us + decode_us,
+        # which at MNN head leaves out sampling (~5-8% on OpenCL), so only a much larger gap means a suspend.
+        if worst > (1.15 if cfg["framework"] == "mnn" else 1.05):
             result["suspended"] = worst
             result["warning"] = ((result.get("warning") or "") + f" phone suspended during timed work (boottime/monotonic "
                                  f"up to {worst:.2f}x): keep it awake (--screen on)").strip()
@@ -469,6 +579,8 @@ class Session:
             r = json.loads(f.read_text())
             if r.get("status") != "ok" or r.get("energy_session") not in (None, session["started"]):
                 continue
+            if r.get("started", "") < session["started"]:
+                continue  # ran in an earlier session whose trace this is not
             if r.get("energy_session") == session["started"] and "energy" in r:
                 continue
             powered = any((inv.get(k) or {}).get("externally_powered")
@@ -556,19 +668,65 @@ class Session:
             time.sleep(a.idle_seconds)
             self.idle_window = (t0 + min(2.0, a.idle_seconds / 4), boottime_s(self.adb))
             session["idle_window"] = self.idle_window
-            (self.out / "session.json").write_text(json.dumps(session, indent=1, default=str))
+            for f in (self.out / "session.json", self.out / "sessions" / f"{stamp}.json"):  # recover_energy reads the latter
+                f.write_text(json.dumps(session, indent=1, default=str))
             for i, cfg in enumerate(todo, 1):
+                level = bench_common.device_state(self.adb).get("battery_level")
+                if a.min_battery and level is not None and level < a.min_battery:
+                    log(f"[BATTERY] {level}% < --min-battery {a.min_battery}%: stopping before {cfg['id']}; charge the "
+                        f"phone to full, unplug it and rerun the same command (completed configurations are kept)")
+                    break
                 log(f"[{i}/{len(todo)}] {cfg['id']}")
-                r = self.run_config(cfg)
+                try:
+                    r = self.run_config(cfg)
+                except RuntimeError as e:  # phone unreachable (e.g. it moved to another Wi-Fi network)
+                    log(f"[SESSION] stopped early during {cfg['id']}: {e}")
+                    break
                 (self.out / "configs" / f"{cfg['id']}.json").write_text(json.dumps(r, indent=1, default=str))
         finally:
             if self.recorder:
                 self.recorder.stop()
             if not a.no_controls:
                 self.controls.restore()
-        self.attach_energy()
+        if self.recorder and self.recorder.trace_name is None and not a.no_perfetto:
+            log(f"[ENERGY] the trace could not be pulled (phone unreachable?); energy not attached. Once the phone is "
+                f"back: python run_paper_table5.py --serial <serial> --results-dir {self.out} --recover-energy")
+        else:
+            self.attach_energy()
         write_summary(self.out)
         log(f"done -> {self.out}  (python report.py {self.out})")
+
+
+def recover_energy(args):
+    """Finish a session that stopped before its energy step: stop the phone's trace and sampler, pull them into
+    the latest session's energy folder, release the wake lock, attach energy to that session's configurations."""
+    out = Path(args.results_dir)
+    stamps = sorted(f.stem for f in (out / "sessions").glob("*.json"))
+    if not stamps:
+        sys.exit(f"{out}/sessions has no session records")
+    stamp = stamps[-1]
+    session = json.loads((out / "sessions" / f"{stamp}.json").read_text())
+    adb = Adb(args.serial)
+    edir = out / "energy" / stamp
+    edir.mkdir(parents=True, exist_ok=True)
+    adb.sh(f"touch {energy_probe.DEV_DIR}/stop")
+    time.sleep(2)
+    pid = adb.sh("pidof perfetto").split()
+    trace = energy_probe.stop_perfetto(adb, int(pid[0]), edir) if pid else None
+    if not trace:  # the phone rebooted: Perfetto is gone but its file (written every 5 s) is still there
+        adb.run(["pull", energy_probe.TRACE_REMOTE, str(edir / "trace.pftrace")], timeout=300)
+    adb.run(["pull", f"{energy_probe.DEV_DIR}/samples.txt", str(edir / "samples.txt")], timeout=300)
+    WakeHolder(adb).restore()
+    adb.sh("cmd notification set_dnd off")
+    if not trace and not (edir / "trace.pftrace").exists():
+        sys.exit("no Perfetto trace on the phone for this session (it may have rebooted); energy cannot be recovered")
+    sess = Session.__new__(Session)
+    sess.out, sess.adb, sess.info, sess.profile = out, adb, session["device"], session["profile"]
+    sess.recorder = EnergyRecorder(adb, edir, session["energy_discovery"], log=log)
+    sess.idle_window = session.get("idle_window")
+    (out / "session.json").write_text(json.dumps(session, indent=1, default=str))
+    sess.attach_energy()
+    log(f"energy recovered for session {stamp} -> {out}")
 
 
 def write_summary(out: Path):
@@ -623,6 +781,8 @@ def main():
                     help="battery energy only: extra repetitions until each phase has this much timed work (0 = off)")
     ap.add_argument("--prime-seconds", type=int, default=0, help="all-core CPU burst before each invocation (off)")
     ap.add_argument("--timeout", type=int, default=5400, help="seconds per benchmark invocation")
+    ap.add_argument("--min-battery", type=int, default=20,
+                    help="stop the session (resumable) before a configuration when the battery is below this %% (0 = off)")
     ap.add_argument("--llama-threads", type=int, default=None, help="llama-bench -t (default: its own default)")
     ap.add_argument("--mnn-threads", type=int, default=None, help="llm_bench -t (default: its own default, 4)")
     ap.add_argument("--no-controls", action="store_true", help="skip airplane mode / screen off / DND")
@@ -634,7 +794,14 @@ def main():
     ap.add_argument("--results-dir", help="resume into an existing results directory")
     ap.add_argument("--force", action="store_true", help="rerun configurations that already have results")
     ap.add_argument("--plan", action="store_true", help="list configurations and exit")
+    ap.add_argument("--smallest-first", action="store_true", help="run configurations in order of model size")
+    ap.add_argument("--recover-energy", action="store_true",
+                    help="with --results-dir: attach energy for a session that stopped early (pulls its trace)")
     args = ap.parse_args()
+    if args.recover_energy:
+        if not args.results_dir:
+            sys.exit("--recover-energy needs --results-dir")
+        return recover_energy(args)
     if args.pool_file:
         from pool import load_pool
         pool = load_pool(args.pool_file)

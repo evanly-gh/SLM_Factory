@@ -1,0 +1,65 @@
+ggml_opencl: selected platform: 'QUALCOMM Snapdragon(TM)'
+
+ggml_opencl: device: 'QUALCOMM Adreno(TM) (OpenCL 3.0 Adreno(TM) 740)'
+ggml_opencl: OpenCL driver: OpenCL 3.0 QUALCOMM build: 0676.77.1 Compiler E031.41.03.64
+ggml_opencl: vector subgroup broadcast support: false
+ggml_opencl: device FP16 support: true
+ggml_opencl: mem base addr align: 128
+ggml_opencl: max mem alloc size: 884 MB
+ggml_opencl: device max workgroup size: 1024
+ggml_opencl: SVM coarse grain buffer support: true
+ggml_opencl: SVM fine grain buffer support: true
+ggml_opencl: SVM fine grain system support: false
+ggml_opencl: SVM atomics support: true
+ggml_opencl: flattening quantized weights representation as struct of arrays (GGML_OPENCL_SOA_Q)
+ggml_opencl: using kernels optimized for Adreno (GGML_OPENCL_USE_ADRENO_KERNELS)
+ggml_opencl: loading OpenCL kernels.............................................................................
+ggml_opencl: default device: 'QUALCOMM Adreno(TM) (OpenCL 3.0 Adreno(TM) 740)'
+PB_MARK llama rep=0 begin=277518659393611 end=277532044116887 n_prompt=0 n_gen=256 n_depth=256
+PB_MARK llama rep=1 begin=277532060136001 end=277545389033861 n_prompt=0 n_gen=256 n_depth=256
+PB_MARK llama rep=2 begin=277545419119121 end=277558736935262 n_prompt=0 n_gen=256 n_depth=256
+PB_MARK llama rep=3 begin=277558749265366 end=277572044424892 n_prompt=0 n_gen=256 n_depth=256
+[
+  {
+    "build_commit": "eadc418",
+    "build_number": 1,
+    "cpu_info": "CPU",
+    "gpu_info": "QUALCOMM Adreno(TM)",
+    "backends": "OpenCL",
+    "model_filename": "/data/local/tmp/paper_bench/models/llama3.2-1b-q4_0.gguf",
+    "model_type": "llama 1B Q4_0",
+    "model_size": 763097216,
+    "model_n_params": 1235814432,
+    "n_batch": 2048,
+    "n_ubatch": 512,
+    "n_threads": 4,
+    "cpu_mask": "0x0",
+    "cpu_strict": false,
+    "poll": 50,
+    "type_k": "f16",
+    "type_v": "f16",
+    "n_gpu_layers": 99,
+    "n_cpu_moe": 0,
+    "split_mode": "layer",
+    "main_gpu": 0,
+    "no_kv_offload": false,
+    "flash_attn": false,
+    "devices": "auto",
+    "tensor_split": "0.00",
+    "tensor_buft_overrides": "none",
+    "use_mmap": true,
+    "embeddings": false,
+    "no_op_offload": 0,
+    "no_host": false,
+    "n_prompt": 0,
+    "n_gen": 256,
+    "n_depth": 256,
+    "test_time": "2026-10-08T05:39:25Z",
+    "avg_ns": 13331646609,
+    "stddev_ns": 38067172,
+    "avg_ts": 19.202546,
+    "stddev_ts": 0.054738,
+    "samples_ns": [ 13384721349, 13328892964, 13317814318, 13295157807 ],
+    "samples_ts": [ 19.1263, 19.2064, 19.2224, 19.2551 ]
+  }
+]

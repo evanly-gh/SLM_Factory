@@ -1,0 +1,7 @@
+ggml_opencl: selected platform: 'QUALCOMM Snapdragon(TM)'
+
+ggml_opencl: device: 'QUALCOMM Adreno(TM) (OpenCL 3.0 Adreno(TM) 740)'
+ggml_opencl: default device: 'QUALCOMM Adreno(TM) (OpenCL 3.0 Adreno(TM) 740)'
+PB_MARK llama rep=0 begin=341414590802032 end=341416984197395 n_prompt=256 n_gen=0 n_depth=0
+PB_MARK llama rep=1 begin=341416984372812 end=341419317904738 n_prompt=256 n_gen=0 n_depth=0
+PB_MARK llama rep=2 begin=341419318091821 end=341421683901560 n_prompt=256 n_gen=0 n_depth=0

@@ -1,0 +1,96 @@
+{
+ "config": {
+  "id": "qwen3.5-2b__F16__llama.cpp__gpu__head",
+  "model": "qwen3.5-2b",
+  "quant": "F16",
+  "bits": 16,
+  "framework": "llama.cpp",
+  "backend": "gpu",
+  "ref": "head"
+ },
+ "model_file": {
+  "name": "qwen3.5-2b",
+  "hf_id": "Qwen/Qwen3.5-2B",
+  "framework": "llama.cpp",
+  "quant": "F16",
+  "bits": 16,
+  "ref": "head",
+  "path": "gguf/qwen3.5-2b-f16-head.gguf",
+  "files": {
+   "qwen3.5-2b-f16-head.gguf": 3897387968
+  },
+  "converter": "llama.cpp 46baf1f1fec5 convert_hf_to_gguf"
+ },
+ "started": "2026-10-08T15:48:07.328358",
+ "invocations": {
+  "prefill": {
+   "exit": 1,
+   "timed_out": false,
+   "seconds": 10.4,
+   "marks": 0,
+   "cpu_busy": 0.079,
+   "gate": {
+    "passed": true,
+    "waited_s": 805.3,
+    "issues": null,
+    "battery_temp_c": 28.0,
+    "cpu_caps_khz": {
+     "policy0": 2016000,
+     "policy3": 2803200,
+     "policy7": 3360000
+    },
+    "thermal_status": 0
+   },
+   "state_before": {
+    "epoch_ms": 1791500505648,
+    "battery_temp_c": 28.0,
+    "battery_level": 57,
+    "battery_status": 3,
+    "externally_powered": false,
+    "power_sources": [],
+    "cpu_caps_khz": {
+     "policy0": 2016000,
+     "policy3": 2803200,
+     "policy7": 3360000
+    },
+    "cpu_hw_max_khz": {
+     "policy0": 2016000,
+     "policy3": 2803200,
+     "policy7": 3360000
+    },
+    "cpu_capped": false,
+    "screen": "Dozing",
+    "thermal_status": 0
+   },
+   "state_after": {
+    "epoch_ms": 1791500517067,
+    "battery_temp_c": 27.9,
+    "battery_level": 57,
+    "battery_status": 3,
+    "externally_powered": false,
+    "power_sources": [],
+    "cpu_caps_khz": {
+     "policy0": 2016000,
+     "policy3": 2803200,
+     "policy7": 3360000
+    },
+    "cpu_hw_max_khz": {
+     "policy0": 2016000,
+     "policy3": 2803200,
+     "policy7": 3360000
+    },
+    "cpu_capped": false,
+    "screen": "Dozing",
+    "thermal_status": 0
+   },
+   "idle_window": [
+    340045.16,
+    340055.31
+   ]
+  }
+ },
+ "windows": [],
+ "status": "failed",
+ "error": "crash/error (exit 1): llama_model_load: error loading model: unable to allocate OpenCL buffer | llama_model_load_from_file_impl: failed to load model | llama_bench: error: failed to load model '/data/local/tmp/paper_bench/models/qwen3.5-2b-f16-head.gguf'",
+ "finished": "2026-10-08T16:02:12.068527"
+}

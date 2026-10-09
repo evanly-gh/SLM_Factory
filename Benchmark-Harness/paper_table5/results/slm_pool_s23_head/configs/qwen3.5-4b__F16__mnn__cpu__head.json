@@ -1,0 +1,37 @@
+{
+ "config": {
+  "id": "qwen3.5-4b__F16__mnn__cpu__head",
+  "model": "qwen3.5-4b",
+  "quant": "F16",
+  "bits": 16,
+  "framework": "mnn",
+  "backend": "cpu",
+  "ref": "head"
+ },
+ "model_file": {
+  "name": "qwen3.5-4b",
+  "hf_id": "Qwen/Qwen3.5-4B",
+  "framework": "mnn",
+  "quant": "F16",
+  "bits": 16,
+  "ref": "head",
+  "path": "mnn/qwen3.5-4b-mnn-paper-default-q16-head",
+  "files": {
+   "config.json": 523,
+   "export_args.json": 1610,
+   "llm.mnn": 4138432,
+   "llm.mnn.json": 10456606,
+   "llm.mnn.weight": 8410935296,
+   "llm_config.json": 9158,
+   "tokenizer.mtok": 7342052
+  },
+  "recipe": "paper-default",
+  "converter": "llmexport.py @ MNN mnn-a8ec49781e19, MNNConvert C:\\Users\\evanl\\.pb\\tools\\mnnconvert_nolog.cmd"
+ },
+ "started": "2026-10-08T21:13:12.171311",
+ "invocations": {},
+ "windows": [],
+ "status": "failed",
+ "error": "does not fit in RAM: 15.71 GiB of weights in memory on a phone with 6.91 GiB RAM (limit 75%); not run",
+ "finished": "2026-10-08T21:13:12.171311"
+}

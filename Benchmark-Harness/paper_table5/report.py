@@ -60,7 +60,10 @@ def load(dirs: list[Path]) -> tuple[dict, dict]:
             c = r["config"]
             quant = c["quant"] if c.get("ref", "pinned") == "pinned" else f"{c['quant']} @{c['ref']}"
             key = (c["model"], c["backend"], c["framework"], quant)
-            data.setdefault(prof["id"], {})[key] = r
+            prev = data.setdefault(prof["id"], {}).get(key)
+            if prev is not None and prev.get("status") == "ok" and r.get("status") != "ok":
+                continue  # a later failure (e.g. not enough free RAM that time) does not hide a good measurement
+            data[prof["id"]][key] = r
             if r.get("energy_headline_method"):
                 dev["energy_methods"].add(r["energy_headline_method"])
             if r.get("energy_kind"):

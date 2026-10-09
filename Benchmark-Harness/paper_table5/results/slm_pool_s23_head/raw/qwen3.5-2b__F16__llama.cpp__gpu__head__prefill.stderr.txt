@@ -1,0 +1,9 @@
+ggml_opencl: selected platform: 'QUALCOMM Snapdragon(TM)'
+
+ggml_opencl: device: 'QUALCOMM Adreno(TM) (OpenCL 3.0 Adreno(TM) 740)'
+ggml_opencl: default device: 'QUALCOMM Adreno(TM) (OpenCL 3.0 Adreno(TM) 740)'
+ggml_backend_opencl_buffer_type_alloc_buffer: failed to allocate 970.00 MiB (err=-61). Consider reducing -ngl, lowering -c / -ub, or using quantized KV cache.
+ggml_backend_buft_alloc_buffer_n_default: failed to allocate OpenCL buffer of size 1017118720
+llama_model_load: error loading model: unable to allocate OpenCL buffer
+llama_model_load_from_file_impl: failed to load model
+llama_bench: error: failed to load model '/data/local/tmp/paper_bench/models/qwen3.5-2b-f16-head.gguf'

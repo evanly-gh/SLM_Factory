@@ -52,7 +52,7 @@ SUPPLY_FILES = ("current_now", "current_avg", "voltage_now", "voltage_avg", "cha
 SAMPLED_CURRENT = ("current_now", "current_avg")
 
 PERFETTO_CONFIG = """
-buffers { size_kb: 32768 fill_policy: DISCARD }
+buffers { size_kb: 32768 fill_policy: RING_BUFFER }
 data_sources {
   config {
     name: "android.power"

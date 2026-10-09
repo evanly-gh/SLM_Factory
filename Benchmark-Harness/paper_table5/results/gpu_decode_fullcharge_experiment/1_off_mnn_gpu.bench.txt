@@ -1,0 +1,19 @@
+PB_MARK mnn mode=kv rep=0 begin=329401033524068 end=329440537072750 prefill_us=23579055 decode_us=15679153 prompt=256 gen=256
+PB_MARK mnn mode=kv rep=1 begin=329440537569521 end=329455733021390 prefill_us=812307 decode_us=14183252 prompt=256 gen=256
+PB_MARK mnn mode=kv rep=2 begin=329455733261547 end=329470996814145 prefill_us=812726 decode_us=14239275 prompt=256 gen=256
+PB_MARK mnn mode=kv rep=3 begin=329470997207583 end=329485909733931 prefill_us=813860 decode_us=13893293 prompt=256 gen=256
+Can't open file:/sys/devices/system/cpu/cpufreq/boost/affected_cpus
+CPU Group: [ 0  1  2 ], 307200 - 2016000
+CPU Group: [ 3  4  5  6 ], 499200 - 2803200
+CPU Group: [ 7 ], 595200 - 3360000
+(last_midr & (CPUINFO_ARM_MIDR_IMPLEMENTER_MASK | CPUINFO_ARM_MIDR_PART_MASK))=0x 4100d4e0 in _getInfoArm, 1234 
+The device supports: i8sdot:1, fp16:1, i8mm: 1, sve2: 0, sme2: 0
+Can't open file:tmp/mnn_cachefile.bin
+Load Cache file error.
+| model                          |  modelSize | backend    | threads | precision  | llm_demo   | speed(tok/s) |
+| ------------------------------ | ---------: | ---------- | ----: | ---------- | ---------- | ------------ |
+| llama3.2-1b-mnn-paper-default-q4 | 737.08 MiB | OPENCL     |     4 | Low        | prompt=256<br>decode=256 | 314.90 ± 0.31<br>18.15 ± 0.24 |
+Update cache to tmp/mnn_cachefile.bin, size = 3307368
+Open tmp/mnn_cachefile.bin error
+Write Cache File error!
+

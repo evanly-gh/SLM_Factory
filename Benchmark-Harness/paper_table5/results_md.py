@@ -163,10 +163,18 @@ def main():
         L += ["", f"Across all runs the battery was at {min(all_t):.1f}–{max(all_t):.1f} °C "
               f"(median {statistics.median(all_t):.1f} °C) when a timed run started."]
 
+    failed = [r for r in res.values() if r.get("status") != "ok"]
+    if failed:
+        L += ["", "## Configurations that did not run", ""]
+        L += [f"- `{r['config']['id']}`: {r.get('error')}" for r in sorted(failed, key=lambda r: r["config"]["id"])]
     L += ["", "## Sessions", "", "| Session | Models | Screen | Radios | Cool-down gate |", "|---|---|---|---|---|"]
     for d in args.dirs:
-        for f in sorted((d / "sessions").glob("*.json")) or [d / "session.json"]:
-            s = json.loads(f.read_text())
+        recs = [json.loads(f.read_text()) for f in sorted((d / "sessions").glob("*.json"))] or             [json.loads((d / "session.json").read_text())]
+        starts = [s["started"] for s in recs] + ["9999"]
+        ran = [r["started"] for r in res.values()]
+        for i, s in enumerate(recs):
+            if not any(starts[i] <= t0 < starts[i + 1] for t0 in ran):
+                continue  # stopped before finishing a configuration
             screen = ("on, minimum brightness" if s.get("screen_on", True) and not s.get("wake_lock")
                       else "off, CPU kept awake by a partial wake lock" if s.get("wake_lock") else "off")
             radios = s.get("radio_mode") or "mobile data, Bluetooth and location off (Wi-Fi kept for adb)"
@@ -190,14 +198,13 @@ def main():
           "partial wake lock held by the adb shell (`tools/PbWake.java`), as the paper's screen-off protocol. "
           "Airplane mode is used when the phone keeps Wi-Fi on in it; otherwise mobile data, Bluetooth and "
           "location are switched off. Each session's setting is in *Sessions* above.",
-          "3. **Cool-down gate.** The paper cools the phone below 28 °C before each run. Where this phone rests "
-          "above that (31.6–32.2 °C with the screen on in the first sessions), the gate also passes once the battery "
-          "temperature has stopped falling (≤ 0.2 °C over 5 minutes, at most 32.5 °C), i.e. the previous run's heat "
-          "has dissipated; the CPU frequency caps must also be back at their maximum. Start temperatures are listed "
-          "above.",
-          "4. **Battery level.** Battery energy is current × voltage at the battery terminals, so a lower charge "
-          "(lower voltage) does not bias it directly; the phone ran from about 60% down to 12% during the first "
-          "session without entering battery saver.",
+          "3. **Cool-down gate.** As in the paper, every run starts with the battery at or below 28 °C (and the CPU "
+          "frequency caps back at their maximum). With the screen off the phone rests at about 24.4 °C, so the gate "
+          "passes on the paper's rule; a fallback (pass once the battery has stopped falling, ≤ 0.2 °C over 5 minutes, "
+          "at most 32.5 °C) exists for a phone that rests above 28 °C, and was needed in the earlier screen-on runs, "
+          "where the phone rested at 31.6–32.2 °C. Start temperatures are listed above.",
+          "4. **Battery level.** Battery energy is current × voltage at the battery terminals, so a lower charge does "
+          "not bias it directly; sessions stop below 20% charge (`--min-battery`).",
           "5. **llama.cpp CPU uses 4 threads.** `llama-bench`'s default on this phone is 8 threads (one per core), "
           "which puts work on the three Cortex-A510 little cores and makes every thread wait for them: "
           "Llama-3.2-1B Q4_0 prefill measured 68 tokens/s at 8 threads standalone and 20.8 tokens/s during a "

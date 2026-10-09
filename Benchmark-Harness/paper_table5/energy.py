@@ -21,8 +21,10 @@ from pathlib import Path
 
 import energy_probe as ep
 
-BATTERY_PREFERENCE = ("perfetto:charge", "sysfs:charge_counter", "perfetto:current", "sysfs:current_now",
-                      "sysfs:current_avg", "sysfs:power_now")
+# Current-based methods first: charge counters can be derived from the state-of-charge estimate (the S23's moves in
+# 0.1%-of-capacity steps about every 30 s), which cannot resolve a minute-long phase.
+BATTERY_PREFERENCE = ("perfetto:current", "sysfs:current_now", "sysfs:current_avg", "sysfs:power_now",
+                      "perfetto:charge", "sysfs:charge_counter")
 
 
 def is_chip_method(method: str) -> bool:
@@ -90,6 +92,20 @@ class EnergyRecorder:
             if z["shell_readable"] or z.get("su_readable"):
                 label = (z["name"] or Path(z["path"]).name).replace(" ", "_")
                 self.columns.append((f"powercap:{label}", f"{z['path']}/energy_uj"))
+        # A killed or crashed earlier session leaves its sampler loop and Perfetto trace running (they only stop on
+        # the stop file); removing the stop file below would let them run alongside this session, adding CPU load
+        # during the benchmarks. Stop them first.
+        stale = self.adb.sh("ps -A -o ARGS | grep -cE 'energy_probe/sample[r][.]sh|energy_probe[.]pftrac[e]'").strip()
+        if stale.isdigit() and int(stale) > 0:
+            self.log(f"[ENERGY] stopping {stale} sampler/trace process(es) left by an earlier session")
+            self.adb.sh(f"mkdir -p {ep.DEV_DIR}; touch {ep.DEV_DIR}/stop; pkill -f 'energy_probe[.]pftrace'")
+            time.sleep(2)
+            self.adb.sh("pkill -f 'energy_probe/sample[r][.]sh'")
+            # keep that session's data for --recover-energy instead of deleting it below / in start_perfetto
+            stamp = time.strftime("%Y%m%d_%H%M%S")
+            self.adb.sh(f"mv {ep.TRACE_REMOTE} {ep.TRACE_REMOTE}.{stamp} 2>/dev/null; "
+                        f"mv {ep.DEV_DIR}/samples.txt {ep.DEV_DIR}/samples.txt.{stamp} 2>/dev/null")
+            self.log(f"[ENERGY] its trace and samples were kept on the phone as *.{stamp}")
         self.adb.sh(f"mkdir -p {ep.DEV_DIR}; rm -f {ep.DEV_DIR}/stop {ep.DEV_DIR}/samples.txt")
         ep.push_text(self.adb, ep.sampler_script(self.columns, 0.1), f"{ep.DEV_DIR}/sampler.sh")
         cmd = f"setsid sh {ep.DEV_DIR}/sampler.sh"
@@ -155,6 +171,7 @@ class EnergyRecorder:
                 # a span's average power applies to the time spent in its own windows, not to the gaps between
                 # them (which can hold other work, e.g. the token MNN generates after each prefill)
                 dur = w.get("covered", w["b"] - w["a"])
+                d["updates"] = d.get("updates", 0) + round(ep.updates_per_s(_series, w["a"], w["b"]) * (w["b"] - w["a"]))                     if _series else d.get("updates", 0)
                 d["mj"] += sign * p * dur
                 d["net_mj"] += (sign * p - (idle_mw or 0.0)) * dur
                 d["s"] += dur
@@ -169,6 +186,13 @@ class EnergyRecorder:
                     reasons.append(f"{d['missing']} window(s) without samples")
                 if not d["tokens"]:
                     reasons.append("no usable windows")
+                if not is_chip_method(method) and idle_mw is None:
+                    reasons.append("no idle baseline: net energy unavailable")
+                # counter methods (charge/energy counters) turn counter steps into power, so they need many steps;
+                # a sampled current that holds steady is fine
+                if "charge" in method and _series and d["tokens"] and d.get("updates", 0) < 10:
+                    # e.g. the S23's charge counter moves in 0.1%-of-capacity steps about every 30 s
+                    reasons.append(f"reading changed only {d.get('updates', 0)} time(s) during the phase")
                 res[phase] = {
                     "uj_per_token": round(d["mj"] * 1e3 / d["tokens"], 1) if d["tokens"] else None,
                     "net_uj_per_token": (round(d["net_mj"] * 1e3 / d["tokens"], 1)

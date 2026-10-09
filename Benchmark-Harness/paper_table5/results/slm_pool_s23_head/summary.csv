@@ -1,0 +1,33 @@
+model,quant,framework,backend,status,error,prefill_tps,prefill_tps_std,prefill_reps,prefill_uj_per_token,prefill_energy_valid,decode_tps,decode_tps_std,decode_reps,decode_uj_per_token,decode_energy_valid,energy_kind,energy_method,warning
+qwen3.5-0.8b,F16,llama.cpp,cpu,ok,,26.62,0.31,26.95 26.58 26.34,,,13.51,0.22,13.74 13.49 13.3,,,,,
+qwen3.5-0.8b,F16,llama.cpp,gpu,ok,,160.74,1.48,162.44 160.07 159.73,,,11.5,0.02,11.5 11.52 11.49,,,,,
+qwen3.5-0.8b,F16,mnn,cpu,ok,,215.92,5.05,221.2 215.43 211.14,,,21.32,1.85,22.15 22.6 19.2,,,,,
+qwen3.5-0.8b,F16,mnn,gpu,failed,"crash/error (exit 139): [llm_bench] -kv true is deprecated: use `-pg <pp>,<tg>` instead (`-p A -n B -kv true` == `-pg A,B`). | PB_MARK mnn mode=kv rep=0 begin=335112369169331 end=335138592140363 prefill_us=8440179 decode_us=17037351 prompt=256 gen=256 | Segmentation fault",,,,,,,,,,,,,
+qwen3.5-0.8b,Q4_0,llama.cpp,cpu,ok,,291.4,5.8,297.48 290.77 285.94,,,43.25,0.87,44.17 43.11 42.46,,,,,
+qwen3.5-0.8b,Q4_0,llama.cpp,gpu,ok,,155.34,2.0,156.58 156.4 153.04,,,12.94,0.09,13.03 12.84 12.93,,,,,
+qwen3.5-0.8b,Q4,mnn,cpu,ok,,271.63,9.32,282.02 268.89 264.0,,,74.86,0.36,75.24 74.81 74.53,,,,,
+qwen3.5-0.8b,Q4,mnn,gpu,ok,,456.87,5.77,463.5 452.98 454.11,,,50.36,0.1,50.36 50.26 50.46,,,,,phone suspended during timed work (boottime/monotonic up to 1.08x): keep it awake (--screen on)
+qwen3.5-0.8b,Q8_0,llama.cpp,cpu,ok,,261.71,3.53,265.56 260.94 258.63,,,41.33,0.35,41.7 41.31 40.99,,,,,
+qwen3.5-0.8b,Q8_0,llama.cpp,gpu,ok,,162.99,1.77,164.98 161.58 162.41,,,14.63,0.06,14.67 14.56 14.65,,,,,
+qwen3.5-0.8b,Q8,mnn,cpu,ok,,274.55,8.6,283.83 272.98 266.86,,,47.69,0.26,47.97 47.64 47.46,,,,,
+qwen3.5-0.8b,Q8,mnn,gpu,ok,,379.23,5.87,376.94 385.89 374.85,,,37.67,0.12,37.73 37.74 37.53,,,,,phone suspended during timed work (boottime/monotonic up to 1.08x): keep it awake (--screen on)
+qwen3.5-2b,F16,llama.cpp,cpu,ok,,9.35,0.08,9.44 9.35 9.27,,,5.26,0.3,5.57 5.23 4.97,,,,,
+qwen3.5-2b,F16,llama.cpp,gpu,failed,crash/error (exit 1): llama_model_load: error loading model: unable to allocate OpenCL buffer | llama_model_load_from_file_impl: failed to load model | llama_bench: error: failed to load model '/data/local/tmp/paper_bench/models/qwen3.5-2b-f16-head.gguf',,,,,,,,,,,,,
+qwen3.5-2b,F16,mnn,cpu,failed,does not fit in RAM: 3877 MB of the benchmark process was swapped out (stopped at > 512 MB),,,,,,,,,,,,,
+qwen3.5-2b,F16,mnn,gpu,failed,does not fit in RAM: 7.04 GiB of weights in memory on a phone with 6.91 GiB RAM (limit 75%); not run,,,,,,,,,,,,,
+qwen3.5-2b,Q4_0,llama.cpp,cpu,ok,,133.0,1.2,134.3 132.75 131.95,,,20.97,0.34,21.34 20.9 20.66,,,,,
+qwen3.5-2b,Q4_0,llama.cpp,gpu,ok,,108.28,1.25,106.98 108.38 109.48,,,11.32,0.11,11.2 11.35 11.41,,,,,
+qwen3.5-2b,Q4,mnn,cpu,ok,,134.45,3.46,138.12 133.99 131.24,47138.6,True,34.25,0.61,34.91 34.13 33.7,294356.3,True,whole device (net of idle),perfetto:current,
+qwen3.5-2b,Q4,mnn,gpu,ok,,251.93,2.6,249.08 252.55 254.17,15384.4,True,30.27,0.05,30.32 30.27 30.22,211131.8,True,whole device (net of idle),perfetto:current,phone suspended during timed work (boottime/monotonic up to 1.07x): keep it awake (--screen on)
+qwen3.5-2b,Q8_0,llama.cpp,cpu,ok,,120.0,0.94,121.08 119.57 119.35,,,19.77,0.2,19.97 19.77 19.56,,,,,
+qwen3.5-2b,Q8_0,llama.cpp,gpu,ok,,113.03,0.58,113.11 113.57 112.41,,,11.35,0.02,11.33 11.36 11.37,,,,,
+qwen3.5-2b,Q8,mnn,cpu,ok,,128.1,1.63,128.71 129.33 126.25,49594.9,True,20.91,0.07,20.98 20.89 20.84,415981.7,True,whole device (net of idle),perfetto:current,
+qwen3.5-2b,Q8,mnn,gpu,ok,,203.09,3.87,199.28 207.03 202.97,22682.1,True,20.14,0.02,20.16 20.14 20.12,369166.4,True,whole device (net of idle),perfetto:current,phone suspended during timed work (boottime/monotonic up to 1.05x): keep it awake (--screen on)
+qwen3.5-4b,F16,llama.cpp,cpu,failed,does not fit in RAM: 8.07 GiB of weights in memory on a phone with 6.91 GiB RAM (limit 75%); not run,,,,,,,,,,,,,
+qwen3.5-4b,F16,llama.cpp,gpu,failed,does not fit in RAM: 8.07 GiB of weights in memory on a phone with 6.91 GiB RAM (limit 75%); not run,,,,,,,,,,,,,
+qwen3.5-4b,F16,mnn,cpu,failed,does not fit in RAM: 15.71 GiB of weights in memory on a phone with 6.91 GiB RAM (limit 75%); not run,,,,,,,,,,,,,
+qwen3.5-4b,F16,mnn,gpu,failed,does not fit in RAM: 15.71 GiB of weights in memory on a phone with 6.91 GiB RAM (limit 75%); not run,,,,,,,,,,,,,
+qwen3.5-4b,Q4_0,llama.cpp,cpu,ok,,50.75,1.52,49.85 52.5 49.89,123507.8,True,10.0,0.19,10.2 9.99 9.82,758412.2,True,whole device (net of idle),perfetto:current,
+qwen3.5-4b,Q4_0,llama.cpp,gpu,ok,,47.48,0.35,47.22 47.34 47.88,85406.5,True,6.45,0.02,6.46 6.43 6.45,740813.4,True,whole device (net of idle),perfetto:current,
+qwen3.5-4b,Q8_0,llama.cpp,cpu,failed,does not fit in RAM: 600 MB of the benchmark process was swapped out (stopped at > 512 MB),,,,,,,,,,,,,
+qwen3.5-4b,Q8_0,llama.cpp,gpu,failed,does not fit in RAM: 723 MB of the benchmark process was swapped out (stopped at > 512 MB),,,,,,,,,,,,,

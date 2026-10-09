@@ -249,6 +249,7 @@ class DeviceControls:
                 self.waker.apply()
             except Exception as e:  # noqa: BLE001 - fall back to the screen-on workaround
                 self.log(f"[DEVICE] WARNING: wake lock failed ({e}); keeping the screen on at minimum brightness")
+                self.waker.restore()  # the helper may have started anyway; do not leave it holding a lock
                 self.waker, self.screen_on, self.keeper = None, True, ScreenKeeper(self.adb)
         if self.keeper:
             self.keeper.apply()
@@ -294,5 +295,13 @@ class DeviceControls:
 
 
 def boottime_s(adb) -> float:
-    """Phone CLOCK_BOOTTIME (same clock as /proc/uptime, Perfetto and the PB_MARK lines)."""
-    return float(adb.sh("cat /proc/uptime").split()[0])
+    """Phone CLOCK_BOOTTIME (same clock as /proc/uptime, Perfetto and the PB_MARK lines). Retries through a brief
+    wireless adb drop; raises RuntimeError if the phone stays unreachable."""
+    for attempt in range(4):
+        out = adb.sh("cat /proc/uptime").split()
+        if out:
+            return float(out[0])
+        time.sleep(5)
+        if ":" in adb.serial:
+            subprocess.run([adb.bin, "connect", adb.serial], capture_output=True, text=True, timeout=30)
+    raise RuntimeError(f"phone {adb.serial} unreachable (no reply to cat /proc/uptime)")

@@ -1,0 +1,96 @@
+{
+ "config": {
+  "id": "qwen2.5-7b__Q4_0__llama.cpp__cpu",
+  "model": "qwen2.5-7b",
+  "quant": "Q4_0",
+  "bits": 4,
+  "framework": "llama.cpp",
+  "backend": "cpu",
+  "ref": "pinned"
+ },
+ "model_file": {
+  "name": "qwen2.5-7b",
+  "hf_id": "Qwen/Qwen2.5-7B-Instruct",
+  "framework": "llama.cpp",
+  "quant": "Q4_0",
+  "bits": 4,
+  "ref": "pinned",
+  "path": "gguf/qwen2.5-7b-q4_0.gguf",
+  "files": {
+   "qwen2.5-7b-q4_0.gguf": 4431391232
+  },
+  "converter": "llama.cpp eadc4184caee convert_hf_to_gguf + llama-quantize"
+ },
+ "started": "2026-10-07T18:35:35.671369",
+ "invocations": {
+  "prefill": {
+   "exit": -9,
+   "timed_out": false,
+   "seconds": 11.9,
+   "marks": 0,
+   "cpu_busy": 0.338,
+   "gate": {
+    "passed": true,
+    "waited_s": 0.5,
+    "issues": null,
+    "battery_temp_c": 27.8,
+    "cpu_caps_khz": {
+     "policy0": 2016000,
+     "policy3": 2803200,
+     "policy7": 3360000
+    },
+    "thermal_status": 0
+   },
+   "state_before": {
+    "epoch_ms": 1791423349074,
+    "battery_temp_c": 27.5,
+    "battery_level": 44,
+    "battery_status": 3,
+    "externally_powered": false,
+    "power_sources": [],
+    "cpu_caps_khz": {
+     "policy0": 2016000,
+     "policy3": 2803200,
+     "policy7": 3360000
+    },
+    "cpu_hw_max_khz": {
+     "policy0": 2016000,
+     "policy3": 2803200,
+     "policy7": 3360000
+    },
+    "cpu_capped": false,
+    "screen": "Dozing",
+    "thermal_status": 0
+   },
+   "state_after": {
+    "epoch_ms": 1791423362590,
+    "battery_temp_c": 27.5,
+    "battery_level": 44,
+    "battery_status": 3,
+    "externally_powered": false,
+    "power_sources": [],
+    "cpu_caps_khz": {
+     "policy0": 2016000,
+     "policy3": 2803200,
+     "policy7": 3360000
+    },
+    "cpu_hw_max_khz": {
+     "policy0": 2016000,
+     "policy3": 2803200,
+     "policy7": 3360000
+    },
+    "cpu_capped": false,
+    "screen": "Dozing",
+    "thermal_status": 0
+   },
+   "idle_window": [
+    262887.51,
+    262897.7
+   ]
+  }
+ },
+ "windows": [],
+ "status": "failed",
+ "error": "does not fit in RAM: 1623 MB of the benchmark process was swapped out (stopped at > 512 MB)",
+ "finished": "2026-10-07T18:36:17.592410"
+}
