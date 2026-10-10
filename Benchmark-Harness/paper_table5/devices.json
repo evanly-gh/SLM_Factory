@@ -1,0 +1,19 @@
+{
+  "_doc": "Device profiles, matched top to bottom; every 'match' rule is a case-insensitive regex on a getprop-derived field (manufacturer, model, device, soc, platform). paper_column names the paper's Table 9 column to compare against (null = not in the paper); proxy_column is the closest paper phone for a phone that is not in it (compared and labelled as a proxy; the Galaxy S23's SM8550 is one generation older than the Xiaomi 14's SM8650). max_temp_c is the cool-down gate (paper: below 28 C). energy_method is the headline method (null = decided by energy_probe.py / auto: powercap if readable, else the best battery method).",
+  "profiles": [
+    {"id": "oneplus15", "label": "OnePlus 15", "match": {"manufacturer": "oneplus", "soc": "SM8850|CPH27"},
+     "paper_column": "oneplus15", "max_temp_c": 28.0, "energy_method": null},
+    {"id": "oneplus15_by_model", "label": "OnePlus 15", "match": {"model": "^CPH274\\d"},
+     "paper_column": "oneplus15", "max_temp_c": 28.0, "energy_method": null},
+    {"id": "xiaomi17", "label": "Xiaomi 17", "match": {"manufacturer": "xiaomi", "soc": "SM8850"},
+     "paper_column": "xiaomi17", "max_temp_c": 28.0, "energy_method": null},
+    {"id": "xiaomi15", "label": "Xiaomi 15", "match": {"manufacturer": "xiaomi", "soc": "SM8750"},
+     "paper_column": "xiaomi15", "max_temp_c": 28.0, "energy_method": null},
+    {"id": "xiaomi14", "label": "Xiaomi 14", "match": {"manufacturer": "xiaomi", "soc": "SM8650"},
+     "paper_column": "xiaomi14", "max_temp_c": 28.0, "energy_method": null},
+    {"id": "galaxy_s23", "label": "Galaxy S23", "match": {"model": "^SM-S911"},
+     "paper_column": null, "proxy_column": "xiaomi14", "max_temp_c": 28.0, "energy_method": "perfetto:current",
+     "gate_plateau_s": 300, "gate_plateau_max_c": 32.5,
+     "_gate_note": "over wireless adb the screen stays on, and the idle phone rests at 29.9-31.2 C battery (2026-10-06/07), above the paper's 28 C; the gate therefore also passes once the battery has stopped cooling (<= 0.2 C drop over 300 s, at most 32.5 C), i.e. the previous run's heat is gone. Each run's start temperature is recorded."}
+  ]
+}

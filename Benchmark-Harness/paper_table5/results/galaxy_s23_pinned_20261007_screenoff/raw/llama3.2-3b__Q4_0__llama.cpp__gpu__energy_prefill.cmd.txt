@@ -1,0 +1,1 @@
+LD_LIBRARY_PATH=.:/vendor/lib64 ./llama-bench -m /data/local/tmp/paper_bench/models/llama3.2-3b-q4_0.gguf -p 256 -n 0 -r 6 -ngl 99 -o json -t 4

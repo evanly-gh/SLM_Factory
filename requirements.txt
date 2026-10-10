@@ -1,0 +1,20 @@
+# Main environment (.venv at the repo root): model conversion to GGUF and MNN, GGUF validation,
+# and the benchmark harnesses. Python 3.10-3.12: llama.cpp's converter pins numpy 1.26, which
+# has no wheels for Python 3.13+.
+#
+#   python -m pip install -r requirements.txt
+
+# convert_hf_to_gguf.py's own pins (CPU torch, transformers, numpy, sentencepiece, gguf, protobuf),
+# from the llama.cpp checkout the SmolChat app is built from.
+-r SmolChat-Android/llama.cpp/requirements/requirements-convert_hf_to_gguf.txt
+
+# Model downloads for convert_to_gguf.py / convert_to_mnn.py.
+huggingface_hub
+
+# Real-load validation of every GGUF convert_to_gguf.py produces. Prebuilt CPU wheels exist for
+# Windows x64, Linux and Apple Silicon; other platforms build it from source with a C++ compiler.
+--extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cpu
+llama-cpp-python==0.3.34
+
+# Energy integration from Perfetto battery traces (bench_common.py).
+perfetto

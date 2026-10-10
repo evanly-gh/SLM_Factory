@@ -22,8 +22,9 @@ Model-Conversion/
 # macOS
 .DS_Store
 
-# MNN
+# MNN: toolchain checkout (convert_to_mnn.py's default SLM_MNN_ROOT) and llmexport.py's venv
 MNN/
+.venv_mnn/
 mnn-benchmark-harness/mnn_models/
 mnn-benchmark-harness/__pycache__/
 mnn-output-qwen2.5-0.5b/

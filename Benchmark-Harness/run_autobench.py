@@ -69,14 +69,11 @@ KNOWN_AFFECTED_DEVICES = {
     # producing a 0-byte "model" that the app fails to load.
 }
 
-FALLBACK_ADB = str(Path.home() / "Library/Android/sdk/platform-tools/adb")
-
-MONSOON_SCRIPT = str(Path.home() / "SLM_Factory_Krishna_Personal/Power-Monitor/monsoon_single_reading.py")
+MONSOON_SCRIPT = str(Path(__file__).resolve().parent.parent / "Power-Monitor" / "monsoon_single_reading.py")
 
 # Shared measurement protocol (readiness gate, page-cache eviction, Perfetto energy) - the same
 # module run_mnn_autobench.py uses, so both engines are measured identically.
-sys.path.insert(0, str(Path.home() / "SLM_Factory_Krishna_Personal/Benchmark-Harness"))
-sys.path.insert(0, str(Path(__file__).resolve().parent))  # in a full checkout, the sibling bench_common.py wins
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 import bench_common  # noqa: E402
 
 # Set in main(): readiness gate + fixed rest applied before every broadcast (see pre_run()).
@@ -86,13 +83,12 @@ _REST_SECONDS = 0
 # (see BenchmarkService.kt's use_mmap extra); set from --mmap in main().
 _USE_MMAP = False
 
-CONVERT_SCRIPT = str(Path.home() / "SLM_Factory-SmolChat/Model-Conversion/convert_to_gguf.py")
+CONVERT_SCRIPT = str(Path(__file__).resolve().parent.parent / "Model-Conversion" / "convert_to_gguf.py")
 # Fallback locations only - the real, guaranteed location is computed
 # per-call in convert_to_gguf() once the model's output directory is known,
 # since we now pass --output explicitly rather than relying on the tool's
 # own "./output" default.
 CONVERSION_REPORT_CANDIDATES = [
-    str(Path.home() / "SLM_Factory_Krishna_Personal/Model-Conversion/conversion_report.json"),
     str(Path.cwd() / "conversion_report.json"),
 ]
 
@@ -195,9 +191,11 @@ def find_adb() -> str:
     on_path = shutil.which("adb")
     if on_path:
         return on_path
-    if os.path.exists(FALLBACK_ADB):
-        return FALLBACK_ADB
-    print("[ERROR] adb not found on PATH or at ~/Library/Android/sdk/platform-tools/adb")
+    candidates = bench_common.adb_candidates()
+    for candidate in candidates:
+        if candidate.exists():
+            return str(candidate)
+    print(f"[ERROR] adb not found on PATH or at any of: {', '.join(map(str, candidates))}")
     sys.exit(1)
 
 
@@ -1422,7 +1420,7 @@ def parse_args():
     p.add_argument("--device", choices=["phone", "emulator"], default="phone")
     p.add_argument("--questions", default=None, help="Path to .txt file, one question per line")
     p.add_argument("--output", default="autobench_results.json")
-    p.add_argument("--quant", choices=["Q4_K_M", "Q5_K_M", "Q8_0", "F16"], default="Q4_K_M")
+    p.add_argument("--quant", choices=["Q4_K_M", "Q8_0", "BF16"], default="Q4_K_M")
     p.add_argument("--timeout", type=int, default=180, help="Seconds to wait for RUN_DONE/RUN_ERROR per question")
     p.add_argument("--max-tokens", type=int, default=256, dest="max_tokens",
                     help="Max tokens the receiver should generate per response. Default 256 = the app's "
@@ -1473,6 +1471,9 @@ def parse_args():
 
 
 def main():
+    # Windows encodes redirected output as cp1252, which can't print every symbol used here.
+    for stream in (sys.stdout, sys.stderr):
+        stream.reconfigure(encoding="utf-8", errors="replace")
     args = parse_args()
 
     global _QUIET

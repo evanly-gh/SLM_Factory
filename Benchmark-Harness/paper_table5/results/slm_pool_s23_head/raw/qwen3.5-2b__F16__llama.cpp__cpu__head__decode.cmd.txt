@@ -1,0 +1,1 @@
+LD_LIBRARY_PATH=.:/vendor/lib64 ./llama-bench -m /data/local/tmp/paper_bench/models/qwen3.5-2b-f16-head.gguf -p 0 -n 256 -r 4 -ngl 0 -o json -d 256 -t 4

@@ -30,8 +30,7 @@ PACKAGE = "com.alibaba.mnnllm.android"
 BROADCAST_ACTION = "com.mnnllmchat.RUN_PROMPT"
 RECEIVER_COMPONENT = f"{PACKAGE}/.benchmark.headless.BenchmarkHeadlessReceiver"
 
-FALLBACK_ADB = str(Path.home() / "Library/Android/sdk/platform-tools/adb")
-MONSOON_SCRIPT = Path.home() / "SLM_Factory_Krishna_Personal/Power-Monitor/monsoon_single_reading.py"
+MONSOON_SCRIPT = Path(__file__).resolve().parent.parent / "Power-Monitor" / "monsoon_single_reading.py"
 
 # Shared measurement protocol (readiness gate, page-cache eviction, Perfetto energy) - the same
 # module SmolChat's run_autobench.py uses, so both engines are measured identically.
@@ -89,9 +88,11 @@ def find_adb() -> str:
     on_path = shutil.which("adb")
     if on_path:
         return on_path
-    if os.path.exists(FALLBACK_ADB):
-        return FALLBACK_ADB
-    print("[ERROR] adb not found on PATH or at ~/Library/Android/sdk/platform-tools/adb")
+    candidates = bench_common.adb_candidates()
+    for candidate in candidates:
+        if candidate.exists():
+            return str(candidate)
+    print(f"[ERROR] adb not found on PATH or at any of: {', '.join(map(str, candidates))}")
     sys.exit(1)
 
 
@@ -1294,6 +1295,9 @@ def parse_args():
 
 
 def main():
+    # Windows encodes redirected output as cp1252, which can't print every symbol used here.
+    for stream in (sys.stdout, sys.stderr):
+        stream.reconfigure(encoding="utf-8", errors="replace")
     args = parse_args()
 
     if args.trials > 1 and args.warmup_runs > 0:

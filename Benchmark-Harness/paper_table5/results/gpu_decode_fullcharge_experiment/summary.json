@@ -1,0 +1,62 @@
+[
+ {
+  "run": "0_off_llama_gpu",
+  "screen": "off",
+  "wakefulness": "mWakefulness=Dozing",
+  "start_temp_c": 25.9,
+  "battery_level": 97,
+  "decode_tps": 18.17,
+  "gpu_mhz_mean_busy": 715.9,
+  "gpu_busy_pct_mean": 82.4,
+  "cpu_little_mhz": 1704.0,
+  "cpu_mid_mhz": 1461.1,
+  "cpu_prime_mhz": 902.2,
+  "samples": 196,
+  "seconds": 68.3
+ },
+ {
+  "run": "0_off_mnn_gpu",
+  "screen": "off",
+  "wakefulness": "mWakefulness=Dozing",
+  "start_temp_c": 27.9,
+  "battery_level": 96,
+  "decode_tps": 17.81,
+  "gpu_mhz_mean_busy": 719.0,
+  "gpu_busy_pct_mean": 43.4,
+  "cpu_little_mhz": 1518.8,
+  "cpu_mid_mhz": 1112.1,
+  "cpu_prime_mhz": 1128.0,
+  "samples": 271,
+  "seconds": 88.4
+ },
+ {
+  "run": "1_off_llama_gpu",
+  "screen": "off",
+  "wakefulness": "mWakefulness=Dozing",
+  "start_temp_c": 27.8,
+  "battery_level": 95,
+  "decode_tps": 18.18,
+  "gpu_mhz_mean_busy": 719.0,
+  "gpu_busy_pct_mean": 81.8,
+  "cpu_little_mhz": 1760.9,
+  "cpu_mid_mhz": 1348.1,
+  "cpu_prime_mhz": 879.4,
+  "samples": 191,
+  "seconds": 67.3
+ },
+ {
+  "run": "1_off_mnn_gpu",
+  "screen": "off",
+  "wakefulness": "mWakefulness=Dozing",
+  "start_temp_c": 27.8,
+  "battery_level": 94,
+  "decode_tps": 17.7,
+  "gpu_mhz_mean_busy": 719.0,
+  "gpu_busy_pct_mean": 44.0,
+  "cpu_little_mhz": 1489.5,
+  "cpu_mid_mhz": 1144.6,
+  "cpu_prime_mhz": 1081.3,
+  "samples": 270,
+  "seconds": 88.3
+ }
+]

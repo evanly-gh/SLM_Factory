@@ -27,6 +27,7 @@ CLI (runs under the repo .venv, which has the perfetto package):
 from __future__ import annotations
 
 import json
+import os
 import re
 import statistics
 import subprocess
@@ -36,9 +37,39 @@ import time
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-VENV_PYTHON = HERE.parent / ".venv" / "bin" / "python"
-NDK_CLANG = (Path.home() / "Library/Android/sdk/ndk/27.2.12479018/toolchains/llvm/prebuilt/darwin-x86_64/bin"
-             / "aarch64-linux-android28-clang")
+NDK_VERSION = "27.2.12479018"
+
+
+def android_sdk_roots() -> list[Path]:
+    """Android SDK locations: $ANDROID_HOME / $ANDROID_SDK_ROOT, then Android Studio's default for this OS."""
+    roots = [Path(p) for p in (os.environ.get("ANDROID_HOME"), os.environ.get("ANDROID_SDK_ROOT")) if p]
+    if sys.platform == "win32":
+        roots.append(Path(os.environ.get("LOCALAPPDATA", Path.home() / "AppData" / "Local")) / "Android" / "Sdk")
+    elif sys.platform == "darwin":
+        roots.append(Path.home() / "Library" / "Android" / "sdk")
+    else:
+        roots.append(Path.home() / "Android" / "Sdk")
+    return roots
+
+
+def adb_candidates() -> list[Path]:
+    """Where adb lives inside each known Android SDK, for when it isn't on PATH."""
+    exe = "adb.exe" if sys.platform == "win32" else "adb"
+    return [root / "platform-tools" / exe for root in android_sdk_roots()]
+
+
+def _ndk_clang() -> Path:
+    """The NDK's aarch64 / API 28 clang: $ANDROID_NDK_HOME or $ANDROID_NDK_ROOT, else the SDK's NDK_VERSION."""
+    host = {"win32": "windows-x86_64", "darwin": "darwin-x86_64"}.get(sys.platform, "linux-x86_64")
+    name = "aarch64-linux-android28-clang" + (".cmd" if sys.platform == "win32" else "")
+    ndk_roots = [Path(p) for p in (os.environ.get("ANDROID_NDK_HOME"), os.environ.get("ANDROID_NDK_ROOT")) if p]
+    ndk_roots += [root / "ndk" / NDK_VERSION for root in android_sdk_roots()]
+    candidates = [root / "toolchains" / "llvm" / "prebuilt" / host / "bin" / name for root in ndk_roots]
+    return next((c for c in candidates if c.exists()), candidates[-1])
+
+
+VENV_PYTHON = HERE.parent / ".venv" / ("Scripts/python.exe" if sys.platform == "win32" else "bin/python")
+NDK_CLANG = _ndk_clang()
 TOOL_SRC = HERE / "tools" / "page_cache_tool.c"
 TOOL_BIN = HERE / "tools" / "bin" / "page_cache_tool"
 DEVICE_TOOL = "/data/local/tmp/page_cache_tool"
@@ -134,9 +165,14 @@ class ReadinessGate:
     state even when cool (screen off 2.0/2.4 GHz, on 2.9/2.9 GHz vs 3.6/4.6 GHz hardware)."""
 
     def __init__(self, adb, max_temp_c: float | None, timeout_s: int = 900, poll_s: int = 15, log=print,
-                 rise_c: float | None = None):
+                 rise_c: float | None = None, plateau_s: int = 0, plateau_drop_c: float = 0.2,
+                 plateau_max_c: float | None = None):
         self.adb, self.max_temp_c, self.timeout_s, self.poll_s, self.log = adb, max_temp_c, timeout_s, poll_s, log
         self.rise_c = rise_c
+        # Plateau: also accept a temperature above the limit once the phone has stopped cooling (dropped
+        # <= plateau_drop_c over the last plateau_s seconds, and at most plateau_max_c), i.e. it is back at
+        # its resting temperature, for a phone whose resting temperature is above the limit (warm room).
+        self.plateau_s, self.plateau_drop_c, self.plateau_max_c = plateau_s, plateau_drop_c, plateau_max_c
         self.baseline_caps: dict | None = None
         self.baseline_temp: float | None = None
 
@@ -155,11 +191,24 @@ class ReadinessGate:
                  f"(hw max {state['cpu_hw_max_khz']}), screen={state['screen']}, "
                  f"battery {state['battery_temp_c']} C")
 
-    def _problems(self, st: dict) -> list:
+    def _plateaued(self, history: list, temp: float) -> bool:
+        """history: [(time, battery C)] since this wait began."""
+        if not self.plateau_s or (self.plateau_max_c is not None and temp > self.plateau_max_c):
+            return False
+        now = history[-1][0]
+        if now - history[0][0] < self.plateau_s:
+            return False
+        window = [t for ts, t in history if now - ts <= self.plateau_s]
+        return max(window) - min(window) <= self.plateau_drop_c  # flat: neither still cooling nor warming up
+
+    def _problems(self, st: dict, history: list | None = None) -> list:
         issues = []
         limit = self.temp_limit()
-        if limit is not None and st["battery_temp_c"] is not None and st["battery_temp_c"] > limit:
-            issues.append(f"battery {st['battery_temp_c']} C > {limit:.1f} C")
+        temp = st["battery_temp_c"]
+        if temp is None or (self.baseline_caps and not st["cpu_caps_khz"]):
+            return ["no reading from the phone (adb not answering?)"]
+        if limit is not None and temp is not None and temp > limit and not (history and self._plateaued(history, temp)):
+            issues.append(f"battery {temp} C > {limit:.1f} C")
         for pol, base in (self.baseline_caps or {}).items():
             cur = st["cpu_caps_khz"].get(pol)
             if cur is not None and cur < base:
@@ -169,12 +218,20 @@ class ReadinessGate:
     def wait(self) -> dict:
         t0 = time.time()
         last_msg, last_log = None, 0.0
+        history = []
         while True:
             st = device_state(self.adb)
-            issues = self._problems(st)
+            if st["battery_temp_c"] is not None:
+                history.append((time.time(), st["battery_temp_c"]))
+            issues = self._problems(st, history)
             waited = time.time() - t0
             if not issues:
-                return {"passed": True, "waited_s": round(waited, 1), "state": st}
+                limit, temp = self.temp_limit(), st["battery_temp_c"]
+                how = ("plateau" if limit is not None and temp is not None and temp > limit else "limit")
+                if how == "plateau":
+                    self.log(f"[GATE] passed at {temp} C: above {limit:.1f} C but no longer cooling "
+                             f"(<= {self.plateau_drop_c} C drop over {self.plateau_s}s)")
+                return {"passed": True, "passed_by": how, "waited_s": round(waited, 1), "state": st}
             if waited >= self.timeout_s:
                 self.log(f"[GATE] WARNING: not ready after {self.timeout_s}s ({'; '.join(issues)}) - running anyway")
                 return {"passed": False, "waited_s": round(waited, 1), "state": st, "issues": issues}
@@ -191,6 +248,9 @@ class ReadinessGate:
 
 def _ensure_tool(adb) -> None:
     if not TOOL_BIN.exists() or TOOL_BIN.stat().st_mtime < TOOL_SRC.stat().st_mtime:
+        if not NDK_CLANG.exists():
+            raise RuntimeError(f"Android NDK clang not found at {NDK_CLANG}: install NDK {NDK_VERSION} with "
+                               f"Android Studio's SDK Manager, or set ANDROID_NDK_HOME")
         TOOL_BIN.parent.mkdir(parents=True, exist_ok=True)
         subprocess.run([str(NDK_CLANG), "-O2", "-o", str(TOOL_BIN), str(TOOL_SRC)], check=True)
     adb.run(["push", str(TOOL_BIN), DEVICE_TOOL], timeout=60)

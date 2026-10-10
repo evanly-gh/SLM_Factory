@@ -1,0 +1,493 @@
+{
+ "config": {
+  "id": "qwen3.5-0.8b__Q4_0__llama.cpp__gpu__head",
+  "model": "qwen3.5-0.8b",
+  "quant": "Q4_0",
+  "bits": 4,
+  "framework": "llama.cpp",
+  "backend": "gpu",
+  "ref": "head"
+ },
+ "model_file": {
+  "name": "qwen3.5-0.8b",
+  "hf_id": "Qwen/Qwen3.5-0.8B",
+  "framework": "llama.cpp",
+  "quant": "Q4_0",
+  "bits": 4,
+  "ref": "head",
+  "path": "gguf/qwen3.5-0.8b-q4_0-head.gguf",
+  "files": {
+   "qwen3.5-0.8b-q4_0-head.gguf": 512977856
+  },
+  "converter": "llama.cpp 46baf1f1fec5 convert_hf_to_gguf + llama-quantize"
+ },
+ "started": "2026-10-08T13:58:00.497200",
+ "invocations": {
+  "prefill": {
+   "exit": 0,
+   "timed_out": false,
+   "seconds": 52.1,
+   "marks": 27,
+   "cpu_busy": 0.08,
+   "gate": {
+    "passed": true,
+    "waited_s": 0.4,
+    "issues": null,
+    "battery_temp_c": 27.8,
+    "cpu_caps_khz": {
+     "policy0": 2016000,
+     "policy3": 2803200,
+     "policy7": 3360000
+    },
+    "thermal_status": 0
+   },
+   "state_before": {
+    "epoch_ms": 1791493093912,
+    "battery_temp_c": 28.4,
+    "battery_level": 82,
+    "battery_status": 3,
+    "externally_powered": false,
+    "power_sources": [],
+    "cpu_caps_khz": {
+     "policy0": 2016000,
+     "policy3": 2803200,
+     "policy7": 3360000
+    },
+    "cpu_hw_max_khz": {
+     "policy0": 2016000,
+     "policy3": 2803200,
+     "policy7": 3360000
+    },
+    "cpu_capped": false,
+    "screen": "Dozing",
+    "thermal_status": 0
+   },
+   "state_after": {
+    "epoch_ms": 1791493147050,
+    "battery_temp_c": 29.1,
+    "battery_level": 82,
+    "battery_status": 3,
+    "externally_powered": false,
+    "power_sources": [],
+    "cpu_caps_khz": {
+     "policy0": 2016000,
+     "policy3": 2803200,
+     "policy7": 3360000
+    },
+    "cpu_hw_max_khz": {
+     "policy0": 2016000,
+     "policy3": 2803200,
+     "policy7": 3360000
+    },
+    "cpu_capped": false,
+    "screen": "Dozing",
+    "thermal_status": 0
+   },
+   "idle_window": [
+    332633.65,
+    332643.79
+   ],
+   "llama_bench": {
+    "build_commit": "9c2e0e4",
+    "backends": "OpenCL",
+    "n_threads": 4,
+    "flash_attn": -1,
+    "type_k": "f16",
+    "type_v": "f16",
+    "n_batch": 2048,
+    "n_ubatch": 512,
+    "use_mmap": null,
+    "avg_ts": 155.545587,
+    "stddev_ts": 1.483838,
+    "samples_ts": [
+     155.57,
+     156.576,
+     156.404,
+     153.037,
+     156.748,
+     157.074,
+     156.226,
+     155.737,
+     157.64,
+     153.548,
+     155.805,
+     155.674,
+     155.492,
+     154.788,
+     156.117,
+     159.162,
+     155.543,
+     154.341,
+     157.822,
+     152.812,
+     153.732,
+     155.605,
+     155.865,
+     155.185,
+     154.165,
+     155.175,
+     153.888
+    ],
+    "model_type": "qwen35 0.8B Q4_0",
+    "model_size": 502015232
+   },
+   "suspend_ratio": 1.0
+  },
+  "decode": {
+   "exit": 0,
+   "timed_out": false,
+   "seconds": 113.9,
+   "marks": 5,
+   "cpu_busy": 0.268,
+   "gate": {
+    "passed": true,
+    "waited_s": 155.3,
+    "issues": null,
+    "battery_temp_c": 27.9,
+    "cpu_caps_khz": {
+     "policy0": 2016000,
+     "policy3": 2803200,
+     "policy7": 3360000
+    },
+    "thermal_status": 0
+   },
+   "state_before": {
+    "epoch_ms": 1791493330132,
+    "battery_temp_c": 27.9,
+    "battery_level": 82,
+    "battery_status": 3,
+    "externally_powered": false,
+    "power_sources": [],
+    "cpu_caps_khz": {
+     "policy0": 2016000,
+     "policy3": 2803200,
+     "policy7": 3360000
+    },
+    "cpu_hw_max_khz": {
+     "policy0": 2016000,
+     "policy3": 2803200,
+     "policy7": 3360000
+    },
+    "cpu_capped": false,
+    "screen": "Dozing",
+    "thermal_status": 0
+   },
+   "state_after": {
+    "epoch_ms": 1791493445071,
+    "battery_temp_c": 30.5,
+    "battery_level": 81,
+    "battery_status": 3,
+    "externally_powered": false,
+    "power_sources": [],
+    "cpu_caps_khz": {
+     "policy0": 2016000,
+     "policy3": 2803200,
+     "policy7": 3360000
+    },
+    "cpu_hw_max_khz": {
+     "policy0": 2016000,
+     "policy3": 2803200,
+     "policy7": 3360000
+    },
+    "cpu_capped": false,
+    "screen": "Dozing",
+    "thermal_status": 0
+   },
+   "idle_window": [
+    332869.98,
+    332880.09
+   ],
+   "llama_bench": {
+    "build_commit": "9c2e0e4",
+    "backends": "OpenCL",
+    "n_threads": 4,
+    "flash_attn": -1,
+    "type_k": "f16",
+    "type_v": "f16",
+    "n_batch": 2048,
+    "n_ubatch": 512,
+    "use_mmap": null,
+    "avg_ts": 12.909905,
+    "stddev_ts": 0.073221,
+    "samples_ts": [
+     12.8788,
+     13.0269,
+     12.8447,
+     12.9337,
+     12.8653
+    ],
+    "model_type": "qwen35 0.8B Q4_0",
+    "model_size": 502015232
+   },
+   "suspend_ratio": 1.0
+  }
+ },
+ "windows": [
+  {
+   "phase": "prefill",
+   "source": "main",
+   "rep": 1,
+   "a": 332651.057297718,
+   "b": 332652.692289645,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "main",
+   "rep": 2,
+   "a": 332652.692482041,
+   "b": 332654.329270009,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "main",
+   "rep": 3,
+   "a": 332654.329462821,
+   "b": 332656.002265425,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 4,
+   "a": 332656.002506466,
+   "b": 332657.635699851,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 5,
+   "a": 332657.635946257,
+   "b": 332659.265751205,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 6,
+   "a": 332659.26599584,
+   "b": 332660.904649746,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 7,
+   "a": 332660.904866933,
+   "b": 332662.548663495,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 8,
+   "a": 332662.548834901,
+   "b": 332664.172787557,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 9,
+   "a": 332664.173029015,
+   "b": 332665.840259692,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 10,
+   "a": 332665.840468077,
+   "b": 332667.483545577,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 11,
+   "a": 332667.483795056,
+   "b": 332669.128259951,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 12,
+   "a": 332669.12848818,
+   "b": 332670.774871409,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 13,
+   "a": 332670.775117034,
+   "b": 332672.428997606,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 14,
+   "a": 332672.429160575,
+   "b": 332674.068957293,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 15,
+   "a": 332674.069198387,
+   "b": 332675.677621042,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 16,
+   "a": 332675.677940261,
+   "b": 332677.323791302,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 17,
+   "a": 332677.323981771,
+   "b": 332678.982649791,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 18,
+   "a": 332678.982910312,
+   "b": 332680.604992551,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 19,
+   "a": 332680.605191509,
+   "b": 332682.280455311,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 20,
+   "a": 332682.280678956,
+   "b": 332683.945919268,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 21,
+   "a": 332683.946178175,
+   "b": 332685.591372445,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 22,
+   "a": 332685.591612757,
+   "b": 332687.234061923,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 23,
+   "a": 332687.23424885,
+   "b": 332688.883890829,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 24,
+   "a": 332688.8840776,
+   "b": 332690.54463937,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 25,
+   "a": 332690.544859526,
+   "b": 332692.194608223,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 26,
+   "a": 332692.194855723,
+   "b": 332693.85840666,
+   "tokens": 256
+  },
+  {
+   "phase": "decode",
+   "source": "main",
+   "rep": 1,
+   "a": 332905.457377934,
+   "b": 332925.109075478,
+   "tokens": 256
+  },
+  {
+   "phase": "decode",
+   "source": "main",
+   "rep": 2,
+   "a": 332925.111393864,
+   "b": 332945.041719064,
+   "tokens": 256
+  },
+  {
+   "phase": "decode",
+   "source": "main",
+   "rep": 3,
+   "a": 332945.043997867,
+   "b": 332964.83718239,
+   "tokens": 256
+  },
+  {
+   "phase": "decode",
+   "source": "energy",
+   "rep": 4,
+   "a": 332964.839662234,
+   "b": 332984.738094049,
+   "tokens": 256
+  }
+ ],
+ "prefill": {
+  "tps": 155.34,
+  "tps_std": 2.0,
+  "reps": [
+   156.58,
+   156.4,
+   153.04
+  ],
+  "tokens": [
+   256
+  ]
+ },
+ "decode": {
+  "tps": 12.94,
+  "tps_std": 0.09,
+  "reps": [
+   13.03,
+   12.84,
+   12.93
+  ],
+  "tokens": [
+   256
+  ]
+ },
+ "status": "ok",
+ "finished": "2026-10-08T14:04:20.073371"
+}

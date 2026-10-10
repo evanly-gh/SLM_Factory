@@ -1,0 +1,1 @@
+LD_LIBRARY_PATH=. PB_IGNORE_EOS=1 ./llm_bench -m /data/local/tmp/paper_bench/models/llama3.2-3b-mnn-paper-default-q4/config.json -a opencl -p 256 -n 0 -rep 12 -kv false

@@ -1,0 +1,10 @@
+CPU Group: [ 0  1  2 ], 307200 - 2016000
+CPU Group: [ 3  4  5  6 ], 499200 - 2803200
+CPU Group: [ 7 ], 595200 - 3360000
+(last_midr & (CPUINFO_ARM_MIDR_IMPLEMENTER_MASK | CPUINFO_ARM_MIDR_PART_MASK))=0x 4100d4e0 in _getInfoArm, 1250 
+The device supports: i8sdot:1, fp16:1, i8mm: 1, sve2: 0, sme2: 0, perfCores: 0
+| model                          |  modelSize | backend    | threads | precision  | llm_demo   | speed(tok/s) |
+| ------------------------------ | ---------: | ---------- | ----: | ---------- | ---------- | ------------ |
+| qwen3.5-0.8b-mnn-paper-default-q8-head | 762.33 MiB | OPENCL     |     4 | Low        | prompt=256<br>decode=256 | 383.42 ± 8.16<br>37.87 ± 0.35 |
+decode wall speed (incl. sampling): 35.07 ± 0.51 tok/s
+

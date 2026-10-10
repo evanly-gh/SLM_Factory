@@ -1,0 +1,367 @@
+{
+ "config": {
+  "id": "qwen3.5-2b__F16__llama.cpp__cpu__head",
+  "model": "qwen3.5-2b",
+  "quant": "F16",
+  "bits": 16,
+  "framework": "llama.cpp",
+  "backend": "cpu",
+  "ref": "head"
+ },
+ "model_file": {
+  "name": "qwen3.5-2b",
+  "hf_id": "Qwen/Qwen3.5-2B",
+  "framework": "llama.cpp",
+  "quant": "F16",
+  "bits": 16,
+  "ref": "head",
+  "path": "gguf/qwen3.5-2b-f16-head.gguf",
+  "files": {
+   "qwen3.5-2b-f16-head.gguf": 3897387968
+  },
+  "converter": "llama.cpp 46baf1f1fec5 convert_hf_to_gguf"
+ },
+ "started": "2026-10-08T15:20:14.024540",
+ "invocations": {
+  "prefill": {
+   "exit": 0,
+   "timed_out": false,
+   "seconds": 468.4,
+   "marks": 14,
+   "cpu_busy": 0.535,
+   "gate": {
+    "passed": true,
+    "waited_s": 124.3,
+    "issues": null,
+    "battery_temp_c": 28.0,
+    "cpu_caps_khz": {
+     "policy0": 2016000,
+     "policy3": 2803200,
+     "policy7": 3360000
+    },
+    "thermal_status": 0
+   },
+   "state_before": {
+    "epoch_ms": 1791498151275,
+    "battery_temp_c": 28.0,
+    "battery_level": 67,
+    "battery_status": 3,
+    "externally_powered": false,
+    "power_sources": [],
+    "cpu_caps_khz": {
+     "policy0": 2016000,
+     "policy3": 2803200,
+     "policy7": 3360000
+    },
+    "cpu_hw_max_khz": {
+     "policy0": 2016000,
+     "policy3": 2803200,
+     "policy7": 3360000
+    },
+    "cpu_capped": false,
+    "screen": "Dozing",
+    "thermal_status": 0
+   },
+   "state_after": {
+    "epoch_ms": 1791498620712,
+    "battery_temp_c": 37.0,
+    "battery_level": 62,
+    "battery_status": 3,
+    "externally_powered": false,
+    "power_sources": [],
+    "cpu_caps_khz": {
+     "policy0": 1555200,
+     "policy3": 2054400,
+     "policy7": 2342400
+    },
+    "cpu_hw_max_khz": {
+     "policy0": 2016000,
+     "policy3": 2803200,
+     "policy7": 3360000
+    },
+    "cpu_capped": true,
+    "screen": "Dozing",
+    "thermal_status": 0
+   },
+   "idle_window": [
+    337690.91,
+    337701.09
+   ],
+   "llama_bench": {
+    "build_commit": "9c2e0e4",
+    "backends": "CPU",
+    "n_threads": 4,
+    "flash_attn": -1,
+    "type_k": "f16",
+    "type_v": "f16",
+    "n_batch": 2048,
+    "n_ubatch": 512,
+    "use_mmap": null,
+    "avg_ts": 8.745412,
+    "stddev_ts": 0.664513,
+    "samples_ts": [
+     9.62055,
+     9.43916,
+     9.34744,
+     9.27159,
+     9.20712,
+     9.15483,
+     9.11133,
+     8.96295,
+     8.53012,
+     8.27327,
+     7.82363,
+     7.99184,
+     7.90192,
+     7.80002
+    ],
+    "model_type": "qwen35 2B F16",
+    "model_size": 3886425344
+   },
+   "suspend_ratio": 1.0
+  },
+  "decode": {
+   "exit": 0,
+   "timed_out": false,
+   "seconds": 229.3,
+   "marks": 4,
+   "cpu_busy": 0.543,
+   "gate": {
+    "passed": true,
+    "waited_s": 792.6,
+    "issues": null,
+    "battery_temp_c": 28.0,
+    "cpu_caps_khz": {
+     "policy0": 2016000,
+     "policy3": 2803200,
+     "policy7": 3360000
+    },
+    "thermal_status": 0
+   },
+   "state_before": {
+    "epoch_ms": 1791499441202,
+    "battery_temp_c": 28.0,
+    "battery_level": 61,
+    "battery_status": 3,
+    "externally_powered": false,
+    "power_sources": [],
+    "cpu_caps_khz": {
+     "policy0": 2016000,
+     "policy3": 2803200,
+     "policy7": 3360000
+    },
+    "cpu_hw_max_khz": {
+     "policy0": 2016000,
+     "policy3": 2803200,
+     "policy7": 3360000
+    },
+    "cpu_capped": false,
+    "screen": "Dozing",
+    "thermal_status": 0
+   },
+   "state_after": {
+    "epoch_ms": 1791499671785,
+    "battery_temp_c": 38.5,
+    "battery_level": 57,
+    "battery_status": 3,
+    "externally_powered": false,
+    "power_sources": [],
+    "cpu_caps_khz": {
+     "policy0": 1555200,
+     "policy3": 1920000,
+     "policy7": 2227200
+    },
+    "cpu_hw_max_khz": {
+     "policy0": 2016000,
+     "policy3": 2803200,
+     "policy7": 3360000
+    },
+    "cpu_capped": true,
+    "screen": "Dozing",
+    "thermal_status": 0
+   },
+   "idle_window": [
+    338980.7,
+    338990.83
+   ],
+   "llama_bench": {
+    "build_commit": "9c2e0e4",
+    "backends": "CPU",
+    "n_threads": 4,
+    "flash_attn": -1,
+    "type_k": "f16",
+    "type_v": "f16",
+    "n_batch": 2048,
+    "n_ubatch": 512,
+    "use_mmap": null,
+    "avg_ts": 5.37897,
+    "stddev_ts": 0.344545,
+    "samples_ts": [
+     5.74433,
+     5.56748,
+     5.23191,
+     4.97217
+    ],
+    "model_type": "qwen35 2B F16",
+    "model_size": 3886425344
+   },
+   "suspend_ratio": 1.0
+  }
+ },
+ "windows": [
+  {
+   "phase": "prefill",
+   "source": "main",
+   "rep": 1,
+   "a": 337774.981411232,
+   "b": 337802.102480128,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "main",
+   "rep": 2,
+   "a": 337802.102561691,
+   "b": 337829.489750535,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "main",
+   "rep": 3,
+   "a": 337829.489821524,
+   "b": 337857.101055576,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 4,
+   "a": 337857.101128076,
+   "b": 337884.905707597,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 5,
+   "a": 337884.905782024,
+   "b": 337912.869159461,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 6,
+   "a": 337912.869232846,
+   "b": 337940.966131221,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 7,
+   "a": 337940.969031169,
+   "b": 337969.531070169,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 8,
+   "a": 337969.531141158,
+   "b": 337999.542458491,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 9,
+   "a": 337999.542524324,
+   "b": 338030.485547385,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 10,
+   "a": 338030.485617958,
+   "b": 338063.207001695,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 11,
+   "a": 338063.210716591,
+   "b": 338095.243371892,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 12,
+   "a": 338095.243438454,
+   "b": 338127.640615317,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 13,
+   "a": 338127.643227452,
+   "b": 338160.463644419,
+   "tokens": 256
+  },
+  {
+   "phase": "decode",
+   "source": "main",
+   "rep": 1,
+   "a": 339066.375675948,
+   "b": 339112.357004993,
+   "tokens": 256
+  },
+  {
+   "phase": "decode",
+   "source": "main",
+   "rep": 2,
+   "a": 339112.358742962,
+   "b": 339161.289263516,
+   "tokens": 256
+  },
+  {
+   "phase": "decode",
+   "source": "main",
+   "rep": 3,
+   "a": 339161.291045495,
+   "b": 339212.77762334,
+   "tokens": 256
+  }
+ ],
+ "prefill": {
+  "tps": 9.35,
+  "tps_std": 0.08,
+  "reps": [
+   9.44,
+   9.35,
+   9.27
+  ],
+  "tokens": [
+   256
+  ]
+ },
+ "decode": {
+  "tps": 5.26,
+  "tps_std": 0.3,
+  "reps": [
+   5.57,
+   5.23,
+   4.97
+  ],
+  "tokens": [
+   256
+  ]
+ },
+ "status": "ok",
+ "finished": "2026-10-08T15:48:06.786738"
+}

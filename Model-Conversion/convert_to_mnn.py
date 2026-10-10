@@ -7,10 +7,12 @@ Mirrors convert_to_gguf.py's interface and behavior, adapted for MNN format.
 Pipeline stages:
   1. Download        — pull model weights + config from HuggingFace Hub (or use a local path)
   2. Export+Quantize — llmexport.py converts the HF checkpoint AND quantizes it in one step
-                        (unlike GGUF, MNN has no separate full-precision base file - there is
-                        no bf16/unquantized MNN export at all)
-  3. Validate         — check file sizes and estimate RAM requirements per quant_bit level
-  4. Deploy           — (optional) push the chosen MNN model folder to a connected Android
+                        (unlike GGUF, MNN has no separate full-precision base file; the 16-bit
+                        level is its own fp16 export)
+  3. Validate         — check the export is complete, was built with exactly the requested
+                        recipe, and record a fingerprint sidecar keyed on recipe + MNN version
+  4. Report           — file sizes and RAM estimates per quant_bit level
+  5. Deploy           — (optional) push the MNN model folders to a connected Android
                         phone via ADB
 """
 
@@ -18,6 +20,8 @@ import argparse
 import hashlib
 import json
 import os
+import platform
+import re
 import shutil
 import subprocess
 import sys
@@ -29,51 +33,44 @@ from pathlib import Path
 # Constants — paths and quantization configuration
 # ---------------------------------------------------------------------------
 
-# MNN is expected to be cloned here. Export tooling and the MNNConvert binary
-# both come from this source tree.
-MNN_ROOT = Path.home() / "SLM_Factory_Krishna_Personal" / "MNN"
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
-# Script that both converts AND quantizes a HuggingFace checkpoint into MNN
-# format in a single pass - MNN has no separate convert-then-quantize split
-# the way GGUF/llama.cpp does. Run from its own dedicated .venv (not this
-# script's interpreter), since it has its own pinned dependency set.
-LLMEXPORT_DIR = MNN_ROOT / "transformers" / "llm" / "export"
-LLMEXPORT_SCRIPT = LLMEXPORT_DIR / "llmexport.py"
-LLMEXPORT_VENV_PYTHON = LLMEXPORT_DIR / ".venv" / "bin" / "python"
+# quant_bit levels and the pool selector each one stands for. Q4_K_M has no
+# exact MNN equivalent; the mapping is a statement about bit width, which is
+# the only thing the two formats can honestly be compared on.
+LEVEL_SELECTORS = {"4": "Q4_K_M", "8": "Q8_0", "16": "FP16"}
+QUANT_LEVELS = ["4", "8"]
 
-# Required by llmexport.py's --mnnconvert flag - without it, conversion
-# crashes with a Bus error via the broken pymnn bindings.
-MNNCONVERT_BIN = MNN_ROOT / "build" / "MNNConvert"
-
-# quant_block is fixed rather than swept - it's a block size for the
-# quantization scheme, not a quality/size tradeoff axis like quant_bit is.
-QUANT_BLOCK = 64
-
-# --quant_bit values MNN actually supports. Unlike GGUF's named presets,
-# there is no 5-bit level and no unquantized/bf16 export at all.
-QUANT_LEVELS = ["2", "3", "4", "8"]
-
-# Full-precision fp16 export. Verified: llm_config.json reports quant_bit=16
-# and the output file size is ~2x the Q8 file, matching genuine fp16 weights
-# (not a relabeled 8-bit export). Kept out of QUANT_LEVELS/ALL since it's a
-# much larger, non-quantized artifact - only produced when explicitly requested.
+# Full-precision fp16 export (`--quant_bit 16`). Kept out of QUANT_LEVELS
+# since it's a much larger, non-quantized artifact.
 FP16_QUANT_LEVEL = "16"
 
-# Levels swept by --quant ALL - the project's standard three-quantization
-# set (mirrors convert_to_gguf.py's ALL: F16, Q4_K_M, Q8_0), not the full
-# QUANT_LEVELS sweep. Individual levels (2, 3, 4, 8, 16/FP16) remain
-# selectable on their own via --quant.
+# Levels exported by --quant ALL - the project's standard three precisions
+# (mirrors convert_to_gguf.py's ALL: BF16, Q4_K_M, Q8_0).
 ALL_QUANT_LEVELS = [FP16_QUANT_LEVEL, "4", "8"]
 
-# Confirmed fix for Q4 output instability (repetition/garbage generation):
-# keeping the lm_head/tied-embedding layer at 8-bit precision even when the
-# rest of the model is quantized to 4-bit, via llmexport.py's --lm_quant_bit,
-# matches Alibaba's own official MNN conversion approach. Verified directly
-# on Qwen3-1.7B; applied to every Q4 export since this is a general
-# precision-sensitivity pattern in low-bit lm_head quantization, not a
-# one-off fix for that model. Q8 exports don't need this override - the
-# lm_head is already 8-bit there since the whole model is.
-Q4_LM_HEAD_QUANT_BIT = 8
+# THE EXPORT RECIPE: block size (input channels sharing one scale/zero-point)
+# and whether HQQ searches for those scales instead of taking each block's
+# min/max. 4-bit uses HQQ with 32-weight blocks: MNN's default (min/max, block
+# 64) was measured losing up to 0.108 macro-F1 against llama.cpp's Q4_K_M on
+# the same weights, and HQQ + block 32 closed that to within 0.011 for ~10%
+# more file. 8-bit and 16-bit keep MNN's default.
+#
+# SLM_MNN_QUANT_BLOCK / SLM_MNN_HQQ, when set, override the recipe for EVERY width.
+_BLOCK_OVERRIDE = os.environ.get("SLM_MNN_QUANT_BLOCK", "")
+_HQQ_OVERRIDE = os.environ.get("SLM_MNN_HQQ", "")
+MNN_QUANT_BLOCK = int(_BLOCK_OVERRIDE) if _BLOCK_OVERRIDE else None
+MNN_HQQ = (_HQQ_OVERRIDE == "1") if _HQQ_OVERRIDE else None
+
+_DEFAULT_RECIPE = {4: (32, True)}
+_FALLBACK_RECIPE = (64, False)
+
+# The lm_head is kept at 8 bits while the body goes to 4: llama.cpp's Q4_K_M
+# keeps output.weight at Q6_K, so a uniform 4-bit MNN export would not be the
+# artifact `Q4_K_M` names, and low-bit lm_heads were seen producing garbage on
+# device. It is never set below the body's width. SLM_MNN_LM_QUANT_BIT=4
+# exports the plain uniform-width model, 16 keeps the lm_head in fp16.
+MNN_LM_QUANT_BIT = int(os.environ.get("SLM_MNN_LM_QUANT_BIT", "8"))
 
 # Maps each quant_bit level to a human-readable RAM range and target device
 # description, used in the validation report to guide deployment decisions.
@@ -81,8 +78,6 @@ RAM_RECOMMENDATIONS = {
     "16": ("12 GB+ RAM", "Full-precision fp16 - lossless quality, reference/desktop use"),
     "8": ("6 GB+ RAM", "Flagship Android devices - near-lossless quality"),
     "4": ("< 4 GB RAM", "Budget/mid-range Android devices - the sweet spot for most phones"),
-    "3": ("< 3 GB RAM", "Very constrained devices - noticeable quality tradeoff vs Q4"),
-    "2": ("< 2 GB RAM", "Extremely constrained devices - significant quality loss; validate outputs carefully"),
 }
 
 # This project's own peak-RSS scaling factor (see check_model_fit.py):
@@ -92,16 +87,37 @@ RAM_RECOMMENDATIONS = {
 # the real file size already reflects whatever llmexport actually produced.
 RSS_MULTIPLIER = 1.6
 
-# Exactly the files export-completeness is judged on (mirrors
-# agent_mnn_quantize.py's is_conversion_complete()) - a successful export
-# also produces export_args.json and llm.mnn.json, but those aren't required
-# to treat a folder as a reusable, complete conversion.
-REQUIRED_FILES = ["config.json", "llm.mnn", "llm.mnn.weight", "llm_config.json", "tokenizer.mtok"]
+# The files an MNN export must have produced for the folder to be a usable
+# model. The tokenizer is spelled either way: MNN writes tokenizer.mtok for a
+# HuggingFace fast tokenizer and tokenizer.txt for a sentencepiece one.
+REQUIRED_FILES = ("config.json", "llm.mnn", "llm.mnn.weight", "llm_config.json")
+TOKENIZER_FILES = ("tokenizer.mtok", "tokenizer.txt")
 
-# The weight file is where a real, concrete corruption was found in practice
-# (a 16KB truncated file where ~2GB was expected) - it's the file hashed and
-# size-checked by the validation sidecar below.
-KEY_WEIGHT_FILENAME = "llm.mnn.weight"
+MNN_VALIDATION_SCHEMA_VERSION = 1
+MNN_VALIDATION_SUFFIX = ".validation.json"
+
+# Weight files llmexport.py cannot use, plus pre-built GGUFs and the raw
+# Meta/Mistral checkpoints some repos ship alongside the HF weights.
+HF_SNAPSHOT_IGNORE_PATTERNS = [
+    "*.gguf",
+    "original/*",
+    "*.pth",
+    "consolidated*",
+    "*.msgpack",
+    "flax_model*",
+    "tf_model*",
+    "rust_model*",
+]
+
+# Wall-clock ceiling for one export. Scales with the bytes read like the GGUF
+# path, but with a much higher floor: an export traces the model through torch
+# to ONNX before MNNConvert rewrites it, and a cold first export is dominated
+# by the torch import rather than the model's size. SLM_QUANT_TIMEOUT_S, when
+# set, is used verbatim and is NOT raised to the floor.
+QUANT_TIMEOUT_FLOOR_S = 600
+QUANT_TIMEOUT_S_PER_GB = int(os.environ.get("SLM_QUANT_TIMEOUT_S_PER_GB", "240"))
+QUANT_TIMEOUT_OVERRIDE_S = os.environ.get("SLM_QUANT_TIMEOUT_S")
+MNN_EXPORT_TIMEOUT_FLOOR_S = int(os.environ.get("SLM_MNN_EXPORT_TIMEOUT_FLOOR_S", "1800"))
 
 DEVICE_MODELS_DIR = "/data/local/tmp/mnn_models"
 
@@ -143,10 +159,18 @@ def file_size_mb(path: Path) -> float:
     return path.stat().st_size / (1024 ** 2)
 
 
+def dir_size_mb(path: Path) -> float:
+    """Return the total size of every file under a directory in megabytes."""
+    total = 0
+    for dirpath, _, filenames in os.walk(path):
+        for name in filenames:
+            total += os.path.getsize(os.path.join(dirpath, name))
+    return total / (1024 ** 2)
+
+
 def combined_size_mb(output_dir: Path):
-    """Sum of llm.mnn + llm.mnn.weight - the two files that actually scale
-    with quant_bit; config/tokenizer files are negligible and roughly
-    constant across levels."""
+    """Sum of llm.mnn + llm.mnn.weight - the two files that are the model;
+    config/tokenizer files are negligible and roughly constant across levels."""
     total = 0
     found_any = False
     for name in ("llm.mnn", "llm.mnn.weight"):
@@ -195,35 +219,196 @@ def quant_slug(prefix: str, quant_bit: str) -> str:
     return f"{prefix}-mnn-q{quant_bit}"
 
 
+def export_recipe(bits: int) -> tuple[int, bool]:
+    """(quant_block, hqq) for an export at `bits`, honouring any operator override."""
+    block, hqq = _DEFAULT_RECIPE.get(bits, _FALLBACK_RECIPE)
+    return (
+        MNN_QUANT_BLOCK if MNN_QUANT_BLOCK is not None else block,
+        MNN_HQQ if MNN_HQQ is not None else hqq,
+    )
+
+
+def lm_quant_bit(bits: int) -> int:
+    return max(MNN_LM_QUANT_BIT, bits)
+
+
+def missing_files(output_dir: Path) -> list[str]:
+    """Which required pieces of an MNN model are absent."""
+    if not output_dir.is_dir():
+        return [f"{output_dir} (directory does not exist)"]
+    absent = [name for name in REQUIRED_FILES if not (output_dir / name).is_file()]
+    if not any((output_dir / name).is_file() for name in TOKENIZER_FILES):
+        absent.append(" or ".join(TOKENIZER_FILES))
+    return absent
+
+
 def is_export_complete(output_dir: Path) -> bool:
-    return output_dir.is_dir() and all((output_dir / f).exists() for f in REQUIRED_FILES)
+    return not missing_files(output_dir)
+
+
+def export_timeout_s(source_size_mb: float) -> int:
+    """Ceiling for one llmexport.py run over a source of `source_size_mb`."""
+    if QUANT_TIMEOUT_OVERRIDE_S:
+        return int(QUANT_TIMEOUT_OVERRIDE_S)
+    scaled = max(QUANT_TIMEOUT_FLOOR_S, int((source_size_mb / 1024.0) * QUANT_TIMEOUT_S_PER_GB))
+    return max(scaled, MNN_EXPORT_TIMEOUT_FLOOR_S)
+
+
+def run_export_tool(cmd: list[str], timeout_s: int, partial_output: Path, cwd: Path) -> str | None:
+    """Run llmexport.py, retrying ONCE at double the ceiling on timeout.
+
+    A timeout is a statement about the machine, not the model, so it is
+    retried; a non-zero exit means the exporter rejected the input and would
+    fail the same way again, so it is not. A killed or failed attempt leaves a
+    half-written folder, which is deleted so it is never mistaken for output.
+
+    Returns None on success or an error string.
+    """
+    def discard_partial():
+        shutil.rmtree(partial_output, ignore_errors=True)
+
+    for attempt, ceiling in enumerate((timeout_s, timeout_s * 2), start=1):
+        print(f"\n[RUN] {' '.join(str(c) for c in cmd)}")
+        try:
+            result = subprocess.run(cmd, cwd=cwd, text=True, timeout=ceiling)
+        except subprocess.TimeoutExpired:
+            discard_partial()
+            if attempt == 1:
+                print(f"[WARN] llmexport.py exceeded {ceiling}s; retrying once at {ceiling * 2}s")
+                continue
+            return (
+                f"llmexport.py timed out twice ({timeout_s}s then {ceiling}s). Raise the ceiling "
+                f"with SLM_QUANT_TIMEOUT_S or SLM_MNN_EXPORT_TIMEOUT_FLOOR_S."
+            )
+        except FileNotFoundError as exc:
+            discard_partial()
+            return f"llmexport.py failed: {exc}"
+        if result.returncode != 0:
+            discard_partial()
+            return f"llmexport.py exited with code {result.returncode}"
+        return None
+    return None
 
 
 # ---------------------------------------------------------------------------
-# Real-load validation + hash-based caching for MNN exports
-#
-# Mirrors convert_to_gguf.py's validate_and_record_gguf()/validated_gguf_cache_hit()
-# pattern, adapted for MNN's multi-file output (a folder of config.json,
-# llm.mnn, llm.mnn.weight, llm_config.json, tokenizer.mtok rather than one
-# GGUF file). llm.mnn.weight is the file hashed - it's the large binary
-# blob where a real corruption (a 16KB file truncated from an expected
-# ~2GB) was found, and the other files are small/structural by comparison.
-#
-# A genuine MNN-engine load test isn't practical from plain Python without
-# the full Android/JNI stack, so instead of a real load we (a) hash the
-# weight file into a sidecar (<file>.validation.json) and (b) when
-# llm_config.json's tie_embeddings offsets make it derivable, check the
-# weight file is at least as large as the offset+size of its last recorded
-# section - cheap, dependency-free, and enough to catch a truncated file
-# like the one that motivated this. On the next run, a cache hit requires
-# the sidecar to match the current file's size and hash, so a corrupted or
-# hand-edited export is not silently reused. This is best-effort throughout:
-# any failure to validate falls back to the plain is_export_complete() check
-# rather than blocking the pipeline.
+# MNN toolchain
 # ---------------------------------------------------------------------------
 
-def mnn_validation_sidecar_path(weight_path: Path) -> Path:
-    return weight_path.with_name(weight_path.name + ".validation.json")
+class MnnToolchain:
+    """Where the three pieces of the MNN export toolchain actually are on this machine."""
+
+    def __init__(self, python: Path, llmexport: Path, mnnconvert: Path, root: Path):
+        self.python = python
+        self.llmexport = llmexport
+        self.mnnconvert = mnnconvert
+        self.root = root
+
+    def versions(self) -> dict:
+        """Tool identity recorded in the validation sidecar, so a cache hit is per-toolchain."""
+        commit = "unknown"
+        try:
+            commit = subprocess.run(
+                ["git", "-C", str(self.root), "rev-parse", "HEAD"],
+                capture_output=True, text=True, timeout=30, check=True,
+            ).stdout.strip()[:12] or "unknown"
+        except (OSError, subprocess.SubprocessError):
+            pass
+        return {
+            "mnn_commit": commit,
+            "mnn_version": _mnn_version(self.root),
+            "python": platform.python_version(),
+        }
+
+
+def _mnn_version(root: Path) -> str:
+    """MNN's own version triple, read from the header that defines it."""
+    header = root / "include" / "MNN" / "MNNDefine.h"
+    parts = {}
+    try:
+        with open(header, encoding="utf-8", errors="replace") as handle:
+            for line in handle:
+                match = re.match(r"#define MNN_VERSION_(MAJOR|MINOR|PATCH)\s+(\d+)", line.strip())
+                if match:
+                    parts[match.group(1)] = match.group(2)
+    except OSError:
+        return "unknown"
+    if len(parts) != 3:
+        return "unknown"
+    return f"{parts['MAJOR']}.{parts['MINOR']}.{parts['PATCH']}"
+
+
+def default_mnn_root() -> Path:
+    """SLM_MNN_ROOT, else the git-ignored MNN/ checkout at the root of this repo."""
+    explicit = os.environ.get("SLM_MNN_ROOT", "").strip()
+    if explicit:
+        return Path(explicit).expanduser().resolve()
+    return PROJECT_ROOT / "MNN"
+
+
+def _first_existing(candidates: list[Path]) -> Path:
+    return next((p for p in candidates if p.is_file()), candidates[0])
+
+
+def find_toolchain() -> tuple[MnnToolchain | None, str | None]:
+    """Locate llmexport.py, MNNConvert and the exporter's interpreter.
+
+    Returns (toolchain, None), or (None, a message saying what's missing).
+    llmexport.py must be given a locally built MNNConvert: without
+    --mnnconvert it falls back to the pymnn bindings, which crash with a bus
+    error, so a missing binary is an error rather than a silent fallback.
+    """
+    root = default_mnn_root()
+    llmexport = Path(
+        os.environ.get("SLM_MNN_LLMEXPORT", "").strip()
+        or root / "transformers" / "llm" / "export" / "llmexport.py"
+    )
+    explicit_convert = os.environ.get("SLM_MNN_CONVERT_BIN", "").strip()
+    mnnconvert = Path(explicit_convert) if explicit_convert else _first_existing([
+        root / "build" / "MNNConvert",
+        root / "build" / "MNNConvert.exe",
+        root / "build" / "Release" / "MNNConvert.exe",
+    ])
+    if not mnnconvert.is_file():
+        found = shutil.which("MNNConvert")
+        if found:
+            mnnconvert = Path(found)
+    explicit_python = os.environ.get("SLM_MNN_PYTHON", "").strip()
+    python = Path(explicit_python) if explicit_python else _first_existing([
+        PROJECT_ROOT / ".venv_mnn" / "bin" / "python",
+        PROJECT_ROOT / ".venv_mnn" / "Scripts" / "python.exe",
+    ])
+
+    missing = []
+    if not llmexport.is_file():
+        missing.append(f"llmexport.py at {llmexport}")
+    if not (mnnconvert.is_file() and os.access(mnnconvert, os.X_OK)):
+        missing.append(f"an executable MNNConvert at {mnnconvert}")
+    if not (python.is_file() and os.access(python, os.X_OK)):
+        missing.append(f"the exporter's python at {python}")
+    if missing:
+        return None, (
+            "The MNN export toolchain needs " + "; ".join(missing)
+            + ". Clone and build MNN (with MNNConvert) into MNN/ at the repo root and create "
+              ".venv_mnn there for llmexport.py, or point SLM_MNN_ROOT / SLM_MNN_LLMEXPORT / SLM_MNN_CONVERT_BIN / "
+              "SLM_MNN_PYTHON at an existing install."
+        )
+    return MnnToolchain(python=python, llmexport=llmexport, mnnconvert=mnnconvert, root=root), None
+
+
+# ---------------------------------------------------------------------------
+# Validation + fingerprint-based caching for MNN exports
+#
+# MNN quantization is a flag, not a file format: a 4-bit build and an fp16
+# build are the same five filenames. So after every export, the exporter's own
+# record of its arguments (export_args.json) is read back and the export is
+# refused if it differs from the requested recipe. The sidecar sits beside the
+# folder (<folder>.validation.json) and fingerprints every file in it; a cached
+# folder is reused only if its fingerprint, recipe and MNN version all match.
+# Anything else is deleted and re-exported.
+# ---------------------------------------------------------------------------
+
+def mnn_validation_sidecar_path(output_dir: Path) -> Path:
+    return output_dir.with_name(output_dir.name + MNN_VALIDATION_SUFFIX)
 
 
 def _sha256_file(path: Path) -> str:
@@ -250,16 +435,41 @@ def _atomic_write_json(path: Path, payload: dict) -> None:
             os.remove(temporary)
 
 
-def _expected_min_weight_size(output_dir: Path) -> "int | None":
-    """Best-effort lower bound on llm.mnn.weight's size, derived from
-    llm_config.json's tie_embeddings offsets (alpha_offset + alpha_size marks
-    the end of the last section llmexport.py records a position for). Returns
-    None if llm_config.json is missing, malformed, or doesn't carry this
-    field - callers must treat that as "not derivable", not a failure.
+def _fingerprint(output_dir: Path) -> dict:
+    """Size + SHA-256 of every file in the export, keyed by relative path.
+
+    The graph, weights, tokenizer and both configs must agree with each other,
+    so all of them are covered: a weight file swapped under an unchanged graph
+    is exactly the half-written artifact this exists to catch.
     """
-    config_path = output_dir / "llm_config.json"
+    files = {}
+    total = 0
+    for dirpath, dirnames, filenames in os.walk(output_dir):
+        dirnames.sort()
+        for name in sorted(filenames):
+            path = Path(dirpath) / name
+            size = path.stat().st_size
+            total += size
+            files[path.relative_to(output_dir).as_posix()] = {"size": size, "sha256": _sha256_file(path)}
+    return {"files": files, "total_size": total}
+
+
+def _recorded_export_args(output_dir: Path) -> dict:
+    """The arguments llmexport.py says it actually ran with, from export_args.json."""
     try:
-        with open(config_path, encoding="utf-8") as handle:
+        with open(output_dir / "export_args.json", encoding="utf-8") as handle:
+            recorded = json.load(handle)
+        return recorded if isinstance(recorded, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+def _expected_min_weight_size(output_dir: Path) -> "int | None":
+    """Lower bound on llm.mnn.weight's size from llm_config.json's
+    tie_embeddings offsets (the end of the last section llmexport.py records a
+    position for). None if not derivable."""
+    try:
+        with open(output_dir / "llm_config.json", encoding="utf-8") as handle:
             config = json.load(handle)
         tie = config.get("tie_embeddings")
         if not isinstance(tie, dict):
@@ -268,106 +478,107 @@ def _expected_min_weight_size(output_dir: Path) -> "int | None":
         size = tie.get("alpha_size")
         if isinstance(offset, int) and isinstance(size, int):
             return offset + size
-    except (OSError, TypeError, ValueError, json.JSONDecodeError):
+    except (OSError, TypeError, ValueError):
         pass
     return None
 
 
-def validate_and_record_mnn_export(output_dir: Path) -> "dict | None":
-    """Best-effort: hash llm.mnn.weight and record a validation sidecar.
+def validate_and_record_mnn(output_dir: Path, level: str, toolchain: MnnToolchain) -> dict:
+    """Check a fresh export is complete and built with the requested recipe, then record it.
 
-    Returns the validation record on success, or None if the sidecar could
-    not be written (a non-fatal problem). Raises only if the weight file
-    itself is clearly broken: missing, empty, or smaller than the minimum
-    size implied by llm_config.json when that's derivable - exactly the
-    class of corruption found in practice (a 16KB file where ~2GB was
-    expected). Callers should treat a raise as a warning, not a hard
-    failure, so a flaky check never blocks the pipeline.
+    Raises RuntimeError if files are missing, the weight file is truncated,
+    or export_args.json reports a different quant_bit, quant_block, hqq or
+    lm_quant_bit than was asked for.
     """
-    weight_path = output_dir / KEY_WEIGHT_FILENAME
-    if not weight_path.is_file():
-        raise RuntimeError(f"MNN validation failed: file not found: {weight_path}")
-    size = weight_path.stat().st_size
-    if size <= 0:
-        raise RuntimeError(f"MNN validation failed: empty file: {weight_path}")
+    absent = missing_files(output_dir)
+    if absent:
+        raise RuntimeError(f"MNN validation failed: incomplete artifact at {output_dir}; missing {absent}")
 
+    weight_path = output_dir / "llm.mnn.weight"
+    weight_size = weight_path.stat().st_size
+    if weight_size <= 0:
+        raise RuntimeError(f"MNN validation failed: empty file: {weight_path}")
     expected_min = _expected_min_weight_size(output_dir)
-    if expected_min is not None and size < expected_min:
+    if expected_min is not None and weight_size < expected_min:
         raise RuntimeError(
-            f"MNN validation failed: {weight_path.name} is {size} bytes, smaller than "
-            f"the {expected_min}-byte minimum implied by llm_config.json (looks truncated)"
+            f"MNN validation failed: {weight_path.name} is {weight_size} bytes, smaller than the "
+            f"{expected_min}-byte minimum implied by llm_config.json (looks truncated)"
         )
 
+    bits = int(level)
+    block, hqq = export_recipe(bits)
+    expected = {"quant_bit": bits, "quant_block": block, "hqq": hqq, "lm_quant_bit": lm_quant_bit(bits)}
+    recorded = _recorded_export_args(output_dir)
+    for key, want in expected.items():
+        got = recorded.get(key)
+        if got is None:
+            continue
+        if (bool(got) if key == "hqq" else int(got)) != want:
+            raise RuntimeError(
+                f"MNN validation failed: {output_dir.name} was exported with {key}={got} but "
+                f"{key}={want} was requested. Scoring it would attribute one recipe's results to another."
+            )
+
     record = {
-        "schema_version": 1,
-        "file_size": size,
-        "sha256": _sha256_file(weight_path),
-        "expected_min_size": expected_min,
+        "schema_version": MNN_VALIDATION_SCHEMA_VERSION,
+        "quant": LEVEL_SELECTORS[level],
+        "quant_bit": bits,
+        "quant_block": block,
+        "hqq": hqq,
+        "lm_quant_bit": lm_quant_bit(bits),
+        "weight_size_mb": combined_size_mb(output_dir),
+        "fingerprint": _fingerprint(output_dir),
+        "tool_versions": toolchain.versions(),
     }
-    try:
-        _atomic_write_json(mnn_validation_sidecar_path(weight_path), record)
-    except OSError as exc:
-        print(f"[WARN] Could not write validation sidecar for {weight_path.name}: {exc}")
-        return None
+    _atomic_write_json(mnn_validation_sidecar_path(output_dir), record)
     return record
 
 
-def mnn_export_cache_status(output_dir: Path) -> str:
-    """Classify an existing export directory for cache-reuse purposes.
+def validated_mnn_cache_hit(output_dir: Path, toolchain: MnnToolchain | None) -> bool:
+    """Whether the export exactly matches a validation record for the current recipe.
 
-    Returns one of:
-      "valid"       - complete export, sidecar present, size+hash match:
-                       safe to reuse as-is.
-      "invalid"     - export dir is incomplete, OR a sidecar exists but does
-                       NOT match the current weight file (the file changed
-                       or was truncated/corrupted since it was validated):
-                       must NOT be reused, caller should reconvert.
-      "unvalidated" - complete export but no sidecar to check against (e.g.
-                       a pre-existing export from before this validation was
-                       added, or the sidecar itself is unreadable): falls
-                       back to the old exists()-only trust, since there is
-                       nothing to compare against and we must not block the
-                       pipeline on a missing sidecar.
-
-    This distinction is what makes corruption detection actually bite: a
-    caller must treat "invalid" as "reconvert", not just log a different
-    message while still skipping (that was the bug in an earlier version of
-    this check - it always skipped on is_export_complete() and only used the
-    validation result to pick which message to print).
+    The export settings are part of the key, not just the file contents: the
+    files on disk cannot say they were built with a different block size or
+    lm_head width, so a hit on contents alone would reuse the previous
+    recipe's model under the new one's name. When the toolchain is available
+    its MNN commit/version must match too.
     """
-    if not is_export_complete(output_dir):
-        return "invalid"
-
-    weight_path = output_dir / KEY_WEIGHT_FILENAME
-    sidecar_path = mnn_validation_sidecar_path(weight_path)
-    if not sidecar_path.is_file():
-        return "unvalidated"
-
+    sidecar_path = mnn_validation_sidecar_path(output_dir)
+    if not output_dir.is_dir() or not sidecar_path.is_file():
+        return False
     try:
         with open(sidecar_path, encoding="utf-8") as handle:
             record = json.load(handle)
-    except (OSError, TypeError, ValueError, json.JSONDecodeError):
-        return "unvalidated"
+        if record.get("schema_version") != MNN_VALIDATION_SCHEMA_VERSION:
+            return False
+        recorded_versions = record.get("tool_versions")
+        if not isinstance(recorded_versions, dict) or not recorded_versions:
+            return False
+        bits = record.get("quant_bit")
+        if not isinstance(bits, int):
+            return False
+        block, hqq = export_recipe(bits)
+        if record.get("quant_block") != block or bool(record.get("hqq", False)) != hqq:
+            return False
+        if record.get("lm_quant_bit") != lm_quant_bit(bits):
+            return False
+        if toolchain is not None:
+            current = toolchain.versions()
+            for key in ("mnn_commit", "mnn_version"):
+                if recorded_versions.get(key) != current.get(key):
+                    return False
+        return record.get("fingerprint") == _fingerprint(output_dir)
+    except (OSError, TypeError, ValueError):
+        return False
 
+
+def invalidate_mnn_cache(output_dir: Path) -> None:
+    """Remove a derived MNN export and its validation record, and nothing else."""
+    shutil.rmtree(output_dir, ignore_errors=True)
     try:
-        matches = (
-            record.get("schema_version") == 1
-            and record.get("file_size") == weight_path.stat().st_size
-            and record.get("sha256") == _sha256_file(weight_path)
-        )
-    except OSError:
-        return "unvalidated"
-
-    return "valid" if matches else "invalid"
-
-
-def validated_mnn_cache_hit(output_dir: Path) -> bool:
-    """True only if mnn_export_cache_status() is "valid" - i.e. safe to reuse
-    without reconverting. Kept as a convenience wrapper; see
-    mnn_export_cache_status() for the "invalid" vs "unvalidated" distinction
-    that callers deciding whether to reconvert need.
-    """
-    return mnn_export_cache_status(output_dir) == "valid"
+        mnn_validation_sidecar_path(output_dir).unlink()
+    except FileNotFoundError:
+        pass
 
 
 # ---------------------------------------------------------------------------
@@ -375,22 +586,21 @@ def validated_mnn_cache_hit(output_dir: Path) -> bool:
 # ---------------------------------------------------------------------------
 
 def resolve_model(model_arg: str, output_dir: Path) -> Path:
-    """Return a local directory containing the model's weights and config.
+    """Return an absolute local directory containing the model's weights and config.
 
     If `model_arg` is already a local directory, use it as-is. Otherwise treat
-    it as a HuggingFace repo ID and download the full snapshot, skipping
-    framework-specific weight files we don't need (TF, Flax, Rust) to save
-    disk space and download time. llmexport.py needs a local folder for
-    --path, not a raw HF ID.
+    it as a HuggingFace repo ID and download the snapshot at the repo's current
+    commit. llmexport.py needs a local folder for --path, not a raw HF ID.
     """
     local = Path(model_arg)
     if local.exists() and local.is_dir():
         print(f"[DOWNLOAD] Using local model at {local}")
-        return local
+        return local.resolve()
 
     print(f"[DOWNLOAD] Fetching {model_arg} from HuggingFace Hub …")
+    os.environ.setdefault("HF_HUB_DISABLE_XET", "1")
     try:
-        from huggingface_hub import snapshot_download
+        from huggingface_hub import model_info, snapshot_download
     except ImportError:
         print("[ERROR] huggingface_hub not installed. Run: pip install huggingface_hub", file=sys.stderr)
         sys.exit(1)
@@ -401,14 +611,21 @@ def resolve_model(model_arg: str, output_dir: Path) -> Path:
     # Rough disk-space check: assume up to 10 GB of weights plus headroom for exports
     check_disk_space(output_dir, 15.0)
 
+    revision = None
+    try:
+        revision = getattr(model_info(model_arg), "sha", None)
+    except Exception:  # noqa: BLE001 - snapshot_download still works from an offline cache
+        pass
+
     try:
         path = snapshot_download(
             repo_id=model_arg,
+            revision=revision,
             local_dir=str(dest),
-            ignore_patterns=["*.msgpack", "flax_model*", "tf_model*", "rust_model*"],
+            ignore_patterns=HF_SNAPSHOT_IGNORE_PATTERNS,
         )
-        print(f"[DOWNLOAD] Saved to {path}")
-        return Path(path)
+        print(f"[DOWNLOAD] Saved to {path} (revision {revision or 'unknown'})")
+        return Path(path).resolve()
     except Exception as e:
         msg = str(e)
         if "404" in msg or "not found" in msg.lower():
@@ -422,110 +639,77 @@ def resolve_model(model_arg: str, output_dir: Path) -> Path:
 # 2. EXPORT + QUANTIZE
 # ---------------------------------------------------------------------------
 
-def find_llmexport_interpreter():
-    """Return llmexport.py's colocated venv python, or None if it's missing -
-    checked lazily per quant_bit so already-exported levels can still be
-    validated/deployed even if the export toolchain isn't set up."""
-    if LLMEXPORT_VENV_PYTHON.exists():
-        return str(LLMEXPORT_VENV_PYTHON)
-    return None
+def export_one(toolchain: MnnToolchain, model_dir: Path, level: str, output_dir: Path,
+               source_size_mb: float) -> None:
+    """Run llmexport.py for a single quant_bit level and validate the result; exit on failure."""
+    bits = int(level)
+    block, hqq = export_recipe(bits)
 
-
-def export_one(interpreter: str, model_dir: Path, quant_bit: str, output_dir: Path,
-                awq: bool = False, hqq: bool = False) -> dict:
-    """Run llmexport.py for a single quant_bit level. Returns {"ok": True} or
-    {"ok": False, "error": str}."""
-    require(LLMEXPORT_SCRIPT.exists(), f"llmexport.py not found at {LLMEXPORT_SCRIPT}")
-    require(
-        MNNCONVERT_BIN.exists(),
-        f"MNNConvert binary not found at {MNNCONVERT_BIN} (--mnnconvert is required - "
-        "without it, conversion crashes with a Bus error via the broken pymnn bindings)",
-    )
-
+    # A previous attempt's half-written folder is rubble, not a starting point.
+    invalidate_mnn_cache(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
+
+    # Every path is absolute: llmexport.py runs from its own source directory,
+    # and a relative --dst_path silently writes the model into the MNN tree.
     cmd = [
-        interpreter, str(LLMEXPORT_SCRIPT),
-        "--path", str(model_dir),
+        str(toolchain.python), str(toolchain.llmexport),
+        "--path", str(model_dir.resolve()),
         "--export", "mnn",
-        "--quant_bit", str(quant_bit),
-        "--quant_block", str(QUANT_BLOCK),
-        "--dst_path", str(output_dir),
-        "--mnnconvert", str(MNNCONVERT_BIN),
+        "--quant_bit", str(bits),
+        "--quant_block", str(block),
+        "--lm_quant_bit", str(lm_quant_bit(bits)),
+        "--dst_path", str(output_dir.resolve()),
+        "--mnnconvert", str(toolchain.mnnconvert.resolve()),
     ]
-    if awq:
-        cmd.append("--awq")
     if hqq:
         cmd.append("--hqq")
-    if str(quant_bit) == "4":
-        # See Q4_LM_HEAD_QUANT_BIT above - confirmed fix for Q4 repetition/
-        # garbage output, applied universally to every Q4 export.
-        cmd += ["--lm_quant_bit", str(Q4_LM_HEAD_QUANT_BIT)]
+    print(f"[EXPORT] {bits}-bit / block {block} / lm_head {lm_quant_bit(bits)}-bit{' / hqq' if hqq else ''}")
 
-    result = run(cmd, cwd=LLMEXPORT_SCRIPT.parent)
-    if result.returncode != 0:
-        return {"ok": False, "error": f"llmexport.py exited with code {result.returncode}"}
+    error = run_export_tool(cmd, export_timeout_s(source_size_mb), partial_output=output_dir,
+                            cwd=toolchain.llmexport.parent)
+    require(error is None, f"MNN export to Q{level} failed: {error}")
 
-    if not is_export_complete(output_dir):
-        missing = [f for f in REQUIRED_FILES if not (output_dir / f).exists()]
-        return {"ok": False, "error": f"llmexport.py exited 0 but expected files are missing: {missing}"}
-
-    return {"ok": True}
+    try:
+        validate_and_record_mnn(output_dir, level, toolchain)
+    except RuntimeError as exc:
+        invalidate_mnn_cache(output_dir)
+        require(False, f"{output_dir.name} failed validation and was removed: {exc}")
 
 
-def export_all_levels(model_dir: Path, output_dir: Path, prefix: str, levels: list,
-                       awq: bool = False, hqq: bool = False) -> dict:
-    """Produce one quantized MNN model folder per requested quant_bit level.
+def export_all_levels(model_dir: Path, output_dir: Path, prefix: str, levels: list) -> dict:
+    """Produce one validated MNN model folder per requested quant_bit level.
 
-    Levels that already exist AND pass validation are skipped so the pipeline
-    is safe to re-run after a partial failure - same idempotent-rerun
-    behavior as convert_to_gguf.py's quantize_model(). A level whose
-    directory looks complete but whose weight-file validation sidecar does
-    NOT match (corrupted/truncated/hand-edited since it was last validated)
-    is treated as invalid and reconverted, not silently reused - that's the
-    whole point of the hash check. A level with no sidecar at all (e.g. an
-    export produced before this validation existed) falls back to the old
-    exists()-only trust rather than forcing a reconvert on stale data.
-    A failure at one level is reported and the sweep continues with the
-    remaining levels rather than aborting. Returns a dict mapping level ->
-    output folder Path for successfully produced levels.
+    A level whose folder matches its validation record for the current recipe
+    is reused. Anything else - incomplete, unvalidated, built with a different
+    recipe or MNN version, or changed since it was validated - is deleted and
+    re-exported. Any failure stops the pipeline: a partial set of levels is
+    never reported as success.
+    Returns a dict mapping level -> output folder Path.
     """
-    interpreter = find_llmexport_interpreter()
-    results = {}
+    toolchain, toolchain_problem = find_toolchain()
+    if toolchain is None:
+        print(f"[WARN] {toolchain_problem}\n[WARN] Only validated exports can be reused, and their MNN "
+              f"version can't be checked.")
 
+    source_size_mb = dir_size_mb(model_dir)
+    results = {}
     for level in levels:
         slug = quant_slug(prefix, level)
         out_dir = output_dir / slug
 
-        status = mnn_export_cache_status(out_dir)
-        if status == "valid":
+        if validated_mnn_cache_hit(out_dir, toolchain):
             print(f"[EXPORT] {slug} already exists and passed validated-cache check, skipping.")
             results[level] = out_dir
             continue
-        elif status == "unvalidated":
-            print(f"[EXPORT] {slug} already exists, skipping.")
-            results[level] = out_dir
-            continue
-        elif out_dir.exists():
-            print(f"[WARN] {slug} exists but failed validation (corrupted/truncated/incomplete) - reconverting.")
+        if out_dir.exists():
+            print(f"[EXPORT] {slug} exists but is unvalidated, changed or built with another recipe - re-exporting.")
 
-        if interpreter is None:
-            print(f"[WARN] llmexport.py venv not found at {LLMEXPORT_VENV_PYTHON}, skipping Q{level}.")
-            continue
-
+        require(toolchain is not None, f"Cannot export {slug}: {toolchain_problem}")
         print(f"\n[EXPORT] → Q{level} …")
-        r = export_one(interpreter, model_dir, level, out_dir, awq=awq, hqq=hqq)
-        if not r["ok"]:
-            # Non-fatal: report the failure and continue with remaining levels
-            print(f"[WARN] Export to Q{level} failed ({r['error']}), skipping.")
-            continue
-
+        export_one(toolchain, model_dir, level, out_dir, source_size_mb)
         size_mb = combined_size_mb(out_dir)
         size_disp = f"{size_mb:.0f} MB" if size_mb is not None else "unknown size"
         print(f"[EXPORT] ✓ {slug}  ({size_disp})")
-        try:
-            validate_and_record_mnn_export(out_dir)
-        except RuntimeError as exc:
-            print(f"[WARN] Post-export validation of {slug} raised: {exc}")
         results[level] = out_dir
 
     return results
@@ -607,7 +791,11 @@ def validate_and_report(
 # Virtual environments inherit a restricted PATH that often omits the Android
 # SDK's platform-tools directory, so we fall back to these known paths.
 ADB_SEARCH_PATHS = [
+    *(Path(p) / "platform-tools" / ("adb.exe" if os.name == "nt" else "adb")
+      for p in (os.environ.get("ANDROID_HOME"), os.environ.get("ANDROID_SDK_ROOT")) if p),
     Path.home() / "Library" / "Android" / "sdk" / "platform-tools" / "adb",
+    Path.home() / "Android" / "Sdk" / "platform-tools" / "adb",
+    Path(os.environ.get("LOCALAPPDATA", Path.home() / "AppData" / "Local")) / "Android" / "Sdk" / "platform-tools" / "adb.exe",
     Path("/usr/local/bin/adb"),
     Path("/opt/homebrew/bin/adb"),
 ]
@@ -710,21 +898,17 @@ def parse_args() -> argparse.Namespace:
         "--quant",
         choices=QUANT_LEVELS + [FP16_QUANT_LEVEL, "FP16", "ALL"],
         default="ALL",
-        help="quant_bit level(s) to produce (default: ALL, sweeps 16/4/8 i.e. "
-             "F16/Q4/Q8 - the project's standard set; 2/3 remain selectable "
-             "individually but are not part of ALL)",
+        help="quant_bit level(s) to produce (default: ALL = 16/4/8, i.e. F16/Q4/Q8)",
     )
-    p.add_argument("--deploy", action="store_true", help="Push the recommended (Q4) level to connected Android via ADB")
-
-    quant_method_group = p.add_mutually_exclusive_group()
-    quant_method_group.add_argument("--awq", action="store_true", help="Use AWQ quantization (passed through to llmexport.py)")
-    quant_method_group.add_argument("--hqq", action="store_true", help="Use HQQ quantization (passed through to llmexport.py)")
-
+    p.add_argument("--deploy", action="store_true", help="Push the exported folders to a connected Android device via ADB")
     return p.parse_args()
 
 
 def main() -> None:
     """Orchestrate the full download → export/quantize → validate → deploy pipeline."""
+    # Windows encodes redirected output as cp1252, which can't print the progress symbols.
+    for stream in (sys.stdout, sys.stderr):
+        stream.reconfigure(encoding="utf-8", errors="replace")
     args = parse_args()
 
     output_dir = Path(args.output).expanduser().resolve()
@@ -733,8 +917,6 @@ def main() -> None:
     if args.quant == "FP16":
         args.quant = FP16_QUANT_LEVEL
     quant_levels = ALL_QUANT_LEVELS if args.quant == "ALL" else [args.quant]
-
-    require(MNN_ROOT.exists(), f"MNN not found at {MNN_ROOT}. Clone it first.")
 
     # Start the clock here so conversion_time covers the full pipeline
     t_start = time.time()
@@ -746,7 +928,7 @@ def main() -> None:
     print(f"[INFO] Output filename prefix: {prefix}")
 
     # 2. Export + quantize each requested quant_bit level
-    quant_dirs = export_all_levels(model_dir, output_dir, prefix, quant_levels, awq=args.awq, hqq=args.hqq)
+    quant_dirs = export_all_levels(model_dir, output_dir, prefix, quant_levels)
 
     conversion_time = time.time() - t_start
 
