@@ -1,0 +1,586 @@
+{
+ "config": {
+  "id": "qwen3-0.6b__Q4_0__llama.cpp__gpu",
+  "model": "qwen3-0.6b",
+  "quant": "Q4_0",
+  "bits": 4,
+  "framework": "llama.cpp",
+  "backend": "gpu",
+  "ref": "pinned"
+ },
+ "model_file": {
+  "name": "qwen3-0.6b",
+  "hf_id": "Qwen/Qwen3-0.6B",
+  "framework": "llama.cpp",
+  "quant": "Q4_0",
+  "bits": 4,
+  "ref": "pinned",
+  "path": "gguf/qwen3-0.6b-q4_0.gguf",
+  "files": {
+   "qwen3-0.6b-q4_0.gguf": 469081344
+  },
+  "converter": "llama.cpp eadc4184caee convert_hf_to_gguf + llama-quantize"
+ },
+ "started": "2026-10-10T11:43:09.631724",
+ "invocations": {
+  "prefill": {
+   "exit": 0,
+   "timed_out": false,
+   "seconds": 73.1,
+   "marks": 30,
+   "cpu_busy": 0.081,
+   "gate": {
+    "passed": true,
+    "waited_s": 124.2,
+    "issues": null,
+    "battery_temp_c": 28.0,
+    "cpu_caps_khz": {
+     "policy0": 2016000,
+     "policy3": 2803200,
+     "policy7": 3360000
+    },
+    "thermal_status": 0
+   },
+   "state_before": {
+    "epoch_ms": 1791657937437,
+    "battery_temp_c": 28.0,
+    "battery_level": 75,
+    "battery_status": 3,
+    "externally_powered": false,
+    "power_sources": [],
+    "cpu_caps_khz": {
+     "policy0": 2016000,
+     "policy3": 2803200,
+     "policy7": 3360000
+    },
+    "cpu_hw_max_khz": {
+     "policy0": 2016000,
+     "policy3": 2803200,
+     "policy7": 3360000
+    },
+    "cpu_capped": false,
+    "screen": "Dozing",
+    "thermal_status": 0
+   },
+   "state_after": {
+    "epoch_ms": 1791658011548,
+    "battery_temp_c": 30.4,
+    "battery_level": 74,
+    "battery_status": 3,
+    "externally_powered": false,
+    "power_sources": [],
+    "cpu_caps_khz": {
+     "policy0": 2016000,
+     "policy3": 2803200,
+     "policy7": 3360000
+    },
+    "cpu_hw_max_khz": {
+     "policy0": 2016000,
+     "policy3": 2803200,
+     "policy7": 3360000
+    },
+    "cpu_capped": false,
+    "screen": "Dozing",
+    "thermal_status": 0
+   },
+   "idle_window": [
+    5860.41,
+    5870.59
+   ],
+   "llama_bench": {
+    "build_commit": "eadc418",
+    "backends": "OpenCL",
+    "n_threads": 4,
+    "flash_attn": false,
+    "type_k": "f16",
+    "type_v": "f16",
+    "n_batch": 2048,
+    "n_ubatch": 512,
+    "use_mmap": true,
+    "avg_ts": 132.565533,
+    "stddev_ts": 0.232028,
+    "samples_ts": [
+     132.706,
+     132.563,
+     132.478,
+     132.794,
+     132.381,
+     132.779,
+     132.74,
+     132.764,
+     132.413,
+     132.6,
+     132.693,
+     132.659,
+     132.492,
+     132.53,
+     132.553,
+     132.354,
+     132.76,
+     132.639,
+     132.486,
+     132.474,
+     131.635,
+     132.382,
+     132.663,
+     132.816,
+     132.487,
+     132.814,
+     132.291,
+     132.555,
+     132.702,
+     132.765
+    ],
+    "model_type": "qwen3 0.6B Q4_0",
+    "model_size": 463129600
+   },
+   "suspend_ratio": 1.0
+  },
+  "decode": {
+   "exit": 0,
+   "timed_out": false,
+   "seconds": 103.7,
+   "marks": 5,
+   "cpu_busy": 0.265,
+   "gate": {
+    "passed": true,
+    "waited_s": 108.8,
+    "issues": null,
+    "battery_temp_c": 27.9,
+    "cpu_caps_khz": {
+     "policy0": 2016000,
+     "policy3": 2803200,
+     "policy7": 3360000
+    },
+    "thermal_status": 0
+   },
+   "state_before": {
+    "epoch_ms": 1791658148700,
+    "battery_temp_c": 27.9,
+    "battery_level": 74,
+    "battery_status": 3,
+    "externally_powered": false,
+    "power_sources": [],
+    "cpu_caps_khz": {
+     "policy0": 2016000,
+     "policy3": 2803200,
+     "policy7": 3360000
+    },
+    "cpu_hw_max_khz": {
+     "policy0": 2016000,
+     "policy3": 2803200,
+     "policy7": 3360000
+    },
+    "cpu_capped": false,
+    "screen": "Dozing",
+    "thermal_status": 0
+   },
+   "state_after": {
+    "epoch_ms": 1791658253443,
+    "battery_temp_c": 30.2,
+    "battery_level": 73,
+    "battery_status": 3,
+    "externally_powered": false,
+    "power_sources": [],
+    "cpu_caps_khz": {
+     "policy0": 2016000,
+     "policy3": 2803200,
+     "policy7": 3360000
+    },
+    "cpu_hw_max_khz": {
+     "policy0": 2016000,
+     "policy3": 2803200,
+     "policy7": 3360000
+    },
+    "cpu_capped": false,
+    "screen": "Dozing",
+    "thermal_status": 0
+   },
+   "idle_window": [
+    6071.61,
+    6081.84
+   ],
+   "llama_bench": {
+    "build_commit": "eadc418",
+    "backends": "OpenCL",
+    "n_threads": 4,
+    "flash_attn": false,
+    "type_k": "f16",
+    "type_v": "f16",
+    "n_batch": 2048,
+    "n_ubatch": 512,
+    "use_mmap": true,
+    "avg_ts": 14.954451,
+    "stddev_ts": 0.158437,
+    "samples_ts": [
+     15.2156,
+     14.8739,
+     14.9393,
+     14.9486,
+     14.7948
+    ],
+    "model_type": "qwen3 0.6B Q4_0",
+    "model_size": 463129600
+   },
+   "suspend_ratio": 1.0
+  }
+ },
+ "windows": [
+  {
+   "phase": "prefill",
+   "source": "main",
+   "rep": 1,
+   "a": 5884.347642535,
+   "b": 5886.27880144,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "main",
+   "rep": 2,
+   "a": 5886.27925868,
+   "b": 5888.211661179,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "main",
+   "rep": 3,
+   "a": 5888.212119877,
+   "b": 5890.139922116,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 4,
+   "a": 5890.140425189,
+   "b": 5892.074245032,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 5,
+   "a": 5892.074665396,
+   "b": 5894.002688729,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 6,
+   "a": 5894.003160864,
+   "b": 5895.931739822,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 7,
+   "a": 5895.932191124,
+   "b": 5897.860431853,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 8,
+   "a": 5897.860974353,
+   "b": 5899.794325602,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 9,
+   "a": 5899.794781748,
+   "b": 5901.725398934,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 10,
+   "a": 5901.725933726,
+   "b": 5903.655194142,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 11,
+   "a": 5903.655669923,
+   "b": 5905.585434141,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 12,
+   "a": 5905.58611362,
+   "b": 5907.518309557,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 13,
+   "a": 5907.518818047,
+   "b": 5909.45046414,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 14,
+   "a": 5909.450917056,
+   "b": 5911.382225858,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 15,
+   "a": 5911.382666743,
+   "b": 5913.316872055,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 16,
+   "a": 5913.317760753,
+   "b": 5915.246053356,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 17,
+   "a": 5915.246539815,
+   "b": 5917.176591949,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 18,
+   "a": 5917.177046949,
+   "b": 5919.109331844,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 19,
+   "a": 5919.110013667,
+   "b": 5921.04247325,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 20,
+   "a": 5921.042954448,
+   "b": 5922.987726478,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 21,
+   "a": 5922.988197416,
+   "b": 5924.92199778,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 22,
+   "a": 5924.922472363,
+   "b": 5926.852172571,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 23,
+   "a": 5926.852654706,
+   "b": 5928.780138143,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 24,
+   "a": 5928.780618976,
+   "b": 5930.712884027,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 25,
+   "a": 5930.713328559,
+   "b": 5932.640844912,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 26,
+   "a": 5932.641293766,
+   "b": 5934.576425224,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 27,
+   "a": 5934.576916318,
+   "b": 5936.508195952,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 28,
+   "a": 5936.508664025,
+   "b": 5938.437803764,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 29,
+   "a": 5938.4382659,
+   "b": 5940.366482305,
+   "tokens": 256
+  },
+  {
+   "phase": "decode",
+   "source": "main",
+   "rep": 1,
+   "a": 6109.227728699,
+   "b": 6126.439046036,
+   "tokens": 256
+  },
+  {
+   "phase": "decode",
+   "source": "main",
+   "rep": 2,
+   "a": 6126.513274734,
+   "b": 6143.649291759,
+   "tokens": 256
+  },
+  {
+   "phase": "decode",
+   "source": "main",
+   "rep": 3,
+   "a": 6143.727706707,
+   "b": 6160.853027221,
+   "tokens": 256
+  },
+  {
+   "phase": "decode",
+   "source": "energy",
+   "rep": 4,
+   "a": 6160.888072533,
+   "b": 6178.1914231,
+   "tokens": 256
+  }
+ ],
+ "prefill": {
+  "tps": 132.61,
+  "tps_std": 0.16,
+  "reps": [
+   132.56,
+   132.48,
+   132.79
+  ],
+  "tokens": [
+   256
+  ],
+  "uj_per_token": 27184.1,
+  "uj_per_token_gross": 28954.7,
+  "energy_valid": true,
+  "energy_reason": null
+ },
+ "decode": {
+  "tps": 14.92,
+  "tps_std": 0.04,
+  "reps": [
+   14.87,
+   14.94,
+   14.95
+  ],
+  "tokens": [
+   256
+  ],
+  "uj_per_token": 188032.7,
+  "uj_per_token_gross": 203796.9,
+  "energy_valid": true,
+  "energy_reason": null
+ },
+ "status": "ok",
+ "finished": "2026-10-10T11:51:08.446018",
+ "energy": {
+  "perfetto:current": {
+   "prefill": {
+    "uj_per_token": 28954.7,
+    "net_uj_per_token": 27184.1,
+    "avg_power_mw": 3838.2,
+    "idle_power_mw": 234.7,
+    "seconds": 56.0,
+    "tokens": 7424,
+    "windows": 1,
+    "valid": true,
+    "reason": null,
+    "note": "battery HAL current, unit mA"
+   },
+   "decode": {
+    "uj_per_token": 203796.9,
+    "net_uj_per_token": 188032.7,
+    "avg_power_mw": 3034.3,
+    "idle_power_mw": 234.7,
+    "seconds": 68.78,
+    "tokens": 1024,
+    "windows": 1,
+    "valid": true,
+    "reason": null,
+    "note": "battery HAL current, unit mA"
+   }
+  },
+  "perfetto:charge": {
+   "prefill": {
+    "uj_per_token": 7204.3,
+    "net_uj_per_token": 7204.3,
+    "avg_power_mw": 955.0,
+    "idle_power_mw": -0.0,
+    "seconds": 56.0,
+    "tokens": 7424,
+    "windows": 1,
+    "valid": false,
+    "reason": "reading changed only 1 time(s) during the phase",
+    "note": "battery HAL charge counter"
+   },
+   "decode": {
+    "uj_per_token": 155564.0,
+    "net_uj_per_token": 155564.0,
+    "avg_power_mw": 2316.2,
+    "idle_power_mw": -0.0,
+    "seconds": 68.78,
+    "tokens": 1024,
+    "windows": 1,
+    "valid": false,
+    "reason": "reading changed only 2 time(s) during the phase",
+    "note": "battery HAL charge counter"
+   }
+  }
+ },
+ "energy_idle": "per invocation",
+ "energy_session": "2026-10-10T10:15:49.212903",
+ "energy_headline_method": "perfetto:current",
+ "energy_kind": "whole device (net of idle)"
+}
