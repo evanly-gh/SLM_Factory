@@ -1,0 +1,1 @@
+LD_LIBRARY_PATH=.:/vendor/lib64 ./llama-bench -m /data/local/tmp/paper_bench/models/gemma3-270m-f16.gguf -p 256 -n 0 -r 41 -ngl 0 -o json -t 4

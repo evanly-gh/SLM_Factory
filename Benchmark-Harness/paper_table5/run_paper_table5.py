@@ -402,7 +402,16 @@ class Session:
         time.sleep(self.args.pre_idle_seconds)
         return [t0 + min(2.0, self.args.pre_idle_seconds / 4), boottime_s(self.adb)]
 
+    def check_battery(self, before: str):
+        """Stop the session below --min-battery. Checked before every invocation, not only between configurations:
+        one configuration can use 5-10% of the battery, and the S23 drops off Wi-Fi at ~3% (2026-10-09, 6% -> dead)."""
+        level = bench_common.device_state(self.adb).get("battery_level")
+        if self.args.min_battery and level is not None and level < self.args.min_battery:
+            raise BatteryLow(f"{level}% < --min-battery {self.args.min_battery}%: stopping before {before}; charge the "
+                             "phone to full, unplug it and rerun the same command (completed configurations are kept)")
+
     def invoke(self, cfg, tag, bin_dir, cmd, env, phase_label) -> dict:
+        self.check_battery(f"{cfg['id']} ({tag})")
         gate = self.wait_ready()
         self.controls.screen_off()
         idle_window = self.measure_idle()
@@ -671,14 +680,13 @@ class Session:
             for f in (self.out / "session.json", self.out / "sessions" / f"{stamp}.json"):  # recover_energy reads the latter
                 f.write_text(json.dumps(session, indent=1, default=str))
             for i, cfg in enumerate(todo, 1):
-                level = bench_common.device_state(self.adb).get("battery_level")
-                if a.min_battery and level is not None and level < a.min_battery:
-                    log(f"[BATTERY] {level}% < --min-battery {a.min_battery}%: stopping before {cfg['id']}; charge the "
-                        f"phone to full, unplug it and rerun the same command (completed configurations are kept)")
-                    break
-                log(f"[{i}/{len(todo)}] {cfg['id']}")
                 try:
+                    self.check_battery(cfg["id"])
+                    log(f"[{i}/{len(todo)}] {cfg['id']}")
                     r = self.run_config(cfg)
+                except BatteryLow as e:  # the unfinished configuration is not saved, so it reruns next session
+                    log(f"[BATTERY] {e}")
+                    break
                 except RuntimeError as e:  # phone unreachable (e.g. it moved to another Wi-Fi network)
                     log(f"[SESSION] stopped early during {cfg['id']}: {e}")
                     break
@@ -695,6 +703,10 @@ class Session:
             self.attach_energy()
         write_summary(self.out)
         log(f"done -> {self.out}  (python report.py {self.out})")
+
+
+class BatteryLow(Exception):
+    pass
 
 
 def recover_energy(args):
@@ -755,7 +767,16 @@ def write_summary(out: Path):
             w.writerows(rows)
 
 
+def keep_host_awake():
+    """Stop Windows from sleeping on idle while this process runs (2026-10-10: the laptop's idle timeout froze a
+    session for two hours mid-configuration). Closing the lid still sleeps it."""
+    if sys.platform == "win32":
+        import ctypes
+        ctypes.windll.kernel32.SetThreadExecutionState(0x80000000 | 0x00000001)  # ES_CONTINUOUS | ES_SYSTEM_REQUIRED
+
+
 def main():
+    keep_host_awake()
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--serial")
     ap.add_argument("--ref", choices=["pinned", "head"], default="pinned", help="which build_binaries.py build to use")

@@ -1,7 +1,7 @@
 {
- "started": "2026-10-09T11:42:45.706006",
+ "started": "2026-10-10T12:50:05.673603",
  "device": {
-  "serial": "10.125.50.227:5555",
+  "serial": "10.18.94.83:5555",
   "manufacturer": "samsung",
   "model": "SM-S911U",
   "device": "dm1q",
@@ -76,7 +76,7 @@
   "battery_files": []
  },
  "params": {
-  "serial": "10.125.50.227:5555",
+  "serial": "10.18.94.83:5555",
   "ref": "pinned",
   "models": [
    "qwen3-0.6b",
@@ -121,7 +121,7 @@
   "recover_energy": false
  },
  "max_temp_c": 28.0,
- "idle_cpu_busy_at_start": 0.033,
+ "idle_cpu_busy_at_start": 0.103,
  "screen_on": false,
  "wireless_adb": true,
  "binaries": {
@@ -224,7 +224,16 @@
    "built": "2026-10-06T22:57:49.571954"
   }
  },
- "energy_dir": "energy/20261009_114245",
+ "energy_dir": "energy/20261010_125005",
  "wake_lock": true,
- "radio_mode": "airplane mode already on (Wi-Fi kept on in it)"
+ "radio_mode": "airplane mode already on (Wi-Fi kept on in it)",
+ "idle_window": [
+  9749.38,
+  9787.86
+ ],
+ "energy_headline_method": "perfetto:current",
+ "energy_methods": [
+  "perfetto:current",
+  "perfetto:charge"
+ ]
 }

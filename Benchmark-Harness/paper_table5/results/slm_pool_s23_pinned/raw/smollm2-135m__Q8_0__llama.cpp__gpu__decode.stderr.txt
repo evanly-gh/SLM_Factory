@@ -1,0 +1,30 @@
+ggml_opencl: selected platform: 'QUALCOMM Snapdragon(TM)'
+
+ggml_opencl: device: 'QUALCOMM Adreno(TM) (OpenCL 3.0 Adreno(TM) 740)'
+ggml_opencl: OpenCL driver: OpenCL 3.0 QUALCOMM build: 0676.77.1 Compiler E031.41.03.64
+ggml_opencl: vector subgroup broadcast support: false
+ggml_opencl: device FP16 support: true
+ggml_opencl: mem base addr align: 128
+ggml_opencl: max mem alloc size: 884 MB
+ggml_opencl: device max workgroup size: 1024
+ggml_opencl: SVM coarse grain buffer support: true
+ggml_opencl: SVM fine grain buffer support: true
+ggml_opencl: SVM fine grain system support: false
+ggml_opencl: SVM atomics support: true
+ggml_opencl: flattening quantized weights representation as struct of arrays (GGML_OPENCL_SOA_Q)
+ggml_opencl: using kernels optimized for Adreno (GGML_OPENCL_USE_ADRENO_KERNELS)
+ggml_opencl: loading OpenCL kernels.............................................................................
+ggml_opencl: default device: 'QUALCOMM Adreno(TM) (OpenCL 3.0 Adreno(TM) 740)'
+PB_MARK llama rep=0 begin=35682898699726 end=35687009765141 n_prompt=0 n_gen=256 n_depth=256
+PB_MARK llama rep=1 begin=35687013426651 end=35690621932900 n_prompt=0 n_gen=256 n_depth=256
+PB_MARK llama rep=2 begin=35690625407588 end=35694530053524 n_prompt=0 n_gen=256 n_depth=256
+PB_MARK llama rep=3 begin=35694534133680 end=35698441356491 n_prompt=0 n_gen=256 n_depth=256
+PB_MARK llama rep=4 begin=35698445651803 end=35703222946749 n_prompt=0 n_gen=256 n_depth=256
+PB_MARK llama rep=5 begin=35703225780447 end=35706837754196 n_prompt=0 n_gen=256 n_depth=256
+PB_MARK llama rep=6 begin=35706841392581 end=35712489604142 n_prompt=0 n_gen=256 n_depth=256
+PB_MARK llama rep=7 begin=35712492390444 end=35716104364036 n_prompt=0 n_gen=256 n_depth=256
+PB_MARK llama rep=8 begin=35716107795234 end=35719806528514 n_prompt=0 n_gen=256 n_depth=256
+PB_MARK llama rep=9 begin=35719810570754 end=35724314704085 n_prompt=0 n_gen=256 n_depth=256
+PB_MARK llama rep=10 begin=35724317567523 end=35727927822105 n_prompt=0 n_gen=256 n_depth=256
+PB_MARK llama rep=11 begin=35727930571375 end=35731712052259 n_prompt=0 n_gen=256 n_depth=256
+PB_MARK llama rep=12 begin=35731715823457 end=35736029946893 n_prompt=0 n_gen=256 n_depth=256

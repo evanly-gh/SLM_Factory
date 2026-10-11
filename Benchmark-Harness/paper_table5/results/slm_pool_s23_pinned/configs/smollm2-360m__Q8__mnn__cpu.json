@@ -1,0 +1,924 @@
+{
+ "config": {
+  "id": "smollm2-360m__Q8__mnn__cpu",
+  "model": "smollm2-360m",
+  "quant": "Q8",
+  "bits": 8,
+  "framework": "mnn",
+  "backend": "cpu",
+  "ref": "pinned"
+ },
+ "model_file": {
+  "name": "smollm2-360m",
+  "hf_id": "HuggingFaceTB/SmolLM2-360M-Instruct",
+  "framework": "mnn",
+  "quant": "Q8",
+  "bits": 8,
+  "ref": "pinned",
+  "path": "mnn/smollm2-360m-mnn-paper-default-q8",
+  "files": {
+   "config.json": 219,
+   "export_args.json": 1435,
+   "llm.mnn": 558608,
+   "llm.mnn.json": 1152426,
+   "llm.mnn.weight": 407536710,
+   "llm_config.json": 722,
+   "tokenizer.txt": 982839
+  },
+  "recipe": "paper-default",
+  "converter": "llmexport.py @ MNN mnn-510ac8f15d10, MNNConvert C:\\Users\\evanl\\.pb\\tools\\mnnconvert_nolog.cmd"
+ },
+ "started": "2026-10-10T11:21:22.508156",
+ "invocations": {
+  "kv": {
+   "exit": 0,
+   "timed_out": false,
+   "seconds": 20.8,
+   "marks": 4,
+   "cpu_busy": 0.402,
+   "gate": {
+    "passed": true,
+    "waited_s": 139.7,
+    "issues": null,
+    "battery_temp_c": 28.0,
+    "cpu_caps_khz": {
+     "policy0": 2016000,
+     "policy3": 2803200,
+     "policy7": 3360000
+    },
+    "thermal_status": 0
+   },
+   "state_before": {
+    "epoch_ms": 1791656645898,
+    "battery_temp_c": 28.0,
+    "battery_level": 78,
+    "battery_status": 3,
+    "externally_powered": false,
+    "power_sources": [],
+    "cpu_caps_khz": {
+     "policy0": 2016000,
+     "policy3": 2803200,
+     "policy7": 3360000
+    },
+    "cpu_hw_max_khz": {
+     "policy0": 2016000,
+     "policy3": 2803200,
+     "policy7": 3360000
+    },
+    "cpu_capped": false,
+    "screen": "Dozing",
+    "thermal_status": 0
+   },
+   "state_after": {
+    "epoch_ms": 1791656667687,
+    "battery_temp_c": 27.7,
+    "battery_level": 78,
+    "battery_status": 3,
+    "externally_powered": false,
+    "power_sources": [],
+    "cpu_caps_khz": {
+     "policy0": 2016000,
+     "policy3": 2803200,
+     "policy7": 3360000
+    },
+    "cpu_hw_max_khz": {
+     "policy0": 2016000,
+     "policy3": 2803200,
+     "policy7": 3360000
+    },
+    "cpu_capped": false,
+    "screen": "Dozing",
+    "thermal_status": 0
+   },
+   "idle_window": [
+    4568.93,
+    4579.12
+   ],
+   "suspend_ratio": 1.006
+  },
+  "energy_prefill": {
+   "exit": 0,
+   "timed_out": false,
+   "seconds": 31.2,
+   "marks": 63,
+   "cpu_busy": 0.506,
+   "gate": {
+    "passed": true,
+    "waited_s": 93.1,
+    "issues": null,
+    "battery_temp_c": 27.9,
+    "cpu_caps_khz": {
+     "policy0": 2016000,
+     "policy3": 2803200,
+     "policy7": 3360000
+    },
+    "thermal_status": 0
+   },
+   "state_before": {
+    "epoch_ms": 1791656789167,
+    "battery_temp_c": 27.9,
+    "battery_level": 78,
+    "battery_status": 3,
+    "externally_powered": false,
+    "power_sources": [],
+    "cpu_caps_khz": {
+     "policy0": 2016000,
+     "policy3": 2803200,
+     "policy7": 3360000
+    },
+    "cpu_hw_max_khz": {
+     "policy0": 2016000,
+     "policy3": 2803200,
+     "policy7": 3360000
+    },
+    "cpu_capped": false,
+    "screen": "Dozing",
+    "thermal_status": 0
+   },
+   "state_after": {
+    "epoch_ms": 1791656821283,
+    "battery_temp_c": 28.2,
+    "battery_level": 78,
+    "battery_status": 3,
+    "externally_powered": false,
+    "power_sources": [],
+    "cpu_caps_khz": {
+     "policy0": 2016000,
+     "policy3": 2803200,
+     "policy7": 3360000
+    },
+    "cpu_hw_max_khz": {
+     "policy0": 2016000,
+     "policy3": 2803200,
+     "policy7": 3360000
+    },
+    "cpu_capped": false,
+    "screen": "Dozing",
+    "thermal_status": 0
+   },
+   "idle_window": [
+    4712.14,
+    4722.37
+   ]
+  },
+  "energy_decode": {
+   "exit": 0,
+   "timed_out": false,
+   "seconds": 31.3,
+   "marks": 8,
+   "cpu_busy": 0.532,
+   "gate": {
+    "passed": true,
+    "waited_s": 124.7,
+    "issues": null,
+    "battery_temp_c": 27.8,
+    "cpu_caps_khz": {
+     "policy0": 2016000,
+     "policy3": 2803200,
+     "policy7": 3360000
+    },
+    "thermal_status": 0
+   },
+   "state_before": {
+    "epoch_ms": 1791656974239,
+    "battery_temp_c": 27.8,
+    "battery_level": 77,
+    "battery_status": 3,
+    "externally_powered": false,
+    "power_sources": [],
+    "cpu_caps_khz": {
+     "policy0": 2016000,
+     "policy3": 2803200,
+     "policy7": 3360000
+    },
+    "cpu_hw_max_khz": {
+     "policy0": 2016000,
+     "policy3": 2803200,
+     "policy7": 3360000
+    },
+    "cpu_capped": false,
+    "screen": "Dozing",
+    "thermal_status": 0
+   },
+   "state_after": {
+    "epoch_ms": 1791657006497,
+    "battery_temp_c": 27.8,
+    "battery_level": 77,
+    "battery_status": 3,
+    "externally_powered": false,
+    "power_sources": [],
+    "cpu_caps_khz": {
+     "policy0": 2016000,
+     "policy3": 2803200,
+     "policy7": 3360000
+    },
+    "cpu_hw_max_khz": {
+     "policy0": 2016000,
+     "policy3": 2803200,
+     "policy7": 3360000
+    },
+    "cpu_capped": false,
+    "screen": "Dozing",
+    "thermal_status": 0
+   },
+   "idle_window": [
+    4897.35,
+    4907.5
+   ]
+  }
+ },
+ "windows": [
+  {
+   "phase": "prefill",
+   "source": "main",
+   "rep": 1,
+   "a": 4584.874519801,
+   "b": 4585.304340801,
+   "tokens": 256
+  },
+  {
+   "phase": "decode",
+   "source": "main",
+   "rep": 1,
+   "a": 4585.304340801,
+   "b": 4588.47165756,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "main",
+   "rep": 2,
+   "a": 4588.471688029,
+   "b": 4588.950532029,
+   "tokens": 256
+  },
+  {
+   "phase": "decode",
+   "source": "main",
+   "rep": 2,
+   "a": 4588.950532029,
+   "b": 4592.162700788,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "main",
+   "rep": 3,
+   "a": 4592.16273433,
+   "b": 4592.64700233,
+   "tokens": 256
+  },
+  {
+   "phase": "decode",
+   "source": "main",
+   "rep": 3,
+   "a": 4592.64700233,
+   "b": 4595.883421151,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 1,
+   "a": 4724.281781259,
+   "b": 4724.6565002590005,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 2,
+   "a": 4724.66929579,
+   "b": 4725.047230790001,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 3,
+   "a": 4725.059989539,
+   "b": 4725.437800539,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 4,
+   "a": 4725.450733914,
+   "b": 4725.836100914,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 5,
+   "a": 4725.849166154,
+   "b": 4726.242636154,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 6,
+   "a": 4726.25555907,
+   "b": 4726.6533870700005,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 7,
+   "a": 4726.66637756,
+   "b": 4727.06781856,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 8,
+   "a": 4727.080591987,
+   "b": 4727.485691987,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 9,
+   "a": 4727.498638757,
+   "b": 4727.907655757,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 10,
+   "a": 4727.920695788,
+   "b": 4728.3317247879995,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 11,
+   "a": 4728.344671309,
+   "b": 4728.757620308999,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 12,
+   "a": 4728.77055334,
+   "b": 4729.18761634,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 13,
+   "a": 4729.200712507,
+   "b": 4729.622911507,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 14,
+   "a": 4729.635698236,
+   "b": 4730.059770236,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 15,
+   "a": 4730.073280267,
+   "b": 4730.497303267,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 16,
+   "a": 4730.511558756,
+   "b": 4730.936938756,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 17,
+   "a": 4730.950651829,
+   "b": 4731.376904829,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 18,
+   "a": 4731.391178287,
+   "b": 4731.819992287,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 19,
+   "a": 4731.833484693,
+   "b": 4732.2630816930005,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 20,
+   "a": 4732.276644953,
+   "b": 4732.706785953,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 21,
+   "a": 4732.720807818,
+   "b": 4733.151607818,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 22,
+   "a": 4733.165502245,
+   "b": 4733.598042245,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 23,
+   "a": 4733.61095339,
+   "b": 4734.04524939,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 24,
+   "a": 4734.05858688,
+   "b": 4734.49092088,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 25,
+   "a": 4734.504306411,
+   "b": 4734.941867410999,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 26,
+   "a": 4734.954946775,
+   "b": 4735.3889547750005,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 27,
+   "a": 4735.401922296,
+   "b": 4735.839423296,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 28,
+   "a": 4735.853479327,
+   "b": 4736.293955327,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 29,
+   "a": 4736.308260525,
+   "b": 4736.747460525,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 30,
+   "a": 4736.760659379,
+   "b": 4737.199414379,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 31,
+   "a": 4737.213432712,
+   "b": 4737.653446712,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 32,
+   "a": 4737.667930524,
+   "b": 4738.107981524,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 33,
+   "a": 4738.121400524,
+   "b": 4738.561104524,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 34,
+   "a": 4738.575174066,
+   "b": 4739.0149270659995,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 35,
+   "a": 4739.028622347,
+   "b": 4739.470627347,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 36,
+   "a": 4739.483543753,
+   "b": 4739.928313753,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 37,
+   "a": 4739.941685055,
+   "b": 4740.384549054999,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 38,
+   "a": 4740.39857719,
+   "b": 4740.84160419,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 39,
+   "a": 4740.855514429,
+   "b": 4741.299123429,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 40,
+   "a": 4741.31307094,
+   "b": 4741.75832194,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 41,
+   "a": 4741.771263804,
+   "b": 4742.219420804,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 42,
+   "a": 4742.233025835,
+   "b": 4742.677671835,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 43,
+   "a": 4742.692170366,
+   "b": 4743.137028366,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 44,
+   "a": 4743.151116095,
+   "b": 4743.595568095,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 45,
+   "a": 4743.609200522,
+   "b": 4744.056976522,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 46,
+   "a": 4744.070332813,
+   "b": 4744.519756813001,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 47,
+   "a": 4744.53361422,
+   "b": 4744.98095422,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 48,
+   "a": 4744.995051042,
+   "b": 4745.442491042,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 49,
+   "a": 4745.456575209,
+   "b": 4745.9054752090005,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 50,
+   "a": 4745.919202084,
+   "b": 4746.366344084,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 51,
+   "a": 4746.380528698,
+   "b": 4746.829774698,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 52,
+   "a": 4746.842758854,
+   "b": 4747.292663854,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 53,
+   "a": 4747.306050937,
+   "b": 4747.758041937,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 54,
+   "a": 4747.771339843,
+   "b": 4748.222090843,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 55,
+   "a": 4748.235086093,
+   "b": 4748.685245093,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 56,
+   "a": 4748.698507655,
+   "b": 4749.148131655,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 57,
+   "a": 4749.161973697,
+   "b": 4749.613917697,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 58,
+   "a": 4749.626916457,
+   "b": 4750.076819457,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 59,
+   "a": 4750.090404947,
+   "b": 4750.542061947,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 60,
+   "a": 4750.555042863,
+   "b": 4751.007960863,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 61,
+   "a": 4751.022881248,
+   "b": 4751.474732248,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 62,
+   "a": 4751.488415675,
+   "b": 4751.941154675001,
+   "tokens": 256
+  },
+  {
+   "phase": "decode",
+   "source": "energy",
+   "rep": 1,
+   "a": 4912.905751166,
+   "b": 4916.100256654,
+   "tokens": 256
+  },
+  {
+   "phase": "decode",
+   "source": "energy",
+   "rep": 2,
+   "a": 4916.571106362,
+   "b": 4919.784638892,
+   "tokens": 256
+  },
+  {
+   "phase": "decode",
+   "source": "energy",
+   "rep": 3,
+   "a": 4920.269739538,
+   "b": 4923.503632797,
+   "tokens": 256
+  },
+  {
+   "phase": "decode",
+   "source": "energy",
+   "rep": 4,
+   "a": 4923.994640151,
+   "b": 4927.246187379,
+   "tokens": 256
+  },
+  {
+   "phase": "decode",
+   "source": "energy",
+   "rep": 5,
+   "a": 4927.746661389,
+   "b": 4931.00944243,
+   "tokens": 256
+  },
+  {
+   "phase": "decode",
+   "source": "energy",
+   "rep": 6,
+   "a": 4931.516162367,
+   "b": 4934.804455657,
+   "tokens": 256
+  },
+  {
+   "phase": "decode",
+   "source": "energy",
+   "rep": 7,
+   "a": 4935.314733470001,
+   "b": 4938.563739614,
+   "tokens": 256
+  }
+ ],
+ "prefill": {
+  "tps": 552.95,
+  "tps_std": 37.05,
+  "reps": [
+   595.6,
+   534.62,
+   528.63
+  ],
+  "tokens": [
+   256
+  ],
+  "uj_per_token": 12001.4,
+  "uj_per_token_gross": 12378.7,
+  "energy_valid": true,
+  "energy_reason": null
+ },
+ "decode": {
+  "tps": 79.87,
+  "tps_std": 0.88,
+  "reps": [
+   80.83,
+   79.7,
+   79.1
+  ],
+  "tokens": [
+   256
+  ],
+  "uj_per_token": 112374.1,
+  "uj_per_token_gross": 115181.0,
+  "energy_valid": true,
+  "energy_reason": null
+ },
+ "status": "ok",
+ "finished": "2026-10-10T11:30:21.498009",
+ "energy": {
+  "perfetto:current": {
+   "prefill": {
+    "uj_per_token": 12378.7,
+    "net_uj_per_token": 12001.4,
+    "avg_power_mw": 7296.9,
+    "idle_power_mw": 222.4,
+    "seconds": 28.23,
+    "tokens": 16640,
+    "windows": 4,
+    "valid": true,
+    "reason": null,
+    "note": "battery HAL current, unit mA"
+   },
+   "decode": {
+    "uj_per_token": 115181.0,
+    "net_uj_per_token": 112374.1,
+    "avg_power_mw": 9126.2,
+    "idle_power_mw": 222.4,
+    "seconds": 32.31,
+    "tokens": 2560,
+    "windows": 7,
+    "valid": true,
+    "reason": null,
+    "note": "battery HAL current, unit mA"
+   }
+  },
+  "perfetto:charge": {
+   "prefill": {
+    "uj_per_token": 0.0,
+    "net_uj_per_token": 0.0,
+    "avg_power_mw": 0.0,
+    "idle_power_mw": 0.0,
+    "seconds": 28.23,
+    "tokens": 16640,
+    "windows": 4,
+    "valid": false,
+    "reason": "reading changed only 0 time(s) during the phase",
+    "note": "battery HAL charge counter"
+   },
+   "decode": {
+    "uj_per_token": 0.0,
+    "net_uj_per_token": 0.0,
+    "avg_power_mw": 0.0,
+    "idle_power_mw": 0.0,
+    "seconds": 32.31,
+    "tokens": 2560,
+    "windows": 7,
+    "valid": false,
+    "reason": "reading changed only 0 time(s) during the phase",
+    "note": "battery HAL charge counter"
+   }
+  }
+ },
+ "energy_idle": "per invocation",
+ "energy_session": "2026-10-10T10:15:49.212903",
+ "energy_headline_method": "perfetto:current",
+ "energy_kind": "whole device (net of idle)"
+}
