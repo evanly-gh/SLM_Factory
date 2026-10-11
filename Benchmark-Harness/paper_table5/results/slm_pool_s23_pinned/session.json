@@ -1,5 +1,5 @@
 {
- "started": "2026-10-10T23:43:07.290157",
+ "started": "2026-10-10T23:50:21.332366",
  "device": {
   "serial": "192.168.86.75:5555",
   "manufacturer": "samsung",
@@ -121,7 +121,7 @@
   "recover_energy": false
  },
  "max_temp_c": 28.0,
- "idle_cpu_busy_at_start": 0.016,
+ "idle_cpu_busy_at_start": 0.075,
  "screen_on": false,
  "wireless_adb": true,
  "binaries": {
@@ -224,7 +224,11 @@
    "built": "2026-10-06T22:57:49.571954"
   }
  },
- "energy_dir": "energy/20261010_234307",
+ "energy_dir": "energy/20261010_235021",
  "wake_lock": true,
- "radio_mode": "airplane mode already on (Wi-Fi kept on in it)"
+ "radio_mode": "airplane mode already on (Wi-Fi kept on in it)",
+ "idle_window": [
+  49366.83,
+  49405.0
+ ]
 }

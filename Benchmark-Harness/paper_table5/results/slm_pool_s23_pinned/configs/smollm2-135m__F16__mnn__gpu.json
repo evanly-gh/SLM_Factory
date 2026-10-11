@@ -28,19 +28,19 @@
   "recipe": "paper-default",
   "converter": "llmexport.py @ MNN mnn-510ac8f15d10, MNNConvert C:\\Users\\evanl\\.pb\\tools\\mnnconvert_nolog.cmd"
  },
- "started": "2026-10-10T12:50:53.843515",
+ "started": "2026-10-10T23:51:12.156046",
  "invocations": {
   "kv": {
    "exit": 139,
    "timed_out": false,
-   "seconds": 31.7,
+   "seconds": 31.0,
    "marks": 1,
-   "cpu_busy": 0.184,
+   "cpu_busy": 0.204,
    "gate": {
     "passed": true,
-    "waited_s": 0.6,
+    "waited_s": 0.4,
     "issues": null,
-    "battery_temp_c": 25.5,
+    "battery_temp_c": 24.7,
     "cpu_caps_khz": {
      "policy0": 2016000,
      "policy3": 2803200,
@@ -49,9 +49,9 @@
     "thermal_status": 0
    },
    "state_before": {
-    "epoch_ms": 1791661878630,
-    "battery_temp_c": 25.5,
-    "battery_level": 65,
+    "epoch_ms": 1791701496140,
+    "battery_temp_c": 24.6,
+    "battery_level": 100,
     "battery_status": 3,
     "externally_powered": false,
     "power_sources": [],
@@ -70,9 +70,9 @@
     "thermal_status": 0
    },
    "state_after": {
-    "epoch_ms": 1791661911648,
-    "battery_temp_c": 25.8,
-    "battery_level": 65,
+    "epoch_ms": 1791701528096,
+    "battery_temp_c": 24.9,
+    "battery_level": 100,
     "battery_status": 3,
     "externally_powered": false,
     "power_sources": [],
@@ -91,13 +91,13 @@
     "thermal_status": 0
    },
    "idle_window": [
-    9802.55,
-    9812.83
+    49418.91,
+    49429.0
    ]
   }
  },
  "windows": [],
  "status": "failed",
- "error": "crash/error (exit 139): PB_MARK mnn mode=kv rep=0 begin=9816338135689 end=9844742111147 prefill_us=1284417 decode_us=27019068 prompt=256 gen=256 | Segmentation fault",
- "finished": "2026-10-10T12:52:06.649754"
+ "error": "crash/error (exit 139): PB_MARK mnn mode=kv rep=0 begin=49430834487154 end=49457496386467 prefill_us=1421427 decode_us=25147186 prompt=256 gen=256 | Segmentation fault",
+ "finished": "2026-10-10T23:52:23.097081"
 }

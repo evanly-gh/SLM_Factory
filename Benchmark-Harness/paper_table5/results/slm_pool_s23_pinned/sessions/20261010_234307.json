@@ -226,5 +226,9 @@
  },
  "energy_dir": "energy/20261010_234307",
  "wake_lock": true,
- "radio_mode": "airplane mode already on (Wi-Fi kept on in it)"
+ "radio_mode": "airplane mode already on (Wi-Fi kept on in it)",
+ "idle_window": [
+  48926.99,
+  48965.19
+ ]
 }
