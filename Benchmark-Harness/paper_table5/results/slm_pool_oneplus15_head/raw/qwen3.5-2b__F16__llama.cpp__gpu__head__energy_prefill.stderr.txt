@@ -1,0 +1,44 @@
+ggml_opencl: selected platform: 'QUALCOMM Snapdragon(TM)'
+
+ggml_opencl: device: 'QUALCOMM Adreno(TM) 840 (OpenCL 3.0 Adreno(TM) 840)'
+ggml_opencl: default device: 'QUALCOMM Adreno(TM) 840 (OpenCL 3.0 Adreno(TM) 840)'
+PB_MARK llama rep=0 begin=2361076900279581 end=2361077484348643 n_prompt=256 n_gen=0 n_depth=0
+PB_MARK llama rep=1 begin=2361077486630518 end=2361078064543226 n_prompt=256 n_gen=0 n_depth=0
+PB_MARK llama rep=2 begin=2361078064653122 end=2361078644576403 n_prompt=256 n_gen=0 n_depth=0
+PB_MARK llama rep=3 begin=2361078644728591 end=2361079231324632 n_prompt=256 n_gen=0 n_depth=0
+PB_MARK llama rep=4 begin=2361079231481976 end=2361079815607757 n_prompt=256 n_gen=0 n_depth=0
+PB_MARK llama rep=5 begin=2361079815716871 end=2361080397711350 n_prompt=256 n_gen=0 n_depth=0
+PB_MARK llama rep=6 begin=2361080397885517 end=2361080978743486 n_prompt=256 n_gen=0 n_depth=0
+PB_MARK llama rep=7 begin=2361080978878433 end=2361081559933017 n_prompt=256 n_gen=0 n_depth=0
+PB_MARK llama rep=8 begin=2361081560053121 end=2361082138168433 n_prompt=256 n_gen=0 n_depth=0
+PB_MARK llama rep=9 begin=2361082138281350 end=2361082718009787 n_prompt=256 n_gen=0 n_depth=0
+PB_MARK llama rep=10 begin=2361082718150360 end=2361083301504422 n_prompt=256 n_gen=0 n_depth=0
+PB_MARK llama rep=11 begin=2361083301656245 end=2361083884352599 n_prompt=256 n_gen=0 n_depth=0
+PB_MARK llama rep=12 begin=2361083884460620 end=2361084465196557 n_prompt=256 n_gen=0 n_depth=0
+PB_MARK llama rep=13 begin=2361084465317234 end=2361085049225567 n_prompt=256 n_gen=0 n_depth=0
+PB_MARK llama rep=14 begin=2361085049350567 end=2361085632104369 n_prompt=256 n_gen=0 n_depth=0
+PB_MARK llama rep=15 begin=2361085632228119 end=2361086214030254 n_prompt=256 n_gen=0 n_depth=0
+PB_MARK llama rep=16 begin=2361086214185463 end=2361086797069577 n_prompt=256 n_gen=0 n_depth=0
+PB_MARK llama rep=17 begin=2361086797212702 end=2361087382398691 n_prompt=256 n_gen=0 n_depth=0
+PB_MARK llama rep=18 begin=2361087382507077 end=2361087962613431 n_prompt=256 n_gen=0 n_depth=0
+PB_MARK llama rep=19 begin=2361087962786920 end=2361088546355254 n_prompt=256 n_gen=0 n_depth=0
+PB_MARK llama rep=20 begin=2361088546498847 end=2361089127611191 n_prompt=256 n_gen=0 n_depth=0
+PB_MARK llama rep=21 begin=2361089127792232 end=2361089711381816 n_prompt=256 n_gen=0 n_depth=0
+PB_MARK llama rep=22 begin=2361089711494420 end=2361090289999211 n_prompt=256 n_gen=0 n_depth=0
+PB_MARK llama rep=23 begin=2361090290161972 end=2361090872062388 n_prompt=256 n_gen=0 n_depth=0
+PB_MARK llama rep=24 begin=2361090872187284 end=2361091451366867 n_prompt=256 n_gen=0 n_depth=0
+PB_MARK llama rep=25 begin=2361091451525148 end=2361092033920148 n_prompt=256 n_gen=0 n_depth=0
+PB_MARK llama rep=26 begin=2361092034019575 end=2361092613690304 n_prompt=256 n_gen=0 n_depth=0
+PB_MARK llama rep=27 begin=2361092613832387 end=2361093196128637 n_prompt=256 n_gen=0 n_depth=0
+PB_MARK llama rep=28 begin=2361093196296554 end=2361093779394106 n_prompt=256 n_gen=0 n_depth=0
+PB_MARK llama rep=29 begin=2361093779545199 end=2361094360440251 n_prompt=256 n_gen=0 n_depth=0
+PB_MARK llama rep=30 begin=2361094360539574 end=2361094944589522 n_prompt=256 n_gen=0 n_depth=0
+PB_MARK llama rep=31 begin=2361094944741449 end=2361095528010355 n_prompt=256 n_gen=0 n_depth=0
+PB_MARK llama rep=32 begin=2361095528153324 end=2361096111676188 n_prompt=256 n_gen=0 n_depth=0
+PB_MARK llama rep=33 begin=2361096111815459 end=2361096694492073 n_prompt=256 n_gen=0 n_depth=0
+PB_MARK llama rep=34 begin=2361096694638323 end=2361097277293479 n_prompt=256 n_gen=0 n_depth=0
+PB_MARK llama rep=35 begin=2361097277397177 end=2361097858468323 n_prompt=256 n_gen=0 n_depth=0
+PB_MARK llama rep=36 begin=2361097858643740 end=2361098439119208 n_prompt=256 n_gen=0 n_depth=0
+PB_MARK llama rep=37 begin=2361098439252073 end=2361099020861812 n_prompt=256 n_gen=0 n_depth=0
+PB_MARK llama rep=38 begin=2361099021056395 end=2361099602960093 n_prompt=256 n_gen=0 n_depth=0
+PB_MARK llama rep=39 begin=2361099603085093 end=2361100184155874 n_prompt=256 n_gen=0 n_depth=0

@@ -1,0 +1,76 @@
+{
+ "recommended": "perfetto:current",
+ "reasons": [
+  "most repeatable battery method: load CV 86.2%, updates 0.1 /s, net all-core power 2040 mW (0.62x the median of battery methods)",
+  "battery methods measure the whole phone (not SoC-only like the paper): use idle-subtracted values and expect them to read higher than the paper's uJ/token"
+ ],
+ "methods": {
+  "perfetto:current": {
+   "quality": {
+    "updates_hz": 0.1,
+    "notes": "battery HAL current, unit mA"
+   },
+   "idle": [
+    96.2368348281583,
+    6.984976439358527,
+    0.07258111150300182
+   ],
+   "cpu1": [
+    606.2943858288165,
+    522.6927828379066,
+    0.8621105440773217
+   ],
+   "cpu_all": [
+    2135.773491565256,
+    1213.8289357200406,
+    0.5683322414637028
+   ],
+   "net_cpu1": [
+    510.05755100065824,
+    522.6927828379066,
+    1.0247721689688936
+   ],
+   "net_cpu_all": [
+    2039.5366567370977,
+    1213.8289357200404,
+    0.5951493598854725
+   ],
+   "load_cv": 0.8621105440773217,
+   "agreement": 0.6190945008913412
+  },
+  "perfetto:charge": {
+   "quality": {
+    "updates_hz": 0.038,
+    "notes": "battery HAL charge counter"
+   },
+   "idle": [
+    199.90732583349592,
+    399.81465166699184,
+    2.0
+   ],
+   "cpu1": [
+    1193.856937242349,
+    1378.572902989718,
+    1.1547220273930294
+   ],
+   "cpu_all": [
+    4749.143962351871,
+    2484.2156892444104,
+    0.5230870466209614
+   ],
+   "net_cpu1": [
+    993.9496114088529,
+    1378.572902989718,
+    1.3869645776466364
+   ],
+   "net_cpu_all": [
+    4549.236636518375,
+    2484.2156892444104,
+    0.5460730860432075
+   ],
+   "load_cv": 1.1547220273930294,
+   "agreement": 1.380905499108659
+  }
+ },
+ "externally_powered": false
+}

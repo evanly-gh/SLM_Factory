@@ -1,0 +1,31 @@
+<!doctype html><meta charset='utf-8'><title>Table 5 replication</title>
+<style>body{font-family:Georgia,serif;margin:24px}table{border-collapse:collapse;font-size:13px}td,th{padding:2px 8px;text-align:right}th{border-bottom:1px solid #000}td.l{text-align:left}tr.sep td{border-top:1px solid #000}caption{font-weight:bold;font-size:15px;margin-bottom:8px}.fail{color:#b00}.inv{color:#888}</style>
+<table><caption>Averaged throughput and energy across devices, models, frameworks and backends with 256 tokens</caption>
+<tr><th rowspan=3>Model</th><th rowspan=3>Backend</th><th rowspan=3>Framework</th><th rowspan=3>Quantization</th><th colspan=2>Prefill</th><th colspan=2>Decode</th></tr>
+<tr><th colspan=1>Throughput (tokens/s)</th><th colspan=1>Energy (&micro;J/token)</th><th colspan=1>Throughput (tokens/s)</th><th colspan=1>Energy (&micro;J/token)</th></tr>
+<tr><th>OnePlus 15</th><th>OnePlus 15</th><th>OnePlus 15</th><th>OnePlus 15</th></tr>
+<tr class=sep><td class=l>gemma3-270m</td><td class=l>CPU</td><td class=l>llama.cpp</td><td class=l>Q4_0</td><td class=v>1090.2 +/- 1.2</td><td class=v>1.8e3</td><td class=v>185.6 +/- 0.8</td><td class=v>1.6e4</td></tr>
+<tr><td class=l></td><td class=l>CPU</td><td class=l>MNN</td><td class=l>Q4</td><td class=v>1278.4 +/- 302.1</td><td class=v>-</td><td class=v>116.0 +/- 0.2</td><td class=v>-</td></tr>
+<tr><td class=l></td><td class=l>GPU</td><td class=l>llama.cpp</td><td class=l>Q4_0</td><td class=v>2874.9 +/- 4.4</td><td class=v>1.3e3</td><td class=v>73.2 +/- 2.8</td><td class=v>3.6e4</td></tr>
+<tr><td class=l></td><td class=l>GPU</td><td class=l>MNN</td><td class=l>Q4</td><td class=v>3888.8 +/- 4.1</td><td class=v>-</td><td class=v>27.4 +/- 0.2</td><td class=v>-</td></tr>
+<tr class=sep><td class=l>qwen3-0.6b</td><td class=l>CPU</td><td class=l>llama.cpp</td><td class=l>Q4_0</td><td class=v>309.4 +/- 0.1</td><td class=v>6.3e3</td><td class=v>72.0 +/- 0.1</td><td class=v>4.7e4</td></tr>
+<tr><td class=l></td><td class=l>CPU</td><td class=l>MNN</td><td class=l>Q4</td><td class=v>398.1 +/- 93.3</td><td class=v>5.7e3</td><td class=v>79.0 +/- 0.6</td><td class=v>3.7e4</td></tr>
+<tr><td class=l></td><td class=l>GPU</td><td class=l>llama.cpp</td><td class=l>Q4_0</td><td class=v>1679.6 +/- 10.0</td><td class=v>2.3e3</td><td class=v>61.7 +/- 0.0</td><td class=v>7.0e4</td></tr>
+<tr><td class=l></td><td class=l>GPU</td><td class=l>MNN</td><td class=l>Q4</td><td class=v>1252.2 +/- 10.2</td><td class=v>3.1e3</td><td class=v>32.0 +/- 0.1</td><td class=v>6.3e4</td></tr>
+<tr class=sep><td class=l>qwen3-1.7b</td><td class=l>CPU</td><td class=l>llama.cpp</td><td class=l>Q4_0</td><td class=v>144.1 +/- 0.2</td><td class=v>1.3e4</td><td class=v>34.9 +/- 0.0</td><td class=v>1.2e5</td></tr>
+<tr><td class=l></td><td class=l>CPU</td><td class=l>MNN</td><td class=l>Q4</td><td class=v>102.8 +/- 0.2</td><td class=v>1.9e4</td><td class=v>36.8 +/- 0.1</td><td class=v>8.6e4</td></tr>
+<tr><td class=l></td><td class=l>GPU</td><td class=l>llama.cpp</td><td class=l>Q4_0</td><td class=v>729.0 +/- 5.5</td><td class=v>8.2e3</td><td class=v>31.4 +/- 0.0</td><td class=v>1.5e5</td></tr>
+<tr><td class=l></td><td class=l>GPU</td><td class=l>MNN</td><td class=l>Q4</td><td class=v>486.2 +/- 1.7</td><td class=v>9.6e3</td><td class=v>25.6 +/- 0.0</td><td class=v>1.3e5</td></tr>
+<tr class=sep><td class=l>qwen3-4b-instruct-2507</td><td class=l>CPU</td><td class=l>llama.cpp</td><td class=l>Q4_0</td><td class=v>56.4 +/- 0.1</td><td class=v>4.1e4</td><td class=v>16.3 +/- 0.3</td><td class=v>2.7e5</td></tr>
+<tr><td class=l></td><td class=l>CPU</td><td class=l>MNN</td><td class=l>Q4</td><td class=v>41.0 +/- 0.1</td><td class=v>6.0e4</td><td class=v>16.8 +/- 0.1</td><td class=v>2.0e5</td></tr>
+<tr><td class=l></td><td class=l>GPU</td><td class=l>llama.cpp</td><td class=l>Q4_0</td><td class=v>315.0 +/- 0.1</td><td class=v>1.9e4</td><td class=v>16.7 +/- 0.0</td><td class=v>3.1e5</td></tr>
+<tr><td class=l></td><td class=l>GPU</td><td class=l>MNN</td><td class=l>Q4</td><td class=v>191.1 +/- 0.3</td><td class=v>3.2e4</td><td class=v>19.7 +/- 0.0</td><td class=v>2.8e5</td></tr>
+<tr class=sep><td class=l>smollm2-135m</td><td class=l>CPU</td><td class=l>llama.cpp</td><td class=l>Q4_0</td><td class=v>1032.0 +/- 1.8</td><td class=v>-</td><td class=v>260.9 +/- 0.2</td><td class=v>-</td></tr>
+<tr><td class=l></td><td class=l>CPU</td><td class=l>MNN</td><td class=l>Q4</td><td class=v>1027.0 +/- 3.5</td><td class=v>-</td><td class=v>205.6 +/- 0.3</td><td class=v>-</td></tr>
+<tr><td class=l></td><td class=l>GPU</td><td class=l>llama.cpp</td><td class=l>Q4_0</td><td class=v>3634.0 +/- 11.1</td><td class=v>-</td><td class=v>93.2 +/- 2.9</td><td class=v>-</td></tr>
+<tr><td class=l></td><td class=l>GPU</td><td class=l>MNN</td><td class=l>Q4</td><td class=v>3666.1 +/- 12.2</td><td class=v>-</td><td class=v>42.2 +/- 0.1</td><td class=v>-</td></tr>
+<tr class=sep><td class=l>smollm2-360m</td><td class=l>CPU</td><td class=l>llama.cpp</td><td class=l>Q4_0</td><td class=v>456.2 +/- 2.7</td><td class=v>4.0e3</td><td class=v>124.5 +/- 0.1</td><td class=v>2.4e4</td></tr>
+<tr><td class=l></td><td class=l>CPU</td><td class=l>MNN</td><td class=l>Q4</td><td class=v>488.3 +/- 132.8</td><td class=v>3.4e3</td><td class=v>114.6 +/- 0.4</td><td class=v>2.3e4</td></tr>
+<tr><td class=l></td><td class=l>GPU</td><td class=l>llama.cpp</td><td class=l>Q4_0</td><td class=v>1829.9 +/- 0.5</td><td class=v>2.5e3</td><td class=v>85.6 +/- 0.1</td><td class=v>4.4e4</td></tr>
+<tr><td class=l></td><td class=l>GPU</td><td class=l>MNN</td><td class=l>Q4</td><td class=v>1653.0 +/- 3.2</td><td class=v>2.6e3</td><td class=v>39.3 +/- 0.2</td><td class=v>5.4e4</td></tr>
+</table>

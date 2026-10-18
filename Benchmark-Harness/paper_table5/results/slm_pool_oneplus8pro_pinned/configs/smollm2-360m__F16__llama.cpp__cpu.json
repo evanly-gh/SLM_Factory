@@ -1,0 +1,284 @@
+{
+ "config": {
+  "id": "smollm2-360m__F16__llama.cpp__cpu",
+  "model": "smollm2-360m",
+  "quant": "F16",
+  "bits": 16,
+  "framework": "llama.cpp",
+  "backend": "cpu",
+  "ref": "pinned"
+ },
+ "model_file": {
+  "name": "smollm2-360m",
+  "hf_id": "HuggingFaceTB/SmolLM2-360M-Instruct",
+  "framework": "llama.cpp",
+  "quant": "F16",
+  "bits": 16,
+  "ref": "pinned",
+  "path": "gguf/smollm2-360m-f16.gguf",
+  "files": {
+   "smollm2-360m-f16.gguf": 725554176
+  },
+  "converter": "llama.cpp eadc4184caee convert_hf_to_gguf"
+ },
+ "started": "2026-10-13T00:58:25.772179",
+ "invocations": {
+  "prefill": {
+   "exit": 0,
+   "timed_out": false,
+   "seconds": 20.7,
+   "marks": 4,
+   "cpu_busy": 0.332,
+   "gate": {
+    "passed": true,
+    "waited_s": 0.4,
+    "issues": null,
+    "battery_temp_c": 24.6,
+    "cpu_caps_khz": {
+     "policy0": 1804800,
+     "policy4": 2419200,
+     "policy7": 2841600
+    },
+    "thermal_status": 0
+   },
+   "state_before": {
+    "epoch_ms": 1791878330498,
+    "battery_temp_c": 24.6,
+    "battery_level": 39,
+    "battery_status": 4,
+    "externally_powered": false,
+    "power_sources": [],
+    "cpu_caps_khz": {
+     "policy0": 1804800,
+     "policy4": 2419200,
+     "policy7": 2841600
+    },
+    "cpu_hw_max_khz": {
+     "policy0": 1804800,
+     "policy4": 2419200,
+     "policy7": 2841600
+    },
+    "cpu_capped": false,
+    "screen": "Awake",
+    "thermal_status": 0
+   },
+   "state_after": {
+    "epoch_ms": 1791878352025,
+    "battery_temp_c": 24.3,
+    "battery_level": 39,
+    "battery_status": 4,
+    "externally_powered": false,
+    "power_sources": [],
+    "cpu_caps_khz": {
+     "policy0": 1804800,
+     "policy4": 2419200,
+     "policy7": 2841600
+    },
+    "cpu_hw_max_khz": {
+     "policy0": 1804800,
+     "policy4": 2419200,
+     "policy7": 2841600
+    },
+    "cpu_capped": false,
+    "screen": "Awake",
+    "thermal_status": 0
+   },
+   "idle_window": null,
+   "llama_bench": {
+    "build_commit": "eadc418",
+    "backends": "CPU",
+    "n_threads": 4,
+    "flash_attn": false,
+    "type_k": "f16",
+    "type_v": "f16",
+    "n_batch": 2048,
+    "n_ubatch": 512,
+    "use_mmap": true,
+    "avg_ts": 106.128751,
+    "stddev_ts": 0.114535,
+    "samples_ts": [
+     106.164,
+     106.23,
+     106.157,
+     105.964
+    ],
+    "model_type": "llama 3B F16",
+    "model_size": 723767040
+   },
+   "suspend_ratio": 1.0
+  },
+  "decode": {
+   "exit": 0,
+   "timed_out": false,
+   "seconds": 62.6,
+   "marks": 4,
+   "cpu_busy": 0.535,
+   "gate": {
+    "passed": true,
+    "waited_s": 0.4,
+    "issues": null,
+    "battery_temp_c": 24.3,
+    "cpu_caps_khz": {
+     "policy0": 1804800,
+     "policy4": 2419200,
+     "policy7": 2841600
+    },
+    "thermal_status": 0
+   },
+   "state_before": {
+    "epoch_ms": 1791878368409,
+    "battery_temp_c": 24.3,
+    "battery_level": 39,
+    "battery_status": 4,
+    "externally_powered": false,
+    "power_sources": [],
+    "cpu_caps_khz": {
+     "policy0": 1804800,
+     "policy4": 2419200,
+     "policy7": 2841600
+    },
+    "cpu_hw_max_khz": {
+     "policy0": 1804800,
+     "policy4": 2419200,
+     "policy7": 2841600
+    },
+    "cpu_capped": false,
+    "screen": "Awake",
+    "thermal_status": 0
+   },
+   "state_after": {
+    "epoch_ms": 1791878431790,
+    "battery_temp_c": 24.9,
+    "battery_level": 38,
+    "battery_status": 4,
+    "externally_powered": false,
+    "power_sources": [],
+    "cpu_caps_khz": {
+     "policy0": 1804800,
+     "policy4": 2419200,
+     "policy7": 2841600
+    },
+    "cpu_hw_max_khz": {
+     "policy0": 1804800,
+     "policy4": 2419200,
+     "policy7": 2841600
+    },
+    "cpu_capped": false,
+    "screen": "Awake",
+    "thermal_status": 0
+   },
+   "idle_window": null,
+   "llama_bench": {
+    "build_commit": "eadc418",
+    "backends": "CPU",
+    "n_threads": 4,
+    "flash_attn": false,
+    "type_k": "f16",
+    "type_v": "f16",
+    "n_batch": 2048,
+    "n_ubatch": 512,
+    "use_mmap": true,
+    "avg_ts": 18.052936,
+    "stddev_ts": 0.262394,
+    "samples_ts": [
+     18.1085,
+     18.1217,
+     17.6818,
+     18.2998
+    ],
+    "model_type": "llama 3B F16",
+    "model_size": 723767040
+   },
+   "suspend_ratio": 1.0
+  }
+ },
+ "windows": [
+  {
+   "phase": "prefill",
+   "source": "main",
+   "rep": 1,
+   "a": 24184.003812438,
+   "b": 24186.41367301,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "main",
+   "rep": 2,
+   "a": 24186.413939937,
+   "b": 24188.825476447,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "main",
+   "rep": 3,
+   "a": 24188.825744937,
+   "b": 24191.241654363,
+   "tokens": 256
+  },
+  {
+   "phase": "decode",
+   "source": "main",
+   "rep": 1,
+   "a": 24233.681417211,
+   "b": 24247.808146008,
+   "tokens": 256
+  },
+  {
+   "phase": "decode",
+   "source": "main",
+   "rep": 2,
+   "a": 24247.811116477,
+   "b": 24262.289322929,
+   "tokens": 256
+  },
+  {
+   "phase": "decode",
+   "source": "main",
+   "rep": 3,
+   "a": 24262.292284544,
+   "b": 24276.281477455,
+   "tokens": 256
+  }
+ ],
+ "prefill": {
+  "tps": 106.12,
+  "tps_std": 0.14,
+  "reps": [
+   106.23,
+   106.16,
+   105.96
+  ],
+  "tokens": [
+   256
+  ],
+  "uj_per_token": null,
+  "uj_per_token_gross": null,
+  "energy_valid": false,
+  "energy_reason": null
+ },
+ "decode": {
+  "tps": 18.03,
+  "tps_std": 0.32,
+  "reps": [
+   18.12,
+   17.68,
+   18.3
+  ],
+  "tokens": [
+   256
+  ],
+  "uj_per_token": null,
+  "uj_per_token_gross": null,
+  "energy_valid": false,
+  "energy_reason": null
+ },
+ "status": "ok",
+ "finished": "2026-10-13T01:00:46.798518",
+ "energy": {},
+ "energy_idle": "session start",
+ "energy_session": "2026-10-12T23:49:02.264415",
+ "energy_headline_method": null,
+ "energy_kind": "whole device (net of idle)"
+}

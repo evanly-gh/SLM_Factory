@@ -1,0 +1,8 @@
+CPU Group: [ 0  1  2  3  4  5 ], 384000 - 3628800
+CPU Group: [ 6  7 ], 768000 - 4608000
+(last_midr & (CPUINFO_ARM_MIDR_IMPLEMENTER_MASK | CPUINFO_ARM_MIDR_PART_MASK))=0x 51000020 in _getInfoArm, 1250 
+The device supports: i8sdot:1, fp16:1, i8mm: 1, sve2: 1, sme2: 0, perfCores: 0
+| model                          |  modelSize | backend    | threads | precision  | test          |        t/s |
+| ------------------------------ | ---------: | ---------- | ----: | ---------- | ------------- | ---------: |
+| qwen3.5-4b-mnn-paper-default-q4-head |   2.20 GiB | OPENCL     |     4 | Low        | pp256         | 278.08 ± 4.41 |
+

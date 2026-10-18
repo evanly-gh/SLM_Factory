@@ -1,0 +1,222 @@
+{
+ "started": "2026-10-09T10:45:36.699941",
+ "device": {
+  "serial": "3C166R00G7Y00000",
+  "manufacturer": "OnePlus",
+  "model": "CPH2749",
+  "device": "OP611FL1",
+  "soc": "SM8850",
+  "platform": "canoe",
+  "android": "16",
+  "sdk": "36",
+  "build": "OnePlus/CPH2749/OP611FL1:16/BP2A.250605.015/B.R4T3.250fe8f-2b9793-2d9dba:user/release-keys",
+  "mem_total_kb": 15475008,
+  "cpu_clusters": {
+   "policy0": {
+    "max_khz": 3628800,
+    "cpus": [
+     0,
+     1,
+     2,
+     3,
+     4,
+     5
+    ]
+   },
+   "policy6": {
+    "max_khz": 4608000,
+    "cpus": [
+     6,
+     7
+    ]
+   }
+  },
+  "ncpu": 8
+ },
+ "profile": {
+  "id": "oneplus15",
+  "label": "OnePlus 15",
+  "match": {
+   "manufacturer": "oneplus",
+   "soc": "SM8850|CPH27"
+  },
+  "paper_column": "oneplus15",
+  "max_temp_c": 28.0,
+  "energy_method": null
+ },
+ "energy_discovery": {
+  "root": {
+   "su_output": "/system/bin/sh: su: inaccessible or not found",
+   "rooted": false
+  },
+  "powercap": {
+   "zones": [],
+   "usable": false,
+   "needs_su": false
+  },
+  "powerstats": {
+   "services": [
+    "android.hardware.power.IPower/default",
+    "android.hardware.power.stats.IPowerStats/default",
+    "oplusnaspower",
+    "power",
+    "power_monitor",
+    "powerstats",
+    "vendor.oplus.hardware.power.powermonitor.IPowerMonitor/default",
+    "vendor.qti.hardware.power.powermodule.IPowerModule/default"
+   ],
+   "service": "android.hardware.power.stats.IPowerStats/default",
+   "dump_head": "Error with service 'android.hardware.power.stats.IPowerStats/default' while dumping: FAILED_TRANSACTION\n"
+  },
+  "battery_dir": null,
+  "battery_files": []
+ },
+ "params": {
+  "serial": "3C166R00G7Y00000",
+  "ref": "pinned",
+  "models": [
+   "qwen2.5-1.5b",
+   "llama3.2-3b"
+  ],
+  "pool_file": null,
+  "quants": [
+   "Q4_0",
+   "Q4"
+  ],
+  "frameworks": [
+   "llama.cpp",
+   "mnn"
+  ],
+  "backends": [
+   "cpu",
+   "gpu"
+  ],
+  "trials": 3,
+  "n_prompt": 256,
+  "n_gen": 256,
+  "max_temp": null,
+  "gate_timeout": 1800,
+  "gate_plateau": null,
+  "rest": 15,
+  "idle_seconds": 40,
+  "pre_idle_seconds": 12.0,
+  "min_energy_seconds": 0.0,
+  "prime_seconds": 0,
+  "timeout": 5400,
+  "llama_threads": 8,
+  "mnn_threads": null,
+  "no_controls": false,
+  "screen": "auto",
+  "no_perfetto": true,
+  "results_dir": "results/oneplus15_pinned_20261009_q40_q4",
+  "force": false,
+  "plan": false
+ },
+ "max_temp_c": 28.0,
+ "idle_cpu_busy_at_start": 0.022,
+ "screen_on": false,
+ "wireless_adb": false,
+ "binaries": {
+  "llama_cpu": {
+   "framework": "llama.cpp",
+   "target": "llama_cpu",
+   "ref": "pinned",
+   "commit": "eadc4184caee5b5f68f31f19a2f65c6961748e46",
+   "cmake_args": [
+    "-G",
+    "Ninja",
+    "-DCMAKE_MAKE_PROGRAM=/Users/ksd/Library/Android/sdk/cmake/4.1.2/bin/ninja",
+    "-DCMAKE_TOOLCHAIN_FILE=/Users/ksd/Library/Android/sdk/ndk/30.0.14904198/build/cmake/android.toolchain.cmake",
+    "-DANDROID_ABI=arm64-v8a",
+    "-DANDROID_PLATFORM=android-28",
+    "-DCMAKE_BUILD_TYPE=Release",
+    "-DCMAKE_C_FLAGS=-march=armv8.7a",
+    "-DCMAKE_CXX_FLAGS=-march=armv8.7a",
+    "-DGGML_OPENMP=OFF",
+    "-DGGML_LLAMAFILE=OFF",
+    "-DBUILD_SHARED_LIBS=OFF",
+    "-DLLAMA_CURL=OFF",
+    "-DLLAMA_BUILD_TESTS=OFF",
+    "-DLLAMA_BUILD_EXAMPLES=OFF",
+    "-DLLAMA_BUILD_SERVER=OFF"
+   ],
+   "binaries": [
+    "llama-bench",
+    "llama-quantize"
+   ],
+   "built": "2026-10-08T22:48:40.008263"
+  },
+  "llama_gpu": {
+   "framework": "llama.cpp",
+   "target": "llama_gpu",
+   "ref": "pinned",
+   "commit": "eadc4184caee5b5f68f31f19a2f65c6961748e46",
+   "cmake_args": [
+    "-G",
+    "Ninja",
+    "-DCMAKE_MAKE_PROGRAM=/Users/ksd/Library/Android/sdk/cmake/4.1.2/bin/ninja",
+    "-DCMAKE_TOOLCHAIN_FILE=/Users/ksd/Library/Android/sdk/ndk/30.0.14904198/build/cmake/android.toolchain.cmake",
+    "-DANDROID_ABI=arm64-v8a",
+    "-DANDROID_PLATFORM=android-28",
+    "-DCMAKE_BUILD_TYPE=Release",
+    "-DCMAKE_C_FLAGS=-march=armv8.7a",
+    "-DCMAKE_CXX_FLAGS=-march=armv8.7a",
+    "-DGGML_OPENMP=OFF",
+    "-DGGML_LLAMAFILE=OFF",
+    "-DBUILD_SHARED_LIBS=OFF",
+    "-DLLAMA_CURL=OFF",
+    "-DLLAMA_BUILD_TESTS=OFF",
+    "-DLLAMA_BUILD_EXAMPLES=OFF",
+    "-DLLAMA_BUILD_SERVER=OFF",
+    "-DGGML_OPENCL=ON",
+    "-DGGML_OPENCL_USE_ADRENO_KERNELS=ON",
+    "-DGGML_OPENCL_EMBED_KERNELS=ON",
+    "-DOpenCL_INCLUDE_DIR=/Users/ksd/SLM_Factory_Krishna_Personal/Benchmark-Harness/paper_table5/third_party/src/OpenCL-Headers-886dc9b7ff48",
+    "-DOpenCL_LIBRARY=/Users/ksd/SLM_Factory_Krishna_Personal/Benchmark-Harness/paper_table5/third_party/build/opencl-icd-loader/libOpenCL.so"
+   ],
+   "binaries": [
+    "llama-bench"
+   ],
+   "built": "2026-10-08T22:59:17.825818"
+  },
+  "mnn": {
+   "framework": "mnn",
+   "target": "mnn",
+   "ref": "pinned",
+   "commit": "510ac8f15d10ce44e8ab89a6fc972800b39a876e",
+   "cmake_args": [
+    "-G",
+    "Ninja",
+    "-DCMAKE_MAKE_PROGRAM=/Users/ksd/Library/Android/sdk/cmake/4.1.2/bin/ninja",
+    "-DCMAKE_TOOLCHAIN_FILE=/Users/ksd/Library/Android/sdk/ndk/30.0.14904198/build/cmake/android.toolchain.cmake",
+    "-DANDROID_ABI=arm64-v8a",
+    "-DANDROID_PLATFORM=android-28",
+    "-DCMAKE_BUILD_TYPE=Release",
+    "-DANDROID_STL=c++_static",
+    "-DMNN_USE_LOGCAT=false",
+    "-DMNN_BUILD_BENCHMARK=ON",
+    "-DMNN_USE_SSE=OFF",
+    "-DMNN_BUILD_TEST=ON",
+    "-DMNN_BUILD_FOR_ANDROID_COMMAND=true",
+    "-DNATIVE_LIBRARY_OUTPUT=.",
+    "-DNATIVE_INCLUDE_OUTPUT=.",
+    "-DMNN_BUILD_LLM=true",
+    "-DMNN_OPENCL=true",
+    "-DMNN_ARM82=ON"
+   ],
+   "binaries": [
+    "llm_bench"
+   ],
+   "libs": [
+    "libMNN.so",
+    "libMNN_CL.so",
+    "libMNN_Express.so",
+    "libllm.so"
+   ],
+   "built": "2026-10-08T23:00:56.095829"
+  }
+ },
+ "energy_dir": "energy/20261009_104536",
+ "wake_lock": false,
+ "radio_mode": "airplane mode on"
+}

@@ -1,0 +1,58 @@
+ggml_opencl: selected platform: 'QUALCOMM Snapdragon(TM)'
+
+ggml_opencl: device: 'QUALCOMM Adreno(TM) 840 (OpenCL 3.0 Adreno(TM) 840)'
+ggml_opencl: OpenCL driver: OpenCL 3.0 QUALCOMM build: 0842.21 Compiler E031.50.19.14
+ggml_opencl: vector subgroup broadcast support: true
+ggml_opencl: device FP16 support: true
+ggml_opencl: mem base addr align: 128
+ggml_opencl: max mem alloc size: 1889 MB
+ggml_opencl: device max workgroup size: 1024
+ggml_opencl: SVM coarse grain buffer support: true
+ggml_opencl: SVM fine grain buffer support: true
+ggml_opencl: SVM fine grain system support: false
+ggml_opencl: SVM atomics support: true
+ggml_opencl: flattening quantized weights representation as struct of arrays (GGML_OPENCL_SOA_Q)
+ggml_opencl: using kernels optimized for Adreno (GGML_OPENCL_USE_ADRENO_KERNELS)
+ggml_opencl: loading OpenCL kernels.............................................................................
+ggml_opencl: default device: 'QUALCOMM Adreno(TM) 840 (OpenCL 3.0 Adreno(TM) 840)'
+PB_MARK llama rep=0 begin=2194647127059629 end=2194647295954837 n_prompt=256 n_gen=0 n_depth=0
+PB_MARK llama rep=1 begin=2194647296229108 end=2194647461479993 n_prompt=256 n_gen=0 n_depth=0
+PB_MARK llama rep=2 begin=2194647461672701 end=2194647626721139 n_prompt=256 n_gen=0 n_depth=0
+PB_MARK llama rep=3 begin=2194647626916556 end=2194647791789212 n_prompt=256 n_gen=0 n_depth=0
+PB_MARK llama rep=4 begin=2194647791981399 end=2194647957164316 n_prompt=256 n_gen=0 n_depth=0
+PB_MARK llama rep=5 begin=2194647957380253 end=2194648126767701 n_prompt=256 n_gen=0 n_depth=0
+PB_MARK llama rep=6 begin=2194648127051920 end=2194648293633847 n_prompt=256 n_gen=0 n_depth=0
+PB_MARK llama rep=7 begin=2194648293915305 end=2194648459163378 n_prompt=256 n_gen=0 n_depth=0
+PB_MARK llama rep=8 begin=2194648459370930 end=2194648624898586 n_prompt=256 n_gen=0 n_depth=0
+PB_MARK llama rep=9 begin=2194648625103482 end=2194648793797701 n_prompt=256 n_gen=0 n_depth=0
+PB_MARK llama rep=10 begin=2194648794323847 end=2194648959371607 n_prompt=256 n_gen=0 n_depth=0
+PB_MARK llama rep=11 begin=2194648959569003 end=2194649125625722 n_prompt=256 n_gen=0 n_depth=0
+PB_MARK llama rep=12 begin=2194649125830722 end=2194649290954836 n_prompt=256 n_gen=0 n_depth=0
+PB_MARK llama rep=13 begin=2194649291141867 end=2194649456484628 n_prompt=256 n_gen=0 n_depth=0
+PB_MARK llama rep=14 begin=2194649456681190 end=2194649621646242 n_prompt=256 n_gen=0 n_depth=0
+PB_MARK llama rep=15 begin=2194649621812857 end=2194649786804367 n_prompt=256 n_gen=0 n_depth=0
+PB_MARK llama rep=16 begin=2194649786996503 end=2194649951895878 n_prompt=256 n_gen=0 n_depth=0
+PB_MARK llama rep=17 begin=2194649952077388 end=2194650120260982 n_prompt=256 n_gen=0 n_depth=0
+PB_MARK llama rep=18 begin=2194650120535825 end=2194650285582127 n_prompt=256 n_gen=0 n_depth=0
+PB_MARK llama rep=19 begin=2194650285776190 end=2194650450739992 n_prompt=256 n_gen=0 n_depth=0
+PB_MARK llama rep=20 begin=2194650450933117 end=2194650616185929 n_prompt=256 n_gen=0 n_depth=0
+PB_MARK llama rep=21 begin=2194650616462023 end=2194650786844263 n_prompt=256 n_gen=0 n_depth=0
+PB_MARK llama rep=22 begin=2194650787118377 end=2194650956458377 n_prompt=256 n_gen=0 n_depth=0
+PB_MARK llama rep=23 begin=2194650956734054 end=2194651126330981 n_prompt=256 n_gen=0 n_depth=0
+PB_MARK llama rep=24 begin=2194651126580356 end=2194651291647752 n_prompt=256 n_gen=0 n_depth=0
+PB_MARK llama rep=25 begin=2194651291866450 end=2194651456916710 n_prompt=256 n_gen=0 n_depth=0
+PB_MARK llama rep=26 begin=2194651457107960 end=2194651625731346 n_prompt=256 n_gen=0 n_depth=0
+PB_MARK llama rep=27 begin=2194651626014158 end=2194651791687231 n_prompt=256 n_gen=0 n_depth=0
+PB_MARK llama rep=28 begin=2194651791892804 end=2194651957974679 n_prompt=256 n_gen=0 n_depth=0
+PB_MARK llama rep=29 begin=2194651958340408 end=2194652128295773 n_prompt=256 n_gen=0 n_depth=0
+PB_MARK llama rep=30 begin=2194652128574314 end=2194652294125460 n_prompt=256 n_gen=0 n_depth=0
+PB_MARK llama rep=31 begin=2194652294330304 end=2194652459479627 n_prompt=256 n_gen=0 n_depth=0
+PB_MARK llama rep=32 begin=2194652459690356 end=2194652625520043 n_prompt=256 n_gen=0 n_depth=0
+PB_MARK llama rep=33 begin=2194652625848949 end=2194652791412856 n_prompt=256 n_gen=0 n_depth=0
+PB_MARK llama rep=34 begin=2194652791618481 end=2194652956809366 n_prompt=256 n_gen=0 n_depth=0
+PB_MARK llama rep=35 begin=2194652957025199 end=2194653122820772 n_prompt=256 n_gen=0 n_depth=0
+PB_MARK llama rep=36 begin=2194653123098689 end=2194653287947595 n_prompt=256 n_gen=0 n_depth=0
+PB_MARK llama rep=37 begin=2194653288144470 end=2194653453207908 n_prompt=256 n_gen=0 n_depth=0
+PB_MARK llama rep=38 begin=2194653453409574 end=2194653619152439 n_prompt=256 n_gen=0 n_depth=0
+PB_MARK llama rep=39 begin=2194653619382803 end=2194653784128897 n_prompt=256 n_gen=0 n_depth=0
+PB_MARK llama rep=40 begin=2194653784278741 end=2194653949046709 n_prompt=256 n_gen=0 n_depth=0

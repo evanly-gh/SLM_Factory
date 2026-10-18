@@ -1,0 +1,27 @@
+<!doctype html><meta charset='utf-8'><title>Table 5 replication</title>
+<style>body{font-family:Georgia,serif;margin:24px}table{border-collapse:collapse;font-size:13px}td,th{padding:2px 8px;text-align:right}th{border-bottom:1px solid #000}td.l{text-align:left}tr.sep td{border-top:1px solid #000}caption{font-weight:bold;font-size:15px;margin-bottom:8px}.fail{color:#b00}.inv{color:#888}</style>
+<table><caption>Averaged throughput and energy across devices, models, frameworks and backends with 256 tokens</caption>
+<tr><th rowspan=3>Model</th><th rowspan=3>Backend</th><th rowspan=3>Framework</th><th rowspan=3>Quantization</th><th colspan=2>Prefill</th><th colspan=2>Decode</th></tr>
+<tr><th colspan=1>Throughput (tokens/s)</th><th colspan=1>Energy (&micro;J/token)</th><th colspan=1>Throughput (tokens/s)</th><th colspan=1>Energy (&micro;J/token)</th></tr>
+<tr><th>OnePlus 15</th><th>OnePlus 15</th><th>OnePlus 15</th><th>OnePlus 15</th></tr>
+<tr class=sep><td class=l>llama3.2-1b</td><td class=l>CPU</td><td class=l>llama.cpp</td><td class=l>Q4_0</td><td class=v>394.0 +/- 1.6</td><td class=v>-</td><td class=v>37.7 +/- 30.5</td><td class=v>-</td></tr>
+<tr><td class=l></td><td class=l>CPU</td><td class=l>llama.cpp</td><td class=l>Q4_K_M</td><td class=v>231.9 +/- 0.6</td><td class=v>-</td><td class=v>53.0 +/- 0.1</td><td class=v>-</td></tr>
+<tr><td class=l></td><td class=l>CPU</td><td class=l>MNN</td><td class=l>Q4</td><td class=v>143.0 +/- 12.8</td><td class=v>-</td><td class=v>54.1 +/- 0.3</td><td class=v>-</td></tr>
+<tr><td class=l></td><td class=l>GPU</td><td class=l>llama.cpp</td><td class=l>Q4_0</td><td class=v>1067.8 +/- 16.0</td><td class=v>-</td><td class=v>24.2 +/- 0.7</td><td class=v>-</td></tr>
+<tr><td class=l></td><td class=l>GPU</td><td class=l>llama.cpp</td><td class=l>Q4_K_M</td><td class=v>28.5 +/- 0.1~</td><td class=v>-</td><td class=v>23.0 +/- 0.1~</td><td class=v>-</td></tr>
+<tr><td class=l></td><td class=l>GPU</td><td class=l>MNN</td><td class=l>Q4</td><td class=v>678.7 +/- 7.3</td><td class=v>-</td><td class=v>19.4 +/- 0.1</td><td class=v>-</td></tr>
+</table>
+<h3>Comparison with the paper</h3><table><tr><th>Model</th><th>Backend</th><th>Framework</th><th>Quant.</th><th>Phone</th><th>Metric</th><th>Ours</th><th>Paper</th><th>Ratio</th><th>Pass</th></tr>
+<tr><td class=l>llama3.2-1b</td><td class=l>CPU</td><td class=l>llama.cpp</td><td class=l>Q4_0</td><td class=l>OnePlus 15</td><td class=l>Prefill t/s</td><td>394.0</td><td>287.6</td><td>1.37x</td><td class=fail>NO</td></tr>
+<tr><td class=l>llama3.2-1b</td><td class=l>CPU</td><td class=l>llama.cpp</td><td class=l>Q4_0</td><td class=l>OnePlus 15</td><td class=l>Decode t/s</td><td>37.7</td><td>72.2</td><td>0.52x</td><td class=fail>NO</td></tr>
+<tr><td class=l>llama3.2-1b</td><td class=l>CPU</td><td class=l>llama.cpp</td><td class=l>Q4_K_M</td><td class=l>OnePlus 15</td><td class=l>Prefill t/s</td><td>231.9</td><td>287.6</td><td>0.81x</td><td class=v>yes</td></tr>
+<tr><td class=l>llama3.2-1b</td><td class=l>CPU</td><td class=l>llama.cpp</td><td class=l>Q4_K_M</td><td class=l>OnePlus 15</td><td class=l>Decode t/s</td><td>53.0</td><td>72.2</td><td>0.73x</td><td class=fail>NO</td></tr>
+<tr><td class=l>llama3.2-1b</td><td class=l>CPU</td><td class=l>MNN</td><td class=l>Q4</td><td class=l>OnePlus 15</td><td class=l>Prefill t/s</td><td>143.0</td><td>184.8</td><td>0.77x</td><td class=v>yes</td></tr>
+<tr><td class=l>llama3.2-1b</td><td class=l>CPU</td><td class=l>MNN</td><td class=l>Q4</td><td class=l>OnePlus 15</td><td class=l>Decode t/s</td><td>54.1</td><td>61.6</td><td>0.88x</td><td class=v>yes</td></tr>
+<tr><td class=l>llama3.2-1b</td><td class=l>GPU</td><td class=l>llama.cpp</td><td class=l>Q4_0</td><td class=l>OnePlus 15</td><td class=l>Prefill t/s</td><td>1067.8</td><td>986.8</td><td>1.08x</td><td class=v>yes</td></tr>
+<tr><td class=l>llama3.2-1b</td><td class=l>GPU</td><td class=l>llama.cpp</td><td class=l>Q4_0</td><td class=l>OnePlus 15</td><td class=l>Decode t/s</td><td>24.2</td><td>64.4</td><td>0.38x</td><td class=fail>NO</td></tr>
+<tr><td class=l>llama3.2-1b</td><td class=l>GPU</td><td class=l>llama.cpp</td><td class=l>Q4_K_M</td><td class=l>OnePlus 15</td><td class=l>Prefill t/s</td><td>28.5</td><td>986.8</td><td>0.03x</td><td class=fail>NO</td></tr>
+<tr><td class=l>llama3.2-1b</td><td class=l>GPU</td><td class=l>llama.cpp</td><td class=l>Q4_K_M</td><td class=l>OnePlus 15</td><td class=l>Decode t/s</td><td>23.0</td><td>64.4</td><td>0.36x</td><td class=fail>NO</td></tr>
+<tr><td class=l>llama3.2-1b</td><td class=l>GPU</td><td class=l>MNN</td><td class=l>Q4</td><td class=l>OnePlus 15</td><td class=l>Prefill t/s</td><td>678.7</td><td>669.8</td><td>1.01x</td><td class=v>yes</td></tr>
+<tr><td class=l>llama3.2-1b</td><td class=l>GPU</td><td class=l>MNN</td><td class=l>Q4</td><td class=l>OnePlus 15</td><td class=l>Decode t/s</td><td>19.4</td><td>21.6</td><td>0.90x</td><td class=v>yes</td></tr>
+</table>

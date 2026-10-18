@@ -1,0 +1,284 @@
+{
+ "config": {
+  "id": "smollm2-135m__Q4_0__llama.cpp__cpu",
+  "model": "smollm2-135m",
+  "quant": "Q4_0",
+  "bits": 4,
+  "framework": "llama.cpp",
+  "backend": "cpu",
+  "ref": "pinned"
+ },
+ "model_file": {
+  "name": "smollm2-135m",
+  "hf_id": "HuggingFaceTB/SmolLM2-135M-Instruct",
+  "framework": "llama.cpp",
+  "quant": "Q4_0",
+  "bits": 4,
+  "ref": "pinned",
+  "path": "gguf/smollm2-135m-q4_0.gguf",
+  "files": {
+   "smollm2-135m-q4_0.gguf": 91727328
+  },
+  "converter": "llama.cpp eadc4184caee convert_hf_to_gguf + llama-quantize"
+ },
+ "started": "2026-10-12T19:55:16.299043",
+ "invocations": {
+  "prefill": {
+   "exit": 0,
+   "timed_out": false,
+   "seconds": 10.2,
+   "marks": 4,
+   "cpu_busy": 0.119,
+   "gate": {
+    "passed": true,
+    "waited_s": 0.3,
+    "issues": null,
+    "battery_temp_c": 23.8,
+    "cpu_caps_khz": {
+     "policy0": 1804800,
+     "policy4": 2419200,
+     "policy7": 2841600
+    },
+    "thermal_status": 0
+   },
+   "state_before": {
+    "epoch_ms": 1791860127764,
+    "battery_temp_c": 23.8,
+    "battery_level": 97,
+    "battery_status": 4,
+    "externally_powered": false,
+    "power_sources": [],
+    "cpu_caps_khz": {
+     "policy0": 1804800,
+     "policy4": 2419200,
+     "policy7": 2841600
+    },
+    "cpu_hw_max_khz": {
+     "policy0": 1804800,
+     "policy4": 2419200,
+     "policy7": 2841600
+    },
+    "cpu_capped": false,
+    "screen": "Awake",
+    "thermal_status": 0
+   },
+   "state_after": {
+    "epoch_ms": 1791860138610,
+    "battery_temp_c": 23.8,
+    "battery_level": 97,
+    "battery_status": 4,
+    "externally_powered": false,
+    "power_sources": [],
+    "cpu_caps_khz": {
+     "policy0": 1804800,
+     "policy4": 2419200,
+     "policy7": 2841600
+    },
+    "cpu_hw_max_khz": {
+     "policy0": 1804800,
+     "policy4": 2419200,
+     "policy7": 2841600
+    },
+    "cpu_capped": false,
+    "screen": "Awake",
+    "thermal_status": 0
+   },
+   "idle_window": null,
+   "llama_bench": {
+    "build_commit": "eadc418",
+    "backends": "CPU",
+    "n_threads": 4,
+    "flash_attn": false,
+    "type_k": "f16",
+    "type_v": "f16",
+    "n_batch": 2048,
+    "n_ubatch": 512,
+    "use_mmap": true,
+    "avg_ts": 922.659746,
+    "stddev_ts": 0.753914,
+    "samples_ts": [
+     923.775,
+     922.177,
+     922.224,
+     922.463
+    ],
+    "model_type": "llama 256M Q4_0",
+    "model_size": 89941248
+   },
+   "suspend_ratio": 1.0
+  },
+  "decode": {
+   "exit": 0,
+   "timed_out": false,
+   "seconds": 10.3,
+   "marks": 4,
+   "cpu_busy": 0.393,
+   "gate": {
+    "passed": true,
+    "waited_s": 0.4,
+    "issues": null,
+    "battery_temp_c": 23.8,
+    "cpu_caps_khz": {
+     "policy0": 1804800,
+     "policy4": 2419200,
+     "policy7": 2841600
+    },
+    "thermal_status": 0
+   },
+   "state_before": {
+    "epoch_ms": 1791860154966,
+    "battery_temp_c": 23.8,
+    "battery_level": 97,
+    "battery_status": 4,
+    "externally_powered": false,
+    "power_sources": [],
+    "cpu_caps_khz": {
+     "policy0": 1804800,
+     "policy4": 2419200,
+     "policy7": 2841600
+    },
+    "cpu_hw_max_khz": {
+     "policy0": 1804800,
+     "policy4": 2419200,
+     "policy7": 2841600
+    },
+    "cpu_capped": false,
+    "screen": "Awake",
+    "thermal_status": 0
+   },
+   "state_after": {
+    "epoch_ms": 1791860165941,
+    "battery_temp_c": 23.8,
+    "battery_level": 97,
+    "battery_status": 4,
+    "externally_powered": false,
+    "power_sources": [],
+    "cpu_caps_khz": {
+     "policy0": 1804800,
+     "policy4": 2419200,
+     "policy7": 2841600
+    },
+    "cpu_hw_max_khz": {
+     "policy0": 1804800,
+     "policy4": 2419200,
+     "policy7": 2841600
+    },
+    "cpu_capped": false,
+    "screen": "Awake",
+    "thermal_status": 0
+   },
+   "idle_window": null,
+   "llama_bench": {
+    "build_commit": "eadc418",
+    "backends": "CPU",
+    "n_threads": 4,
+    "flash_attn": false,
+    "type_k": "f16",
+    "type_v": "f16",
+    "n_batch": 2048,
+    "n_ubatch": 512,
+    "use_mmap": true,
+    "avg_ts": 151.586068,
+    "stddev_ts": 0.914279,
+    "samples_ts": [
+     151.891,
+     151.062,
+     150.667,
+     152.724
+    ],
+    "model_type": "llama 256M Q4_0",
+    "model_size": 89941248
+   },
+   "suspend_ratio": 1.0
+  }
+ },
+ "windows": [
+  {
+   "phase": "prefill",
+   "source": "main",
+   "rep": 1,
+   "a": 5977.038986058,
+   "b": 5977.316593297,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "main",
+   "rep": 2,
+   "a": 5977.316652568,
+   "b": 5977.594243974,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "main",
+   "rep": 3,
+   "a": 5977.594323922,
+   "b": 5977.871842151,
+   "tokens": 256
+  },
+  {
+   "phase": "decode",
+   "source": "main",
+   "rep": 1,
+   "a": 6005.521550057,
+   "b": 6007.216219692,
+   "tokens": 256
+  },
+  {
+   "phase": "decode",
+   "source": "main",
+   "rep": 2,
+   "a": 6007.217773807,
+   "b": 6008.916887556,
+   "tokens": 256
+  },
+  {
+   "phase": "decode",
+   "source": "main",
+   "rep": 3,
+   "a": 6008.918433233,
+   "b": 6010.59465917,
+   "tokens": 256
+  }
+ ],
+ "prefill": {
+  "tps": 922.28,
+  "tps_std": 0.16,
+  "reps": [
+   922.17,
+   922.22,
+   922.46
+  ],
+  "tokens": [
+   256
+  ],
+  "uj_per_token": null,
+  "uj_per_token_gross": null,
+  "energy_valid": false,
+  "energy_reason": null
+ },
+ "decode": {
+  "tps": 151.48,
+  "tps_std": 1.09,
+  "reps": [
+   151.06,
+   150.67,
+   152.72
+  ],
+  "tokens": [
+   256
+  ],
+  "uj_per_token": null,
+  "uj_per_token_gross": null,
+  "energy_valid": false,
+  "energy_reason": null
+ },
+ "status": "ok",
+ "finished": "2026-10-12T19:56:20.925332",
+ "energy": {},
+ "energy_idle": "session start",
+ "energy_session": "2026-10-12T19:51:14.537157",
+ "energy_headline_method": null,
+ "energy_kind": "whole device (net of idle)"
+}

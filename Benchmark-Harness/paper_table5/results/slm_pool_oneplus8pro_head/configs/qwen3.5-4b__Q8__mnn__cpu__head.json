@@ -1,0 +1,104 @@
+{
+ "config": {
+  "id": "qwen3.5-4b__Q8__mnn__cpu__head",
+  "model": "qwen3.5-4b",
+  "quant": "Q8",
+  "bits": 8,
+  "framework": "mnn",
+  "backend": "cpu",
+  "ref": "head"
+ },
+ "model_file": {
+  "name": "qwen3.5-4b",
+  "hf_id": "Qwen/Qwen3.5-4B",
+  "framework": "mnn",
+  "quant": "Q8",
+  "bits": 8,
+  "ref": "head",
+  "path": "mnn/qwen3.5-4b-mnn-paper-default-q8-head",
+  "files": {
+   "config.json": 502,
+   "export_args.json": 1535,
+   "llm.mnn": 4138432,
+   "llm.mnn.json": 10445594,
+   "llm.mnn.weight": 4469012234,
+   "llm_config.json": 9118,
+   "tokenizer.mtok": 7342049
+  },
+  "recipe": "paper-default",
+  "converter": "llmexport.py @ MNN mnn-a8ec49781e19, MNNConvert /Users/ksd/SLM_Factory_Krishna_Personal/Benchmark-Harness/paper_table5/third_party/tools/mnnconvert_nolog"
+ },
+ "started": "2026-10-15T01:15:49.614549",
+ "invocations": {
+  "kv": {
+   "exit": -9,
+   "timed_out": false,
+   "seconds": 11.9,
+   "marks": 0,
+   "cpu_busy": 0.292,
+   "gate": {
+    "passed": true,
+    "waited_s": 62.1,
+    "issues": null,
+    "battery_temp_c": 27.8,
+    "cpu_caps_khz": {
+     "policy0": 1804800,
+     "policy4": 2419200,
+     "policy7": 2841600
+    },
+    "thermal_status": 0
+   },
+   "state_before": {
+    "epoch_ms": 1792052317376,
+    "battery_temp_c": 27.8,
+    "battery_level": 39,
+    "battery_status": 2,
+    "externally_powered": true,
+    "power_sources": [
+     "ac"
+    ],
+    "cpu_caps_khz": {
+     "policy0": 1804800,
+     "policy4": 2419200,
+     "policy7": 2841600
+    },
+    "cpu_hw_max_khz": {
+     "policy0": 1804800,
+     "policy4": 2419200,
+     "policy7": 2841600
+    },
+    "cpu_capped": false,
+    "screen": "Awake",
+    "thermal_status": 0
+   },
+   "state_after": {
+    "epoch_ms": 1792052330055,
+    "battery_temp_c": 27.7,
+    "battery_level": 39,
+    "battery_status": 2,
+    "externally_powered": true,
+    "power_sources": [
+     "ac"
+    ],
+    "cpu_caps_khz": {
+     "policy0": 1804800,
+     "policy4": 2419200,
+     "policy7": 2841600
+    },
+    "cpu_hw_max_khz": {
+     "policy0": 1804800,
+     "policy4": 2419200,
+     "policy7": 2841600
+    },
+    "cpu_capped": false,
+    "screen": "Awake",
+    "thermal_status": 0
+   },
+   "idle_window": null
+  }
+ },
+ "windows": [],
+ "status": "failed",
+ "error": "does not fit in RAM: 615 MB of the benchmark process was swapped out (stopped at > 512 MB)",
+ "finished": "2026-10-15T01:19:05.061054"
+}

@@ -1,0 +1,7 @@
+model,quant,framework,backend,status,error,prefill_tps,prefill_tps_std,prefill_reps,prefill_uj_per_token,prefill_energy_valid,decode_tps,decode_tps_std,decode_reps,decode_uj_per_token,decode_energy_valid,energy_kind,energy_method,warning
+llama3.2-1b,Q4_0,llama.cpp,cpu,ok,,394.0,1.55,393.54 392.73 395.73,,False,37.68,30.52,2.46 54.35 56.24,,False,whole device (net of idle),,
+llama3.2-1b,Q4_0,llama.cpp,gpu,ok,,1067.79,16.01,1079.82 1073.93 1049.62,,False,24.18,0.74,24.93 23.45 24.15,,False,whole device (net of idle),,
+llama3.2-1b,Q4_K_M,llama.cpp,cpu,ok,,231.95,0.63,232.67 231.67 231.51,,False,52.98,0.07,53.05 52.91 52.97,,False,whole device (net of idle),,
+llama3.2-1b,Q4_K_M,llama.cpp,gpu,ok,,28.53,0.07,28.5 28.61 28.5,,False,23.02,0.06,23.08 23.01 22.96,,False,whole device (net of idle),,"Q4_K_M: the pinned OpenCL backend has no matmul kernel for this type (supported: F16, F32, MXFP4, Q4_0, Q6_K, Q8_0), so most matmuls run on the CPU"
+llama3.2-1b,Q4,mnn,cpu,ok,,143.03,12.78,128.31 149.46 151.33,,False,54.07,0.3,54.27 53.73 54.23,,False,whole device (net of idle),,
+llama3.2-1b,Q4,mnn,gpu,ok,,678.67,7.29,684.71 670.57 680.73,,False,19.35,0.09,19.25 19.42 19.36,,False,whole device (net of idle),,

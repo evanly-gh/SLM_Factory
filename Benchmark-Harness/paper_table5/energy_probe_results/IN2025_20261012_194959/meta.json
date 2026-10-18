@@ -1,0 +1,97 @@
+{
+ "discovery": {
+  "serial": "10.0.0.36:5555",
+  "manufacturer": "OnePlus",
+  "model": "IN2025",
+  "soc": "SM8250",
+  "android": "13",
+  "sdk": "33",
+  "cpus_online": "0-7",
+  "ncpu": 8,
+  "root": {
+   "su_output": "/system/bin/sh: su: inaccessible or not found",
+   "rooted": false
+  },
+  "powercap": {
+   "zones": [],
+   "usable": false,
+   "needs_su": false
+  },
+  "powerstats": {
+   "services": [
+    "android.hardware.power.IPower/default",
+    "power",
+    "power_monitor",
+    "powerstats",
+    "vendor.oplus.hardware.power.powermonitor.IPowerMonitor/default"
+   ],
+   "service": null,
+   "dump_head": null
+  },
+  "battery_dir": null,
+  "power_supply": [],
+  "battery_files": [],
+  "power_supply_diag": "type: cat: /sys/class/power_supply/battery/type: Permission denied\ncurrent_now: cat: /sys/class/power_supply/battery/current_now: Permission denied\ncharge_counter: cat: /sys/class/power_supply/battery/charge_counter: Permission denied\nvoltage_now: cat: /sys/class/power_supply/battery/voltage_now: Permission denied",
+  "perfetto_version": "Perfetto v25.0 (N/A)",
+  "state": {
+   "epoch_ms": 1791859799043,
+   "battery_temp_c": 22.8,
+   "battery_level": 98,
+   "battery_status": 4,
+   "externally_powered": false,
+   "power_sources": [],
+   "cpu_caps_khz": {
+    "policy0": 1804800,
+    "policy4": 1478400,
+    "policy7": 2841600
+   },
+   "cpu_hw_max_khz": {
+    "policy0": 1804800,
+    "policy4": 2419200,
+    "policy7": 2841600
+   },
+   "cpu_capped": true,
+   "screen": "Asleep",
+   "thermal_status": 0
+  }
+ },
+ "params": {
+  "cmd": "collect",
+  "serial": "10.0.0.36:5555",
+  "repeats": 4,
+  "window": 45,
+  "rest": 20,
+  "settle": 5.0,
+  "interval": 0.1,
+  "screen": "on",
+  "no_perfetto": false,
+  "allow_powered": false,
+  "allow_busy": true,
+  "out_dir": "/Users/ksd/SLM_Factory_Krishna_Personal/Benchmark-Harness/paper_table5/energy_probe_results"
+ },
+ "columns": [],
+ "start": "2026-10-12T19:50:13.828923",
+ "wake_lock": false,
+ "end": "2026-10-12T19:50:16.765419",
+ "state_end": {
+  "epoch_ms": 1791859817102,
+  "battery_temp_c": 22.8,
+  "battery_level": 98,
+  "battery_status": 4,
+  "externally_powered": false,
+  "power_sources": [],
+  "cpu_caps_khz": {
+   "policy0": 1804800,
+   "policy4": 2419200,
+   "policy7": 2841600
+  },
+  "cpu_hw_max_khz": {
+   "policy0": 1804800,
+   "policy4": 2419200,
+   "policy7": 2841600
+  },
+  "cpu_capped": false,
+  "screen": "Awake",
+  "thermal_status": 0
+ }
+}

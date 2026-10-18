@@ -1,0 +1,98 @@
+{
+ "config": {
+  "id": "qwen3-4b-instruct-2507__F16__mnn__gpu",
+  "model": "qwen3-4b-instruct-2507",
+  "quant": "F16",
+  "bits": 16,
+  "framework": "mnn",
+  "backend": "gpu",
+  "ref": "pinned"
+ },
+ "model_file": {
+  "name": "qwen3-4b-instruct-2507",
+  "hf_id": "Qwen/Qwen3-4B-Instruct-2507",
+  "framework": "mnn",
+  "quant": "F16",
+  "bits": 16,
+  "ref": "pinned",
+  "path": "mnn/qwen3-4b-instruct-2507-mnn-paper-default-q16",
+  "files": {
+   "config.json": 210,
+   "export_args.json": 1376,
+   "llm.mnn": 646904,
+   "llm.mnn.json": 1289992,
+   "llm.mnn.weight": 8046112768,
+   "llm_config.json": 3051,
+   "tokenizer.txt": 3193548
+  },
+  "recipe": "paper-default",
+  "converter": "llmexport.py @ MNN mnn-510ac8f15d10, MNNConvert /Users/ksd/SLM_Factory_Krishna_Personal/Benchmark-Harness/paper_table5/third_party/tools/mnnconvert_nolog"
+ },
+ "started": "2026-10-13T02:56:24.809984",
+ "invocations": {
+  "kv": {
+   "exit": 139,
+   "timed_out": false,
+   "seconds": 112.9,
+   "marks": 1,
+   "cpu_busy": 0.121,
+   "gate": {
+    "passed": true,
+    "waited_s": 0.4,
+    "issues": null,
+    "battery_temp_c": 22.2,
+    "cpu_caps_khz": {
+     "policy0": 1996800,
+     "policy6": 2438400
+    },
+    "thermal_status": 0
+   },
+   "state_before": {
+    "epoch_ms": 1791885794379,
+    "battery_temp_c": 22.2,
+    "battery_level": 30,
+    "battery_status": 3,
+    "externally_powered": false,
+    "power_sources": [],
+    "cpu_caps_khz": {
+     "policy0": 1996800,
+     "policy6": 2438400
+    },
+    "cpu_hw_max_khz": {
+     "policy0": 3628800,
+     "policy6": 4608000
+    },
+    "cpu_capped": true,
+    "screen": "Asleep",
+    "thermal_status": 0
+   },
+   "state_after": {
+    "epoch_ms": 1791885908081,
+    "battery_temp_c": 21.9,
+    "battery_level": 29,
+    "battery_status": 3,
+    "externally_powered": false,
+    "power_sources": [],
+    "cpu_caps_khz": {
+     "policy0": 1996800,
+     "policy6": 2438400
+    },
+    "cpu_hw_max_khz": {
+     "policy0": 3628800,
+     "policy6": 4608000
+    },
+    "cpu_capped": true,
+    "screen": "Asleep",
+    "thermal_status": 0
+   },
+   "idle_window": [
+    2204258.15,
+    2204268.29
+   ]
+  }
+ },
+ "windows": [],
+ "status": "failed",
+ "error": "crash/error (exit 139): PB_MARK mnn mode=kv rep=0 begin=2204299420187821 end=2204372118522689 prefill_us=25961864 decode_us=46452531 prompt=256 gen=256 | Segmentation fault",
+ "finished": "2026-10-13T03:05:23.087375"
+}

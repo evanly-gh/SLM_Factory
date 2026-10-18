@@ -1,0 +1,271 @@
+{
+ "config": {
+  "id": "qwen3-0.6b__F16__llama.cpp__gpu",
+  "model": "qwen3-0.6b",
+  "quant": "F16",
+  "bits": 16,
+  "framework": "llama.cpp",
+  "backend": "gpu",
+  "ref": "pinned"
+ },
+ "model_file": {
+  "name": "qwen3-0.6b",
+  "hf_id": "Qwen/Qwen3-0.6B",
+  "framework": "llama.cpp",
+  "quant": "F16",
+  "bits": 16,
+  "ref": "pinned",
+  "path": "gguf/qwen3-0.6b-f16.gguf",
+  "files": {
+   "qwen3-0.6b-f16.gguf": 1509347584
+  },
+  "converter": "llama.cpp eadc4184caee convert_hf_to_gguf"
+ },
+ "started": "2026-10-13T15:39:22.622406",
+ "invocations": {
+  "prefill": {
+   "exit": 0,
+   "timed_out": false,
+   "seconds": 908.6,
+   "marks": 4,
+   "cpu_busy": 0.06,
+   "gate": {
+    "passed": true,
+    "waited_s": 0.4,
+    "issues": null,
+    "battery_temp_c": 22.2,
+    "cpu_caps_khz": {
+     "policy0": 1804800,
+     "policy4": 2419200,
+     "policy7": 2841600
+    },
+    "thermal_status": 0
+   },
+   "state_before": {
+    "epoch_ms": 1791931174127,
+    "battery_temp_c": 22.2,
+    "battery_level": 71,
+    "battery_status": 4,
+    "externally_powered": false,
+    "power_sources": [],
+    "cpu_caps_khz": {
+     "policy0": 1804800,
+     "policy4": 2419200,
+     "policy7": 2841600
+    },
+    "cpu_hw_max_khz": {
+     "policy0": 1804800,
+     "policy4": 2419200,
+     "policy7": 2841600
+    },
+    "cpu_capped": false,
+    "screen": "Awake",
+    "thermal_status": 0
+   },
+   "state_after": {
+    "epoch_ms": 1791932083393,
+    "battery_temp_c": 25.0,
+    "battery_level": 66,
+    "battery_status": 4,
+    "externally_powered": false,
+    "power_sources": [],
+    "cpu_caps_khz": {
+     "policy0": 1804800,
+     "policy4": 2419200,
+     "policy7": 2841600
+    },
+    "cpu_hw_max_khz": {
+     "policy0": 1804800,
+     "policy4": 2419200,
+     "policy7": 2841600
+    },
+    "cpu_capped": false,
+    "screen": "Awake",
+    "thermal_status": 0
+   },
+   "idle_window": null,
+   "llama_bench": {
+    "build_commit": "eadc418",
+    "backends": "OpenCL",
+    "n_threads": 4,
+    "flash_attn": false,
+    "type_k": "f16",
+    "type_v": "f16",
+    "n_batch": 2048,
+    "n_ubatch": 512,
+    "use_mmap": true,
+    "avg_ts": 1.433339,
+    "stddev_ts": 0.000288,
+    "samples_ts": [
+     1.43305,
+     1.43325,
+     1.43374,
+     1.43331
+    ],
+    "model_type": "qwen3 0.6B F16",
+    "model_size": 1503395840
+   },
+   "suspend_ratio": 1.0
+  },
+  "decode": {
+   "exit": 0,
+   "timed_out": false,
+   "seconds": 995.2,
+   "marks": 4,
+   "cpu_busy": null,
+   "gate": {
+    "passed": true,
+    "waited_s": 0.4,
+    "issues": null,
+    "battery_temp_c": 25.0,
+    "cpu_caps_khz": {
+     "policy0": 1804800,
+     "policy4": 2419200,
+     "policy7": 2841600
+    },
+    "thermal_status": 0
+   },
+   "state_before": {
+    "epoch_ms": 1791932099808,
+    "battery_temp_c": 25.0,
+    "battery_level": 66,
+    "battery_status": 4,
+    "externally_powered": false,
+    "power_sources": [],
+    "cpu_caps_khz": {
+     "policy0": 1804800,
+     "policy4": 2419200,
+     "policy7": 2841600
+    },
+    "cpu_hw_max_khz": {
+     "policy0": 1804800,
+     "policy4": 2419200,
+     "policy7": 2841600
+    },
+    "cpu_capped": false,
+    "screen": "Awake",
+    "thermal_status": 0
+   },
+   "state_after": {
+    "epoch_ms": 1791933095708,
+    "battery_temp_c": 24.7,
+    "battery_level": 64,
+    "battery_status": 4,
+    "externally_powered": false,
+    "power_sources": [],
+    "cpu_caps_khz": {
+     "policy0": 1804800,
+     "policy4": 1478400,
+     "policy7": 2841600
+    },
+    "cpu_hw_max_khz": {
+     "policy0": 1804800,
+     "policy4": 2419200,
+     "policy7": 2841600
+    },
+    "cpu_capped": true,
+    "screen": "Asleep",
+    "thermal_status": 0
+   },
+   "idle_window": null,
+   "llama_bench": {
+    "build_commit": "eadc418",
+    "backends": "OpenCL",
+    "n_threads": 4,
+    "flash_attn": false,
+    "type_k": "f16",
+    "type_v": "f16",
+    "n_batch": 2048,
+    "n_ubatch": 512,
+    "use_mmap": true,
+    "avg_ts": 4.497661,
+    "stddev_ts": 0.005134,
+    "samples_ts": [
+     4.49183,
+     4.49793,
+     4.50428,
+     4.4966
+    ],
+    "model_type": "qwen3 0.6B F16",
+    "model_size": 1503395840
+   },
+   "suspend_ratio": 1.0
+  }
+ },
+ "windows": [
+  {
+   "phase": "prefill",
+   "source": "main",
+   "rep": 1,
+   "a": 77393.193635253,
+   "b": 77571.808217268,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "main",
+   "rep": 2,
+   "a": 77571.808636799,
+   "b": 77750.362937616,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "main",
+   "rep": 3,
+   "a": 77750.363026679,
+   "b": 77928.970335361,
+   "tokens": 256
+  },
+  {
+   "phase": "decode",
+   "source": "main",
+   "rep": 1,
+   "a": 78190.532054896,
+   "b": 78247.447112062,
+   "tokens": 256
+  },
+  {
+   "phase": "decode",
+   "source": "main",
+   "rep": 2,
+   "a": 78247.475798104,
+   "b": 78304.310591155,
+   "tokens": 256
+  },
+  {
+   "phase": "decode",
+   "source": "main",
+   "rep": 3,
+   "a": 78304.339505843,
+   "b": 78361.271395508,
+   "tokens": 256
+  }
+ ],
+ "prefill": {
+  "tps": 1.43,
+  "tps_std": 0.0,
+  "reps": [
+   1.43,
+   1.43,
+   1.43
+  ],
+  "tokens": [
+   256
+  ]
+ },
+ "decode": {
+  "tps": 4.5,
+  "tps_std": 0.0,
+  "reps": [
+   4.5,
+   4.5,
+   4.5
+  ],
+  "tokens": [
+   256
+  ]
+ },
+ "status": "ok",
+ "finished": "2026-10-13T16:13:13.372681"
+}

@@ -1,0 +1,2830 @@
+{
+ "config": {
+  "id": "smollm2-135m__F16__llama.cpp__gpu",
+  "model": "smollm2-135m",
+  "quant": "F16",
+  "bits": 16,
+  "framework": "llama.cpp",
+  "backend": "gpu",
+  "ref": "pinned"
+ },
+ "model_file": {
+  "name": "smollm2-135m",
+  "hf_id": "HuggingFaceTB/SmolLM2-135M-Instruct",
+  "framework": "llama.cpp",
+  "quant": "F16",
+  "bits": 16,
+  "ref": "pinned",
+  "path": "gguf/smollm2-135m-f16.gguf",
+  "files": {
+   "smollm2-135m-f16.gguf": 270886368
+  },
+  "converter": "llama.cpp eadc4184caee convert_hf_to_gguf"
+ },
+ "started": "2026-10-13T00:08:54.903843",
+ "invocations": {
+  "prefill": {
+   "exit": 0,
+   "timed_out": false,
+   "seconds": 21.4,
+   "marks": 41,
+   "cpu_busy": 0.131,
+   "gate": {
+    "passed": true,
+    "waited_s": 0.4,
+    "issues": null,
+    "battery_temp_c": 21.7,
+    "cpu_caps_khz": {
+     "policy0": 1996800,
+     "policy6": 2438400
+    },
+    "thermal_status": 0
+   },
+   "state_before": {
+    "epoch_ms": 1791875359677,
+    "battery_temp_c": 21.7,
+    "battery_level": 69,
+    "battery_status": 3,
+    "externally_powered": false,
+    "power_sources": [],
+    "cpu_caps_khz": {
+     "policy0": 1996800,
+     "policy6": 2438400
+    },
+    "cpu_hw_max_khz": {
+     "policy0": 3628800,
+     "policy6": 4608000
+    },
+    "cpu_capped": true,
+    "screen": "Asleep",
+    "thermal_status": 0
+   },
+   "state_after": {
+    "epoch_ms": 1791875381600,
+    "battery_temp_c": 21.7,
+    "battery_level": 69,
+    "battery_status": 3,
+    "externally_powered": false,
+    "power_sources": [],
+    "cpu_caps_khz": {
+     "policy0": 1996800,
+     "policy6": 2438400
+    },
+    "cpu_hw_max_khz": {
+     "policy0": 3628800,
+     "policy6": 4608000
+    },
+    "cpu_capped": true,
+    "screen": "Asleep",
+    "thermal_status": 0
+   },
+   "idle_window": [
+    2193822.93,
+    2193833.53
+   ],
+   "llama_bench": {
+    "build_commit": "eadc418",
+    "backends": "OpenCL",
+    "n_threads": 4,
+    "flash_attn": false,
+    "type_k": "f16",
+    "type_v": "f16",
+    "n_batch": 2048,
+    "n_ubatch": 512,
+    "use_mmap": true,
+    "avg_ts": 2433.747921,
+    "stddev_ts": 14.026393,
+    "samples_ts": [
+     2417.15,
+     2424.18,
+     2437.62,
+     2427.66,
+     2438.95,
+     2424.44,
+     2433.98,
+     2437.03,
+     2437.51,
+     2364.56,
+     2438.05,
+     2433.23,
+     2435.58,
+     2447.17,
+     2437.93,
+     2449.65,
+     2443.55,
+     2441.01,
+     2422.98,
+     2417.66,
+     2433.53,
+     2439.95,
+     2440.15,
+     2424.51,
+     2426.97,
+     2437.63,
+     2443.26,
+     2437.85,
+     2424.93,
+     2440.78,
+     2429.34,
+     2446.53,
+     2419.45,
+     2448.12,
+     2449.47,
+     2442.37,
+     2442.04,
+     2438.06,
+     2439.91,
+     2430.81,
+     2438.11
+    ],
+    "model_type": "llama 256M F16",
+    "model_size": 269100288
+   },
+   "suspend_ratio": 1.0
+  },
+  "decode": {
+   "exit": 0,
+   "timed_out": false,
+   "seconds": 42.1,
+   "marks": 8,
+   "cpu_busy": 0.239,
+   "gate": {
+    "passed": true,
+    "waited_s": 0.4,
+    "issues": null,
+    "battery_temp_c": 21.7,
+    "cpu_caps_khz": {
+     "policy0": 1996800,
+     "policy6": 2438400
+    },
+    "thermal_status": 0
+   },
+   "state_before": {
+    "epoch_ms": 1791875410576,
+    "battery_temp_c": 21.6,
+    "battery_level": 69,
+    "battery_status": 3,
+    "externally_powered": false,
+    "power_sources": [],
+    "cpu_caps_khz": {
+     "policy0": 1996800,
+     "policy6": 2438400
+    },
+    "cpu_hw_max_khz": {
+     "policy0": 3628800,
+     "policy6": 4608000
+    },
+    "cpu_capped": true,
+    "screen": "Asleep",
+    "thermal_status": 0
+   },
+   "state_after": {
+    "epoch_ms": 1791875453440,
+    "battery_temp_c": 21.6,
+    "battery_level": 69,
+    "battery_status": 3,
+    "externally_powered": false,
+    "power_sources": [],
+    "cpu_caps_khz": {
+     "policy0": 1996800,
+     "policy6": 2438400
+    },
+    "cpu_hw_max_khz": {
+     "policy0": 3628800,
+     "policy6": 4608000
+    },
+    "cpu_capped": true,
+    "screen": "Asleep",
+    "thermal_status": 0
+   },
+   "idle_window": [
+    2193874.11,
+    2193884.42
+   ],
+   "llama_bench": {
+    "build_commit": "eadc418",
+    "backends": "OpenCL",
+    "n_threads": 4,
+    "flash_attn": false,
+    "type_k": "f16",
+    "type_v": "f16",
+    "n_batch": 2048,
+    "n_ubatch": 512,
+    "use_mmap": true,
+    "avg_ts": 97.422042,
+    "stddev_ts": 1.083279,
+    "samples_ts": [
+     96.1921,
+     98.1568,
+     98.1058,
+     96.2622,
+     99.3409,
+     97.5966,
+     96.9218,
+     96.8004
+    ],
+    "model_type": "llama 256M F16",
+    "model_size": 269100288
+   },
+   "suspend_ratio": 1.0
+  },
+  "energy_prefill": {
+   "exit": 0,
+   "timed_out": false,
+   "seconds": 42.8,
+   "marks": 247,
+   "cpu_busy": 0.145,
+   "gate": {
+    "passed": true,
+    "waited_s": 0.4,
+    "issues": null,
+    "battery_temp_c": 21.6,
+    "cpu_caps_khz": {
+     "policy0": 1996800,
+     "policy6": 2438400
+    },
+    "thermal_status": 0
+   },
+   "state_before": {
+    "epoch_ms": 1791875482860,
+    "battery_temp_c": 21.6,
+    "battery_level": 69,
+    "battery_status": 3,
+    "externally_powered": false,
+    "power_sources": [],
+    "cpu_caps_khz": {
+     "policy0": 1996800,
+     "policy6": 2438400
+    },
+    "cpu_hw_max_khz": {
+     "policy0": 3628800,
+     "policy6": 4608000
+    },
+    "cpu_capped": true,
+    "screen": "Asleep",
+    "thermal_status": 0
+   },
+   "state_after": {
+    "epoch_ms": 1791875526322,
+    "battery_temp_c": 21.6,
+    "battery_level": 68,
+    "battery_status": 3,
+    "externally_powered": false,
+    "power_sources": [],
+    "cpu_caps_khz": {
+     "policy0": 1996800,
+     "policy6": 2438400
+    },
+    "cpu_hw_max_khz": {
+     "policy0": 3628800,
+     "policy6": 4608000
+    },
+    "cpu_capped": true,
+    "screen": "Asleep",
+    "thermal_status": 0
+   },
+   "idle_window": [
+    2193946.09,
+    2193956.73
+   ]
+  },
+  "energy_decode": {
+   "exit": 0,
+   "timed_out": false,
+   "seconds": 32.3,
+   "marks": 6,
+   "cpu_busy": 0.251,
+   "gate": {
+    "passed": true,
+    "waited_s": 0.3,
+    "issues": null,
+    "battery_temp_c": 21.6,
+    "cpu_caps_khz": {
+     "policy0": 1996800,
+     "policy6": 2438400
+    },
+    "thermal_status": 0
+   },
+   "state_before": {
+    "epoch_ms": 1791875555399,
+    "battery_temp_c": 21.6,
+    "battery_level": 68,
+    "battery_status": 3,
+    "externally_powered": false,
+    "power_sources": [],
+    "cpu_caps_khz": {
+     "policy0": 1996800,
+     "policy6": 2438400
+    },
+    "cpu_hw_max_khz": {
+     "policy0": 3628800,
+     "policy6": 4608000
+    },
+    "cpu_capped": true,
+    "screen": "Asleep",
+    "thermal_status": 0
+   },
+   "state_after": {
+    "epoch_ms": 1791875588281,
+    "battery_temp_c": 21.6,
+    "battery_level": 68,
+    "battery_status": 3,
+    "externally_powered": false,
+    "power_sources": [],
+    "cpu_caps_khz": {
+     "policy0": 1996800,
+     "policy6": 2438400
+    },
+    "cpu_hw_max_khz": {
+     "policy0": 3628800,
+     "policy6": 4608000
+    },
+    "cpu_capped": true,
+    "screen": "Asleep",
+    "thermal_status": 0
+   },
+   "idle_window": [
+    2194018.52,
+    2194029.22
+   ]
+  }
+ },
+ "windows": [
+  {
+   "phase": "prefill",
+   "source": "main",
+   "rep": 1,
+   "a": 2193846.03172832,
+   "b": 2193846.137332486,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "main",
+   "rep": 2,
+   "a": 2193846.137451028,
+   "b": 2193846.242473007,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "main",
+   "rep": 3,
+   "a": 2193846.242598945,
+   "b": 2193846.348050715,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 4,
+   "a": 2193846.348172174,
+   "b": 2193846.45313634,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 5,
+   "a": 2193846.453343945,
+   "b": 2193846.558936392,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 6,
+   "a": 2193846.559131132,
+   "b": 2193846.664309569,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 7,
+   "a": 2193846.664429569,
+   "b": 2193846.769475715,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 8,
+   "a": 2193846.769575403,
+   "b": 2193846.87460233,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 9,
+   "a": 2193846.874723163,
+   "b": 2193846.982989048,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 10,
+   "a": 2193846.983108319,
+   "b": 2193847.088110715,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 11,
+   "a": 2193847.088210559,
+   "b": 2193847.193420923,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 12,
+   "a": 2193847.193570298,
+   "b": 2193847.298679257,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 13,
+   "a": 2193847.2987791,
+   "b": 2193847.403390455,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 14,
+   "a": 2193847.40350134,
+   "b": 2193847.50850884,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 15,
+   "a": 2193847.508604986,
+   "b": 2193847.613109882,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 16,
+   "a": 2193847.613212173,
+   "b": 2193847.717979673,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 17,
+   "a": 2193847.718140715,
+   "b": 2193847.823015767,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 18,
+   "a": 2193847.823137121,
+   "b": 2193847.928793423,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 19,
+   "a": 2193847.928989569,
+   "b": 2193848.034877798,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 20,
+   "a": 2193848.034999986,
+   "b": 2193848.140197277,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 21,
+   "a": 2193848.140318006,
+   "b": 2193848.245238579,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 22,
+   "a": 2193848.245360975,
+   "b": 2193848.350273215,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 23,
+   "a": 2193848.35039436,
+   "b": 2193848.455983423,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 24,
+   "a": 2193848.456174569,
+   "b": 2193848.5616566,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 25,
+   "a": 2193848.561773996,
+   "b": 2193848.666794308,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 26,
+   "a": 2193848.666914256,
+   "b": 2193848.77169285,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 27,
+   "a": 2193848.771791235,
+   "b": 2193848.876802121,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 28,
+   "a": 2193848.876901548,
+   "b": 2193848.982472277,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 29,
+   "a": 2193848.982582121,
+   "b": 2193849.087467016,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 30,
+   "a": 2193849.087573058,
+   "b": 2193849.192952173,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 31,
+   "a": 2193849.19304785,
+   "b": 2193849.297686391,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 32,
+   "a": 2193849.297791079,
+   "b": 2193849.403601495,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 33,
+   "a": 2193849.403720245,
+   "b": 2193849.508290662,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 34,
+   "a": 2193849.508391756,
+   "b": 2193849.61290462,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 35,
+   "a": 2193849.613004933,
+   "b": 2193849.717821443,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 36,
+   "a": 2193849.717921547,
+   "b": 2193849.822752797,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 37,
+   "a": 2193849.822875193,
+   "b": 2193849.927876964,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 38,
+   "a": 2193849.927977485,
+   "b": 2193850.032899881,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 39,
+   "a": 2193850.033023839,
+   "b": 2193850.138338995,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 40,
+   "a": 2193850.138464933,
+   "b": 2193850.243464828,
+   "tokens": 256
+  },
+  {
+   "phase": "decode",
+   "source": "main",
+   "rep": 1,
+   "a": 2193899.652563351,
+   "b": 2193902.260636996,
+   "tokens": 256
+  },
+  {
+   "phase": "decode",
+   "source": "main",
+   "rep": 2,
+   "a": 2193902.264243402,
+   "b": 2193904.873672724,
+   "tokens": 256
+  },
+  {
+   "phase": "decode",
+   "source": "main",
+   "rep": 3,
+   "a": 2193904.878135849,
+   "b": 2193907.537539494,
+   "tokens": 256
+  },
+  {
+   "phase": "decode",
+   "source": "energy",
+   "rep": 4,
+   "a": 2193907.540959963,
+   "b": 2193910.117946264,
+   "tokens": 256
+  },
+  {
+   "phase": "decode",
+   "source": "energy",
+   "rep": 5,
+   "a": 2193910.120983191,
+   "b": 2193912.744026159,
+   "tokens": 256
+  },
+  {
+   "phase": "decode",
+   "source": "energy",
+   "rep": 6,
+   "a": 2193912.746757617,
+   "b": 2193915.388063241,
+   "tokens": 256
+  },
+  {
+   "phase": "decode",
+   "source": "energy",
+   "rep": 7,
+   "a": 2193915.392362668,
+   "b": 2193918.036981261,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 1,
+   "a": 2193969.309018533,
+   "b": 2193969.414139887,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 2,
+   "a": 2193969.414254627,
+   "b": 2193969.518967231,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 3,
+   "a": 2193969.519062387,
+   "b": 2193969.623613429,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 4,
+   "a": 2193969.623720252,
+   "b": 2193969.729038897,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 5,
+   "a": 2193969.729146085,
+   "b": 2193969.833586814,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 6,
+   "a": 2193969.833682075,
+   "b": 2193969.937946606,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 7,
+   "a": 2193969.93804072,
+   "b": 2193970.042162752,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 8,
+   "a": 2193970.042258324,
+   "b": 2193970.146505304,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 9,
+   "a": 2193970.14660072,
+   "b": 2193970.250770043,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 10,
+   "a": 2193970.250861554,
+   "b": 2193970.354916085,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 11,
+   "a": 2193970.355010981,
+   "b": 2193970.459239626,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 12,
+   "a": 2193970.459331553,
+   "b": 2193970.563504626,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 13,
+   "a": 2193970.563599731,
+   "b": 2193970.667751189,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 14,
+   "a": 2193970.667847126,
+   "b": 2193970.771926345,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 15,
+   "a": 2193970.77201822,
+   "b": 2193970.876162491,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 16,
+   "a": 2193970.87625447,
+   "b": 2193970.980595824,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 17,
+   "a": 2193970.980692803,
+   "b": 2193971.084921762,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 18,
+   "a": 2193971.085299522,
+   "b": 2193971.189478949,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 19,
+   "a": 2193971.189570824,
+   "b": 2193971.29370598,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 20,
+   "a": 2193971.293777334,
+   "b": 2193971.397440928,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 21,
+   "a": 2193971.397531345,
+   "b": 2193971.501670095,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 22,
+   "a": 2193971.501759522,
+   "b": 2193971.60637447,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 23,
+   "a": 2193971.606468063,
+   "b": 2193971.71078322,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 24,
+   "a": 2193971.710874313,
+   "b": 2193971.815044782,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 25,
+   "a": 2193971.815139886,
+   "b": 2193971.919204157,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 26,
+   "a": 2193971.919298272,
+   "b": 2193972.023330772,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 27,
+   "a": 2193972.023422282,
+   "b": 2193972.127513115,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 28,
+   "a": 2193972.127604209,
+   "b": 2193972.231794469,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 29,
+   "a": 2193972.23188499,
+   "b": 2193972.336757855,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 30,
+   "a": 2193972.336874365,
+   "b": 2193972.441916344,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 31,
+   "a": 2193972.442034157,
+   "b": 2193972.546956813,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 32,
+   "a": 2193972.547052178,
+   "b": 2193972.651604626,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 33,
+   "a": 2193972.651722021,
+   "b": 2193972.756510771,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 34,
+   "a": 2193972.756608428,
+   "b": 2193972.861267542,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 35,
+   "a": 2193972.86136223,
+   "b": 2193972.965970563,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 36,
+   "a": 2193972.96608775,
+   "b": 2193973.070816344,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 37,
+   "a": 2193973.070908271,
+   "b": 2193973.176053167,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 38,
+   "a": 2193973.176150146,
+   "b": 2193973.280865042,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 39,
+   "a": 2193973.280978167,
+   "b": 2193973.385884625,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 40,
+   "a": 2193973.386001292,
+   "b": 2193973.490949781,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 41,
+   "a": 2193973.491047698,
+   "b": 2193973.595948219,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 42,
+   "a": 2193973.596062021,
+   "b": 2193973.701080563,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 43,
+   "a": 2193973.701193219,
+   "b": 2193973.80602775,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 44,
+   "a": 2193973.806206656,
+   "b": 2193973.910447438,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 45,
+   "a": 2193973.910544885,
+   "b": 2193974.015142125,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 46,
+   "a": 2193974.015263219,
+   "b": 2193974.12075676,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 47,
+   "a": 2193974.120927646,
+   "b": 2193974.225870719,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 48,
+   "a": 2193974.225966917,
+   "b": 2193974.331026552,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 49,
+   "a": 2193974.331166604,
+   "b": 2193974.436213427,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 50,
+   "a": 2193974.436311917,
+   "b": 2193974.541124104,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 51,
+   "a": 2193974.541205719,
+   "b": 2193974.645553687,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 52,
+   "a": 2193974.645645666,
+   "b": 2193974.750351864,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 53,
+   "a": 2193974.750469625,
+   "b": 2193974.860923323,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 54,
+   "a": 2193974.861038479,
+   "b": 2193974.96595702,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 55,
+   "a": 2193974.96610577,
+   "b": 2193975.071143323,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 56,
+   "a": 2193975.071331239,
+   "b": 2193975.176580718,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 57,
+   "a": 2193975.176694364,
+   "b": 2193975.28202551,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 58,
+   "a": 2193975.282217906,
+   "b": 2193975.386883947,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 59,
+   "a": 2193975.38699801,
+   "b": 2193975.491845718,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 60,
+   "a": 2193975.491959416,
+   "b": 2193975.596815562,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 61,
+   "a": 2193975.596927281,
+   "b": 2193975.701784781,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 62,
+   "a": 2193975.701883583,
+   "b": 2193975.806448739,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 63,
+   "a": 2193975.806567176,
+   "b": 2193975.911634624,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 64,
+   "a": 2193975.911751968,
+   "b": 2193976.016598062,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 65,
+   "a": 2193976.016715926,
+   "b": 2193976.121681916,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 66,
+   "a": 2193976.121778322,
+   "b": 2193976.226609416,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 67,
+   "a": 2193976.226704676,
+   "b": 2193976.331206499,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 68,
+   "a": 2193976.331304989,
+   "b": 2193976.435693062,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 69,
+   "a": 2193976.435804832,
+   "b": 2193976.54078327,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 70,
+   "a": 2193976.540879572,
+   "b": 2193976.645435301,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 71,
+   "a": 2193976.64553103,
+   "b": 2193976.750499676,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 72,
+   "a": 2193976.750618061,
+   "b": 2193976.855378999,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 73,
+   "a": 2193976.855498009,
+   "b": 2193976.960666968,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 74,
+   "a": 2193976.960764416,
+   "b": 2193977.066233895,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 75,
+   "a": 2193977.066370301,
+   "b": 2193977.171142697,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 76,
+   "a": 2193977.171280822,
+   "b": 2193977.276408374,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 77,
+   "a": 2193977.276525509,
+   "b": 2193977.383401863,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 78,
+   "a": 2193977.383516342,
+   "b": 2193977.488371707,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 79,
+   "a": 2193977.488483113,
+   "b": 2193977.593402488,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 80,
+   "a": 2193977.593515665,
+   "b": 2193977.698410822,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 81,
+   "a": 2193977.698507905,
+   "b": 2193977.802781655,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 82,
+   "a": 2193977.802878113,
+   "b": 2193977.907636759,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 83,
+   "a": 2193977.907756863,
+   "b": 2193978.012636915,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 84,
+   "a": 2193978.012715561,
+   "b": 2193978.117423634,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 85,
+   "a": 2193978.117517123,
+   "b": 2193978.222170196,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 86,
+   "a": 2193978.222285613,
+   "b": 2193978.328106863,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 87,
+   "a": 2193978.328226603,
+   "b": 2193978.433487592,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 88,
+   "a": 2193978.433587696,
+   "b": 2193978.538279832,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 89,
+   "a": 2193978.538406394,
+   "b": 2193978.643502227,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 90,
+   "a": 2193978.643622488,
+   "b": 2193978.748743738,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 91,
+   "a": 2193978.748841759,
+   "b": 2193978.853452696,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 92,
+   "a": 2193978.853570665,
+   "b": 2193978.958259519,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 93,
+   "a": 2193978.958361863,
+   "b": 2193979.064627956,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 94,
+   "a": 2193979.064728477,
+   "b": 2193979.169705977,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 95,
+   "a": 2193979.169824467,
+   "b": 2193979.274992592,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 96,
+   "a": 2193979.2750903,
+   "b": 2193979.379630248,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 97,
+   "a": 2193979.379724467,
+   "b": 2193979.4845478,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 98,
+   "a": 2193979.48466004,
+   "b": 2193979.589721081,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 99,
+   "a": 2193979.589816967,
+   "b": 2193979.694614519,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 100,
+   "a": 2193979.694734206,
+   "b": 2193979.799650977,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 101,
+   "a": 2193979.799733789,
+   "b": 2193979.904222331,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 102,
+   "a": 2193979.904321289,
+   "b": 2193980.009061081,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 103,
+   "a": 2193980.009179675,
+   "b": 2193980.114400821,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 104,
+   "a": 2193980.114497071,
+   "b": 2193980.219603633,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 105,
+   "a": 2193980.219787435,
+   "b": 2193980.324872852,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 106,
+   "a": 2193980.324990925,
+   "b": 2193980.429919987,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 107,
+   "a": 2193980.430037331,
+   "b": 2193980.535028998,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 108,
+   "a": 2193980.535145873,
+   "b": 2193980.640246341,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 109,
+   "a": 2193980.640342852,
+   "b": 2193980.7449978,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 110,
+   "a": 2193980.745094518,
+   "b": 2193980.849702383,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 111,
+   "a": 2193980.849820404,
+   "b": 2193980.954883633,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 112,
+   "a": 2193980.954979622,
+   "b": 2193981.059371602,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 113,
+   "a": 2193981.059469518,
+   "b": 2193981.16478582,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 114,
+   "a": 2193981.164970508,
+   "b": 2193981.270039049,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 115,
+   "a": 2193981.270187383,
+   "b": 2193981.374572539,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 116,
+   "a": 2193981.374689935,
+   "b": 2193981.479690924,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 117,
+   "a": 2193981.479795195,
+   "b": 2193981.584626497,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 118,
+   "a": 2193981.584708789,
+   "b": 2193981.689063164,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 119,
+   "a": 2193981.689166341,
+   "b": 2193981.793939466,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 120,
+   "a": 2193981.79403707,
+   "b": 2193981.898809153,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 121,
+   "a": 2193981.898927539,
+   "b": 2193982.004629882,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 122,
+   "a": 2193982.004818424,
+   "b": 2193982.109912487,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 123,
+   "a": 2193982.110029726,
+   "b": 2193982.214952486,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 124,
+   "a": 2193982.21506858,
+   "b": 2193982.320041341,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 125,
+   "a": 2193982.320154257,
+   "b": 2193982.425147695,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 126,
+   "a": 2193982.425265663,
+   "b": 2193982.530367174,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 127,
+   "a": 2193982.530485403,
+   "b": 2193982.635462434,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 128,
+   "a": 2193982.635574986,
+   "b": 2193982.740910872,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 129,
+   "a": 2193982.741026549,
+   "b": 2193982.845985351,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 130,
+   "a": 2193982.846350924,
+   "b": 2193982.951614361,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 131,
+   "a": 2193982.951711497,
+   "b": 2193983.056708372,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 132,
+   "a": 2193983.056804934,
+   "b": 2193983.161826288,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 133,
+   "a": 2193983.161930194,
+   "b": 2193983.267197799,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 134,
+   "a": 2193983.267300299,
+   "b": 2193983.372168944,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 135,
+   "a": 2193983.372249778,
+   "b": 2193983.476468788,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 136,
+   "a": 2193983.476580142,
+   "b": 2193983.582659413,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 137,
+   "a": 2193983.582757851,
+   "b": 2193983.686995819,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 138,
+   "a": 2193983.687110715,
+   "b": 2193983.792269986,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 139,
+   "a": 2193983.792383267,
+   "b": 2193983.897609517,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 140,
+   "a": 2193983.897706236,
+   "b": 2193984.002397225,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 141,
+   "a": 2193984.002515246,
+   "b": 2193984.107438527,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 142,
+   "a": 2193984.107551496,
+   "b": 2193984.2124391,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 143,
+   "a": 2193984.21255634,
+   "b": 2193984.317488996,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 144,
+   "a": 2193984.31760634,
+   "b": 2193984.422911027,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 145,
+   "a": 2193984.423031079,
+   "b": 2193984.5281916,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 146,
+   "a": 2193984.528308579,
+   "b": 2193984.633362433,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 147,
+   "a": 2193984.633479413,
+   "b": 2193984.738501861,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 148,
+   "a": 2193984.738599204,
+   "b": 2193984.84303186,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 149,
+   "a": 2193984.843131288,
+   "b": 2193984.948304152,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 150,
+   "a": 2193984.948399517,
+   "b": 2193985.052880923,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 151,
+   "a": 2193985.052978371,
+   "b": 2193985.157443996,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 152,
+   "a": 2193985.157550037,
+   "b": 2193985.263463475,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 153,
+   "a": 2193985.263559464,
+   "b": 2193985.368719569,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 154,
+   "a": 2193985.368817121,
+   "b": 2193985.473491548,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 155,
+   "a": 2193985.473610923,
+   "b": 2193985.578573787,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 156,
+   "a": 2193985.578670089,
+   "b": 2193985.683533683,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 157,
+   "a": 2193985.683630871,
+   "b": 2193985.789138214,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 158,
+   "a": 2193985.789261964,
+   "b": 2193985.894282641,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 159,
+   "a": 2193985.894392693,
+   "b": 2193985.999407589,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 160,
+   "a": 2193985.999544464,
+   "b": 2193986.104668787,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 161,
+   "a": 2193986.104785975,
+   "b": 2193986.209920245,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 162,
+   "a": 2193986.210040037,
+   "b": 2193986.315031547,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 163,
+   "a": 2193986.315149672,
+   "b": 2193986.420086808,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 164,
+   "a": 2193986.420182641,
+   "b": 2193986.524535349,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 165,
+   "a": 2193986.524632172,
+   "b": 2193986.62983686,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 166,
+   "a": 2193986.629930141,
+   "b": 2193986.734318735,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 167,
+   "a": 2193986.734407745,
+   "b": 2193986.838632693,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 168,
+   "a": 2193986.838743318,
+   "b": 2193986.943855141,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 169,
+   "a": 2193986.943951235,
+   "b": 2193987.048571078,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 170,
+   "a": 2193987.048684776,
+   "b": 2193987.153705037,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 171,
+   "a": 2193987.153823422,
+   "b": 2193987.25910212,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 172,
+   "a": 2193987.259223526,
+   "b": 2193987.364338578,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 173,
+   "a": 2193987.364454932,
+   "b": 2193987.469198422,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 174,
+   "a": 2193987.469315089,
+   "b": 2193987.574151651,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 175,
+   "a": 2193987.57427087,
+   "b": 2193987.679413161,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 176,
+   "a": 2193987.679529099,
+   "b": 2193987.784488891,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 177,
+   "a": 2193987.784585089,
+   "b": 2193987.889570036,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 178,
+   "a": 2193987.889667693,
+   "b": 2193987.994582536,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 179,
+   "a": 2193987.994678526,
+   "b": 2193988.099107901,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 180,
+   "a": 2193988.099204359,
+   "b": 2193988.203764568,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 181,
+   "a": 2193988.203862797,
+   "b": 2193988.308726599,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 182,
+   "a": 2193988.30881889,
+   "b": 2193988.413268942,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 183,
+   "a": 2193988.413359932,
+   "b": 2193988.517822015,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 184,
+   "a": 2193988.517923786,
+   "b": 2193988.623326651,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 185,
+   "a": 2193988.623445192,
+   "b": 2193988.728853994,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 186,
+   "a": 2193988.728995349,
+   "b": 2193988.834210088,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 187,
+   "a": 2193988.834309411,
+   "b": 2193988.938732171,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 188,
+   "a": 2193988.938828734,
+   "b": 2193989.043438473,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 189,
+   "a": 2193989.043536078,
+   "b": 2193989.148290036,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 190,
+   "a": 2193989.14840139,
+   "b": 2193989.253311182,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 191,
+   "a": 2193989.253425609,
+   "b": 2193989.358518265,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 192,
+   "a": 2193989.358635609,
+   "b": 2193989.46378514,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 193,
+   "a": 2193989.463881598,
+   "b": 2193989.568849359,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 194,
+   "a": 2193989.568967744,
+   "b": 2193989.674428577,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 195,
+   "a": 2193989.674527015,
+   "b": 2193989.779086286,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 196,
+   "a": 2193989.779186494,
+   "b": 2193989.884309775,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 197,
+   "a": 2193989.884406234,
+   "b": 2193989.989157119,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 198,
+   "a": 2193989.989254411,
+   "b": 2193990.094294671,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 199,
+   "a": 2193990.094391963,
+   "b": 2193990.198971338,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 200,
+   "a": 2193990.199073369,
+   "b": 2193990.304494931,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 201,
+   "a": 2193990.304597327,
+   "b": 2193990.409445088,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 202,
+   "a": 2193990.409559827,
+   "b": 2193990.514798004,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 203,
+   "a": 2193990.514982171,
+   "b": 2193990.620425035,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 204,
+   "a": 2193990.620540608,
+   "b": 2193990.725531494,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 205,
+   "a": 2193990.725650608,
+   "b": 2193990.830741858,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 206,
+   "a": 2193990.830859879,
+   "b": 2193990.935795139,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 207,
+   "a": 2193990.935910921,
+   "b": 2193991.041093316,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 208,
+   "a": 2193991.0412079,
+   "b": 2193991.146495296,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 209,
+   "a": 2193991.146612118,
+   "b": 2193991.251517014,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 210,
+   "a": 2193991.251635243,
+   "b": 2193991.356783212,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 211,
+   "a": 2193991.356900295,
+   "b": 2193991.461827327,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 212,
+   "a": 2193991.461924827,
+   "b": 2193991.566793941,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 213,
+   "a": 2193991.566910764,
+   "b": 2193991.67223217,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 214,
+   "a": 2193991.672328056,
+   "b": 2193991.777270087,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 215,
+   "a": 2193991.777365972,
+   "b": 2193991.882113212,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 216,
+   "a": 2193991.882239566,
+   "b": 2193991.987014879,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 217,
+   "a": 2193991.987157535,
+   "b": 2193992.094442743,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 218,
+   "a": 2193992.094550191,
+   "b": 2193992.199409618,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 219,
+   "a": 2193992.199507639,
+   "b": 2193992.304283108,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 220,
+   "a": 2193992.304402014,
+   "b": 2193992.409553108,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 221,
+   "a": 2193992.40967217,
+   "b": 2193992.514825035,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 222,
+   "a": 2193992.514941545,
+   "b": 2193992.619676493,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 223,
+   "a": 2193992.619773628,
+   "b": 2193992.724291441,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 224,
+   "a": 2193992.724411128,
+   "b": 2193992.829274462,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 225,
+   "a": 2193992.829390607,
+   "b": 2193992.934514357,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 226,
+   "a": 2193992.934632482,
+   "b": 2193993.039532014,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 227,
+   "a": 2193993.039645659,
+   "b": 2193993.147270139,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 228,
+   "a": 2193993.147384409,
+   "b": 2193993.252249149,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 229,
+   "a": 2193993.252368055,
+   "b": 2193993.357331336,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 230,
+   "a": 2193993.357427638,
+   "b": 2193993.462134461,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 231,
+   "a": 2193993.462274618,
+   "b": 2193993.567755503,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 232,
+   "a": 2193993.567851388,
+   "b": 2193993.672458107,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 233,
+   "a": 2193993.672542899,
+   "b": 2193993.776972638,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 234,
+   "a": 2193993.777070763,
+   "b": 2193993.884251701,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 235,
+   "a": 2193993.884344409,
+   "b": 2193993.988902847,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 236,
+   "a": 2193993.988999878,
+   "b": 2193994.093574253,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 237,
+   "a": 2193994.093671388,
+   "b": 2193994.198830815,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 238,
+   "a": 2193994.198925971,
+   "b": 2193994.303587221,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 239,
+   "a": 2193994.303704721,
+   "b": 2193994.408751336,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 240,
+   "a": 2193994.408864044,
+   "b": 2193994.513643888,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 241,
+   "a": 2193994.513762898,
+   "b": 2193994.618666961,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 242,
+   "a": 2193994.618763471,
+   "b": 2193994.723333263,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 243,
+   "a": 2193994.723450971,
+   "b": 2193994.828358575,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 244,
+   "a": 2193994.828457534,
+   "b": 2193994.933363627,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 245,
+   "a": 2193994.933476284,
+   "b": 2193995.038344721,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 246,
+   "a": 2193995.038460659,
+   "b": 2193995.143602169,
+   "tokens": 256
+  },
+  {
+   "phase": "decode",
+   "source": "energy",
+   "rep": 1,
+   "a": 2194044.308349859,
+   "b": 2194046.945833139,
+   "tokens": 256
+  },
+  {
+   "phase": "decode",
+   "source": "energy",
+   "rep": 2,
+   "a": 2194046.951729389,
+   "b": 2194049.595414336,
+   "tokens": 256
+  },
+  {
+   "phase": "decode",
+   "source": "energy",
+   "rep": 3,
+   "a": 2194049.599483763,
+   "b": 2194052.241372668,
+   "tokens": 256
+  },
+  {
+   "phase": "decode",
+   "source": "energy",
+   "rep": 4,
+   "a": 2194052.245766001,
+   "b": 2194054.953595948,
+   "tokens": 256
+  },
+  {
+   "phase": "decode",
+   "source": "energy",
+   "rep": 5,
+   "a": 2194054.956875167,
+   "b": 2194057.589089385,
+   "tokens": 256
+  }
+ ],
+ "prefill": {
+  "tps": 2429.79,
+  "tps_std": 6.97,
+  "reps": [
+   2424.15,
+   2437.58,
+   2427.65
+  ],
+  "tokens": [
+   256
+  ],
+  "uj_per_token": 1011.3,
+  "uj_per_token_gross": 1068.4,
+  "energy_valid": true,
+  "energy_reason": null
+ },
+ "decode": {
+  "tps": 97.51,
+  "tps_std": 1.08,
+  "reps": [
+   98.16,
+   98.11,
+   96.26
+  ],
+  "tokens": [
+   256
+  ],
+  "uj_per_token": 31614.5,
+  "uj_per_token_gross": 33047.9,
+  "energy_valid": true,
+  "energy_reason": null
+ },
+ "status": "ok",
+ "finished": "2026-10-13T00:13:23.292947",
+ "energy": {
+  "perfetto:current": {
+   "prefill": {
+    "uj_per_token": 1068.4,
+    "net_uj_per_token": 1011.3,
+    "avg_power_mw": 2606.1,
+    "idle_power_mw": 139.2,
+    "seconds": 30.01,
+    "tokens": 73216,
+    "windows": 2,
+    "valid": true,
+    "reason": null,
+    "note": "battery HAL current, unit mA"
+   },
+   "decode": {
+    "uj_per_token": 33047.9,
+    "net_uj_per_token": 31614.5,
+    "avg_power_mw": 3210.1,
+    "idle_power_mw": 139.2,
+    "seconds": 31.63,
+    "tokens": 3072,
+    "windows": 2,
+    "valid": true,
+    "reason": null,
+    "note": "battery HAL current, unit mA"
+   }
+  },
+  "perfetto:charge": {
+   "prefill": {
+    "uj_per_token": 2351.5,
+    "net_uj_per_token": 2351.5,
+    "avg_power_mw": 5736.1,
+    "idle_power_mw": -0.0,
+    "seconds": 30.01,
+    "tokens": 73216,
+    "windows": 2,
+    "valid": false,
+    "reason": "reading changed only 2 time(s) during the phase",
+    "note": "battery HAL charge counter"
+   },
+   "decode": {
+    "uj_per_token": 93231.4,
+    "net_uj_per_token": 93231.4,
+    "avg_power_mw": 9056.1,
+    "idle_power_mw": -0.0,
+    "seconds": 31.63,
+    "tokens": 3072,
+    "windows": 2,
+    "valid": false,
+    "reason": "reading changed only 3 time(s) during the phase",
+    "note": "battery HAL charge counter"
+   }
+  }
+ },
+ "energy_idle": "per invocation",
+ "energy_session": "2026-10-12T23:50:04.511925",
+ "energy_headline_method": "perfetto:current",
+ "energy_kind": "whole device (net of idle)"
+}

@@ -1,0 +1,1088 @@
+phone,metric,backend,model,engine,precision,value
+Redmi 9A,prefill throughput,CPU,SmolLM2-135M,llama.cpp,4-bit,11.64
+Redmi 9A,prefill throughput,CPU,Gemma3-270M,llama.cpp,4-bit,11.72
+Redmi 9A,prefill throughput,CPU,SmolLM2-360M,llama.cpp,4-bit,5.39
+Redmi 9A,prefill throughput,CPU,Qwen3-0.6B,llama.cpp,4-bit,3.31
+Redmi 9A,prefill throughput,CPU,Qwen3.5-0.8B,llama.cpp,4-bit,4.59
+Redmi 9A,prefill throughput,CPU,Qwen3-1.7B,llama.cpp,4-bit,1.78
+Redmi 9A,prefill throughput,CPU,Qwen3.5-2B,llama.cpp,4-bit,2.19
+Redmi 9A,prefill throughput,CPU,SmolLM2-135M,llama.cpp,8-bit,11.25
+Redmi 9A,prefill throughput,CPU,Gemma3-270M,llama.cpp,8-bit,11.34
+Redmi 9A,prefill throughput,CPU,SmolLM2-360M,llama.cpp,8-bit,5.14
+Redmi 9A,prefill throughput,CPU,Qwen3-0.6B,llama.cpp,8-bit,3.18
+Redmi 9A,prefill throughput,CPU,Qwen3.5-0.8B,llama.cpp,8-bit,4.29
+Redmi 9A,prefill throughput,CPU,Qwen3.5-2B,llama.cpp,8-bit,1.86
+Redmi 9A,prefill throughput,CPU,SmolLM2-135M,llama.cpp,16-bit,1.54
+Redmi 9A,prefill throughput,CPU,Gemma3-270M,llama.cpp,16-bit,1.64
+Redmi 9A,prefill throughput,CPU,SmolLM2-360M,llama.cpp,16-bit,0.54
+Redmi 9A,prefill throughput,CPU,Qwen3-0.6B,llama.cpp,16-bit,0.38
+Redmi 9A,prefill throughput,CPU,Qwen3.5-0.8B,llama.cpp,16-bit,0.33
+Redmi 9A,prefill throughput,CPU,SmolLM2-135M,MNN,4-bit,36.55
+Redmi 9A,prefill throughput,CPU,Gemma3-270M,MNN,4-bit,39.9
+Redmi 9A,prefill throughput,CPU,SmolLM2-360M,MNN,4-bit,14.81
+Redmi 9A,prefill throughput,CPU,Qwen3-0.6B,MNN,4-bit,11.38
+Redmi 9A,prefill throughput,CPU,Qwen3.5-0.8B,MNN,4-bit,9.11
+Redmi 9A,prefill throughput,CPU,Qwen3-1.7B,MNN,4-bit,4.75
+Redmi 9A,prefill throughput,CPU,Qwen3.5-2B,MNN,4-bit,4.62
+Redmi 9A,prefill throughput,CPU,SmolLM2-135M,MNN,8-bit,32.54
+Redmi 9A,prefill throughput,CPU,Gemma3-270M,MNN,8-bit,35.16
+Redmi 9A,prefill throughput,CPU,SmolLM2-360M,MNN,8-bit,12.68
+Redmi 9A,prefill throughput,CPU,Qwen3-0.6B,MNN,8-bit,9.59
+Redmi 9A,prefill throughput,CPU,Qwen3.5-0.8B,MNN,8-bit,7.8
+Redmi 9A,prefill throughput,CPU,Qwen3-1.7B,MNN,8-bit,3.77
+Redmi 9A,prefill throughput,CPU,SmolLM2-135M,MNN,16-bit,42.96
+Redmi 9A,prefill throughput,CPU,Gemma3-270M,MNN,16-bit,44.92
+Redmi 9A,prefill throughput,CPU,SmolLM2-360M,MNN,16-bit,15.9
+Redmi 9A,decode throughput,CPU,SmolLM2-135M,llama.cpp,4-bit,5.76
+Redmi 9A,decode throughput,CPU,Gemma3-270M,llama.cpp,4-bit,4.65
+Redmi 9A,decode throughput,CPU,SmolLM2-360M,llama.cpp,4-bit,2.95
+Redmi 9A,decode throughput,CPU,Qwen3-0.6B,llama.cpp,4-bit,1.68
+Redmi 9A,decode throughput,CPU,Qwen3.5-0.8B,llama.cpp,4-bit,2.16
+Redmi 9A,decode throughput,CPU,Qwen3-1.7B,llama.cpp,4-bit,1.07
+Redmi 9A,decode throughput,CPU,Qwen3.5-2B,llama.cpp,4-bit,1.24
+Redmi 9A,decode throughput,CPU,SmolLM2-135M,llama.cpp,8-bit,5.6
+Redmi 9A,decode throughput,CPU,Gemma3-270M,llama.cpp,8-bit,4.56
+Redmi 9A,decode throughput,CPU,SmolLM2-360M,llama.cpp,8-bit,2.82
+Redmi 9A,decode throughput,CPU,Qwen3-0.6B,llama.cpp,8-bit,1.67
+Redmi 9A,decode throughput,CPU,Qwen3.5-0.8B,llama.cpp,8-bit,2.23
+Redmi 9A,decode throughput,CPU,Qwen3.5-2B,llama.cpp,8-bit,1.02
+Redmi 9A,decode throughput,CPU,SmolLM2-135M,llama.cpp,16-bit,1.09
+Redmi 9A,decode throughput,CPU,Gemma3-270M,llama.cpp,16-bit,0.59
+Redmi 9A,decode throughput,CPU,SmolLM2-360M,llama.cpp,16-bit,0.43
+Redmi 9A,decode throughput,CPU,Qwen3-0.6B,llama.cpp,16-bit,0.26
+Redmi 9A,decode throughput,CPU,Qwen3.5-0.8B,llama.cpp,16-bit,0.21
+Redmi 9A,decode throughput,CPU,SmolLM2-135M,MNN,4-bit,16.28
+Redmi 9A,decode throughput,CPU,Gemma3-270M,MNN,4-bit,7.72
+Redmi 9A,decode throughput,CPU,SmolLM2-360M,MNN,4-bit,8.58
+Redmi 9A,decode throughput,CPU,Qwen3-0.6B,MNN,4-bit,5.83
+Redmi 9A,decode throughput,CPU,Qwen3.5-0.8B,MNN,4-bit,5.77
+Redmi 9A,decode throughput,CPU,Qwen3-1.7B,MNN,4-bit,3.35
+Redmi 9A,decode throughput,CPU,Qwen3.5-2B,MNN,4-bit,3.28
+Redmi 9A,decode throughput,CPU,SmolLM2-135M,MNN,8-bit,13.18
+Redmi 9A,decode throughput,CPU,Gemma3-270M,MNN,8-bit,6.71
+Redmi 9A,decode throughput,CPU,SmolLM2-360M,MNN,8-bit,7.55
+Redmi 9A,decode throughput,CPU,Qwen3-0.6B,MNN,8-bit,5.35
+Redmi 9A,decode throughput,CPU,Qwen3.5-0.8B,MNN,8-bit,4.79
+Redmi 9A,decode throughput,CPU,Qwen3-1.7B,MNN,8-bit,1.82
+Redmi 9A,decode throughput,CPU,SmolLM2-135M,MNN,16-bit,8.17
+Redmi 9A,decode throughput,CPU,Gemma3-270M,MNN,16-bit,4.2
+Redmi 9A,decode throughput,CPU,SmolLM2-360M,MNN,16-bit,4.1
+Redmi 9A,energy prefill (mJ/token),CPU,SmolLM2-135M,llama.cpp,4-bit,74.13
+Redmi 9A,energy prefill (mJ/token),CPU,Gemma3-270M,llama.cpp,4-bit,77.21
+Redmi 9A,energy prefill (mJ/token),CPU,SmolLM2-360M,llama.cpp,4-bit,152.23
+Redmi 9A,energy prefill (mJ/token),CPU,Qwen3-0.6B,llama.cpp,4-bit,245.41
+Redmi 9A,energy prefill (mJ/token),CPU,Qwen3-1.7B,llama.cpp,4-bit,524.39
+Redmi 9A,energy prefill (mJ/token),CPU,SmolLM2-135M,llama.cpp,8-bit,76.45
+Redmi 9A,energy prefill (mJ/token),CPU,Gemma3-270M,llama.cpp,8-bit,76.77
+Redmi 9A,energy prefill (mJ/token),CPU,SmolLM2-360M,llama.cpp,8-bit,179.34
+Redmi 9A,energy prefill (mJ/token),CPU,Qwen3-0.6B,llama.cpp,8-bit,282.89
+Redmi 9A,energy prefill (mJ/token),CPU,SmolLM2-135M,llama.cpp,16-bit,500.6
+Redmi 9A,energy prefill (mJ/token),CPU,Gemma3-270M,llama.cpp,16-bit,452.11
+Redmi 9A,energy prefill (mJ/token),CPU,SmolLM2-360M,llama.cpp,16-bit,1402.83
+Redmi 9A,energy prefill (mJ/token),CPU,Qwen3-0.6B,llama.cpp,16-bit,1970.47
+Redmi 9A,energy prefill (mJ/token),CPU,SmolLM2-135M,MNN,4-bit,23.76
+Redmi 9A,energy prefill (mJ/token),CPU,Gemma3-270M,MNN,4-bit,24.86
+Redmi 9A,energy prefill (mJ/token),CPU,SmolLM2-360M,MNN,4-bit,61.27
+Redmi 9A,energy prefill (mJ/token),CPU,Qwen3-0.6B,MNN,4-bit,81.51
+Redmi 9A,energy prefill (mJ/token),CPU,Qwen3-1.7B,MNN,4-bit,215.59
+Redmi 9A,energy prefill (mJ/token),CPU,SmolLM2-135M,MNN,8-bit,28.91
+Redmi 9A,energy prefill (mJ/token),CPU,Gemma3-270M,MNN,8-bit,27.94
+Redmi 9A,energy prefill (mJ/token),CPU,SmolLM2-360M,MNN,8-bit,74.69
+Redmi 9A,energy prefill (mJ/token),CPU,Qwen3-0.6B,MNN,8-bit,98.95
+Redmi 9A,energy prefill (mJ/token),CPU,SmolLM2-135M,MNN,16-bit,22.21
+Redmi 9A,energy prefill (mJ/token),CPU,Gemma3-270M,MNN,16-bit,24.33
+Redmi 9A,energy prefill (mJ/token),CPU,SmolLM2-360M,MNN,16-bit,66.85
+Redmi 9A,energy decode (mJ/token),CPU,SmolLM2-135M,llama.cpp,4-bit,141.46
+Redmi 9A,energy decode (mJ/token),CPU,Gemma3-270M,llama.cpp,4-bit,211.1
+Redmi 9A,energy decode (mJ/token),CPU,SmolLM2-360M,llama.cpp,4-bit,298.98
+Redmi 9A,energy decode (mJ/token),CPU,Qwen3-0.6B,llama.cpp,4-bit,522.71
+Redmi 9A,energy decode (mJ/token),CPU,Qwen3-1.7B,llama.cpp,4-bit,943.0
+Redmi 9A,energy decode (mJ/token),CPU,SmolLM2-135M,llama.cpp,8-bit,170.24
+Redmi 9A,energy decode (mJ/token),CPU,Gemma3-270M,llama.cpp,8-bit,242.0
+Redmi 9A,energy decode (mJ/token),CPU,SmolLM2-360M,llama.cpp,8-bit,352.16
+Redmi 9A,energy decode (mJ/token),CPU,Qwen3-0.6B,llama.cpp,8-bit,608.65
+Redmi 9A,energy decode (mJ/token),CPU,SmolLM2-135M,llama.cpp,16-bit,734.48
+Redmi 9A,energy decode (mJ/token),CPU,Gemma3-270M,llama.cpp,16-bit,1348.11
+Redmi 9A,energy decode (mJ/token),CPU,SmolLM2-360M,llama.cpp,16-bit,1865.6
+Redmi 9A,energy decode (mJ/token),CPU,Qwen3-0.6B,llama.cpp,16-bit,3054.64
+Redmi 9A,energy decode (mJ/token),CPU,SmolLM2-135M,MNN,4-bit,65.16
+Redmi 9A,energy decode (mJ/token),CPU,Gemma3-270M,MNN,4-bit,143.4
+Redmi 9A,energy decode (mJ/token),CPU,SmolLM2-360M,MNN,4-bit,124.31
+Redmi 9A,energy decode (mJ/token),CPU,Qwen3-0.6B,MNN,4-bit,192.38
+Redmi 9A,energy decode (mJ/token),CPU,Qwen3-1.7B,MNN,4-bit,406.77
+Redmi 9A,energy decode (mJ/token),CPU,SmolLM2-135M,MNN,8-bit,78.71
+Redmi 9A,energy decode (mJ/token),CPU,Gemma3-270M,MNN,8-bit,158.58
+Redmi 9A,energy decode (mJ/token),CPU,SmolLM2-360M,MNN,8-bit,152.52
+Redmi 9A,energy decode (mJ/token),CPU,Qwen3-0.6B,MNN,8-bit,238.59
+Redmi 9A,energy decode (mJ/token),CPU,Qwen3-1.7B,MNN,8-bit,4949.35
+Redmi 9A,energy decode (mJ/token),CPU,SmolLM2-135M,MNN,16-bit,151.63
+Redmi 9A,energy decode (mJ/token),CPU,Gemma3-270M,MNN,16-bit,300.96
+Redmi 9A,energy decode (mJ/token),CPU,SmolLM2-360M,MNN,16-bit,353.1
+Redmi 9A,weight size (GiB),,SmolLM2-135M,llama.cpp,4-bit,0.085
+Redmi 9A,weight size (GiB),,Gemma3-270M,llama.cpp,4-bit,0.225
+Redmi 9A,weight size (GiB),,SmolLM2-360M,llama.cpp,4-bit,0.213
+Redmi 9A,weight size (GiB),,Qwen3-0.6B,llama.cpp,4-bit,0.437
+Redmi 9A,weight size (GiB),,Qwen3.5-0.8B,llama.cpp,4-bit,0.478
+Redmi 9A,weight size (GiB),,Qwen3-1.7B,llama.cpp,4-bit,1.145
+Redmi 9A,weight size (GiB),,Qwen3.5-2B,llama.cpp,4-bit,1.152
+Redmi 9A,weight size (GiB),,Qwen3-4B,llama.cpp,4-bit,2.207
+Redmi 9A,weight size (GiB),,Qwen3.5-4B,llama.cpp,4-bit,2.432
+Redmi 9A,weight size (GiB),,SmolLM2-135M,llama.cpp,8-bit,0.135
+Redmi 9A,weight size (GiB),,Gemma3-270M,llama.cpp,8-bit,0.272
+Redmi 9A,weight size (GiB),,SmolLM2-360M,llama.cpp,8-bit,0.36
+Redmi 9A,weight size (GiB),,Qwen3-0.6B,llama.cpp,8-bit,0.749
+Redmi 9A,weight size (GiB),,Qwen3.5-0.8B,llama.cpp,8-bit,0.776
+Redmi 9A,weight size (GiB),,Qwen3-1.7B,llama.cpp,8-bit,2.016
+Redmi 9A,weight size (GiB),,Qwen3.5-2B,llama.cpp,8-bit,1.934
+Redmi 9A,weight size (GiB),,Qwen3-4B,llama.cpp,8-bit,3.986
+Redmi 9A,weight size (GiB),,Qwen3.5-4B,llama.cpp,8-bit,4.294
+Redmi 9A,weight size (GiB),,SmolLM2-135M,llama.cpp,16-bit,0.252
+Redmi 9A,weight size (GiB),,Gemma3-270M,llama.cpp,16-bit,0.506
+Redmi 9A,weight size (GiB),,SmolLM2-360M,llama.cpp,16-bit,0.676
+Redmi 9A,weight size (GiB),,Qwen3-0.6B,llama.cpp,16-bit,1.406
+Redmi 9A,weight size (GiB),,Qwen3.5-0.8B,llama.cpp,16-bit,1.451
+Redmi 9A,weight size (GiB),,Qwen3-1.7B,llama.cpp,16-bit,3.79
+Redmi 9A,weight size (GiB),,Qwen3.5-2B,llama.cpp,16-bit,3.63
+Redmi 9A,weight size (GiB),,Qwen3-4B,llama.cpp,16-bit,7.498
+Redmi 9A,weight size (GiB),,SmolLM2-135M,MNN,4-bit,0.081
+Redmi 9A,weight size (GiB),,Gemma3-270M,MNN,4-bit,0.163
+Redmi 9A,weight size (GiB),,SmolLM2-360M,MNN,4-bit,0.213
+Redmi 9A,weight size (GiB),,Qwen3-0.6B,MNN,4-bit,0.352
+Redmi 9A,weight size (GiB),,Qwen3.5-0.8B,MNN,4-bit,0.41
+Redmi 9A,weight size (GiB),,Qwen3-1.7B,MNN,4-bit,1.007
+Redmi 9A,weight size (GiB),,Qwen3.5-2B,MNN,4-bit,1.002
+Redmi 9A,weight size (GiB),,Qwen3-4B,MNN,4-bit,2.348
+Redmi 9A,weight size (GiB),,Qwen3.5-4B,MNN,4-bit,2.224
+Redmi 9A,weight size (GiB),,SmolLM2-135M,MNN,8-bit,0.144
+Redmi 9A,weight size (GiB),,Gemma3-270M,MNN,8-bit,0.288
+Redmi 9A,weight size (GiB),,SmolLM2-360M,MNN,8-bit,0.382
+Redmi 9A,weight size (GiB),,Qwen3-0.6B,MNN,8-bit,0.629
+Redmi 9A,weight size (GiB),,Qwen3.5-0.8B,MNN,8-bit,0.76
+Redmi 9A,weight size (GiB),,Qwen3-1.7B,MNN,8-bit,1.808
+Redmi 9A,weight size (GiB),,Qwen3.5-2B,MNN,8-bit,1.878
+Redmi 9A,weight size (GiB),,Qwen3-4B,MNN,8-bit,4.221
+Redmi 9A,weight size (GiB),,Qwen3.5-4B,MNN,8-bit,4.183
+Redmi 9A,weight size (GiB),,SmolLM2-135M,MNN,16-bit,0.253
+Redmi 9A,weight size (GiB),,Gemma3-270M,MNN,16-bit,0.507
+Redmi 9A,weight size (GiB),,SmolLM2-360M,MNN,16-bit,0.677
+Redmi 9A,weight size (GiB),,Qwen3-0.6B,MNN,16-bit,1.115
+Redmi 9A,weight size (GiB),,Qwen3.5-0.8B,MNN,16-bit,1.416
+Redmi 9A,weight size (GiB),,Qwen3-1.7B,MNN,16-bit,3.21
+Redmi 9A,weight size (GiB),,Qwen3.5-2B,MNN,16-bit,3.521
+Redmi 9A,weight size (GiB),,Qwen3-4B,MNN,16-bit,7.498
+OnePlus 8 Pro,prefill throughput,CPU,SmolLM2-135M,llama.cpp,4-bit,922.28
+OnePlus 8 Pro,prefill throughput,CPU,Gemma3-270M,llama.cpp,4-bit,1012.74
+OnePlus 8 Pro,prefill throughput,CPU,SmolLM2-360M,llama.cpp,4-bit,377.22
+OnePlus 8 Pro,prefill throughput,CPU,Qwen3-0.6B,llama.cpp,4-bit,262.03
+OnePlus 8 Pro,prefill throughput,CPU,Qwen3.5-0.8B,llama.cpp,4-bit,99.93
+OnePlus 8 Pro,prefill throughput,CPU,Qwen3-1.7B,llama.cpp,4-bit,106.17
+OnePlus 8 Pro,prefill throughput,CPU,Qwen3.5-2B,llama.cpp,4-bit,63.06
+OnePlus 8 Pro,prefill throughput,CPU,Qwen3-4B,llama.cpp,4-bit,41.37
+OnePlus 8 Pro,prefill throughput,CPU,Qwen3.5-4B,llama.cpp,4-bit,23.92
+OnePlus 8 Pro,prefill throughput,CPU,SmolLM2-135M,llama.cpp,8-bit,484.48
+OnePlus 8 Pro,prefill throughput,CPU,Gemma3-270M,llama.cpp,8-bit,520.42
+OnePlus 8 Pro,prefill throughput,CPU,SmolLM2-360M,llama.cpp,8-bit,214.08
+OnePlus 8 Pro,prefill throughput,CPU,Qwen3-0.6B,llama.cpp,8-bit,148.16
+OnePlus 8 Pro,prefill throughput,CPU,Qwen3.5-0.8B,llama.cpp,8-bit,113.26
+OnePlus 8 Pro,prefill throughput,CPU,Qwen3-1.7B,llama.cpp,8-bit,50.65
+OnePlus 8 Pro,prefill throughput,CPU,Qwen3.5-2B,llama.cpp,8-bit,56.56
+OnePlus 8 Pro,prefill throughput,CPU,SmolLM2-135M,llama.cpp,16-bit,274.42
+OnePlus 8 Pro,prefill throughput,CPU,Gemma3-270M,llama.cpp,16-bit,297.74
+OnePlus 8 Pro,prefill throughput,CPU,SmolLM2-360M,llama.cpp,16-bit,106.12
+OnePlus 8 Pro,prefill throughput,CPU,Qwen3-0.6B,llama.cpp,16-bit,75.53
+OnePlus 8 Pro,prefill throughput,CPU,Qwen3.5-0.8B,llama.cpp,16-bit,60.73
+OnePlus 8 Pro,prefill throughput,CPU,Qwen3-1.7B,llama.cpp,16-bit,18.89
+OnePlus 8 Pro,prefill throughput,CPU,Qwen3.5-2B,llama.cpp,16-bit,24.55
+OnePlus 8 Pro,prefill throughput,CPU,SmolLM2-135M,MNN,4-bit,836.26
+OnePlus 8 Pro,prefill throughput,CPU,Gemma3-270M,MNN,4-bit,899.11
+OnePlus 8 Pro,prefill throughput,CPU,SmolLM2-360M,MNN,4-bit,326.79
+OnePlus 8 Pro,prefill throughput,CPU,Qwen3-0.6B,MNN,4-bit,229.48
+OnePlus 8 Pro,prefill throughput,CPU,Qwen3.5-0.8B,MNN,4-bit,105.94
+OnePlus 8 Pro,prefill throughput,CPU,Qwen3-1.7B,MNN,4-bit,81.65
+OnePlus 8 Pro,prefill throughput,CPU,Qwen3.5-2B,MNN,4-bit,54.51
+OnePlus 8 Pro,prefill throughput,CPU,Qwen3-4B,MNN,4-bit,32.64
+OnePlus 8 Pro,prefill throughput,CPU,Qwen3.5-4B,MNN,4-bit,22.15
+OnePlus 8 Pro,prefill throughput,CPU,SmolLM2-135M,MNN,8-bit,456.3
+OnePlus 8 Pro,prefill throughput,CPU,Gemma3-270M,MNN,8-bit,394.89
+OnePlus 8 Pro,prefill throughput,CPU,SmolLM2-360M,MNN,8-bit,152.65
+OnePlus 8 Pro,prefill throughput,CPU,Qwen3-0.6B,MNN,8-bit,102.83
+OnePlus 8 Pro,prefill throughput,CPU,Qwen3.5-0.8B,MNN,8-bit,105.97
+OnePlus 8 Pro,prefill throughput,CPU,Qwen3-1.7B,MNN,8-bit,41.26
+OnePlus 8 Pro,prefill throughput,CPU,Qwen3.5-2B,MNN,8-bit,56.1
+OnePlus 8 Pro,prefill throughput,CPU,Qwen3-4B,MNN,8-bit,12.6
+OnePlus 8 Pro,prefill throughput,CPU,SmolLM2-135M,MNN,16-bit,285.74
+OnePlus 8 Pro,prefill throughput,CPU,Gemma3-270M,MNN,16-bit,325.99
+OnePlus 8 Pro,prefill throughput,CPU,SmolLM2-360M,MNN,16-bit,117.09
+OnePlus 8 Pro,prefill throughput,CPU,Qwen3-0.6B,MNN,16-bit,66.3
+OnePlus 8 Pro,prefill throughput,CPU,Qwen3.5-0.8B,MNN,16-bit,79.77
+OnePlus 8 Pro,prefill throughput,GPU,SmolLM2-135M,llama.cpp,4-bit,115.21
+OnePlus 8 Pro,prefill throughput,GPU,Gemma3-270M,llama.cpp,4-bit,82.34
+OnePlus 8 Pro,prefill throughput,GPU,SmolLM2-360M,llama.cpp,4-bit,63.16
+OnePlus 8 Pro,prefill throughput,GPU,Qwen3-0.6B,llama.cpp,4-bit,35.24
+OnePlus 8 Pro,prefill throughput,GPU,Qwen3-1.7B,llama.cpp,4-bit,26.98
+OnePlus 8 Pro,prefill throughput,GPU,Qwen3-4B,llama.cpp,4-bit,11.66
+OnePlus 8 Pro,prefill throughput,GPU,SmolLM2-135M,llama.cpp,8-bit,11.39
+OnePlus 8 Pro,prefill throughput,GPU,Gemma3-270M,llama.cpp,8-bit,11.68
+OnePlus 8 Pro,prefill throughput,GPU,SmolLM2-360M,llama.cpp,8-bit,3.97
+OnePlus 8 Pro,prefill throughput,GPU,Qwen3-0.6B,llama.cpp,8-bit,2.82
+OnePlus 8 Pro,prefill throughput,GPU,Qwen3-1.7B,llama.cpp,8-bit,0.88
+OnePlus 8 Pro,prefill throughput,GPU,SmolLM2-135M,llama.cpp,16-bit,5.87
+OnePlus 8 Pro,prefill throughput,GPU,Gemma3-270M,llama.cpp,16-bit,5.6
+OnePlus 8 Pro,prefill throughput,GPU,SmolLM2-360M,llama.cpp,16-bit,2.01
+OnePlus 8 Pro,prefill throughput,GPU,Qwen3-0.6B,llama.cpp,16-bit,1.43
+OnePlus 8 Pro,prefill throughput,GPU,Qwen3-1.7B,llama.cpp,16-bit,0.46
+OnePlus 8 Pro,prefill throughput,GPU,SmolLM2-135M,MNN,4-bit,747.86
+OnePlus 8 Pro,prefill throughput,GPU,Gemma3-270M,MNN,4-bit,746.54
+OnePlus 8 Pro,prefill throughput,GPU,SmolLM2-360M,MNN,4-bit,298.53
+OnePlus 8 Pro,prefill throughput,GPU,Qwen3-0.6B,MNN,4-bit,215.28
+OnePlus 8 Pro,prefill throughput,GPU,Qwen3.5-0.8B,MNN,4-bit,205.97
+OnePlus 8 Pro,prefill throughput,GPU,Qwen3-1.7B,MNN,4-bit,77.03
+OnePlus 8 Pro,prefill throughput,GPU,Qwen3.5-2B,MNN,4-bit,101.02
+OnePlus 8 Pro,prefill throughput,GPU,Qwen3-4B,MNN,4-bit,30.9
+OnePlus 8 Pro,prefill throughput,GPU,Qwen3.5-4B,MNN,4-bit,39.86
+OnePlus 8 Pro,prefill throughput,GPU,SmolLM2-135M,MNN,8-bit,740.29
+OnePlus 8 Pro,prefill throughput,GPU,Gemma3-270M,MNN,8-bit,741.86
+OnePlus 8 Pro,prefill throughput,GPU,SmolLM2-360M,MNN,8-bit,298.27
+OnePlus 8 Pro,prefill throughput,GPU,Qwen3-0.6B,MNN,8-bit,213.17
+OnePlus 8 Pro,prefill throughput,GPU,Qwen3.5-0.8B,MNN,8-bit,180.57
+OnePlus 8 Pro,prefill throughput,GPU,Qwen3-1.7B,MNN,8-bit,75.3
+OnePlus 8 Pro,prefill throughput,GPU,Qwen3.5-2B,MNN,8-bit,83.54
+OnePlus 8 Pro,prefill throughput,GPU,Qwen3-4B,MNN,8-bit,26.36
+OnePlus 8 Pro,prefill throughput,GPU,Qwen3.5-4B,MNN,8-bit,33.1
+OnePlus 8 Pro,decode throughput,CPU,SmolLM2-135M,llama.cpp,4-bit,151.48
+OnePlus 8 Pro,decode throughput,CPU,Gemma3-270M,llama.cpp,4-bit,83.98
+OnePlus 8 Pro,decode throughput,CPU,SmolLM2-360M,llama.cpp,4-bit,75.54
+OnePlus 8 Pro,decode throughput,CPU,Qwen3-0.6B,llama.cpp,4-bit,47.64
+OnePlus 8 Pro,decode throughput,CPU,Qwen3.5-0.8B,llama.cpp,4-bit,25.28
+OnePlus 8 Pro,decode throughput,CPU,Qwen3-1.7B,llama.cpp,4-bit,21.82
+OnePlus 8 Pro,decode throughput,CPU,Qwen3.5-2B,llama.cpp,4-bit,12.1
+OnePlus 8 Pro,decode throughput,CPU,Qwen3-4B,llama.cpp,4-bit,9.91
+OnePlus 8 Pro,decode throughput,CPU,Qwen3.5-4B,llama.cpp,4-bit,5.33
+OnePlus 8 Pro,decode throughput,CPU,SmolLM2-135M,llama.cpp,8-bit,78.9
+OnePlus 8 Pro,decode throughput,CPU,Gemma3-270M,llama.cpp,8-bit,46.35
+OnePlus 8 Pro,decode throughput,CPU,SmolLM2-360M,llama.cpp,8-bit,32.32
+OnePlus 8 Pro,decode throughput,CPU,Qwen3-0.6B,llama.cpp,8-bit,19.52
+OnePlus 8 Pro,decode throughput,CPU,Qwen3.5-0.8B,llama.cpp,8-bit,15.42
+OnePlus 8 Pro,decode throughput,CPU,Qwen3-1.7B,llama.cpp,8-bit,9.19
+OnePlus 8 Pro,decode throughput,CPU,Qwen3.5-2B,llama.cpp,8-bit,8.08
+OnePlus 8 Pro,decode throughput,CPU,SmolLM2-135M,llama.cpp,16-bit,41.85
+OnePlus 8 Pro,decode throughput,CPU,Gemma3-270M,llama.cpp,16-bit,34.09
+OnePlus 8 Pro,decode throughput,CPU,SmolLM2-360M,llama.cpp,16-bit,18.03
+OnePlus 8 Pro,decode throughput,CPU,Qwen3-0.6B,llama.cpp,16-bit,14.73
+OnePlus 8 Pro,decode throughput,CPU,Qwen3.5-0.8B,llama.cpp,16-bit,12.76
+OnePlus 8 Pro,decode throughput,CPU,Qwen3-1.7B,llama.cpp,16-bit,6.27
+OnePlus 8 Pro,decode throughput,CPU,Qwen3.5-2B,llama.cpp,16-bit,5.66
+OnePlus 8 Pro,decode throughput,CPU,SmolLM2-135M,MNN,4-bit,142.77
+OnePlus 8 Pro,decode throughput,CPU,Gemma3-270M,MNN,4-bit,64.41
+OnePlus 8 Pro,decode throughput,CPU,SmolLM2-360M,MNN,4-bit,71.28
+OnePlus 8 Pro,decode throughput,CPU,Qwen3-0.6B,MNN,4-bit,42.54
+OnePlus 8 Pro,decode throughput,CPU,Qwen3.5-0.8B,MNN,4-bit,20.21
+OnePlus 8 Pro,decode throughput,CPU,Qwen3-1.7B,MNN,4-bit,19.68
+OnePlus 8 Pro,decode throughput,CPU,Qwen3.5-2B,MNN,4-bit,9.09
+OnePlus 8 Pro,decode throughput,CPU,Qwen3-4B,MNN,4-bit,8.88
+OnePlus 8 Pro,decode throughput,CPU,Qwen3.5-4B,MNN,4-bit,3.72
+OnePlus 8 Pro,decode throughput,CPU,SmolLM2-135M,MNN,8-bit,51.71
+OnePlus 8 Pro,decode throughput,CPU,Gemma3-270M,MNN,8-bit,27.33
+OnePlus 8 Pro,decode throughput,CPU,SmolLM2-360M,MNN,8-bit,24.84
+OnePlus 8 Pro,decode throughput,CPU,Qwen3-0.6B,MNN,8-bit,15.48
+OnePlus 8 Pro,decode throughput,CPU,Qwen3.5-0.8B,MNN,8-bit,15.23
+OnePlus 8 Pro,decode throughput,CPU,Qwen3-1.7B,MNN,8-bit,5.29
+OnePlus 8 Pro,decode throughput,CPU,Qwen3.5-2B,MNN,8-bit,6.22
+OnePlus 8 Pro,decode throughput,CPU,Qwen3-4B,MNN,8-bit,2.14
+OnePlus 8 Pro,decode throughput,CPU,SmolLM2-135M,MNN,16-bit,35.11
+OnePlus 8 Pro,decode throughput,CPU,Gemma3-270M,MNN,16-bit,18.55
+OnePlus 8 Pro,decode throughput,CPU,SmolLM2-360M,MNN,16-bit,14.58
+OnePlus 8 Pro,decode throughput,CPU,Qwen3-0.6B,MNN,16-bit,8.81
+OnePlus 8 Pro,decode throughput,CPU,Qwen3.5-0.8B,MNN,16-bit,9.0
+OnePlus 8 Pro,decode throughput,GPU,SmolLM2-135M,llama.cpp,4-bit,12.72
+OnePlus 8 Pro,decode throughput,GPU,Gemma3-270M,llama.cpp,4-bit,7.15
+OnePlus 8 Pro,decode throughput,GPU,SmolLM2-360M,llama.cpp,4-bit,8.99
+OnePlus 8 Pro,decode throughput,GPU,Qwen3-0.6B,llama.cpp,4-bit,3.47
+OnePlus 8 Pro,decode throughput,GPU,Qwen3-1.7B,llama.cpp,4-bit,2.54
+OnePlus 8 Pro,decode throughput,GPU,Qwen3-4B,llama.cpp,4-bit,1.68
+OnePlus 8 Pro,decode throughput,GPU,SmolLM2-135M,llama.cpp,8-bit,9.22
+OnePlus 8 Pro,decode throughput,GPU,Gemma3-270M,llama.cpp,8-bit,6.26
+OnePlus 8 Pro,decode throughput,GPU,SmolLM2-360M,llama.cpp,8-bit,6.12
+OnePlus 8 Pro,decode throughput,GPU,Qwen3-0.6B,llama.cpp,8-bit,4.35
+OnePlus 8 Pro,decode throughput,GPU,Qwen3-1.7B,llama.cpp,8-bit,3.24
+OnePlus 8 Pro,decode throughput,GPU,SmolLM2-135M,llama.cpp,16-bit,9.73
+OnePlus 8 Pro,decode throughput,GPU,Gemma3-270M,llama.cpp,16-bit,6.79
+OnePlus 8 Pro,decode throughput,GPU,SmolLM2-360M,llama.cpp,16-bit,6.34
+OnePlus 8 Pro,decode throughput,GPU,Qwen3-0.6B,llama.cpp,16-bit,4.5
+OnePlus 8 Pro,decode throughput,GPU,Qwen3-1.7B,llama.cpp,16-bit,3.09
+OnePlus 8 Pro,decode throughput,GPU,SmolLM2-135M,MNN,4-bit,9.84
+OnePlus 8 Pro,decode throughput,GPU,Gemma3-270M,MNN,4-bit,8.31
+OnePlus 8 Pro,decode throughput,GPU,SmolLM2-360M,MNN,4-bit,9.27
+OnePlus 8 Pro,decode throughput,GPU,Qwen3-0.6B,MNN,4-bit,9.28
+OnePlus 8 Pro,decode throughput,GPU,Qwen3.5-0.8B,MNN,4-bit,23.54
+OnePlus 8 Pro,decode throughput,GPU,Qwen3-1.7B,MNN,4-bit,8.83
+OnePlus 8 Pro,decode throughput,GPU,Qwen3.5-2B,MNN,4-bit,14.22
+OnePlus 8 Pro,decode throughput,GPU,Qwen3-4B,MNN,4-bit,6.32
+OnePlus 8 Pro,decode throughput,GPU,Qwen3.5-4B,MNN,4-bit,7.13
+OnePlus 8 Pro,decode throughput,GPU,SmolLM2-135M,MNN,8-bit,10.4
+OnePlus 8 Pro,decode throughput,GPU,Gemma3-270M,MNN,8-bit,8.79
+OnePlus 8 Pro,decode throughput,GPU,SmolLM2-360M,MNN,8-bit,8.84
+OnePlus 8 Pro,decode throughput,GPU,Qwen3-0.6B,MNN,8-bit,8.28
+OnePlus 8 Pro,decode throughput,GPU,Qwen3.5-0.8B,MNN,8-bit,17.56
+OnePlus 8 Pro,decode throughput,GPU,Qwen3-1.7B,MNN,8-bit,8.0
+OnePlus 8 Pro,decode throughput,GPU,Qwen3.5-2B,MNN,8-bit,9.39
+OnePlus 8 Pro,decode throughput,GPU,Qwen3-4B,MNN,8-bit,0.71
+OnePlus 8 Pro,decode throughput,GPU,Qwen3.5-4B,MNN,8-bit,3.99
+OnePlus 8 Pro,weight size (GiB),,SmolLM2-135M,llama.cpp,4-bit,0.085
+OnePlus 8 Pro,weight size (GiB),,Gemma3-270M,llama.cpp,4-bit,0.225
+OnePlus 8 Pro,weight size (GiB),,SmolLM2-360M,llama.cpp,4-bit,0.213
+OnePlus 8 Pro,weight size (GiB),,Qwen3-0.6B,llama.cpp,4-bit,0.437
+OnePlus 8 Pro,weight size (GiB),,Qwen3.5-0.8B,llama.cpp,4-bit,0.478
+OnePlus 8 Pro,weight size (GiB),,Qwen3-1.7B,llama.cpp,4-bit,1.145
+OnePlus 8 Pro,weight size (GiB),,Qwen3.5-2B,llama.cpp,4-bit,1.152
+OnePlus 8 Pro,weight size (GiB),,Qwen3-4B,llama.cpp,4-bit,2.207
+OnePlus 8 Pro,weight size (GiB),,Qwen3.5-4B,llama.cpp,4-bit,2.432
+OnePlus 8 Pro,weight size (GiB),,SmolLM2-135M,llama.cpp,8-bit,0.135
+OnePlus 8 Pro,weight size (GiB),,Gemma3-270M,llama.cpp,8-bit,0.272
+OnePlus 8 Pro,weight size (GiB),,SmolLM2-360M,llama.cpp,8-bit,0.36
+OnePlus 8 Pro,weight size (GiB),,Qwen3-0.6B,llama.cpp,8-bit,0.749
+OnePlus 8 Pro,weight size (GiB),,Qwen3.5-0.8B,llama.cpp,8-bit,0.776
+OnePlus 8 Pro,weight size (GiB),,Qwen3-1.7B,llama.cpp,8-bit,2.016
+OnePlus 8 Pro,weight size (GiB),,Qwen3.5-2B,llama.cpp,8-bit,1.934
+OnePlus 8 Pro,weight size (GiB),,Qwen3-4B,llama.cpp,8-bit,3.986
+OnePlus 8 Pro,weight size (GiB),,Qwen3.5-4B,llama.cpp,8-bit,4.294
+OnePlus 8 Pro,weight size (GiB),,SmolLM2-135M,llama.cpp,16-bit,0.252
+OnePlus 8 Pro,weight size (GiB),,Gemma3-270M,llama.cpp,16-bit,0.506
+OnePlus 8 Pro,weight size (GiB),,SmolLM2-360M,llama.cpp,16-bit,0.676
+OnePlus 8 Pro,weight size (GiB),,Qwen3-0.6B,llama.cpp,16-bit,1.406
+OnePlus 8 Pro,weight size (GiB),,Qwen3.5-0.8B,llama.cpp,16-bit,1.451
+OnePlus 8 Pro,weight size (GiB),,Qwen3-1.7B,llama.cpp,16-bit,3.79
+OnePlus 8 Pro,weight size (GiB),,Qwen3.5-2B,llama.cpp,16-bit,3.63
+OnePlus 8 Pro,weight size (GiB),,Qwen3-4B,llama.cpp,16-bit,7.498
+OnePlus 8 Pro,weight size (GiB),,SmolLM2-135M,MNN,4-bit,0.081
+OnePlus 8 Pro,weight size (GiB),,Gemma3-270M,MNN,4-bit,0.163
+OnePlus 8 Pro,weight size (GiB),,SmolLM2-360M,MNN,4-bit,0.213
+OnePlus 8 Pro,weight size (GiB),,Qwen3-0.6B,MNN,4-bit,0.352
+OnePlus 8 Pro,weight size (GiB),,Qwen3.5-0.8B,MNN,4-bit,0.41
+OnePlus 8 Pro,weight size (GiB),,Qwen3-1.7B,MNN,4-bit,1.007
+OnePlus 8 Pro,weight size (GiB),,Qwen3.5-2B,MNN,4-bit,1.002
+OnePlus 8 Pro,weight size (GiB),,Qwen3-4B,MNN,4-bit,2.348
+OnePlus 8 Pro,weight size (GiB),,Qwen3.5-4B,MNN,4-bit,2.224
+OnePlus 8 Pro,weight size (GiB),,SmolLM2-135M,MNN,8-bit,0.144
+OnePlus 8 Pro,weight size (GiB),,Gemma3-270M,MNN,8-bit,0.288
+OnePlus 8 Pro,weight size (GiB),,SmolLM2-360M,MNN,8-bit,0.382
+OnePlus 8 Pro,weight size (GiB),,Qwen3-0.6B,MNN,8-bit,0.629
+OnePlus 8 Pro,weight size (GiB),,Qwen3.5-0.8B,MNN,8-bit,0.76
+OnePlus 8 Pro,weight size (GiB),,Qwen3-1.7B,MNN,8-bit,1.808
+OnePlus 8 Pro,weight size (GiB),,Qwen3.5-2B,MNN,8-bit,1.878
+OnePlus 8 Pro,weight size (GiB),,Qwen3-4B,MNN,8-bit,4.221
+OnePlus 8 Pro,weight size (GiB),,Qwen3.5-4B,MNN,8-bit,4.183
+OnePlus 8 Pro,weight size (GiB),,SmolLM2-135M,MNN,16-bit,0.253
+OnePlus 8 Pro,weight size (GiB),,Gemma3-270M,MNN,16-bit,0.507
+OnePlus 8 Pro,weight size (GiB),,SmolLM2-360M,MNN,16-bit,0.677
+OnePlus 8 Pro,weight size (GiB),,Qwen3-0.6B,MNN,16-bit,1.115
+OnePlus 8 Pro,weight size (GiB),,Qwen3.5-0.8B,MNN,16-bit,1.416
+OnePlus 8 Pro,weight size (GiB),,Qwen3-1.7B,MNN,16-bit,3.21
+OnePlus 8 Pro,weight size (GiB),,Qwen3.5-2B,MNN,16-bit,3.521
+OnePlus 8 Pro,weight size (GiB),,Qwen3-4B,MNN,16-bit,7.498
+OnePlus 15,prefill throughput,CPU,SmolLM2-135M,llama.cpp,4-bit,1032.02
+OnePlus 15,prefill throughput,CPU,Gemma3-270M,llama.cpp,4-bit,1090.21
+OnePlus 15,prefill throughput,CPU,SmolLM2-360M,llama.cpp,4-bit,456.2
+OnePlus 15,prefill throughput,CPU,Qwen3-0.6B,llama.cpp,4-bit,309.44
+OnePlus 15,prefill throughput,CPU,Qwen3.5-0.8B,llama.cpp,4-bit,306.89
+OnePlus 15,prefill throughput,CPU,Qwen3-1.7B,llama.cpp,4-bit,144.05
+OnePlus 15,prefill throughput,CPU,Qwen3.5-2B,llama.cpp,4-bit,150.48
+OnePlus 15,prefill throughput,CPU,Qwen3-4B,llama.cpp,4-bit,56.41
+OnePlus 15,prefill throughput,CPU,Qwen3.5-4B,llama.cpp,4-bit,25.3
+OnePlus 15,prefill throughput,CPU,SmolLM2-135M,llama.cpp,8-bit,1045.08
+OnePlus 15,prefill throughput,CPU,Gemma3-270M,llama.cpp,8-bit,1105.29
+OnePlus 15,prefill throughput,CPU,SmolLM2-360M,llama.cpp,8-bit,472.22
+OnePlus 15,prefill throughput,CPU,Qwen3-0.6B,llama.cpp,8-bit,60.05
+OnePlus 15,prefill throughput,CPU,Qwen3.5-0.8B,llama.cpp,8-bit,316.0
+OnePlus 15,prefill throughput,CPU,Qwen3-1.7B,llama.cpp,8-bit,150.21
+OnePlus 15,prefill throughput,CPU,Qwen3.5-2B,llama.cpp,8-bit,159.05
+OnePlus 15,prefill throughput,CPU,Qwen3-4B,llama.cpp,8-bit,58.79
+OnePlus 15,prefill throughput,CPU,SmolLM2-135M,llama.cpp,16-bit,260.44
+OnePlus 15,prefill throughput,CPU,Gemma3-270M,llama.cpp,16-bit,282.42
+OnePlus 15,prefill throughput,CPU,SmolLM2-360M,llama.cpp,16-bit,95.54
+OnePlus 15,prefill throughput,CPU,Qwen3-0.6B,llama.cpp,16-bit,67.15
+OnePlus 15,prefill throughput,CPU,Qwen3.5-0.8B,llama.cpp,16-bit,60.95
+OnePlus 15,prefill throughput,CPU,Qwen3-1.7B,llama.cpp,16-bit,15.92
+OnePlus 15,prefill throughput,CPU,Qwen3.5-2B,llama.cpp,16-bit,23.52
+OnePlus 15,prefill throughput,CPU,Qwen3-4B,llama.cpp,16-bit,8.93
+OnePlus 15,prefill throughput,CPU,SmolLM2-135M,MNN,4-bit,1027.05
+OnePlus 15,prefill throughput,CPU,Gemma3-270M,MNN,4-bit,1278.4
+OnePlus 15,prefill throughput,CPU,SmolLM2-360M,MNN,4-bit,488.32
+OnePlus 15,prefill throughput,CPU,Qwen3-0.6B,MNN,4-bit,398.08
+OnePlus 15,prefill throughput,CPU,Qwen3.5-0.8B,MNN,4-bit,336.73
+OnePlus 15,prefill throughput,CPU,Qwen3-1.7B,MNN,4-bit,102.82
+OnePlus 15,prefill throughput,CPU,Qwen3.5-2B,MNN,4-bit,157.76
+OnePlus 15,prefill throughput,CPU,Qwen3-4B,MNN,4-bit,40.99
+OnePlus 15,prefill throughput,CPU,Qwen3.5-4B,MNN,4-bit,62.53
+OnePlus 15,prefill throughput,CPU,SmolLM2-135M,MNN,8-bit,1087.35
+OnePlus 15,prefill throughput,CPU,Gemma3-270M,MNN,8-bit,1329.31
+OnePlus 15,prefill throughput,CPU,SmolLM2-360M,MNN,8-bit,523.77
+OnePlus 15,prefill throughput,CPU,Qwen3-0.6B,MNN,8-bit,423.57
+OnePlus 15,prefill throughput,CPU,Qwen3.5-0.8B,MNN,8-bit,356.18
+OnePlus 15,prefill throughput,CPU,Qwen3-1.7B,MNN,8-bit,135.68
+OnePlus 15,prefill throughput,CPU,Qwen3.5-2B,MNN,8-bit,168.74
+OnePlus 15,prefill throughput,CPU,Qwen3.5-4B,MNN,8-bit,67.57
+OnePlus 15,prefill throughput,CPU,SmolLM2-135M,MNN,16-bit,845.09
+OnePlus 15,prefill throughput,CPU,Gemma3-270M,MNN,16-bit,861.37
+OnePlus 15,prefill throughput,CPU,SmolLM2-360M,MNN,16-bit,326.23
+OnePlus 15,prefill throughput,CPU,Qwen3-0.6B,MNN,16-bit,183.99
+OnePlus 15,prefill throughput,CPU,Qwen3.5-0.8B,MNN,16-bit,249.76
+OnePlus 15,prefill throughput,CPU,Qwen3-1.7B,MNN,16-bit,79.44
+OnePlus 15,prefill throughput,CPU,Qwen3.5-2B,MNN,16-bit,113.15
+OnePlus 15,prefill throughput,GPU,SmolLM2-135M,llama.cpp,4-bit,3634.0
+OnePlus 15,prefill throughput,GPU,Gemma3-270M,llama.cpp,4-bit,2874.86
+OnePlus 15,prefill throughput,GPU,SmolLM2-360M,llama.cpp,4-bit,1829.89
+OnePlus 15,prefill throughput,GPU,Qwen3-0.6B,llama.cpp,4-bit,1679.56
+OnePlus 15,prefill throughput,GPU,Qwen3.5-0.8B,llama.cpp,4-bit,1120.31
+OnePlus 15,prefill throughput,GPU,Qwen3-1.7B,llama.cpp,4-bit,728.96
+OnePlus 15,prefill throughput,GPU,Qwen3.5-2B,llama.cpp,4-bit,641.35
+OnePlus 15,prefill throughput,GPU,Qwen3-4B,llama.cpp,4-bit,315.02
+OnePlus 15,prefill throughput,GPU,Qwen3.5-4B,llama.cpp,4-bit,280.56
+OnePlus 15,prefill throughput,GPU,SmolLM2-135M,llama.cpp,8-bit,1895.82
+OnePlus 15,prefill throughput,GPU,Gemma3-270M,llama.cpp,8-bit,1550.98
+OnePlus 15,prefill throughput,GPU,SmolLM2-360M,llama.cpp,8-bit,678.73
+OnePlus 15,prefill throughput,GPU,Qwen3-0.6B,llama.cpp,8-bit,471.59
+OnePlus 15,prefill throughput,GPU,Qwen3.5-0.8B,llama.cpp,8-bit,1041.16
+OnePlus 15,prefill throughput,GPU,Qwen3-1.7B,llama.cpp,8-bit,164.25
+OnePlus 15,prefill throughput,GPU,Qwen3.5-2B,llama.cpp,8-bit,550.53
+OnePlus 15,prefill throughput,GPU,Qwen3-4B,llama.cpp,8-bit,63.66
+OnePlus 15,prefill throughput,GPU,Qwen3.5-4B,llama.cpp,8-bit,240.07
+OnePlus 15,prefill throughput,GPU,SmolLM2-135M,llama.cpp,16-bit,2429.79
+OnePlus 15,prefill throughput,GPU,Gemma3-270M,llama.cpp,16-bit,1887.6
+OnePlus 15,prefill throughput,GPU,SmolLM2-360M,llama.cpp,16-bit,901.16
+OnePlus 15,prefill throughput,GPU,Qwen3-0.6B,llama.cpp,16-bit,627.44
+OnePlus 15,prefill throughput,GPU,Qwen3.5-0.8B,llama.cpp,16-bit,847.26
+OnePlus 15,prefill throughput,GPU,Qwen3-1.7B,llama.cpp,16-bit,224.99
+OnePlus 15,prefill throughput,GPU,Qwen3.5-2B,llama.cpp,16-bit,436.91
+OnePlus 15,prefill throughput,GPU,Qwen3-4B,llama.cpp,16-bit,88.2
+OnePlus 15,prefill throughput,GPU,SmolLM2-135M,MNN,4-bit,3666.11
+OnePlus 15,prefill throughput,GPU,Gemma3-270M,MNN,4-bit,3888.77
+OnePlus 15,prefill throughput,GPU,SmolLM2-360M,MNN,4-bit,1652.95
+OnePlus 15,prefill throughput,GPU,Qwen3-0.6B,MNN,4-bit,1252.17
+OnePlus 15,prefill throughput,GPU,Qwen3.5-0.8B,MNN,4-bit,1291.78
+OnePlus 15,prefill throughput,GPU,Qwen3-1.7B,MNN,4-bit,486.21
+OnePlus 15,prefill throughput,GPU,Qwen3.5-2B,MNN,4-bit,668.92
+OnePlus 15,prefill throughput,GPU,Qwen3-4B,MNN,4-bit,191.06
+OnePlus 15,prefill throughput,GPU,Qwen3.5-4B,MNN,4-bit,274.87
+OnePlus 15,prefill throughput,GPU,SmolLM2-135M,MNN,8-bit,3625.56
+OnePlus 15,prefill throughput,GPU,Gemma3-270M,MNN,8-bit,3614.48
+OnePlus 15,prefill throughput,GPU,SmolLM2-360M,MNN,8-bit,1561.99
+OnePlus 15,prefill throughput,GPU,Qwen3-0.6B,MNN,8-bit,1177.54
+OnePlus 15,prefill throughput,GPU,Qwen3.5-0.8B,MNN,8-bit,982.2
+OnePlus 15,prefill throughput,GPU,Qwen3-1.7B,MNN,8-bit,442.67
+OnePlus 15,prefill throughput,GPU,Qwen3.5-2B,MNN,8-bit,457.58
+OnePlus 15,prefill throughput,GPU,Qwen3-4B,MNN,8-bit,180.0
+OnePlus 15,prefill throughput,GPU,Qwen3.5-4B,MNN,8-bit,203.85
+OnePlus 15,decode throughput,CPU,SmolLM2-135M,llama.cpp,4-bit,260.94
+OnePlus 15,decode throughput,CPU,Gemma3-270M,llama.cpp,4-bit,185.58
+OnePlus 15,decode throughput,CPU,SmolLM2-360M,llama.cpp,4-bit,124.55
+OnePlus 15,decode throughput,CPU,Qwen3-0.6B,llama.cpp,4-bit,72.0
+OnePlus 15,decode throughput,CPU,Qwen3.5-0.8B,llama.cpp,4-bit,60.06
+OnePlus 15,decode throughput,CPU,Qwen3-1.7B,llama.cpp,4-bit,34.91
+OnePlus 15,decode throughput,CPU,Qwen3.5-2B,llama.cpp,4-bit,32.68
+OnePlus 15,decode throughput,CPU,Qwen3-4B,llama.cpp,4-bit,16.26
+OnePlus 15,decode throughput,CPU,Qwen3.5-4B,llama.cpp,4-bit,15.05
+OnePlus 15,decode throughput,CPU,SmolLM2-135M,llama.cpp,8-bit,226.08
+OnePlus 15,decode throughput,CPU,Gemma3-270M,llama.cpp,8-bit,169.24
+OnePlus 15,decode throughput,CPU,SmolLM2-360M,llama.cpp,8-bit,98.4
+OnePlus 15,decode throughput,CPU,Qwen3-0.6B,llama.cpp,8-bit,66.96
+OnePlus 15,decode throughput,CPU,Qwen3.5-0.8B,llama.cpp,8-bit,59.6
+OnePlus 15,decode throughput,CPU,Qwen3-1.7B,llama.cpp,8-bit,30.78
+OnePlus 15,decode throughput,CPU,Qwen3.5-2B,llama.cpp,8-bit,29.32
+OnePlus 15,decode throughput,CPU,Qwen3-4B,llama.cpp,8-bit,13.83
+OnePlus 15,decode throughput,CPU,SmolLM2-135M,llama.cpp,16-bit,118.52
+OnePlus 15,decode throughput,CPU,Gemma3-270M,llama.cpp,16-bit,81.81
+OnePlus 15,decode throughput,CPU,SmolLM2-360M,llama.cpp,16-bit,50.29
+OnePlus 15,decode throughput,CPU,Qwen3-0.6B,llama.cpp,16-bit,38.42
+OnePlus 15,decode throughput,CPU,Qwen3.5-0.8B,llama.cpp,16-bit,32.18
+OnePlus 15,decode throughput,CPU,Qwen3-1.7B,llama.cpp,16-bit,15.87
+OnePlus 15,decode throughput,CPU,Qwen3.5-2B,llama.cpp,16-bit,14.66
+OnePlus 15,decode throughput,CPU,Qwen3-4B,llama.cpp,16-bit,6.87
+OnePlus 15,decode throughput,CPU,SmolLM2-135M,MNN,4-bit,205.62
+OnePlus 15,decode throughput,CPU,Gemma3-270M,MNN,4-bit,115.95
+OnePlus 15,decode throughput,CPU,SmolLM2-360M,MNN,4-bit,114.64
+OnePlus 15,decode throughput,CPU,Qwen3-0.6B,MNN,4-bit,78.96
+OnePlus 15,decode throughput,CPU,Qwen3.5-0.8B,MNN,4-bit,80.04
+OnePlus 15,decode throughput,CPU,Qwen3-1.7B,MNN,4-bit,36.75
+OnePlus 15,decode throughput,CPU,Qwen3.5-2B,MNN,4-bit,37.21
+OnePlus 15,decode throughput,CPU,Qwen3-4B,MNN,4-bit,16.76
+OnePlus 15,decode throughput,CPU,Qwen3.5-4B,MNN,4-bit,16.91
+OnePlus 15,decode throughput,CPU,SmolLM2-135M,MNN,8-bit,184.91
+OnePlus 15,decode throughput,CPU,Gemma3-270M,MNN,8-bit,101.3
+OnePlus 15,decode throughput,CPU,SmolLM2-360M,MNN,8-bit,99.64
+OnePlus 15,decode throughput,CPU,Qwen3-0.6B,MNN,8-bit,66.39
+OnePlus 15,decode throughput,CPU,Qwen3.5-0.8B,MNN,8-bit,69.25
+OnePlus 15,decode throughput,CPU,Qwen3-1.7B,MNN,8-bit,29.59
+OnePlus 15,decode throughput,CPU,Qwen3.5-2B,MNN,8-bit,31.38
+OnePlus 15,decode throughput,CPU,Qwen3.5-4B,MNN,8-bit,14.15
+OnePlus 15,decode throughput,CPU,SmolLM2-135M,MNN,16-bit,126.72
+OnePlus 15,decode throughput,CPU,Gemma3-270M,MNN,16-bit,67.94
+OnePlus 15,decode throughput,CPU,SmolLM2-360M,MNN,16-bit,58.41
+OnePlus 15,decode throughput,CPU,Qwen3-0.6B,MNN,16-bit,37.31
+OnePlus 15,decode throughput,CPU,Qwen3.5-0.8B,MNN,16-bit,34.52
+OnePlus 15,decode throughput,CPU,Qwen3-1.7B,MNN,16-bit,13.62
+OnePlus 15,decode throughput,CPU,Qwen3.5-2B,MNN,16-bit,14.09
+OnePlus 15,decode throughput,GPU,SmolLM2-135M,llama.cpp,4-bit,93.17
+OnePlus 15,decode throughput,GPU,Gemma3-270M,llama.cpp,4-bit,73.21
+OnePlus 15,decode throughput,GPU,SmolLM2-360M,llama.cpp,4-bit,85.56
+OnePlus 15,decode throughput,GPU,Qwen3-0.6B,llama.cpp,4-bit,61.74
+OnePlus 15,decode throughput,GPU,Qwen3.5-0.8B,llama.cpp,4-bit,61.38
+OnePlus 15,decode throughput,GPU,Qwen3-1.7B,llama.cpp,4-bit,31.4
+OnePlus 15,decode throughput,GPU,Qwen3.5-2B,llama.cpp,4-bit,38.09
+OnePlus 15,decode throughput,GPU,Qwen3-4B,llama.cpp,4-bit,16.66
+OnePlus 15,decode throughput,GPU,Qwen3.5-4B,llama.cpp,4-bit,14.5
+OnePlus 15,decode throughput,GPU,SmolLM2-135M,llama.cpp,8-bit,99.28
+OnePlus 15,decode throughput,GPU,Gemma3-270M,llama.cpp,8-bit,84.58
+OnePlus 15,decode throughput,GPU,SmolLM2-360M,llama.cpp,8-bit,79.58
+OnePlus 15,decode throughput,GPU,Qwen3-0.6B,llama.cpp,8-bit,57.56
+OnePlus 15,decode throughput,GPU,Qwen3.5-0.8B,llama.cpp,8-bit,53.04
+OnePlus 15,decode throughput,GPU,Qwen3-1.7B,llama.cpp,8-bit,28.08
+OnePlus 15,decode throughput,GPU,Qwen3.5-2B,llama.cpp,8-bit,27.63
+OnePlus 15,decode throughput,GPU,Qwen3-4B,llama.cpp,8-bit,12.7
+OnePlus 15,decode throughput,GPU,Qwen3.5-4B,llama.cpp,8-bit,12.62
+OnePlus 15,decode throughput,GPU,SmolLM2-135M,llama.cpp,16-bit,97.51
+OnePlus 15,decode throughput,GPU,Gemma3-270M,llama.cpp,16-bit,55.82
+OnePlus 15,decode throughput,GPU,SmolLM2-360M,llama.cpp,16-bit,59.05
+OnePlus 15,decode throughput,GPU,Qwen3-0.6B,llama.cpp,16-bit,41.25
+OnePlus 15,decode throughput,GPU,Qwen3.5-0.8B,llama.cpp,16-bit,34.95
+OnePlus 15,decode throughput,GPU,Qwen3-1.7B,llama.cpp,16-bit,17.13
+OnePlus 15,decode throughput,GPU,Qwen3.5-2B,llama.cpp,16-bit,16.35
+OnePlus 15,decode throughput,GPU,Qwen3-4B,llama.cpp,16-bit,7.42
+OnePlus 15,decode throughput,GPU,SmolLM2-135M,MNN,4-bit,42.24
+OnePlus 15,decode throughput,GPU,Gemma3-270M,MNN,4-bit,27.4
+OnePlus 15,decode throughput,GPU,SmolLM2-360M,MNN,4-bit,39.27
+OnePlus 15,decode throughput,GPU,Qwen3-0.6B,MNN,4-bit,32.02
+OnePlus 15,decode throughput,GPU,Qwen3.5-0.8B,MNN,4-bit,75.91
+OnePlus 15,decode throughput,GPU,Qwen3-1.7B,MNN,4-bit,25.59
+OnePlus 15,decode throughput,GPU,Qwen3.5-2B,MNN,4-bit,43.17
+OnePlus 15,decode throughput,GPU,Qwen3-4B,MNN,4-bit,19.74
+OnePlus 15,decode throughput,GPU,Qwen3.5-4B,MNN,4-bit,21.71
+OnePlus 15,decode throughput,GPU,SmolLM2-135M,MNN,8-bit,39.96
+OnePlus 15,decode throughput,GPU,Gemma3-270M,MNN,8-bit,23.83
+OnePlus 15,decode throughput,GPU,SmolLM2-360M,MNN,8-bit,37.01
+OnePlus 15,decode throughput,GPU,Qwen3-0.6B,MNN,8-bit,25.62
+OnePlus 15,decode throughput,GPU,Qwen3.5-0.8B,MNN,8-bit,52.64
+OnePlus 15,decode throughput,GPU,Qwen3-1.7B,MNN,8-bit,22.81
+OnePlus 15,decode throughput,GPU,Qwen3.5-2B,MNN,8-bit,25.96
+OnePlus 15,decode throughput,GPU,Qwen3-4B,MNN,8-bit,12.6
+OnePlus 15,decode throughput,GPU,Qwen3.5-4B,MNN,8-bit,13.38
+OnePlus 15,energy prefill (mJ/token),CPU,Gemma3-270M,llama.cpp,4-bit,1.78
+OnePlus 15,energy prefill (mJ/token),CPU,SmolLM2-360M,llama.cpp,4-bit,3.96
+OnePlus 15,energy prefill (mJ/token),CPU,Qwen3-0.6B,llama.cpp,4-bit,6.27
+OnePlus 15,energy prefill (mJ/token),CPU,Qwen3.5-0.8B,llama.cpp,4-bit,6.78
+OnePlus 15,energy prefill (mJ/token),CPU,Qwen3-1.7B,llama.cpp,4-bit,13.36
+OnePlus 15,energy prefill (mJ/token),CPU,Qwen3.5-2B,llama.cpp,4-bit,13.5
+OnePlus 15,energy prefill (mJ/token),CPU,Qwen3-4B,llama.cpp,4-bit,41.19
+OnePlus 15,energy prefill (mJ/token),CPU,Qwen3.5-4B,llama.cpp,4-bit,52.4
+OnePlus 15,energy prefill (mJ/token),CPU,SmolLM2-135M,llama.cpp,8-bit,1.37
+OnePlus 15,energy prefill (mJ/token),CPU,Gemma3-270M,llama.cpp,8-bit,1.94
+OnePlus 15,energy prefill (mJ/token),CPU,SmolLM2-360M,llama.cpp,8-bit,4.27
+OnePlus 15,energy prefill (mJ/token),CPU,Qwen3-0.6B,llama.cpp,8-bit,23.6
+OnePlus 15,energy prefill (mJ/token),CPU,Qwen3.5-0.8B,llama.cpp,8-bit,7.13
+OnePlus 15,energy prefill (mJ/token),CPU,Qwen3-1.7B,llama.cpp,8-bit,16.72
+OnePlus 15,energy prefill (mJ/token),CPU,Qwen3.5-2B,llama.cpp,8-bit,15.11
+OnePlus 15,energy prefill (mJ/token),CPU,Qwen3-4B,llama.cpp,8-bit,48.2
+OnePlus 15,energy prefill (mJ/token),CPU,SmolLM2-135M,llama.cpp,16-bit,8.74
+OnePlus 15,energy prefill (mJ/token),CPU,Gemma3-270M,llama.cpp,16-bit,8.15
+OnePlus 15,energy prefill (mJ/token),CPU,SmolLM2-360M,llama.cpp,16-bit,25.04
+OnePlus 15,energy prefill (mJ/token),CPU,Qwen3-0.6B,llama.cpp,16-bit,38.7
+OnePlus 15,energy prefill (mJ/token),CPU,Qwen3.5-0.8B,llama.cpp,16-bit,41.11
+OnePlus 15,energy prefill (mJ/token),CPU,Qwen3-1.7B,llama.cpp,16-bit,128.86
+OnePlus 15,energy prefill (mJ/token),CPU,Qwen3.5-2B,llama.cpp,16-bit,106.42
+OnePlus 15,energy prefill (mJ/token),CPU,Qwen3-4B,llama.cpp,16-bit,303.41
+OnePlus 15,energy prefill (mJ/token),CPU,SmolLM2-360M,MNN,4-bit,3.42
+OnePlus 15,energy prefill (mJ/token),CPU,Qwen3-0.6B,MNN,4-bit,5.68
+OnePlus 15,energy prefill (mJ/token),CPU,Qwen3.5-0.8B,MNN,4-bit,4.92
+OnePlus 15,energy prefill (mJ/token),CPU,Qwen3-1.7B,MNN,4-bit,19.43
+OnePlus 15,energy prefill (mJ/token),CPU,Qwen3.5-2B,MNN,4-bit,14.68
+OnePlus 15,energy prefill (mJ/token),CPU,Qwen3-4B,MNN,4-bit,59.61
+OnePlus 15,energy prefill (mJ/token),CPU,Qwen3.5-4B,MNN,4-bit,42.72
+OnePlus 15,energy prefill (mJ/token),CPU,SmolLM2-135M,MNN,8-bit,1.6
+OnePlus 15,energy prefill (mJ/token),CPU,Gemma3-270M,MNN,8-bit,1.7
+OnePlus 15,energy prefill (mJ/token),CPU,SmolLM2-360M,MNN,8-bit,3.95
+OnePlus 15,energy prefill (mJ/token),CPU,Qwen3-0.6B,MNN,8-bit,6.23
+OnePlus 15,energy prefill (mJ/token),CPU,Qwen3.5-0.8B,MNN,8-bit,5.69
+OnePlus 15,energy prefill (mJ/token),CPU,Qwen3-1.7B,MNN,8-bit,22.14
+OnePlus 15,energy prefill (mJ/token),CPU,Qwen3.5-2B,MNN,8-bit,17.66
+OnePlus 15,energy prefill (mJ/token),CPU,Qwen3.5-4B,MNN,8-bit,68.67
+OnePlus 15,energy prefill (mJ/token),CPU,SmolLM2-135M,MNN,16-bit,1.97
+OnePlus 15,energy prefill (mJ/token),CPU,Gemma3-270M,MNN,16-bit,2.37
+OnePlus 15,energy prefill (mJ/token),CPU,SmolLM2-360M,MNN,16-bit,7.17
+OnePlus 15,energy prefill (mJ/token),CPU,Qwen3-0.6B,MNN,16-bit,10.11
+OnePlus 15,energy prefill (mJ/token),CPU,Qwen3.5-0.8B,MNN,16-bit,9.85
+OnePlus 15,energy prefill (mJ/token),CPU,Qwen3-1.7B,MNN,16-bit,36.75
+OnePlus 15,energy prefill (mJ/token),CPU,Qwen3.5-2B,MNN,16-bit,21.74
+OnePlus 15,energy prefill (mJ/token),GPU,Gemma3-270M,llama.cpp,4-bit,1.31
+OnePlus 15,energy prefill (mJ/token),GPU,SmolLM2-360M,llama.cpp,4-bit,2.48
+OnePlus 15,energy prefill (mJ/token),GPU,Qwen3-0.6B,llama.cpp,4-bit,2.28
+OnePlus 15,energy prefill (mJ/token),GPU,Qwen3.5-0.8B,llama.cpp,4-bit,3.48
+OnePlus 15,energy prefill (mJ/token),GPU,Qwen3-1.7B,llama.cpp,4-bit,8.19
+OnePlus 15,energy prefill (mJ/token),GPU,Qwen3.5-2B,llama.cpp,4-bit,8.82
+OnePlus 15,energy prefill (mJ/token),GPU,Qwen3-4B,llama.cpp,4-bit,18.7
+OnePlus 15,energy prefill (mJ/token),GPU,Qwen3.5-4B,llama.cpp,4-bit,21.31
+OnePlus 15,energy prefill (mJ/token),GPU,SmolLM2-135M,llama.cpp,8-bit,1.4
+OnePlus 15,energy prefill (mJ/token),GPU,Gemma3-270M,llama.cpp,8-bit,1.56
+OnePlus 15,energy prefill (mJ/token),GPU,SmolLM2-360M,llama.cpp,8-bit,3.12
+OnePlus 15,energy prefill (mJ/token),GPU,Qwen3-0.6B,llama.cpp,8-bit,4.68
+OnePlus 15,energy prefill (mJ/token),GPU,Qwen3.5-0.8B,llama.cpp,8-bit,2.99
+OnePlus 15,energy prefill (mJ/token),GPU,Qwen3-1.7B,llama.cpp,8-bit,16.65
+OnePlus 15,energy prefill (mJ/token),GPU,Qwen3.5-2B,llama.cpp,8-bit,8.46
+OnePlus 15,energy prefill (mJ/token),GPU,Qwen3-4B,llama.cpp,8-bit,45.03
+OnePlus 15,energy prefill (mJ/token),GPU,Qwen3.5-4B,llama.cpp,8-bit,23.58
+OnePlus 15,energy prefill (mJ/token),GPU,SmolLM2-135M,llama.cpp,16-bit,1.01
+OnePlus 15,energy prefill (mJ/token),GPU,Gemma3-270M,llama.cpp,16-bit,1.5
+OnePlus 15,energy prefill (mJ/token),GPU,SmolLM2-360M,llama.cpp,16-bit,2.95
+OnePlus 15,energy prefill (mJ/token),GPU,Qwen3-0.6B,llama.cpp,16-bit,4.53
+OnePlus 15,energy prefill (mJ/token),GPU,Qwen3.5-0.8B,llama.cpp,16-bit,3.63
+OnePlus 15,energy prefill (mJ/token),GPU,Qwen3-1.7B,llama.cpp,16-bit,14.53
+OnePlus 15,energy prefill (mJ/token),GPU,Qwen3.5-2B,llama.cpp,16-bit,7.63
+OnePlus 15,energy prefill (mJ/token),GPU,Qwen3-4B,llama.cpp,16-bit,42.54
+OnePlus 15,energy prefill (mJ/token),GPU,SmolLM2-360M,MNN,4-bit,2.56
+OnePlus 15,energy prefill (mJ/token),GPU,Qwen3-0.6B,MNN,4-bit,3.13
+OnePlus 15,energy prefill (mJ/token),GPU,Qwen3.5-0.8B,MNN,4-bit,2.98
+OnePlus 15,energy prefill (mJ/token),GPU,Qwen3-1.7B,MNN,4-bit,9.64
+OnePlus 15,energy prefill (mJ/token),GPU,Qwen3.5-2B,MNN,4-bit,5.29
+OnePlus 15,energy prefill (mJ/token),GPU,Qwen3-4B,MNN,4-bit,31.53
+OnePlus 15,energy prefill (mJ/token),GPU,Qwen3.5-4B,MNN,4-bit,14.85
+OnePlus 15,energy prefill (mJ/token),GPU,SmolLM2-135M,MNN,8-bit,0.9
+OnePlus 15,energy prefill (mJ/token),GPU,Gemma3-270M,MNN,8-bit,0.84
+OnePlus 15,energy prefill (mJ/token),GPU,SmolLM2-360M,MNN,8-bit,2.41
+OnePlus 15,energy prefill (mJ/token),GPU,Qwen3-0.6B,MNN,8-bit,3.5
+OnePlus 15,energy prefill (mJ/token),GPU,Qwen3.5-0.8B,MNN,8-bit,4.5
+OnePlus 15,energy prefill (mJ/token),GPU,Qwen3-1.7B,MNN,8-bit,11.13
+OnePlus 15,energy prefill (mJ/token),GPU,Qwen3.5-2B,MNN,8-bit,8.65
+OnePlus 15,energy prefill (mJ/token),GPU,Qwen3-4B,MNN,8-bit,33.51
+OnePlus 15,energy prefill (mJ/token),GPU,Qwen3.5-4B,MNN,8-bit,23.15
+OnePlus 15,energy decode (mJ/token),CPU,Gemma3-270M,llama.cpp,4-bit,15.74
+OnePlus 15,energy decode (mJ/token),CPU,SmolLM2-360M,llama.cpp,4-bit,24.16
+OnePlus 15,energy decode (mJ/token),CPU,Qwen3-0.6B,llama.cpp,4-bit,47.18
+OnePlus 15,energy decode (mJ/token),CPU,Qwen3.5-0.8B,llama.cpp,4-bit,60.28
+OnePlus 15,energy decode (mJ/token),CPU,Qwen3-1.7B,llama.cpp,4-bit,121.31
+OnePlus 15,energy decode (mJ/token),CPU,Qwen3.5-2B,llama.cpp,4-bit,135.73
+OnePlus 15,energy decode (mJ/token),CPU,Qwen3-4B,llama.cpp,4-bit,271.28
+OnePlus 15,energy decode (mJ/token),CPU,Qwen3.5-4B,llama.cpp,4-bit,294.12
+OnePlus 15,energy decode (mJ/token),CPU,SmolLM2-135M,llama.cpp,8-bit,12.9
+OnePlus 15,energy decode (mJ/token),CPU,Gemma3-270M,llama.cpp,8-bit,20.65
+OnePlus 15,energy decode (mJ/token),CPU,SmolLM2-360M,llama.cpp,8-bit,33.3
+OnePlus 15,energy decode (mJ/token),CPU,Qwen3-0.6B,llama.cpp,8-bit,54.63
+OnePlus 15,energy decode (mJ/token),CPU,Qwen3.5-0.8B,llama.cpp,8-bit,68.12
+OnePlus 15,energy decode (mJ/token),CPU,Qwen3-1.7B,llama.cpp,8-bit,140.98
+OnePlus 15,energy decode (mJ/token),CPU,Qwen3.5-2B,llama.cpp,8-bit,154.73
+OnePlus 15,energy decode (mJ/token),CPU,Qwen3-4B,llama.cpp,8-bit,331.75
+OnePlus 15,energy decode (mJ/token),CPU,SmolLM2-135M,llama.cpp,16-bit,26.74
+OnePlus 15,energy decode (mJ/token),CPU,Gemma3-270M,llama.cpp,16-bit,44.9
+OnePlus 15,energy decode (mJ/token),CPU,SmolLM2-360M,llama.cpp,16-bit,71.54
+OnePlus 15,energy decode (mJ/token),CPU,Qwen3-0.6B,llama.cpp,16-bit,122.9
+OnePlus 15,energy decode (mJ/token),CPU,Qwen3.5-0.8B,llama.cpp,16-bit,148.13
+OnePlus 15,energy decode (mJ/token),CPU,Qwen3-1.7B,llama.cpp,16-bit,334.18
+OnePlus 15,energy decode (mJ/token),CPU,Qwen3.5-2B,llama.cpp,16-bit,351.91
+OnePlus 15,energy decode (mJ/token),CPU,Qwen3-4B,llama.cpp,16-bit,789.31
+OnePlus 15,energy decode (mJ/token),CPU,SmolLM2-360M,MNN,4-bit,22.68
+OnePlus 15,energy decode (mJ/token),CPU,Qwen3-0.6B,MNN,4-bit,36.6
+OnePlus 15,energy decode (mJ/token),CPU,Qwen3.5-0.8B,MNN,4-bit,35.77
+OnePlus 15,energy decode (mJ/token),CPU,Qwen3-1.7B,MNN,4-bit,85.61
+OnePlus 15,energy decode (mJ/token),CPU,Qwen3.5-2B,MNN,4-bit,96.08
+OnePlus 15,energy decode (mJ/token),CPU,Qwen3-4B,MNN,4-bit,203.04
+OnePlus 15,energy decode (mJ/token),CPU,Qwen3.5-4B,MNN,4-bit,184.71
+OnePlus 15,energy decode (mJ/token),CPU,SmolLM2-135M,MNN,8-bit,16.21
+OnePlus 15,energy decode (mJ/token),CPU,Gemma3-270M,MNN,8-bit,27.09
+OnePlus 15,energy decode (mJ/token),CPU,SmolLM2-360M,MNN,8-bit,30.13
+OnePlus 15,energy decode (mJ/token),CPU,Qwen3-0.6B,MNN,8-bit,51.65
+OnePlus 15,energy decode (mJ/token),CPU,Qwen3.5-0.8B,MNN,8-bit,51.46
+OnePlus 15,energy decode (mJ/token),CPU,Qwen3-1.7B,MNN,8-bit,147.35
+OnePlus 15,energy decode (mJ/token),CPU,Qwen3.5-2B,MNN,8-bit,142.46
+OnePlus 15,energy decode (mJ/token),CPU,Qwen3.5-4B,MNN,8-bit,328.1
+OnePlus 15,energy decode (mJ/token),CPU,SmolLM2-135M,MNN,16-bit,17.56
+OnePlus 15,energy decode (mJ/token),CPU,Gemma3-270M,MNN,16-bit,42.67
+OnePlus 15,energy decode (mJ/token),CPU,SmolLM2-360M,MNN,16-bit,58.35
+OnePlus 15,energy decode (mJ/token),CPU,Qwen3-0.6B,MNN,16-bit,95.23
+OnePlus 15,energy decode (mJ/token),CPU,Qwen3.5-0.8B,MNN,16-bit,104.81
+OnePlus 15,energy decode (mJ/token),CPU,Qwen3-1.7B,MNN,16-bit,249.03
+OnePlus 15,energy decode (mJ/token),CPU,Qwen3.5-2B,MNN,16-bit,279.39
+OnePlus 15,energy decode (mJ/token),GPU,Gemma3-270M,llama.cpp,4-bit,35.54
+OnePlus 15,energy decode (mJ/token),GPU,SmolLM2-360M,llama.cpp,4-bit,43.68
+OnePlus 15,energy decode (mJ/token),GPU,Qwen3-0.6B,llama.cpp,4-bit,69.82
+OnePlus 15,energy decode (mJ/token),GPU,Qwen3.5-0.8B,llama.cpp,4-bit,59.67
+OnePlus 15,energy decode (mJ/token),GPU,Qwen3-1.7B,llama.cpp,4-bit,148.3
+OnePlus 15,energy decode (mJ/token),GPU,Qwen3.5-2B,llama.cpp,4-bit,132.52
+OnePlus 15,energy decode (mJ/token),GPU,Qwen3-4B,llama.cpp,4-bit,309.31
+OnePlus 15,energy decode (mJ/token),GPU,Qwen3.5-4B,llama.cpp,4-bit,284.7
+OnePlus 15,energy decode (mJ/token),GPU,SmolLM2-135M,llama.cpp,8-bit,34.26
+OnePlus 15,energy decode (mJ/token),GPU,Gemma3-270M,llama.cpp,8-bit,38.08
+OnePlus 15,energy decode (mJ/token),GPU,SmolLM2-360M,llama.cpp,8-bit,52.88
+OnePlus 15,energy decode (mJ/token),GPU,Qwen3-0.6B,llama.cpp,8-bit,72.99
+OnePlus 15,energy decode (mJ/token),GPU,Qwen3.5-0.8B,llama.cpp,8-bit,89.26
+OnePlus 15,energy decode (mJ/token),GPU,Qwen3-1.7B,llama.cpp,8-bit,189.32
+OnePlus 15,energy decode (mJ/token),GPU,Qwen3.5-2B,llama.cpp,8-bit,189.18
+OnePlus 15,energy decode (mJ/token),GPU,Qwen3-4B,llama.cpp,8-bit,429.0
+OnePlus 15,energy decode (mJ/token),GPU,Qwen3.5-4B,llama.cpp,8-bit,409.22
+OnePlus 15,energy decode (mJ/token),GPU,SmolLM2-135M,llama.cpp,16-bit,31.61
+OnePlus 15,energy decode (mJ/token),GPU,Gemma3-270M,llama.cpp,16-bit,53.46
+OnePlus 15,energy decode (mJ/token),GPU,SmolLM2-360M,llama.cpp,16-bit,72.36
+OnePlus 15,energy decode (mJ/token),GPU,Qwen3-0.6B,llama.cpp,16-bit,108.38
+OnePlus 15,energy decode (mJ/token),GPU,Qwen3.5-0.8B,llama.cpp,16-bit,133.64
+OnePlus 15,energy decode (mJ/token),GPU,Qwen3-1.7B,llama.cpp,16-bit,284.54
+OnePlus 15,energy decode (mJ/token),GPU,Qwen3.5-2B,llama.cpp,16-bit,302.58
+OnePlus 15,energy decode (mJ/token),GPU,Qwen3-4B,llama.cpp,16-bit,665.38
+OnePlus 15,energy decode (mJ/token),GPU,SmolLM2-360M,MNN,4-bit,53.9
+OnePlus 15,energy decode (mJ/token),GPU,Qwen3-0.6B,MNN,4-bit,62.93
+OnePlus 15,energy decode (mJ/token),GPU,Qwen3.5-0.8B,MNN,4-bit,40.61
+OnePlus 15,energy decode (mJ/token),GPU,Qwen3-1.7B,MNN,4-bit,126.63
+OnePlus 15,energy decode (mJ/token),GPU,Qwen3.5-2B,MNN,4-bit,100.68
+OnePlus 15,energy decode (mJ/token),GPU,Qwen3-4B,MNN,4-bit,279.68
+OnePlus 15,energy decode (mJ/token),GPU,Qwen3.5-4B,MNN,4-bit,231.18
+OnePlus 15,energy decode (mJ/token),GPU,SmolLM2-135M,MNN,8-bit,37.53
+OnePlus 15,energy decode (mJ/token),GPU,Gemma3-270M,MNN,8-bit,51.58
+OnePlus 15,energy decode (mJ/token),GPU,SmolLM2-360M,MNN,8-bit,63.69
+OnePlus 15,energy decode (mJ/token),GPU,Qwen3-0.6B,MNN,8-bit,90.13
+OnePlus 15,energy decode (mJ/token),GPU,Qwen3.5-0.8B,MNN,8-bit,74.3
+OnePlus 15,energy decode (mJ/token),GPU,Qwen3-1.7B,MNN,8-bit,189.91
+OnePlus 15,energy decode (mJ/token),GPU,Qwen3.5-2B,MNN,8-bit,183.48
+OnePlus 15,energy decode (mJ/token),GPU,Qwen3-4B,MNN,8-bit,449.45
+OnePlus 15,energy decode (mJ/token),GPU,Qwen3.5-4B,MNN,8-bit,423.33
+OnePlus 15,weight size (GiB),,SmolLM2-135M,llama.cpp,4-bit,0.085
+OnePlus 15,weight size (GiB),,Gemma3-270M,llama.cpp,4-bit,0.225
+OnePlus 15,weight size (GiB),,SmolLM2-360M,llama.cpp,4-bit,0.213
+OnePlus 15,weight size (GiB),,Qwen3-0.6B,llama.cpp,4-bit,0.437
+OnePlus 15,weight size (GiB),,Qwen3.5-0.8B,llama.cpp,4-bit,0.478
+OnePlus 15,weight size (GiB),,Qwen3-1.7B,llama.cpp,4-bit,1.145
+OnePlus 15,weight size (GiB),,Qwen3.5-2B,llama.cpp,4-bit,1.152
+OnePlus 15,weight size (GiB),,Qwen3-4B,llama.cpp,4-bit,2.207
+OnePlus 15,weight size (GiB),,Qwen3.5-4B,llama.cpp,4-bit,2.432
+OnePlus 15,weight size (GiB),,SmolLM2-135M,llama.cpp,8-bit,0.135
+OnePlus 15,weight size (GiB),,Gemma3-270M,llama.cpp,8-bit,0.272
+OnePlus 15,weight size (GiB),,SmolLM2-360M,llama.cpp,8-bit,0.36
+OnePlus 15,weight size (GiB),,Qwen3-0.6B,llama.cpp,8-bit,0.749
+OnePlus 15,weight size (GiB),,Qwen3.5-0.8B,llama.cpp,8-bit,0.776
+OnePlus 15,weight size (GiB),,Qwen3-1.7B,llama.cpp,8-bit,2.016
+OnePlus 15,weight size (GiB),,Qwen3.5-2B,llama.cpp,8-bit,1.934
+OnePlus 15,weight size (GiB),,Qwen3-4B,llama.cpp,8-bit,3.986
+OnePlus 15,weight size (GiB),,Qwen3.5-4B,llama.cpp,8-bit,4.294
+OnePlus 15,weight size (GiB),,SmolLM2-135M,llama.cpp,16-bit,0.252
+OnePlus 15,weight size (GiB),,Gemma3-270M,llama.cpp,16-bit,0.506
+OnePlus 15,weight size (GiB),,SmolLM2-360M,llama.cpp,16-bit,0.676
+OnePlus 15,weight size (GiB),,Qwen3-0.6B,llama.cpp,16-bit,1.406
+OnePlus 15,weight size (GiB),,Qwen3.5-0.8B,llama.cpp,16-bit,1.451
+OnePlus 15,weight size (GiB),,Qwen3-1.7B,llama.cpp,16-bit,3.79
+OnePlus 15,weight size (GiB),,Qwen3.5-2B,llama.cpp,16-bit,3.63
+OnePlus 15,weight size (GiB),,Qwen3-4B,llama.cpp,16-bit,7.498
+OnePlus 15,weight size (GiB),,SmolLM2-135M,MNN,4-bit,0.081
+OnePlus 15,weight size (GiB),,Gemma3-270M,MNN,4-bit,0.163
+OnePlus 15,weight size (GiB),,SmolLM2-360M,MNN,4-bit,0.213
+OnePlus 15,weight size (GiB),,Qwen3-0.6B,MNN,4-bit,0.352
+OnePlus 15,weight size (GiB),,Qwen3.5-0.8B,MNN,4-bit,0.41
+OnePlus 15,weight size (GiB),,Qwen3-1.7B,MNN,4-bit,1.007
+OnePlus 15,weight size (GiB),,Qwen3.5-2B,MNN,4-bit,1.002
+OnePlus 15,weight size (GiB),,Qwen3-4B,MNN,4-bit,2.348
+OnePlus 15,weight size (GiB),,Qwen3.5-4B,MNN,4-bit,2.224
+OnePlus 15,weight size (GiB),,SmolLM2-135M,MNN,8-bit,0.144
+OnePlus 15,weight size (GiB),,Gemma3-270M,MNN,8-bit,0.288
+OnePlus 15,weight size (GiB),,SmolLM2-360M,MNN,8-bit,0.382
+OnePlus 15,weight size (GiB),,Qwen3-0.6B,MNN,8-bit,0.629
+OnePlus 15,weight size (GiB),,Qwen3.5-0.8B,MNN,8-bit,0.76
+OnePlus 15,weight size (GiB),,Qwen3-1.7B,MNN,8-bit,1.808
+OnePlus 15,weight size (GiB),,Qwen3.5-2B,MNN,8-bit,1.878
+OnePlus 15,weight size (GiB),,Qwen3-4B,MNN,8-bit,4.221
+OnePlus 15,weight size (GiB),,Qwen3.5-4B,MNN,8-bit,4.183
+OnePlus 15,weight size (GiB),,SmolLM2-135M,MNN,16-bit,0.253
+OnePlus 15,weight size (GiB),,Gemma3-270M,MNN,16-bit,0.507
+OnePlus 15,weight size (GiB),,SmolLM2-360M,MNN,16-bit,0.677
+OnePlus 15,weight size (GiB),,Qwen3-0.6B,MNN,16-bit,1.115
+OnePlus 15,weight size (GiB),,Qwen3.5-0.8B,MNN,16-bit,1.416
+OnePlus 15,weight size (GiB),,Qwen3-1.7B,MNN,16-bit,3.21
+OnePlus 15,weight size (GiB),,Qwen3.5-2B,MNN,16-bit,3.521
+OnePlus 15,weight size (GiB),,Qwen3-4B,MNN,16-bit,7.498
+OnePlus 15 vs paper,Prefill throughput,CPU,SmolLM2-135M,llama.cpp,4-bit (ours),1032.02
+OnePlus 15 vs paper,Prefill throughput,CPU,Gemma3-270M,llama.cpp,4-bit (ours),1090.21
+OnePlus 15 vs paper,Prefill throughput,CPU,SmolLM2-360M,llama.cpp,4-bit (ours),456.2
+OnePlus 15 vs paper,Prefill throughput,CPU,Qwen3-0.6B,llama.cpp,4-bit (ours),309.44
+OnePlus 15 vs paper,Prefill throughput,CPU,Qwen3.5-0.8B,llama.cpp,4-bit (ours),306.89
+OnePlus 15 vs paper,Prefill throughput,CPU,Qwen3-1.7B,llama.cpp,4-bit (ours),144.05
+OnePlus 15 vs paper,Prefill throughput,CPU,Qwen3.5-2B,llama.cpp,4-bit (ours),150.48
+OnePlus 15 vs paper,Prefill throughput,CPU,Qwen3-4B,llama.cpp,4-bit (ours),56.41
+OnePlus 15 vs paper,Prefill throughput,CPU,Qwen3.5-4B,llama.cpp,4-bit (ours),25.3
+OnePlus 15 vs paper,Prefill throughput,CPU,Llama-3.2-1B (paper),llama.cpp,4-bit (paper),287.6
+OnePlus 15 vs paper,Prefill throughput,CPU,Qwen2.5-1.5B (paper),llama.cpp,4-bit (paper),299.9
+OnePlus 15 vs paper,Prefill throughput,CPU,Llama-3.2-3B (paper),llama.cpp,4-bit (paper),109.8
+OnePlus 15 vs paper,Prefill throughput,CPU,Qwen2.5-7B (paper),llama.cpp,4-bit (paper),58.6
+OnePlus 15 vs paper,Prefill throughput,CPU,SmolLM2-135M,MNN,4-bit (ours),1027.05
+OnePlus 15 vs paper,Prefill throughput,CPU,Gemma3-270M,MNN,4-bit (ours),1278.4
+OnePlus 15 vs paper,Prefill throughput,CPU,SmolLM2-360M,MNN,4-bit (ours),488.32
+OnePlus 15 vs paper,Prefill throughput,CPU,Qwen3-0.6B,MNN,4-bit (ours),398.08
+OnePlus 15 vs paper,Prefill throughput,CPU,Qwen3.5-0.8B,MNN,4-bit (ours),336.73
+OnePlus 15 vs paper,Prefill throughput,CPU,Qwen3-1.7B,MNN,4-bit (ours),102.82
+OnePlus 15 vs paper,Prefill throughput,CPU,Qwen3.5-2B,MNN,4-bit (ours),157.76
+OnePlus 15 vs paper,Prefill throughput,CPU,Qwen3-4B,MNN,4-bit (ours),40.99
+OnePlus 15 vs paper,Prefill throughput,CPU,Qwen3.5-4B,MNN,4-bit (ours),62.53
+OnePlus 15 vs paper,Prefill throughput,CPU,Llama-3.2-1B (paper),MNN,4-bit (paper),184.8
+OnePlus 15 vs paper,Prefill throughput,CPU,Qwen2.5-1.5B (paper),MNN,4-bit (paper),228.3
+OnePlus 15 vs paper,Prefill throughput,CPU,Llama-3.2-3B (paper),MNN,4-bit (paper),66.1
+OnePlus 15 vs paper,Prefill throughput,CPU,Qwen2.5-7B (paper),MNN,4-bit (paper),30.0
+OnePlus 15 vs paper,Prefill throughput,GPU,SmolLM2-135M,llama.cpp,4-bit (ours),3634.0
+OnePlus 15 vs paper,Prefill throughput,GPU,Gemma3-270M,llama.cpp,4-bit (ours),2874.86
+OnePlus 15 vs paper,Prefill throughput,GPU,SmolLM2-360M,llama.cpp,4-bit (ours),1829.89
+OnePlus 15 vs paper,Prefill throughput,GPU,Qwen3-0.6B,llama.cpp,4-bit (ours),1679.56
+OnePlus 15 vs paper,Prefill throughput,GPU,Qwen3.5-0.8B,llama.cpp,4-bit (ours),1120.31
+OnePlus 15 vs paper,Prefill throughput,GPU,Qwen3-1.7B,llama.cpp,4-bit (ours),728.96
+OnePlus 15 vs paper,Prefill throughput,GPU,Qwen3.5-2B,llama.cpp,4-bit (ours),641.35
+OnePlus 15 vs paper,Prefill throughput,GPU,Qwen3-4B,llama.cpp,4-bit (ours),315.02
+OnePlus 15 vs paper,Prefill throughput,GPU,Qwen3.5-4B,llama.cpp,4-bit (ours),280.56
+OnePlus 15 vs paper,Prefill throughput,GPU,Llama-3.2-1B (paper),llama.cpp,4-bit (paper),986.8
+OnePlus 15 vs paper,Prefill throughput,GPU,Qwen2.5-1.5B (paper),llama.cpp,4-bit (paper),754.8
+OnePlus 15 vs paper,Prefill throughput,GPU,Llama-3.2-3B (paper),llama.cpp,4-bit (paper),357.6
+OnePlus 15 vs paper,Prefill throughput,GPU,Qwen2.5-7B (paper),llama.cpp,4-bit (paper),171.6
+OnePlus 15 vs paper,Prefill throughput,GPU,SmolLM2-135M,MNN,4-bit (ours),3666.11
+OnePlus 15 vs paper,Prefill throughput,GPU,Gemma3-270M,MNN,4-bit (ours),3888.77
+OnePlus 15 vs paper,Prefill throughput,GPU,SmolLM2-360M,MNN,4-bit (ours),1652.95
+OnePlus 15 vs paper,Prefill throughput,GPU,Qwen3-0.6B,MNN,4-bit (ours),1252.17
+OnePlus 15 vs paper,Prefill throughput,GPU,Qwen3.5-0.8B,MNN,4-bit (ours),1291.78
+OnePlus 15 vs paper,Prefill throughput,GPU,Qwen3-1.7B,MNN,4-bit (ours),486.21
+OnePlus 15 vs paper,Prefill throughput,GPU,Qwen3.5-2B,MNN,4-bit (ours),668.92
+OnePlus 15 vs paper,Prefill throughput,GPU,Qwen3-4B,MNN,4-bit (ours),191.06
+OnePlus 15 vs paper,Prefill throughput,GPU,Qwen3.5-4B,MNN,4-bit (ours),274.87
+OnePlus 15 vs paper,Prefill throughput,GPU,Llama-3.2-1B (paper),MNN,4-bit (paper),669.8
+OnePlus 15 vs paper,Prefill throughput,GPU,Qwen2.5-1.5B (paper),MNN,4-bit (paper),434.1
+OnePlus 15 vs paper,Prefill throughput,GPU,Llama-3.2-3B (paper),MNN,4-bit (paper),248.7
+OnePlus 15 vs paper,Prefill throughput,GPU,Qwen2.5-7B (paper),MNN,4-bit (paper),102.1
+OnePlus 8 Pro vs paper,Prefill throughput,CPU,SmolLM2-135M,llama.cpp,4-bit (ours),922.28
+OnePlus 8 Pro vs paper,Prefill throughput,CPU,Gemma3-270M,llama.cpp,4-bit (ours),1012.74
+OnePlus 8 Pro vs paper,Prefill throughput,CPU,SmolLM2-360M,llama.cpp,4-bit (ours),377.22
+OnePlus 8 Pro vs paper,Prefill throughput,CPU,Qwen3-0.6B,llama.cpp,4-bit (ours),262.03
+OnePlus 8 Pro vs paper,Prefill throughput,CPU,Qwen3.5-0.8B,llama.cpp,4-bit (ours),99.93
+OnePlus 8 Pro vs paper,Prefill throughput,CPU,Qwen3-1.7B,llama.cpp,4-bit (ours),106.17
+OnePlus 8 Pro vs paper,Prefill throughput,CPU,Qwen3.5-2B,llama.cpp,4-bit (ours),63.06
+OnePlus 8 Pro vs paper,Prefill throughput,CPU,Qwen3-4B,llama.cpp,4-bit (ours),41.37
+OnePlus 8 Pro vs paper,Prefill throughput,CPU,Qwen3.5-4B,llama.cpp,4-bit (ours),23.92
+OnePlus 8 Pro vs paper,Prefill throughput,CPU,Llama-3.2-1B (paper),llama.cpp,4-bit (paper),166.3
+OnePlus 8 Pro vs paper,Prefill throughput,CPU,Qwen2.5-1.5B (paper),llama.cpp,4-bit (paper),157.2
+OnePlus 8 Pro vs paper,Prefill throughput,CPU,Llama-3.2-3B (paper),llama.cpp,4-bit (paper),58.6
+OnePlus 8 Pro vs paper,Prefill throughput,CPU,Qwen2.5-7B (paper),llama.cpp,4-bit (paper),34.1
+OnePlus 8 Pro vs paper,Prefill throughput,CPU,SmolLM2-135M,MNN,4-bit (ours),836.26
+OnePlus 8 Pro vs paper,Prefill throughput,CPU,Gemma3-270M,MNN,4-bit (ours),899.11
+OnePlus 8 Pro vs paper,Prefill throughput,CPU,SmolLM2-360M,MNN,4-bit (ours),326.79
+OnePlus 8 Pro vs paper,Prefill throughput,CPU,Qwen3-0.6B,MNN,4-bit (ours),229.48
+OnePlus 8 Pro vs paper,Prefill throughput,CPU,Qwen3.5-0.8B,MNN,4-bit (ours),105.94
+OnePlus 8 Pro vs paper,Prefill throughput,CPU,Qwen3-1.7B,MNN,4-bit (ours),81.65
+OnePlus 8 Pro vs paper,Prefill throughput,CPU,Qwen3.5-2B,MNN,4-bit (ours),54.51
+OnePlus 8 Pro vs paper,Prefill throughput,CPU,Qwen3-4B,MNN,4-bit (ours),32.64
+OnePlus 8 Pro vs paper,Prefill throughput,CPU,Qwen3.5-4B,MNN,4-bit (ours),22.15
+OnePlus 8 Pro vs paper,Prefill throughput,CPU,Llama-3.2-1B (paper),MNN,4-bit (paper),321.9
+OnePlus 8 Pro vs paper,Prefill throughput,CPU,Qwen2.5-1.5B (paper),MNN,4-bit (paper),259.5
+OnePlus 8 Pro vs paper,Prefill throughput,CPU,Llama-3.2-3B (paper),MNN,4-bit (paper),113.1
+OnePlus 8 Pro vs paper,Prefill throughput,CPU,Qwen2.5-7B (paper),MNN,4-bit (paper),50.8
+OnePlus 8 Pro vs paper,Prefill throughput,GPU,SmolLM2-135M,llama.cpp,4-bit (ours),115.21
+OnePlus 8 Pro vs paper,Prefill throughput,GPU,Gemma3-270M,llama.cpp,4-bit (ours),82.34
+OnePlus 8 Pro vs paper,Prefill throughput,GPU,SmolLM2-360M,llama.cpp,4-bit (ours),63.16
+OnePlus 8 Pro vs paper,Prefill throughput,GPU,Qwen3-0.6B,llama.cpp,4-bit (ours),35.24
+OnePlus 8 Pro vs paper,Prefill throughput,GPU,Qwen3-1.7B,llama.cpp,4-bit (ours),26.98
+OnePlus 8 Pro vs paper,Prefill throughput,GPU,Qwen3-4B,llama.cpp,4-bit (ours),11.66
+OnePlus 8 Pro vs paper,Prefill throughput,GPU,Llama-3.2-1B (paper),llama.cpp,4-bit (paper),450.1
+OnePlus 8 Pro vs paper,Prefill throughput,GPU,Qwen2.5-1.5B (paper),llama.cpp,4-bit (paper),365.7
+OnePlus 8 Pro vs paper,Prefill throughput,GPU,Llama-3.2-3B (paper),llama.cpp,4-bit (paper),161.1
+OnePlus 8 Pro vs paper,Prefill throughput,GPU,Qwen2.5-7B (paper),llama.cpp,4-bit (paper),84.6
+OnePlus 8 Pro vs paper,Prefill throughput,GPU,SmolLM2-135M,MNN,4-bit (ours),747.86
+OnePlus 8 Pro vs paper,Prefill throughput,GPU,Gemma3-270M,MNN,4-bit (ours),746.54
+OnePlus 8 Pro vs paper,Prefill throughput,GPU,SmolLM2-360M,MNN,4-bit (ours),298.53
+OnePlus 8 Pro vs paper,Prefill throughput,GPU,Qwen3-0.6B,MNN,4-bit (ours),215.28
+OnePlus 8 Pro vs paper,Prefill throughput,GPU,Qwen3.5-0.8B,MNN,4-bit (ours),205.97
+OnePlus 8 Pro vs paper,Prefill throughput,GPU,Qwen3-1.7B,MNN,4-bit (ours),77.03
+OnePlus 8 Pro vs paper,Prefill throughput,GPU,Qwen3.5-2B,MNN,4-bit (ours),101.02
+OnePlus 8 Pro vs paper,Prefill throughput,GPU,Qwen3-4B,MNN,4-bit (ours),30.9
+OnePlus 8 Pro vs paper,Prefill throughput,GPU,Qwen3.5-4B,MNN,4-bit (ours),39.86
+OnePlus 8 Pro vs paper,Prefill throughput,GPU,Llama-3.2-1B (paper),MNN,4-bit (paper),371.3
+OnePlus 8 Pro vs paper,Prefill throughput,GPU,Qwen2.5-1.5B (paper),MNN,4-bit (paper),272.5
+OnePlus 8 Pro vs paper,Prefill throughput,GPU,Llama-3.2-3B (paper),MNN,4-bit (paper),145.3
+OnePlus 8 Pro vs paper,Prefill throughput,GPU,Qwen2.5-7B (paper),MNN,4-bit (paper),62.4
+OnePlus 15 vs paper,Decode throughput,CPU,SmolLM2-135M,llama.cpp,4-bit (ours),260.94
+OnePlus 15 vs paper,Decode throughput,CPU,Gemma3-270M,llama.cpp,4-bit (ours),185.58
+OnePlus 15 vs paper,Decode throughput,CPU,SmolLM2-360M,llama.cpp,4-bit (ours),124.55
+OnePlus 15 vs paper,Decode throughput,CPU,Qwen3-0.6B,llama.cpp,4-bit (ours),72.0
+OnePlus 15 vs paper,Decode throughput,CPU,Qwen3.5-0.8B,llama.cpp,4-bit (ours),60.06
+OnePlus 15 vs paper,Decode throughput,CPU,Qwen3-1.7B,llama.cpp,4-bit (ours),34.91
+OnePlus 15 vs paper,Decode throughput,CPU,Qwen3.5-2B,llama.cpp,4-bit (ours),32.68
+OnePlus 15 vs paper,Decode throughput,CPU,Qwen3-4B,llama.cpp,4-bit (ours),16.26
+OnePlus 15 vs paper,Decode throughput,CPU,Qwen3.5-4B,llama.cpp,4-bit (ours),15.05
+OnePlus 15 vs paper,Decode throughput,CPU,Llama-3.2-1B (paper),llama.cpp,4-bit (paper),72.2
+OnePlus 15 vs paper,Decode throughput,CPU,Qwen2.5-1.5B (paper),llama.cpp,4-bit (paper),55.7
+OnePlus 15 vs paper,Decode throughput,CPU,Llama-3.2-3B (paper),llama.cpp,4-bit (paper),30.5
+OnePlus 15 vs paper,Decode throughput,CPU,Qwen2.5-7B (paper),llama.cpp,4-bit (paper),14.3
+OnePlus 15 vs paper,Decode throughput,CPU,SmolLM2-135M,MNN,4-bit (ours),205.62
+OnePlus 15 vs paper,Decode throughput,CPU,Gemma3-270M,MNN,4-bit (ours),115.95
+OnePlus 15 vs paper,Decode throughput,CPU,SmolLM2-360M,MNN,4-bit (ours),114.64
+OnePlus 15 vs paper,Decode throughput,CPU,Qwen3-0.6B,MNN,4-bit (ours),78.96
+OnePlus 15 vs paper,Decode throughput,CPU,Qwen3.5-0.8B,MNN,4-bit (ours),80.04
+OnePlus 15 vs paper,Decode throughput,CPU,Qwen3-1.7B,MNN,4-bit (ours),36.75
+OnePlus 15 vs paper,Decode throughput,CPU,Qwen3.5-2B,MNN,4-bit (ours),37.21
+OnePlus 15 vs paper,Decode throughput,CPU,Qwen3-4B,MNN,4-bit (ours),16.76
+OnePlus 15 vs paper,Decode throughput,CPU,Qwen3.5-4B,MNN,4-bit (ours),16.91
+OnePlus 15 vs paper,Decode throughput,CPU,Llama-3.2-1B (paper),MNN,4-bit (paper),61.6
+OnePlus 15 vs paper,Decode throughput,CPU,Qwen2.5-1.5B (paper),MNN,4-bit (paper),47.5
+OnePlus 15 vs paper,Decode throughput,CPU,Llama-3.2-3B (paper),MNN,4-bit (paper),24.9
+OnePlus 15 vs paper,Decode throughput,CPU,Qwen2.5-7B (paper),MNN,4-bit (paper),12.2
+OnePlus 15 vs paper,Decode throughput,GPU,SmolLM2-135M,llama.cpp,4-bit (ours),93.17
+OnePlus 15 vs paper,Decode throughput,GPU,Gemma3-270M,llama.cpp,4-bit (ours),73.21
+OnePlus 15 vs paper,Decode throughput,GPU,SmolLM2-360M,llama.cpp,4-bit (ours),85.56
+OnePlus 15 vs paper,Decode throughput,GPU,Qwen3-0.6B,llama.cpp,4-bit (ours),61.74
+OnePlus 15 vs paper,Decode throughput,GPU,Qwen3.5-0.8B,llama.cpp,4-bit (ours),61.38
+OnePlus 15 vs paper,Decode throughput,GPU,Qwen3-1.7B,llama.cpp,4-bit (ours),31.4
+OnePlus 15 vs paper,Decode throughput,GPU,Qwen3.5-2B,llama.cpp,4-bit (ours),38.09
+OnePlus 15 vs paper,Decode throughput,GPU,Qwen3-4B,llama.cpp,4-bit (ours),16.66
+OnePlus 15 vs paper,Decode throughput,GPU,Qwen3.5-4B,llama.cpp,4-bit (ours),14.5
+OnePlus 15 vs paper,Decode throughput,GPU,Llama-3.2-1B (paper),llama.cpp,4-bit (paper),64.4
+OnePlus 15 vs paper,Decode throughput,GPU,Qwen2.5-1.5B (paper),llama.cpp,4-bit (paper),50.3
+OnePlus 15 vs paper,Decode throughput,GPU,Llama-3.2-3B (paper),llama.cpp,4-bit (paper),25.0
+OnePlus 15 vs paper,Decode throughput,GPU,Qwen2.5-7B (paper),llama.cpp,4-bit (paper),12.2
+OnePlus 15 vs paper,Decode throughput,GPU,SmolLM2-135M,MNN,4-bit (ours),42.24
+OnePlus 15 vs paper,Decode throughput,GPU,Gemma3-270M,MNN,4-bit (ours),27.4
+OnePlus 15 vs paper,Decode throughput,GPU,SmolLM2-360M,MNN,4-bit (ours),39.27
+OnePlus 15 vs paper,Decode throughput,GPU,Qwen3-0.6B,MNN,4-bit (ours),32.02
+OnePlus 15 vs paper,Decode throughput,GPU,Qwen3.5-0.8B,MNN,4-bit (ours),75.91
+OnePlus 15 vs paper,Decode throughput,GPU,Qwen3-1.7B,MNN,4-bit (ours),25.59
+OnePlus 15 vs paper,Decode throughput,GPU,Qwen3.5-2B,MNN,4-bit (ours),43.17
+OnePlus 15 vs paper,Decode throughput,GPU,Qwen3-4B,MNN,4-bit (ours),19.74
+OnePlus 15 vs paper,Decode throughput,GPU,Qwen3.5-4B,MNN,4-bit (ours),21.71
+OnePlus 15 vs paper,Decode throughput,GPU,Llama-3.2-1B (paper),MNN,4-bit (paper),21.6
+OnePlus 15 vs paper,Decode throughput,GPU,Qwen2.5-1.5B (paper),MNN,4-bit (paper),12.3
+OnePlus 15 vs paper,Decode throughput,GPU,Llama-3.2-3B (paper),MNN,4-bit (paper),12.1
+OnePlus 15 vs paper,Decode throughput,GPU,Qwen2.5-7B (paper),MNN,4-bit (paper),10.6
+OnePlus 8 Pro vs paper,Decode throughput,CPU,SmolLM2-135M,llama.cpp,4-bit (ours),151.48
+OnePlus 8 Pro vs paper,Decode throughput,CPU,Gemma3-270M,llama.cpp,4-bit (ours),83.98
+OnePlus 8 Pro vs paper,Decode throughput,CPU,SmolLM2-360M,llama.cpp,4-bit (ours),75.54
+OnePlus 8 Pro vs paper,Decode throughput,CPU,Qwen3-0.6B,llama.cpp,4-bit (ours),47.64
+OnePlus 8 Pro vs paper,Decode throughput,CPU,Qwen3.5-0.8B,llama.cpp,4-bit (ours),25.28
+OnePlus 8 Pro vs paper,Decode throughput,CPU,Qwen3-1.7B,llama.cpp,4-bit (ours),21.82
+OnePlus 8 Pro vs paper,Decode throughput,CPU,Qwen3.5-2B,llama.cpp,4-bit (ours),12.1
+OnePlus 8 Pro vs paper,Decode throughput,CPU,Qwen3-4B,llama.cpp,4-bit (ours),9.91
+OnePlus 8 Pro vs paper,Decode throughput,CPU,Qwen3.5-4B,llama.cpp,4-bit (ours),5.33
+OnePlus 8 Pro vs paper,Decode throughput,CPU,Llama-3.2-1B (paper),llama.cpp,4-bit (paper),41.9
+OnePlus 8 Pro vs paper,Decode throughput,CPU,Qwen2.5-1.5B (paper),llama.cpp,4-bit (paper),34.5
+OnePlus 8 Pro vs paper,Decode throughput,CPU,Llama-3.2-3B (paper),llama.cpp,4-bit (paper),17.1
+OnePlus 8 Pro vs paper,Decode throughput,CPU,Qwen2.5-7B (paper),llama.cpp,4-bit (paper),8.7
+OnePlus 8 Pro vs paper,Decode throughput,CPU,SmolLM2-135M,MNN,4-bit (ours),142.77
+OnePlus 8 Pro vs paper,Decode throughput,CPU,Gemma3-270M,MNN,4-bit (ours),64.41
+OnePlus 8 Pro vs paper,Decode throughput,CPU,SmolLM2-360M,MNN,4-bit (ours),71.28
+OnePlus 8 Pro vs paper,Decode throughput,CPU,Qwen3-0.6B,MNN,4-bit (ours),42.54
+OnePlus 8 Pro vs paper,Decode throughput,CPU,Qwen3.5-0.8B,MNN,4-bit (ours),20.21
+OnePlus 8 Pro vs paper,Decode throughput,CPU,Qwen3-1.7B,MNN,4-bit (ours),19.68
+OnePlus 8 Pro vs paper,Decode throughput,CPU,Qwen3.5-2B,MNN,4-bit (ours),9.09
+OnePlus 8 Pro vs paper,Decode throughput,CPU,Qwen3-4B,MNN,4-bit (ours),8.88
+OnePlus 8 Pro vs paper,Decode throughput,CPU,Qwen3.5-4B,MNN,4-bit (ours),3.72
+OnePlus 8 Pro vs paper,Decode throughput,CPU,Llama-3.2-1B (paper),MNN,4-bit (paper),55.4
+OnePlus 8 Pro vs paper,Decode throughput,CPU,Qwen2.5-1.5B (paper),MNN,4-bit (paper),45.7
+OnePlus 8 Pro vs paper,Decode throughput,CPU,Llama-3.2-3B (paper),MNN,4-bit (paper),23.7
+OnePlus 8 Pro vs paper,Decode throughput,CPU,Qwen2.5-7B (paper),MNN,4-bit (paper),7.2
+OnePlus 8 Pro vs paper,Decode throughput,GPU,SmolLM2-135M,llama.cpp,4-bit (ours),12.72
+OnePlus 8 Pro vs paper,Decode throughput,GPU,Gemma3-270M,llama.cpp,4-bit (ours),7.15
+OnePlus 8 Pro vs paper,Decode throughput,GPU,SmolLM2-360M,llama.cpp,4-bit (ours),8.99
+OnePlus 8 Pro vs paper,Decode throughput,GPU,Qwen3-0.6B,llama.cpp,4-bit (ours),3.47
+OnePlus 8 Pro vs paper,Decode throughput,GPU,Qwen3-1.7B,llama.cpp,4-bit (ours),2.54
+OnePlus 8 Pro vs paper,Decode throughput,GPU,Qwen3-4B,llama.cpp,4-bit (ours),1.68
+OnePlus 8 Pro vs paper,Decode throughput,GPU,Llama-3.2-1B (paper),llama.cpp,4-bit (paper),22.5
+OnePlus 8 Pro vs paper,Decode throughput,GPU,Qwen2.5-1.5B (paper),llama.cpp,4-bit (paper),31.8
+OnePlus 8 Pro vs paper,Decode throughput,GPU,Llama-3.2-3B (paper),llama.cpp,4-bit (paper),11.1
+OnePlus 8 Pro vs paper,Decode throughput,GPU,Qwen2.5-7B (paper),llama.cpp,4-bit (paper),5.4
+OnePlus 8 Pro vs paper,Decode throughput,GPU,SmolLM2-135M,MNN,4-bit (ours),9.84
+OnePlus 8 Pro vs paper,Decode throughput,GPU,Gemma3-270M,MNN,4-bit (ours),8.31
+OnePlus 8 Pro vs paper,Decode throughput,GPU,SmolLM2-360M,MNN,4-bit (ours),9.27
+OnePlus 8 Pro vs paper,Decode throughput,GPU,Qwen3-0.6B,MNN,4-bit (ours),9.28
+OnePlus 8 Pro vs paper,Decode throughput,GPU,Qwen3.5-0.8B,MNN,4-bit (ours),23.54
+OnePlus 8 Pro vs paper,Decode throughput,GPU,Qwen3-1.7B,MNN,4-bit (ours),8.83
+OnePlus 8 Pro vs paper,Decode throughput,GPU,Qwen3.5-2B,MNN,4-bit (ours),14.22
+OnePlus 8 Pro vs paper,Decode throughput,GPU,Qwen3-4B,MNN,4-bit (ours),6.32
+OnePlus 8 Pro vs paper,Decode throughput,GPU,Qwen3.5-4B,MNN,4-bit (ours),7.13
+OnePlus 8 Pro vs paper,Decode throughput,GPU,Llama-3.2-1B (paper),MNN,4-bit (paper),44.4
+OnePlus 8 Pro vs paper,Decode throughput,GPU,Qwen2.5-1.5B (paper),MNN,4-bit (paper),26.2
+OnePlus 8 Pro vs paper,Decode throughput,GPU,Llama-3.2-3B (paper),MNN,4-bit (paper),17.1
+OnePlus 8 Pro vs paper,Decode throughput,GPU,Qwen2.5-7B (paper),MNN,4-bit (paper),11.7
+OnePlus 15 vs paper,Prefill energy,CPU,Gemma3-270M,llama.cpp,4-bit (ours),1.78
+OnePlus 15 vs paper,Prefill energy,CPU,SmolLM2-360M,llama.cpp,4-bit (ours),3.96
+OnePlus 15 vs paper,Prefill energy,CPU,Qwen3-0.6B,llama.cpp,4-bit (ours),6.27
+OnePlus 15 vs paper,Prefill energy,CPU,Qwen3.5-0.8B,llama.cpp,4-bit (ours),6.78
+OnePlus 15 vs paper,Prefill energy,CPU,Qwen3-1.7B,llama.cpp,4-bit (ours),13.36
+OnePlus 15 vs paper,Prefill energy,CPU,Qwen3.5-2B,llama.cpp,4-bit (ours),13.5
+OnePlus 15 vs paper,Prefill energy,CPU,Qwen3-4B,llama.cpp,4-bit (ours),41.19
+OnePlus 15 vs paper,Prefill energy,CPU,Qwen3.5-4B,llama.cpp,4-bit (ours),52.4
+OnePlus 15 vs paper,Prefill energy,CPU,Llama-3.2-1B (paper),llama.cpp,4-bit (paper),16.0
+OnePlus 15 vs paper,Prefill energy,CPU,Qwen2.5-1.5B (paper),llama.cpp,4-bit (paper),15.0
+OnePlus 15 vs paper,Prefill energy,CPU,Llama-3.2-3B (paper),llama.cpp,4-bit (paper),41.0
+OnePlus 15 vs paper,Prefill energy,CPU,Qwen2.5-7B (paper),llama.cpp,4-bit (paper),79.0
+OnePlus 15 vs paper,Prefill energy,CPU,SmolLM2-360M,MNN,4-bit (ours),3.42
+OnePlus 15 vs paper,Prefill energy,CPU,Qwen3-0.6B,MNN,4-bit (ours),5.68
+OnePlus 15 vs paper,Prefill energy,CPU,Qwen3.5-0.8B,MNN,4-bit (ours),4.92
+OnePlus 15 vs paper,Prefill energy,CPU,Qwen3-1.7B,MNN,4-bit (ours),19.43
+OnePlus 15 vs paper,Prefill energy,CPU,Qwen3.5-2B,MNN,4-bit (ours),14.68
+OnePlus 15 vs paper,Prefill energy,CPU,Qwen3-4B,MNN,4-bit (ours),59.61
+OnePlus 15 vs paper,Prefill energy,CPU,Qwen3.5-4B,MNN,4-bit (ours),42.72
+OnePlus 15 vs paper,Prefill energy,CPU,Llama-3.2-1B (paper),MNN,4-bit (paper),15.0
+OnePlus 15 vs paper,Prefill energy,CPU,Qwen2.5-1.5B (paper),MNN,4-bit (paper),15.0
+OnePlus 15 vs paper,Prefill energy,CPU,Llama-3.2-3B (paper),MNN,4-bit (paper),44.0
+OnePlus 15 vs paper,Prefill energy,CPU,Qwen2.5-7B (paper),MNN,4-bit (paper),100.0
+OnePlus 15 vs paper,Prefill energy,GPU,Gemma3-270M,llama.cpp,4-bit (ours),1.31
+OnePlus 15 vs paper,Prefill energy,GPU,SmolLM2-360M,llama.cpp,4-bit (ours),2.48
+OnePlus 15 vs paper,Prefill energy,GPU,Qwen3-0.6B,llama.cpp,4-bit (ours),2.28
+OnePlus 15 vs paper,Prefill energy,GPU,Qwen3.5-0.8B,llama.cpp,4-bit (ours),3.48
+OnePlus 15 vs paper,Prefill energy,GPU,Qwen3-1.7B,llama.cpp,4-bit (ours),8.19
+OnePlus 15 vs paper,Prefill energy,GPU,Qwen3.5-2B,llama.cpp,4-bit (ours),8.82
+OnePlus 15 vs paper,Prefill energy,GPU,Qwen3-4B,llama.cpp,4-bit (ours),18.7
+OnePlus 15 vs paper,Prefill energy,GPU,Qwen3.5-4B,llama.cpp,4-bit (ours),21.31
+OnePlus 15 vs paper,Prefill energy,GPU,Llama-3.2-1B (paper),llama.cpp,4-bit (paper),5.4
+OnePlus 15 vs paper,Prefill energy,GPU,Qwen2.5-1.5B (paper),llama.cpp,4-bit (paper),11.0
+OnePlus 15 vs paper,Prefill energy,GPU,Llama-3.2-3B (paper),llama.cpp,4-bit (paper),21.0
+OnePlus 15 vs paper,Prefill energy,GPU,Qwen2.5-7B (paper),llama.cpp,4-bit (paper),65.0
+OnePlus 15 vs paper,Prefill energy,GPU,SmolLM2-360M,MNN,4-bit (ours),2.56
+OnePlus 15 vs paper,Prefill energy,GPU,Qwen3-0.6B,MNN,4-bit (ours),3.13
+OnePlus 15 vs paper,Prefill energy,GPU,Qwen3.5-0.8B,MNN,4-bit (ours),2.98
+OnePlus 15 vs paper,Prefill energy,GPU,Qwen3-1.7B,MNN,4-bit (ours),9.64
+OnePlus 15 vs paper,Prefill energy,GPU,Qwen3.5-2B,MNN,4-bit (ours),5.29
+OnePlus 15 vs paper,Prefill energy,GPU,Qwen3-4B,MNN,4-bit (ours),31.53
+OnePlus 15 vs paper,Prefill energy,GPU,Qwen3.5-4B,MNN,4-bit (ours),14.85
+OnePlus 15 vs paper,Prefill energy,GPU,Llama-3.2-1B (paper),MNN,4-bit (paper),13.0
+OnePlus 15 vs paper,Prefill energy,GPU,Qwen2.5-1.5B (paper),MNN,4-bit (paper),17.0
+OnePlus 15 vs paper,Prefill energy,GPU,Llama-3.2-3B (paper),MNN,4-bit (paper),35.0
+OnePlus 15 vs paper,Prefill energy,GPU,Qwen2.5-7B (paper),MNN,4-bit (paper),91.0
+OnePlus 15 vs paper,Decode energy,CPU,Gemma3-270M,llama.cpp,4-bit (ours),15.74
+OnePlus 15 vs paper,Decode energy,CPU,SmolLM2-360M,llama.cpp,4-bit (ours),24.16
+OnePlus 15 vs paper,Decode energy,CPU,Qwen3-0.6B,llama.cpp,4-bit (ours),47.18
+OnePlus 15 vs paper,Decode energy,CPU,Qwen3.5-0.8B,llama.cpp,4-bit (ours),60.28
+OnePlus 15 vs paper,Decode energy,CPU,Qwen3-1.7B,llama.cpp,4-bit (ours),121.31
+OnePlus 15 vs paper,Decode energy,CPU,Qwen3.5-2B,llama.cpp,4-bit (ours),135.73
+OnePlus 15 vs paper,Decode energy,CPU,Qwen3-4B,llama.cpp,4-bit (ours),271.28
+OnePlus 15 vs paper,Decode energy,CPU,Qwen3.5-4B,llama.cpp,4-bit (ours),294.12
+OnePlus 15 vs paper,Decode energy,CPU,Llama-3.2-1B (paper),llama.cpp,4-bit (paper),74.0
+OnePlus 15 vs paper,Decode energy,CPU,Qwen2.5-1.5B (paper),llama.cpp,4-bit (paper),97.0
+OnePlus 15 vs paper,Decode energy,CPU,Llama-3.2-3B (paper),llama.cpp,4-bit (paper),210.0
+OnePlus 15 vs paper,Decode energy,CPU,Qwen2.5-7B (paper),llama.cpp,4-bit (paper),440.0
+OnePlus 15 vs paper,Decode energy,CPU,SmolLM2-360M,MNN,4-bit (ours),22.68
+OnePlus 15 vs paper,Decode energy,CPU,Qwen3-0.6B,MNN,4-bit (ours),36.6
+OnePlus 15 vs paper,Decode energy,CPU,Qwen3.5-0.8B,MNN,4-bit (ours),35.77
+OnePlus 15 vs paper,Decode energy,CPU,Qwen3-1.7B,MNN,4-bit (ours),85.61
+OnePlus 15 vs paper,Decode energy,CPU,Qwen3.5-2B,MNN,4-bit (ours),96.08
+OnePlus 15 vs paper,Decode energy,CPU,Qwen3-4B,MNN,4-bit (ours),203.04
+OnePlus 15 vs paper,Decode energy,CPU,Qwen3.5-4B,MNN,4-bit (ours),184.71
+OnePlus 15 vs paper,Decode energy,CPU,Llama-3.2-1B (paper),MNN,4-bit (paper),66.0
+OnePlus 15 vs paper,Decode energy,CPU,Qwen2.5-1.5B (paper),MNN,4-bit (paper),92.0
+OnePlus 15 vs paper,Decode energy,CPU,Llama-3.2-3B (paper),MNN,4-bit (paper),180.0
+OnePlus 15 vs paper,Decode energy,CPU,Qwen2.5-7B (paper),MNN,4-bit (paper),390.0
+OnePlus 15 vs paper,Decode energy,GPU,Gemma3-270M,llama.cpp,4-bit (ours),35.54
+OnePlus 15 vs paper,Decode energy,GPU,SmolLM2-360M,llama.cpp,4-bit (ours),43.68
+OnePlus 15 vs paper,Decode energy,GPU,Qwen3-0.6B,llama.cpp,4-bit (ours),69.82
+OnePlus 15 vs paper,Decode energy,GPU,Qwen3.5-0.8B,llama.cpp,4-bit (ours),59.67
+OnePlus 15 vs paper,Decode energy,GPU,Qwen3-1.7B,llama.cpp,4-bit (ours),148.3
+OnePlus 15 vs paper,Decode energy,GPU,Qwen3.5-2B,llama.cpp,4-bit (ours),132.52
+OnePlus 15 vs paper,Decode energy,GPU,Qwen3-4B,llama.cpp,4-bit (ours),309.31
+OnePlus 15 vs paper,Decode energy,GPU,Qwen3.5-4B,llama.cpp,4-bit (ours),284.7
+OnePlus 15 vs paper,Decode energy,GPU,Llama-3.2-1B (paper),llama.cpp,4-bit (paper),110.0
+OnePlus 15 vs paper,Decode energy,GPU,Qwen2.5-1.5B (paper),llama.cpp,4-bit (paper),140.0
+OnePlus 15 vs paper,Decode energy,GPU,Llama-3.2-3B (paper),llama.cpp,4-bit (paper),250.0
+OnePlus 15 vs paper,Decode energy,GPU,Qwen2.5-7B (paper),llama.cpp,4-bit (paper),570.0
+OnePlus 15 vs paper,Decode energy,GPU,SmolLM2-360M,MNN,4-bit (ours),53.9
+OnePlus 15 vs paper,Decode energy,GPU,Qwen3-0.6B,MNN,4-bit (ours),62.93
+OnePlus 15 vs paper,Decode energy,GPU,Qwen3.5-0.8B,MNN,4-bit (ours),40.61
+OnePlus 15 vs paper,Decode energy,GPU,Qwen3-1.7B,MNN,4-bit (ours),126.63
+OnePlus 15 vs paper,Decode energy,GPU,Qwen3.5-2B,MNN,4-bit (ours),100.68
+OnePlus 15 vs paper,Decode energy,GPU,Qwen3-4B,MNN,4-bit (ours),279.68
+OnePlus 15 vs paper,Decode energy,GPU,Qwen3.5-4B,MNN,4-bit (ours),231.18
+OnePlus 15 vs paper,Decode energy,GPU,Llama-3.2-1B (paper),MNN,4-bit (paper),79.0
+OnePlus 15 vs paper,Decode energy,GPU,Qwen2.5-1.5B (paper),MNN,4-bit (paper),99.0
+OnePlus 15 vs paper,Decode energy,GPU,Llama-3.2-3B (paper),MNN,4-bit (paper),200.0
+OnePlus 15 vs paper,Decode energy,GPU,Qwen2.5-7B (paper),MNN,4-bit (paper),510.0

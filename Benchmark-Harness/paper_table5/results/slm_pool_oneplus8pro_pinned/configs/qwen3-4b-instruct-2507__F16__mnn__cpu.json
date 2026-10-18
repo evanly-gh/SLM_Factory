@@ -1,0 +1,37 @@
+{
+ "config": {
+  "id": "qwen3-4b-instruct-2507__F16__mnn__cpu",
+  "model": "qwen3-4b-instruct-2507",
+  "quant": "F16",
+  "bits": 16,
+  "framework": "mnn",
+  "backend": "cpu",
+  "ref": "pinned"
+ },
+ "model_file": {
+  "name": "qwen3-4b-instruct-2507",
+  "hf_id": "Qwen/Qwen3-4B-Instruct-2507",
+  "framework": "mnn",
+  "quant": "F16",
+  "bits": 16,
+  "ref": "pinned",
+  "path": "mnn/qwen3-4b-instruct-2507-mnn-paper-default-q16",
+  "files": {
+   "config.json": 210,
+   "export_args.json": 1376,
+   "llm.mnn": 646904,
+   "llm.mnn.json": 1289992,
+   "llm.mnn.weight": 8046112768,
+   "llm_config.json": 3051,
+   "tokenizer.txt": 3193548
+  },
+  "recipe": "paper-default",
+  "converter": "llmexport.py @ MNN mnn-510ac8f15d10, MNNConvert /Users/ksd/SLM_Factory_Krishna_Personal/Benchmark-Harness/paper_table5/third_party/tools/mnnconvert_nolog"
+ },
+ "started": "2026-10-14T21:59:21.595189",
+ "invocations": {},
+ "windows": [],
+ "status": "failed",
+ "error": "does not fit in RAM: 15.00 GiB of weights in memory on a phone with 11.24 GiB RAM (limit 55%); not run",
+ "finished": "2026-10-14T21:59:21.595245"
+}

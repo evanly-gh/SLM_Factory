@@ -1,0 +1,1 @@
+LD_LIBRARY_PATH=. PB_IGNORE_EOS=1 ./llm_bench -m /data/local/tmp/paper_bench/models/qwen3.5-2b-mnn-paper-default-q8-head/config.json -a cpu -p 256 -n 256 -rep 3 -kv true

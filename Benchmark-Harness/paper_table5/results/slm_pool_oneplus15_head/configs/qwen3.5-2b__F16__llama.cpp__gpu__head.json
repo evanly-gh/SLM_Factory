@@ -1,0 +1,795 @@
+{
+ "config": {
+  "id": "qwen3.5-2b__F16__llama.cpp__gpu__head",
+  "model": "qwen3.5-2b",
+  "quant": "F16",
+  "bits": 16,
+  "framework": "llama.cpp",
+  "backend": "gpu",
+  "ref": "head"
+ },
+ "model_file": {
+  "name": "qwen3.5-2b",
+  "hf_id": "Qwen/Qwen3.5-2B",
+  "framework": "llama.cpp",
+  "quant": "F16",
+  "bits": 16,
+  "ref": "head",
+  "path": "gguf/qwen3.5-2b-f16-head.gguf",
+  "files": {
+   "qwen3.5-2b-f16-head.gguf": 3897387968
+  },
+  "converter": "llama.cpp 9c2e0e491a82 convert_hf_to_gguf"
+ },
+ "started": "2026-10-14T22:33:40.155756",
+ "invocations": {
+  "prefill": {
+   "exit": 0,
+   "timed_out": false,
+   "seconds": 20.5,
+   "marks": 14,
+   "cpu_busy": 0.203,
+   "gate": {
+    "passed": true,
+    "waited_s": 0.4,
+    "issues": null,
+    "battery_temp_c": 22.3,
+    "cpu_caps_khz": {
+     "policy0": 1996800,
+     "policy6": 2438400
+    },
+    "thermal_status": 0
+   },
+   "state_before": {
+    "epoch_ms": 1792042444013,
+    "battery_temp_c": 22.5,
+    "battery_level": 75,
+    "battery_status": 3,
+    "externally_powered": false,
+    "power_sources": [],
+    "cpu_caps_khz": {
+     "policy0": 1996800,
+     "policy6": 2438400
+    },
+    "cpu_hw_max_khz": {
+     "policy0": 3628800,
+     "policy6": 4608000
+    },
+    "cpu_capped": true,
+    "screen": "Asleep",
+    "thermal_status": 0
+   },
+   "state_after": {
+    "epoch_ms": 1792042465175,
+    "battery_temp_c": 22.5,
+    "battery_level": 75,
+    "battery_status": 3,
+    "externally_powered": false,
+    "power_sources": [],
+    "cpu_caps_khz": {
+     "policy0": 1996800,
+     "policy6": 2438400
+    },
+    "cpu_hw_max_khz": {
+     "policy0": 3628800,
+     "policy6": 4608000
+    },
+    "cpu_capped": true,
+    "screen": "Asleep",
+    "thermal_status": 0
+   },
+   "idle_window": [
+    2360908.25,
+    2360918.38
+   ],
+   "llama_bench": {
+    "build_commit": "9c2e0e4",
+    "backends": "OpenCL",
+    "n_threads": 4,
+    "flash_attn": -1,
+    "type_k": "f16",
+    "type_v": "f16",
+    "n_batch": 2048,
+    "n_ubatch": 512,
+    "use_mmap": null,
+    "avg_ts": 436.622078,
+    "stddev_ts": 2.216918,
+    "samples_ts": [
+     430.923,
+     437.231,
+     437.551,
+     435.963,
+     437.323,
+     438.146,
+     436.24,
+     436.914,
+     438.117,
+     440.355,
+     435.655,
+     434.403,
+     438.438,
+     435.448
+    ],
+    "model_type": "qwen35 2B F16",
+    "model_size": 3886425344
+   },
+   "suspend_ratio": 1.0
+  },
+  "decode": {
+   "exit": 0,
+   "timed_out": false,
+   "seconds": 72.0,
+   "marks": 4,
+   "cpu_busy": 0.257,
+   "gate": {
+    "passed": true,
+    "waited_s": 0.2,
+    "issues": null,
+    "battery_temp_c": 22.5,
+    "cpu_caps_khz": {
+     "policy0": 1996800,
+     "policy6": 2438400
+    },
+    "thermal_status": 0
+   },
+   "state_before": {
+    "epoch_ms": 1792042493120,
+    "battery_temp_c": 22.8,
+    "battery_level": 75,
+    "battery_status": 3,
+    "externally_powered": false,
+    "power_sources": [],
+    "cpu_caps_khz": {
+     "policy0": 1996800,
+     "policy6": 2438400
+    },
+    "cpu_hw_max_khz": {
+     "policy0": 3628800,
+     "policy6": 4608000
+    },
+    "cpu_capped": true,
+    "screen": "Asleep",
+    "thermal_status": 0
+   },
+   "state_after": {
+    "epoch_ms": 1792042565574,
+    "battery_temp_c": 23.5,
+    "battery_level": 74,
+    "battery_status": 3,
+    "externally_powered": false,
+    "power_sources": [],
+    "cpu_caps_khz": {
+     "policy0": 1996800,
+     "policy6": 2438400
+    },
+    "cpu_hw_max_khz": {
+     "policy0": 3628800,
+     "policy6": 4608000
+    },
+    "cpu_capped": true,
+    "screen": "Asleep",
+    "thermal_status": 0
+   },
+   "idle_window": [
+    2360957.62,
+    2360967.72
+   ],
+   "llama_bench": {
+    "build_commit": "9c2e0e4",
+    "backends": "OpenCL",
+    "n_threads": 4,
+    "flash_attn": -1,
+    "type_k": "f16",
+    "type_v": "f16",
+    "n_batch": 2048,
+    "n_ubatch": 512,
+    "use_mmap": null,
+    "avg_ts": 16.363568,
+    "stddev_ts": 0.03203,
+    "samples_ts": [
+     16.3905,
+     16.3555,
+     16.3867,
+     16.3217
+    ],
+    "model_type": "qwen35 2B F16",
+    "model_size": 3886425344
+   },
+   "suspend_ratio": 1.0
+  },
+  "energy_prefill": {
+   "exit": 0,
+   "timed_out": false,
+   "seconds": 41.0,
+   "marks": 40,
+   "cpu_busy": 0.157,
+   "gate": {
+    "passed": true,
+    "waited_s": 0.4,
+    "issues": null,
+    "battery_temp_c": 23.5,
+    "cpu_caps_khz": {
+     "policy0": 1996800,
+     "policy6": 2438400
+    },
+    "thermal_status": 0
+   },
+   "state_before": {
+    "epoch_ms": 1792042594088,
+    "battery_temp_c": 23.5,
+    "battery_level": 74,
+    "battery_status": 3,
+    "externally_powered": false,
+    "power_sources": [],
+    "cpu_caps_khz": {
+     "policy0": 1996800,
+     "policy6": 2438400
+    },
+    "cpu_hw_max_khz": {
+     "policy0": 3628800,
+     "policy6": 4608000
+    },
+    "cpu_capped": true,
+    "screen": "Asleep",
+    "thermal_status": 0
+   },
+   "state_after": {
+    "epoch_ms": 1792042635607,
+    "battery_temp_c": 24.1,
+    "battery_level": 74,
+    "battery_status": 3,
+    "externally_powered": false,
+    "power_sources": [],
+    "cpu_caps_khz": {
+     "policy0": 1996800,
+     "policy6": 2438400
+    },
+    "cpu_hw_max_khz": {
+     "policy0": 3628800,
+     "policy6": 4608000
+    },
+    "cpu_capped": true,
+    "screen": "Asleep",
+    "thermal_status": 0
+   },
+   "idle_window": [
+    2361058.37,
+    2361068.51
+   ]
+  }
+ },
+ "windows": [
+  {
+   "phase": "prefill",
+   "source": "main",
+   "rep": 1,
+   "a": 2360929.092260523,
+   "b": 2360929.67776672,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "main",
+   "rep": 2,
+   "a": 2360929.677874793,
+   "b": 2360930.262950574,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "main",
+   "rep": 3,
+   "a": 2360930.263093595,
+   "b": 2360930.850299949,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 4,
+   "a": 2360930.850425834,
+   "b": 2360931.435808386,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 5,
+   "a": 2360931.435926459,
+   "b": 2360932.020208282,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 6,
+   "a": 2360932.020348386,
+   "b": 2360932.607181928,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 7,
+   "a": 2360932.607332969,
+   "b": 2360933.193261615,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 8,
+   "a": 2360933.193368125,
+   "b": 2360933.777687604,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 9,
+   "a": 2360933.777789896,
+   "b": 2360934.359139427,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 10,
+   "a": 2360934.359281979,
+   "b": 2360934.946904218,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 11,
+   "a": 2360934.947074687,
+   "b": 2360935.536389426,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 12,
+   "a": 2360935.536516926,
+   "b": 2360936.120409947,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 13,
+   "a": 2360936.120588593,
+   "b": 2360936.708489061,
+   "tokens": 256
+  },
+  {
+   "phase": "decode",
+   "source": "main",
+   "rep": 1,
+   "a": 2360991.611493988,
+   "b": 2361007.263742837,
+   "tokens": 256
+  },
+  {
+   "phase": "decode",
+   "source": "main",
+   "rep": 2,
+   "a": 2361007.269043253,
+   "b": 2361022.891504497,
+   "tokens": 256
+  },
+  {
+   "phase": "decode",
+   "source": "main",
+   "rep": 3,
+   "a": 2361022.898385747,
+   "b": 2361038.583057877,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 1,
+   "a": 2361077.486630518,
+   "b": 2361078.064543226,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 2,
+   "a": 2361078.064653122,
+   "b": 2361078.644576403,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 3,
+   "a": 2361078.644728591,
+   "b": 2361079.231324632,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 4,
+   "a": 2361079.231481976,
+   "b": 2361079.815607757,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 5,
+   "a": 2361079.815716871,
+   "b": 2361080.39771135,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 6,
+   "a": 2361080.397885517,
+   "b": 2361080.978743486,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 7,
+   "a": 2361080.978878433,
+   "b": 2361081.559933017,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 8,
+   "a": 2361081.560053121,
+   "b": 2361082.138168433,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 9,
+   "a": 2361082.13828135,
+   "b": 2361082.718009787,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 10,
+   "a": 2361082.71815036,
+   "b": 2361083.301504422,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 11,
+   "a": 2361083.301656245,
+   "b": 2361083.884352599,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 12,
+   "a": 2361083.88446062,
+   "b": 2361084.465196557,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 13,
+   "a": 2361084.465317234,
+   "b": 2361085.049225567,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 14,
+   "a": 2361085.049350567,
+   "b": 2361085.632104369,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 15,
+   "a": 2361085.632228119,
+   "b": 2361086.214030254,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 16,
+   "a": 2361086.214185463,
+   "b": 2361086.797069577,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 17,
+   "a": 2361086.797212702,
+   "b": 2361087.382398691,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 18,
+   "a": 2361087.382507077,
+   "b": 2361087.962613431,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 19,
+   "a": 2361087.96278692,
+   "b": 2361088.546355254,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 20,
+   "a": 2361088.546498847,
+   "b": 2361089.127611191,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 21,
+   "a": 2361089.127792232,
+   "b": 2361089.711381816,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 22,
+   "a": 2361089.71149442,
+   "b": 2361090.289999211,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 23,
+   "a": 2361090.290161972,
+   "b": 2361090.872062388,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 24,
+   "a": 2361090.872187284,
+   "b": 2361091.451366867,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 25,
+   "a": 2361091.451525148,
+   "b": 2361092.033920148,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 26,
+   "a": 2361092.034019575,
+   "b": 2361092.613690304,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 27,
+   "a": 2361092.613832387,
+   "b": 2361093.196128637,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 28,
+   "a": 2361093.196296554,
+   "b": 2361093.779394106,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 29,
+   "a": 2361093.779545199,
+   "b": 2361094.360440251,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 30,
+   "a": 2361094.360539574,
+   "b": 2361094.944589522,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 31,
+   "a": 2361094.944741449,
+   "b": 2361095.528010355,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 32,
+   "a": 2361095.528153324,
+   "b": 2361096.111676188,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 33,
+   "a": 2361096.111815459,
+   "b": 2361096.694492073,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 34,
+   "a": 2361096.694638323,
+   "b": 2361097.277293479,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 35,
+   "a": 2361097.277397177,
+   "b": 2361097.858468323,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 36,
+   "a": 2361097.85864374,
+   "b": 2361098.439119208,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 37,
+   "a": 2361098.439252073,
+   "b": 2361099.020861812,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 38,
+   "a": 2361099.021056395,
+   "b": 2361099.602960093,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 39,
+   "a": 2361099.603085093,
+   "b": 2361100.184155874,
+   "tokens": 256
+  }
+ ],
+ "prefill": {
+  "tps": 436.91,
+  "tps_std": 0.84,
+  "reps": [
+   437.23,
+   437.55,
+   435.96
+  ],
+  "tokens": [
+   256
+  ],
+  "uj_per_token": 7634.1,
+  "uj_per_token_gross": 7999.3,
+  "energy_valid": true,
+  "energy_reason": null
+ },
+ "decode": {
+  "tps": 16.35,
+  "tps_std": 0.03,
+  "reps": [
+   16.36,
+   16.39,
+   16.32
+  ],
+  "tokens": [
+   256
+  ],
+  "uj_per_token": 302576.6,
+  "uj_per_token_gross": 312385.1,
+  "energy_valid": true,
+  "energy_reason": null
+ },
+ "status": "ok",
+ "finished": "2026-10-14T22:37:30.613660",
+ "energy": {
+  "perfetto:current": {
+   "prefill": {
+    "uj_per_token": 7999.3,
+    "net_uj_per_token": 7634.1,
+    "avg_power_mw": 3513.6,
+    "idle_power_mw": 160.4,
+    "seconds": 30.31,
+    "tokens": 13312,
+    "windows": 2,
+    "valid": true,
+    "reason": null,
+    "note": "battery HAL current, unit mA"
+   },
+   "decode": {
+    "uj_per_token": 312385.1,
+    "net_uj_per_token": 302576.6,
+    "avg_power_mw": 5108.9,
+    "idle_power_mw": 160.4,
+    "seconds": 46.96,
+    "tokens": 768,
+    "windows": 1,
+    "valid": true,
+    "reason": null,
+    "note": "battery HAL current, unit mA"
+   }
+  },
+  "perfetto:charge": {
+   "prefill": {
+    "uj_per_token": 15396.2,
+    "net_uj_per_token": 15396.2,
+    "avg_power_mw": 6762.6,
+    "idle_power_mw": -0.0,
+    "seconds": 30.31,
+    "tokens": 13312,
+    "windows": 2,
+    "valid": false,
+    "reason": "reading changed only 2 time(s) during the phase",
+    "note": "battery HAL charge counter"
+   },
+   "decode": {
+    "uj_per_token": 568063.9,
+    "net_uj_per_token": 568063.9,
+    "avg_power_mw": 9290.4,
+    "idle_power_mw": -0.0,
+    "seconds": 46.96,
+    "tokens": 768,
+    "windows": 1,
+    "valid": false,
+    "reason": "reading changed only 4 time(s) during the phase",
+    "note": "battery HAL charge counter"
+   }
+  }
+ },
+ "energy_idle": "per invocation",
+ "energy_session": "2026-10-14T19:25:09.325478",
+ "energy_headline_method": "perfetto:current",
+ "energy_kind": "whole device (net of idle)"
+}

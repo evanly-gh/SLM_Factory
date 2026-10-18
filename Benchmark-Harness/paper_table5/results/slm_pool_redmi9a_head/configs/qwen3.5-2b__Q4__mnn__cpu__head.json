@@ -1,0 +1,181 @@
+{
+ "config": {
+  "id": "qwen3.5-2b__Q4__mnn__cpu__head",
+  "model": "qwen3.5-2b",
+  "quant": "Q4",
+  "bits": 4,
+  "framework": "mnn",
+  "backend": "cpu",
+  "ref": "head"
+ },
+ "model_file": {
+  "name": "qwen3.5-2b",
+  "hf_id": "Qwen/Qwen3.5-2B",
+  "framework": "mnn",
+  "quant": "Q4",
+  "bits": 4,
+  "ref": "head",
+  "path": "mnn/qwen3.5-2b-mnn-paper-default-q4-head",
+  "files": {
+   "config.json": 502,
+   "export_args.json": 1535,
+   "llm.mnn": 2681616,
+   "llm.mnn.json": 6712234,
+   "llm.mnn.weight": 1059043482,
+   "llm_config.json": 9116,
+   "tokenizer.mtok": 7342048
+  },
+  "recipe": "paper-default",
+  "converter": "llmexport.py @ MNN mnn-a8ec49781e19, MNNConvert /Users/ksd/SLM_Factory_Krishna_Personal/Benchmark-Harness/paper_table5/third_party/tools/mnnconvert_nolog"
+ },
+ "started": "2026-10-14T20:39:49.659269",
+ "invocations": {
+  "kv": {
+   "exit": 0,
+   "timed_out": false,
+   "seconds": 748.8,
+   "marks": 4,
+   "cpu_busy": 0.385,
+   "gate": {
+    "passed": true,
+    "waited_s": 0.3,
+    "issues": null,
+    "battery_temp_c": 20.0,
+    "cpu_caps_khz": {
+     "policy0": 2001000,
+     "policy4": 1500000
+    },
+    "thermal_status": 0
+   },
+   "state_before": {
+    "epoch_ms": 1792035786485,
+    "battery_temp_c": 20.0,
+    "battery_level": 54,
+    "battery_status": 3,
+    "externally_powered": false,
+    "power_sources": [],
+    "cpu_caps_khz": {
+     "policy0": 2001000,
+     "policy4": 1500000
+    },
+    "cpu_hw_max_khz": {
+     "policy0": 2001000,
+     "policy4": 1500000
+    },
+    "cpu_capped": false,
+    "screen": "Asleep",
+    "thermal_status": 0
+   },
+   "state_after": {
+    "epoch_ms": 1792036536049,
+    "battery_temp_c": 22.0,
+    "battery_level": 53,
+    "battery_status": 3,
+    "externally_powered": false,
+    "power_sources": [],
+    "cpu_caps_khz": {
+     "policy0": 2001000,
+     "policy4": 1500000
+    },
+    "cpu_hw_max_khz": {
+     "policy0": 2001000,
+     "policy4": 1500000
+    },
+    "cpu_capped": false,
+    "screen": "Asleep",
+    "thermal_status": 0
+   },
+   "idle_window": null,
+   "suspend_ratio": 1.004
+  }
+ },
+ "windows": [
+  {
+   "phase": "prefill",
+   "source": "main",
+   "rep": 1,
+   "a": 182957.710316958,
+   "b": 183013.049301958,
+   "tokens": 256
+  },
+  {
+   "phase": "decode",
+   "source": "main",
+   "rep": 1,
+   "a": 183013.049301958,
+   "b": 183095.369013812,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "main",
+   "rep": 2,
+   "a": 183095.369116274,
+   "b": 183150.787014274,
+   "tokens": 256
+  },
+  {
+   "phase": "decode",
+   "source": "main",
+   "rep": 2,
+   "a": 183150.787014274,
+   "b": 183227.074199205,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "main",
+   "rep": 3,
+   "a": 183227.074304512,
+   "b": 183282.444905512,
+   "tokens": 256
+  },
+  {
+   "phase": "decode",
+   "source": "main",
+   "rep": 3,
+   "a": 183282.444905512,
+   "b": 183358.46951652,
+   "tokens": 256
+  }
+ ],
+ "prefill": {
+  "tps": 4.62,
+  "tps_std": 0.0,
+  "reps": [
+   4.63,
+   4.62,
+   4.62
+  ],
+  "tokens": [
+   256
+  ],
+  "uj_per_token": null,
+  "uj_per_token_gross": null,
+  "energy_valid": false,
+  "energy_reason": null
+ },
+ "decode": {
+  "tps": 3.28,
+  "tps_std": 0.15,
+  "reps": [
+   3.11,
+   3.36,
+   3.37
+  ],
+  "tokens": [
+   256
+  ],
+  "uj_per_token": null,
+  "uj_per_token_gross": null,
+  "energy_valid": false,
+  "energy_reason": null
+ },
+ "status": "ok",
+ "finished": "2026-10-14T20:55:51.050740",
+ "energy": {},
+ "energy_idle": "session start",
+ "energy_session": "2026-10-14T19:27:06.566899",
+ "energy_headline_method": null,
+ "energy_kind": "whole device (net of idle)"
+}

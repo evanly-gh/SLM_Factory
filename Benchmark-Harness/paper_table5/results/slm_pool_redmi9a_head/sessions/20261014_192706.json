@@ -1,0 +1,179 @@
+{
+ "started": "2026-10-14T19:27:06.566899",
+ "device": {
+  "serial": "10.0.0.49:5555",
+  "manufacturer": "Xiaomi",
+  "model": "M2006C3LG",
+  "device": "dandelion",
+  "soc": "mt6765",
+  "platform": "mt6765",
+  "android": "11",
+  "sdk": "30",
+  "build": "Redmi/dandelion_global/dandelion:11/RP1A.200720.011/V12.5.4.0.RCDMIXM:user/release-keys",
+  "mem_total_kb": 3898736,
+  "cpu_clusters": {
+   "policy0": {
+    "max_khz": 2001000,
+    "cpus": [
+     0,
+     1,
+     2,
+     3
+    ]
+   },
+   "policy4": {
+    "max_khz": 1500000,
+    "cpus": [
+     4,
+     5,
+     6,
+     7
+    ]
+   }
+  },
+  "ncpu": 8
+ },
+ "profile": {
+  "id": "redmi9a",
+  "label": "Redmi 9A",
+  "match": {
+   "model": "^M2006C3L"
+  },
+  "paper_column": null,
+  "proxy_column": null,
+  "max_temp_c": 28.0,
+  "energy_method": null,
+  "_note": "Helio G25 (MT6762), 8x Cortex-A53, 32-bit Android 11 (armeabi-v7a only), 3.9 GB RAM, no OpenCL: CPU only (--backends cpu). Needs armeabi-v7a llama.cpp and MNN builds (the harness builds arm64-v8a only; use a wrapper that swaps the ABI). Nothing in the paper is comparable, so there is no proxy column."
+ },
+ "energy_discovery": {
+  "root": {
+   "su_output": "/system/bin/sh: su: inaccessible or not found",
+   "rooted": false
+  },
+  "powercap": {
+   "zones": [],
+   "usable": false,
+   "needs_su": false
+  },
+  "powerstats": {
+   "services": [
+    "android.hardware.power.IPower/default",
+    "miui.whetstone.power",
+    "power",
+    "power_hal_mgr_service"
+   ],
+   "service": null,
+   "dump_head": null
+  },
+  "battery_dir": "/sys/class/power_supply/battery",
+  "battery_files": [
+   "current_avg",
+   "voltage_now",
+   "charge_counter"
+  ]
+ },
+ "params": {
+  "serial": "10.0.0.49:5555",
+  "ref": "head",
+  "models": [
+   "qwen3.5-0.8b",
+   "qwen3.5-2b",
+   "qwen3.5-4b",
+   "qwen3.5-0.8b",
+   "qwen3.5-2b",
+   "qwen3.5-4b"
+  ],
+  "pool_file": "pools/slm_factory_android_pool.py",
+  "quants": [
+   "Q4_0",
+   "Q8_0",
+   "F16",
+   "Q4",
+   "Q8"
+  ],
+  "frameworks": [
+   "llama.cpp",
+   "mnn"
+  ],
+  "backends": [
+   "cpu"
+  ],
+  "trials": 3,
+  "n_prompt": 256,
+  "n_gen": 256,
+  "max_temp": null,
+  "gate_timeout": 1800,
+  "gate_plateau": null,
+  "rest": 15,
+  "idle_seconds": 40,
+  "pre_idle_seconds": 0.0,
+  "min_energy_seconds": 0.0,
+  "prime_seconds": 0,
+  "timeout": 5400,
+  "min_battery": 5,
+  "llama_threads": 4,
+  "mnn_threads": null,
+  "no_controls": false,
+  "screen": "auto",
+  "no_perfetto": true,
+  "results_dir": "results/slm_pool_redmi9a_head",
+  "force": false,
+  "plan": false,
+  "smallest_first": true,
+  "recover_energy": false
+ },
+ "max_temp_c": 28.0,
+ "idle_cpu_busy_at_start": 0.014,
+ "screen_on": false,
+ "wireless_adb": true,
+ "binaries": {
+  "llama_cpu": null,
+  "llama_gpu": null,
+  "mnn": {
+   "framework": "mnn",
+   "target": "mnn",
+   "ref": "head",
+   "commit": "a8ec49781e191d7b94e31974210b34010a02ec1e",
+   "abi": "armeabi-v7a",
+   "cmake_args": [
+    "-G",
+    "Ninja",
+    "-DCMAKE_MAKE_PROGRAM=/Users/ksd/Library/Android/sdk/cmake/4.1.2/bin/ninja",
+    "-DCMAKE_TOOLCHAIN_FILE=/Users/ksd/Library/Android/sdk/ndk/30.0.14904198/build/cmake/android.toolchain.cmake",
+    "-DANDROID_ABI=armeabi-v7a",
+    "-DANDROID_ARM_NEON=ON",
+    "-DANDROID_PLATFORM=android-28",
+    "-DCMAKE_BUILD_TYPE=Release",
+    "-DANDROID_STL=c++_static",
+    "-DMNN_USE_LOGCAT=false",
+    "-DMNN_BUILD_BENCHMARK=ON",
+    "-DMNN_USE_SSE=OFF",
+    "-DMNN_BUILD_TEST=OFF",
+    "-DMNN_BUILD_FOR_ANDROID_COMMAND=true",
+    "-DNATIVE_LIBRARY_OUTPUT=.",
+    "-DNATIVE_INCLUDE_OUTPUT=.",
+    "-DMNN_BUILD_LLM=true",
+    "-DMNN_OPENCL=false",
+    "-DMNN_ARM82=OFF",
+    "-DMNN_SME2=OFF",
+    "-DMNN_KLEIDIAI=OFF"
+   ],
+   "binaries": [
+    "llm_bench"
+   ],
+   "libs": [
+    "libMNN.so",
+    "libMNN_Express.so",
+    "libllm.so"
+   ],
+   "built": "2026-10-14T19:23:00.101805"
+  }
+ },
+ "energy_dir": "energy/20261014_192706",
+ "wake_lock": true,
+ "radio_mode": "mobile data, Bluetooth and location off (Wi-Fi kept for adb; airplane mode would end Wireless debugging: turn Wi-Fi back on once while in airplane mode to change that)",
+ "idle_window": [
+  178217.77,
+  178256.06
+ ]
+}

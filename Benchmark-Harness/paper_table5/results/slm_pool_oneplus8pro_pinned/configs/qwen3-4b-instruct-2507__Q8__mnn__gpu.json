@@ -1,0 +1,186 @@
+{
+ "config": {
+  "id": "qwen3-4b-instruct-2507__Q8__mnn__gpu",
+  "model": "qwen3-4b-instruct-2507",
+  "quant": "Q8",
+  "bits": 8,
+  "framework": "mnn",
+  "backend": "gpu",
+  "ref": "pinned"
+ },
+ "model_file": {
+  "name": "qwen3-4b-instruct-2507",
+  "hf_id": "Qwen/Qwen3-4B-Instruct-2507",
+  "framework": "mnn",
+  "quant": "Q8",
+  "bits": 8,
+  "ref": "pinned",
+  "path": "mnn/qwen3-4b-instruct-2507-mnn-paper-default-q8",
+  "files": {
+   "config.json": 210,
+   "export_args.json": 1373,
+   "llm.mnn": 646904,
+   "llm.mnn.json": 1292586,
+   "llm.mnn.weight": 4526691058,
+   "llm_config.json": 3057,
+   "tokenizer.txt": 3193548
+  },
+  "recipe": "paper-default",
+  "converter": "llmexport.py @ MNN mnn-510ac8f15d10, MNNConvert /Users/ksd/SLM_Factory_Krishna_Personal/Benchmark-Harness/paper_table5/third_party/tools/mnnconvert_nolog"
+ },
+ "started": "2026-10-14T21:33:06.720574",
+ "invocations": {
+  "kv": {
+   "exit": 0,
+   "timed_out": false,
+   "seconds": 1546.8,
+   "marks": 4,
+   "cpu_busy": 0.148,
+   "gate": {
+    "passed": true,
+    "waited_s": 0.4,
+    "issues": null,
+    "battery_temp_c": 26.2,
+    "cpu_caps_khz": {
+     "policy0": 1804800,
+     "policy4": 2419200,
+     "policy7": 2841600
+    },
+    "thermal_status": 0
+   },
+   "state_before": {
+    "epoch_ms": 1792038798525,
+    "battery_temp_c": 26.2,
+    "battery_level": 39,
+    "battery_status": 4,
+    "externally_powered": false,
+    "power_sources": [],
+    "cpu_caps_khz": {
+     "policy0": 1804800,
+     "policy4": 2419200,
+     "policy7": 2841600
+    },
+    "cpu_hw_max_khz": {
+     "policy0": 1804800,
+     "policy4": 2419200,
+     "policy7": 2841600
+    },
+    "cpu_capped": false,
+    "screen": "Awake",
+    "thermal_status": 0
+   },
+   "state_after": {
+    "epoch_ms": 1792040346139,
+    "battery_temp_c": 25.6,
+    "battery_level": 31,
+    "battery_status": 4,
+    "externally_powered": false,
+    "power_sources": [],
+    "cpu_caps_khz": {
+     "policy0": 1804800,
+     "policy4": 2419200,
+     "policy7": 2841600
+    },
+    "cpu_hw_max_khz": {
+     "policy0": 1804800,
+     "policy4": 2419200,
+     "policy7": 2841600
+    },
+    "cpu_capped": false,
+    "screen": "Awake",
+    "thermal_status": 0
+   },
+   "idle_window": null,
+   "suspend_ratio": 1.0
+  }
+ },
+ "windows": [
+  {
+   "phase": "prefill",
+   "source": "main",
+   "rep": 1,
+   "a": 94995.512709723,
+   "b": 95005.217677723,
+   "tokens": 256
+  },
+  {
+   "phase": "decode",
+   "source": "main",
+   "rep": 1,
+   "a": 95005.217677723,
+   "b": 95367.628962029,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "main",
+   "rep": 2,
+   "a": 95367.629022185,
+   "b": 95377.34466318501,
+   "tokens": 256
+  },
+  {
+   "phase": "decode",
+   "source": "main",
+   "rep": 2,
+   "a": 95377.34466318501,
+   "b": 95740.45523298,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "main",
+   "rep": 3,
+   "a": 95740.455352043,
+   "b": 95750.168993043,
+   "tokens": 256
+  },
+  {
+   "phase": "decode",
+   "source": "main",
+   "rep": 3,
+   "a": 95750.168993043,
+   "b": 96113.166443099,
+   "tokens": 256
+  }
+ ],
+ "prefill": {
+  "tps": 26.36,
+  "tps_std": 0.02,
+  "reps": [
+   26.38,
+   26.35,
+   26.35
+  ],
+  "tokens": [
+   256
+  ],
+  "uj_per_token": null,
+  "uj_per_token_gross": null,
+  "energy_valid": false,
+  "energy_reason": null
+ },
+ "decode": {
+  "tps": 0.71,
+  "tps_std": 0.0,
+  "reps": [
+   0.71,
+   0.71,
+   0.71
+  ],
+  "tokens": [
+   256
+  ],
+  "uj_per_token": null,
+  "uj_per_token_gross": null,
+  "energy_valid": false,
+  "energy_reason": null
+ },
+ "status": "ok",
+ "finished": "2026-10-14T21:59:21.145803",
+ "energy": {},
+ "energy_idle": "session start",
+ "energy_session": "2026-10-14T19:20:33.610654",
+ "energy_headline_method": null,
+ "energy_kind": "whole device (net of idle)"
+}

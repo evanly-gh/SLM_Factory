@@ -1,0 +1,12 @@
+Can't open file:/sys/devices/system/cpu/cpufreq/boost/affected_cpus
+CPU Group: [ 0  1  2  3  4  5 ], 384000 - 3628800
+CPU Group: [ 6  7 ], 768000 - 4608000
+(last_midr & (CPUINFO_ARM_MIDR_IMPLEMENTER_MASK | CPUINFO_ARM_MIDR_PART_MASK))=0x 51000020 in _getInfoArm, 1234 
+The device supports: i8sdot:1, fp16:1, i8mm: 1, sve2: 1, sme2: 0
+load_vocab, 202, cost time: 96.610001 ms
+| model                          |  modelSize | backend    | threads | precision  | test          |        t/s |
+| ------------------------------ | ---------: | ---------- | ----: | ---------- | ------------- | ---------: |
+| gemma3-270m-mnn-paper-default-q8 | 288.04 MiB | OPENCL     |     4 | Low        | pp256         | 3597.84 ± 14.79 |
+load_vocab, 202, cost time: 102.422997 ms
+| gemma3-270m-mnn-paper-default-q8 | 288.04 MiB | OPENCL     |     4 | Low        | pp0+tg0       |  nan ± nan |
+

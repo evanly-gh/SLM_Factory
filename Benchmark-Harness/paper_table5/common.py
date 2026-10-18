@@ -34,6 +34,14 @@ REFS = {
 }
 
 DEV_ROOT = "/data/local/tmp/paper_bench"
+
+# A real wake -> sleep screen transition, run on the phone immediately before a benchmark (profiles with wake_kick).
+# On the OnePlus 15 a benchmark that starts 20 s or more after the last screen transition or adb activity runs in a
+# slow CPU-governor state (clocks stay at their floor; a 135M model decodes at 2.8 instead of ~217 tokens/s). A plain
+# sleep key event is a no-op while the screen is already off. The benefit lasts about 10-20 s, so the key events go
+# inside the on-device run script, right before the benchmark, not in a separate adb call.
+WAKE_KICK_CMD = "input keyevent 224; sleep 1; input keyevent 223; "  # KEYCODE_WAKEUP, then KEYCODE_SLEEP
+
 DEV_MODELS = f"{DEV_ROOT}/models"
 
 
@@ -266,6 +274,7 @@ class DeviceControls:
 
     def screen_off(self):
         self.ensure_screen()
+
 
     def restore(self):
         try:

@@ -1,0 +1,234 @@
+{
+ "config": {
+  "id": "gemma3-270m__Q4__mnn__cpu",
+  "model": "gemma3-270m",
+  "quant": "Q4",
+  "bits": 4,
+  "framework": "mnn",
+  "backend": "cpu",
+  "ref": "pinned"
+ },
+ "model_file": {
+  "name": "gemma3-270m",
+  "hf_id": "google/gemma-3-270m-it",
+  "framework": "mnn",
+  "quant": "Q4",
+  "bits": 4,
+  "ref": "pinned",
+  "path": "mnn/gemma3-270m-mnn-paper-default-q4",
+  "files": {
+   "config.json": 210,
+   "export_args.json": 1352,
+   "llm.mnn": 374752,
+   "llm.mnn.json": 744476,
+   "llm.mnn.weight": 167976686,
+   "llm_config.json": 1941,
+   "tokenizer.txt": 6346065
+  },
+  "recipe": "paper-default",
+  "converter": "llmexport.py @ MNN mnn-510ac8f15d10, MNNConvert /Users/ksd/SLM_Factory_Krishna_Personal/Benchmark-Harness/paper_table5/third_party/tools/mnnconvert_nolog"
+ },
+ "started": "2026-10-12T23:56:20.111560",
+ "invocations": {
+  "kv": {
+   "exit": 0,
+   "timed_out": false,
+   "seconds": 178.4,
+   "marks": 4,
+   "cpu_busy": 0.505,
+   "gate": {
+    "passed": true,
+    "waited_s": 0.3,
+    "issues": null,
+    "battery_temp_c": 20.0,
+    "cpu_caps_khz": {
+     "policy0": 2001000,
+     "policy4": 1500000
+    },
+    "thermal_status": 0
+   },
+   "state_before": {
+    "epoch_ms": 1791874619984,
+    "battery_temp_c": 20.0,
+    "battery_level": 100,
+    "battery_status": 3,
+    "externally_powered": false,
+    "power_sources": [],
+    "cpu_caps_khz": {
+     "policy0": 2001000,
+     "policy4": 1500000
+    },
+    "cpu_hw_max_khz": {
+     "policy0": 2001000,
+     "policy4": 1500000
+    },
+    "cpu_capped": false,
+    "screen": "Asleep",
+    "thermal_status": 0
+   },
+   "state_after": {
+    "epoch_ms": 1791874799015,
+    "battery_temp_c": 21.0,
+    "battery_level": 100,
+    "battery_status": 3,
+    "externally_powered": false,
+    "power_sources": [],
+    "cpu_caps_khz": {
+     "policy0": 2001000,
+     "policy4": 1500000
+    },
+    "cpu_hw_max_khz": {
+     "policy0": 2001000,
+     "policy4": 1500000
+    },
+    "cpu_capped": false,
+    "screen": "Asleep",
+    "thermal_status": 0
+   },
+   "idle_window": null,
+   "suspend_ratio": 1.01
+  }
+ },
+ "windows": [
+  {
+   "phase": "prefill",
+   "source": "main",
+   "rep": 1,
+   "a": 21647.961343723,
+   "b": 21654.389649723,
+   "tokens": 256
+  },
+  {
+   "phase": "decode",
+   "source": "main",
+   "rep": 1,
+   "a": 21654.389649723,
+   "b": 21688.427878341,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "main",
+   "rep": 2,
+   "a": 21688.427973648,
+   "b": 21694.850764648,
+   "tokens": 256
+  },
+  {
+   "phase": "decode",
+   "source": "main",
+   "rep": 2,
+   "a": 21694.850764648,
+   "b": 21727.510966343,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "main",
+   "rep": 3,
+   "a": 21727.511067958,
+   "b": 21733.907765958,
+   "tokens": 256
+  },
+  {
+   "phase": "decode",
+   "source": "main",
+   "rep": 3,
+   "a": 21733.907765958,
+   "b": 21766.743571576,
+   "tokens": 256
+  }
+ ],
+ "prefill": {
+  "tps": 39.9,
+  "tps_std": 0.11,
+  "reps": [
+   39.82,
+   39.86,
+   40.02
+  ],
+  "tokens": [
+   256
+  ],
+  "uj_per_token": 24861.2,
+  "uj_per_token_gross": 32217.0,
+  "energy_valid": true,
+  "energy_reason": null
+ },
+ "decode": {
+  "tps": 7.72,
+  "tps_std": 0.17,
+  "reps": [
+   7.52,
+   7.84,
+   7.8
+  ],
+  "tokens": [
+   256
+  ],
+  "uj_per_token": 143403.7,
+  "uj_per_token_gross": 181442.0,
+  "energy_valid": true,
+  "energy_reason": null
+ },
+ "status": "ok",
+ "finished": "2026-10-13T00:00:14.026474",
+ "energy": {
+  "sysfs:current_avg": {
+   "prefill": {
+    "uj_per_token": 32217.0,
+    "net_uj_per_token": 24861.2,
+    "avg_power_mw": 1285.5,
+    "idle_power_mw": 293.5,
+    "seconds": 19.25,
+    "tokens": 768,
+    "windows": 3,
+    "valid": true,
+    "reason": null,
+    "note": "current unit uA"
+   },
+   "decode": {
+    "uj_per_token": 181442.0,
+    "net_uj_per_token": 143403.7,
+    "avg_power_mw": 1400.0,
+    "idle_power_mw": 293.5,
+    "seconds": 99.53,
+    "tokens": 768,
+    "windows": 3,
+    "valid": true,
+    "reason": null,
+    "note": "current unit uA"
+   }
+  },
+  "sysfs:charge_counter": {
+   "prefill": {
+    "uj_per_token": 0.0,
+    "net_uj_per_token": 0.0,
+    "avg_power_mw": 0.0,
+    "idle_power_mw": 0.0,
+    "seconds": 19.25,
+    "tokens": 768,
+    "windows": 3,
+    "valid": false,
+    "reason": "reading changed only 0 time(s) during the phase",
+    "note": "coulomb counter (uAh)"
+   },
+   "decode": {
+    "uj_per_token": 0.0,
+    "net_uj_per_token": 0.0,
+    "avg_power_mw": 0.0,
+    "idle_power_mw": 0.0,
+    "seconds": 99.53,
+    "tokens": 768,
+    "windows": 3,
+    "valid": false,
+    "reason": "reading changed only 0 time(s) during the phase",
+    "note": "coulomb counter (uAh)"
+   }
+  }
+ },
+ "energy_idle": "session start",
+ "energy_session": "2026-10-12T23:47:10.627601",
+ "energy_headline_method": "sysfs:current_avg",
+ "energy_kind": "whole device (net of idle)"
+}

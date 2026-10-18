@@ -1,0 +1,30 @@
+{
+ "config": {
+  "id": "qwen3-4b-instruct-2507__F16__llama.cpp__gpu",
+  "model": "qwen3-4b-instruct-2507",
+  "quant": "F16",
+  "bits": 16,
+  "framework": "llama.cpp",
+  "backend": "gpu",
+  "ref": "pinned"
+ },
+ "model_file": {
+  "name": "qwen3-4b-instruct-2507",
+  "hf_id": "Qwen/Qwen3-4B-Instruct-2507",
+  "framework": "llama.cpp",
+  "quant": "F16",
+  "bits": 16,
+  "ref": "pinned",
+  "path": "gguf/qwen3-4b-instruct-2507-f16.gguf",
+  "files": {
+   "qwen3-4b-instruct-2507-f16.gguf": 8051283616
+  },
+  "converter": "llama.cpp eadc4184caee convert_hf_to_gguf"
+ },
+ "started": "2026-10-14T21:59:22.746029",
+ "invocations": {},
+ "windows": [],
+ "status": "failed",
+ "error": "does not fit in RAM: 7.50 GiB of weights in memory on a phone with 11.24 GiB RAM (limit 55%); not run",
+ "finished": "2026-10-14T21:59:22.746099"
+}

@@ -1,0 +1,274 @@
+{
+ "config": {
+  "id": "qwen3.5-0.8b__F16__llama.cpp__cpu__head",
+  "model": "qwen3.5-0.8b",
+  "quant": "F16",
+  "bits": 16,
+  "framework": "llama.cpp",
+  "backend": "cpu",
+  "ref": "head"
+ },
+ "model_file": {
+  "name": "qwen3.5-0.8b",
+  "hf_id": "Qwen/Qwen3.5-0.8B",
+  "framework": "llama.cpp",
+  "quant": "F16",
+  "bits": 16,
+  "ref": "head",
+  "path": "gguf/qwen3.5-0.8b-f16-head.gguf",
+  "files": {
+   "qwen3.5-0.8b-f16-head.gguf": 1557662656
+  },
+  "converter": "llama.cpp 9c2e0e491a82 convert_hf_to_gguf"
+ },
+ "started": "2026-10-14T21:33:04.933872",
+ "invocations": {
+  "prefill": {
+   "exit": 0,
+   "timed_out": false,
+   "seconds": 3862.9,
+   "marks": 4,
+   "cpu_busy": 0.552,
+   "gate": {
+    "passed": true,
+    "waited_s": 0.4,
+    "issues": null,
+    "battery_temp_c": 22.0,
+    "cpu_caps_khz": {
+     "policy0": 2001000,
+     "policy4": 1500000
+    },
+    "thermal_status": 0
+   },
+   "state_before": {
+    "epoch_ms": 1792039023943,
+    "battery_temp_c": 22.0,
+    "battery_level": 49,
+    "battery_status": 3,
+    "externally_powered": false,
+    "power_sources": [],
+    "cpu_caps_khz": {
+     "policy0": 2001000,
+     "policy4": 1500000
+    },
+    "cpu_hw_max_khz": {
+     "policy0": 2001000,
+     "policy4": 1500000
+    },
+    "cpu_capped": false,
+    "screen": "Asleep",
+    "thermal_status": 0
+   },
+   "state_after": {
+    "epoch_ms": 1792042887608,
+    "battery_temp_c": 23.0,
+    "battery_level": 42,
+    "battery_status": 3,
+    "externally_powered": false,
+    "power_sources": [],
+    "cpu_caps_khz": {
+     "policy0": 2001000,
+     "policy4": 1500000
+    },
+    "cpu_hw_max_khz": {
+     "policy0": 2001000,
+     "policy4": 1500000
+    },
+    "cpu_capped": false,
+    "screen": "Asleep",
+    "thermal_status": 0
+   },
+   "idle_window": null,
+   "llama_bench": {
+    "build_commit": "9c2e0e4",
+    "backends": "CPU",
+    "n_threads": 4,
+    "flash_attn": -1,
+    "type_k": "f16",
+    "type_v": "f16",
+    "n_batch": 2048,
+    "n_ubatch": 512,
+    "use_mmap": null,
+    "avg_ts": 0.332649,
+    "stddev_ts": 0.003119,
+    "samples_ts": [
+     0.335007,
+     0.335128,
+     0.328531,
+     0.331928
+    ],
+    "model_type": "qwen35 0.8B F16",
+    "model_size": 1546700032
+   },
+   "suspend_ratio": 1.0
+  },
+  "decode": {
+   "exit": 0,
+   "timed_out": false,
+   "seconds": 5692.4,
+   "marks": 4,
+   "cpu_busy": 0.537,
+   "gate": {
+    "passed": true,
+    "waited_s": 0.3,
+    "issues": null,
+    "battery_temp_c": 23.0,
+    "cpu_caps_khz": {
+     "policy0": 2001000,
+     "policy4": 1500000
+    },
+    "thermal_status": 0
+   },
+   "state_before": {
+    "epoch_ms": 1792042905580,
+    "battery_temp_c": 23.0,
+    "battery_level": 42,
+    "battery_status": 3,
+    "externally_powered": false,
+    "power_sources": [],
+    "cpu_caps_khz": {
+     "policy0": 2001000,
+     "policy4": 1500000
+    },
+    "cpu_hw_max_khz": {
+     "policy0": 2001000,
+     "policy4": 1500000
+    },
+    "cpu_capped": false,
+    "screen": "Asleep",
+    "thermal_status": 0
+   },
+   "state_after": {
+    "epoch_ms": 1792048598697,
+    "battery_temp_c": 23.0,
+    "battery_level": 32,
+    "battery_status": 3,
+    "externally_powered": false,
+    "power_sources": [],
+    "cpu_caps_khz": {
+     "policy0": 2001000,
+     "policy4": 1500000
+    },
+    "cpu_hw_max_khz": {
+     "policy0": 2001000,
+     "policy4": 1500000
+    },
+    "cpu_capped": false,
+    "screen": "Asleep",
+    "thermal_status": 0
+   },
+   "idle_window": null,
+   "llama_bench": {
+    "build_commit": "9c2e0e4",
+    "backends": "CPU",
+    "n_threads": 4,
+    "flash_attn": -1,
+    "type_k": "f16",
+    "type_v": "f16",
+    "n_batch": 2048,
+    "n_ubatch": 512,
+    "use_mmap": null,
+    "avg_ts": 0.209754,
+    "stddev_ts": 0.000682,
+    "samples_ts": [
+     0.209922,
+     0.210487,
+     0.209763,
+     0.208844
+    ],
+    "model_type": "qwen35 0.8B F16",
+    "model_size": 1546700032
+   },
+   "suspend_ratio": 1.0
+  }
+ },
+ "windows": [
+  {
+   "phase": "prefill",
+   "source": "main",
+   "rep": 1,
+   "a": 187543.563383539,
+   "b": 188307.450738969,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "main",
+   "rep": 2,
+   "a": 188307.451065354,
+   "b": 189086.676993862,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "main",
+   "rep": 3,
+   "a": 189086.678131092,
+   "b": 189857.930489292,
+   "tokens": 256
+  },
+  {
+   "phase": "decode",
+   "source": "main",
+   "rep": 1,
+   "a": 191881.609487105,
+   "b": 193097.835866332,
+   "tokens": 256
+  },
+  {
+   "phase": "decode",
+   "source": "main",
+   "rep": 2,
+   "a": 193097.853406562,
+   "b": 194318.277173173,
+   "tokens": 256
+  },
+  {
+   "phase": "decode",
+   "source": "main",
+   "rep": 3,
+   "a": 194318.310086712,
+   "b": 195544.10424317,
+   "tokens": 256
+  }
+ ],
+ "prefill": {
+  "tps": 0.33,
+  "tps_std": 0.0,
+  "reps": [
+   0.34,
+   0.33,
+   0.33
+  ],
+  "tokens": [
+   256
+  ],
+  "uj_per_token": null,
+  "uj_per_token_gross": null,
+  "energy_valid": false,
+  "energy_reason": null
+ },
+ "decode": {
+  "tps": 0.21,
+  "tps_std": 0.0,
+  "reps": [
+   0.21,
+   0.21,
+   0.21
+  ],
+  "tokens": [
+   256
+  ],
+  "uj_per_token": null,
+  "uj_per_token_gross": null,
+  "energy_valid": false,
+  "energy_reason": null
+ },
+ "status": "ok",
+ "finished": "2026-10-15T00:16:53.719937",
+ "energy": {},
+ "energy_idle": "session start",
+ "energy_session": "2026-10-14T19:27:06.566899",
+ "energy_headline_method": null,
+ "energy_kind": "whole device (net of idle)"
+}

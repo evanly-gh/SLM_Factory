@@ -1,0 +1,2 @@
+PB_MARK mnn mode=kv rep=0 begin=2196989017045923 end=2197010643929248 prefill_us=5524423 decode_us=15807287 prompt=256 gen=256
+Segmentation fault 

@@ -1,0 +1,25 @@
+ggml_opencl: selected platform: 'QUALCOMM Snapdragon(TM)'
+
+ggml_opencl: device: 'QUALCOMM Adreno(TM) 840 (OpenCL 3.0 Adreno(TM) 840)'
+ggml_opencl: OpenCL driver: OpenCL 3.0 QUALCOMM build: 0842.21 Compiler E031.50.19.14
+ggml_opencl: vector subgroup broadcast support: true
+ggml_opencl: device FP16 support: true
+ggml_opencl: mem base addr align: 128
+ggml_opencl: max mem alloc size: 1889 MB
+ggml_opencl: device max workgroup size: 1024
+ggml_opencl: SVM coarse grain buffer support: true
+ggml_opencl: SVM fine grain buffer support: true
+ggml_opencl: SVM fine grain system support: false
+ggml_opencl: SVM atomics support: true
+ggml_opencl: flattening quantized weights representation as struct of arrays (GGML_OPENCL_SOA_Q)
+ggml_opencl: using kernels optimized for Adreno (GGML_OPENCL_USE_ADRENO_KERNELS)
+ggml_opencl: loading OpenCL kernels.............................................................................
+ggml_opencl: default device: 'QUALCOMM Adreno(TM) 840 (OpenCL 3.0 Adreno(TM) 840)'
+PB_MARK llama rep=0 begin=2184343542308403 end=2184347019202725 n_prompt=0 n_gen=256 n_depth=256
+PB_MARK llama rep=1 begin=2184347025637100 end=2184350677745015 n_prompt=0 n_gen=256 n_depth=256
+PB_MARK llama rep=2 begin=2184350684631786 end=2184354137339806 n_prompt=0 n_gen=256 n_depth=256
+PB_MARK llama rep=3 begin=2184354144428139 end=2184357539701679 n_prompt=0 n_gen=256 n_depth=256
+PB_MARK llama rep=4 begin=2184357546792825 end=2184360930888553 n_prompt=0 n_gen=256 n_depth=256
+PB_MARK llama rep=5 begin=2184360938728605 end=2184364327575583 n_prompt=0 n_gen=256 n_depth=256
+PB_MARK llama rep=6 begin=2184364333646677 end=2184367732532352 n_prompt=0 n_gen=256 n_depth=256
+PB_MARK llama rep=7 begin=2184367740401675 end=2184371223778809 n_prompt=0 n_gen=256 n_depth=256

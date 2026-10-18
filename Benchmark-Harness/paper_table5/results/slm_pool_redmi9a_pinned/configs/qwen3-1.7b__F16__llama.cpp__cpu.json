@@ -1,0 +1,30 @@
+{
+ "config": {
+  "id": "qwen3-1.7b__F16__llama.cpp__cpu",
+  "model": "qwen3-1.7b",
+  "quant": "F16",
+  "bits": 16,
+  "framework": "llama.cpp",
+  "backend": "cpu",
+  "ref": "pinned"
+ },
+ "model_file": {
+  "name": "qwen3-1.7b",
+  "hf_id": "Qwen/Qwen3-1.7B",
+  "framework": "llama.cpp",
+  "quant": "F16",
+  "bits": 16,
+  "ref": "pinned",
+  "path": "gguf/qwen3-1.7b-f16.gguf",
+  "files": {
+   "qwen3-1.7b-f16.gguf": 4069679360
+  },
+  "converter": "llama.cpp eadc4184caee convert_hf_to_gguf"
+ },
+ "started": "2026-10-13T08:43:59.979977",
+ "invocations": {},
+ "windows": [],
+ "status": "failed",
+ "error": "does not fit in RAM: 3.79 GiB of weights in memory on a phone with 3.72 GiB RAM (limit 55%); not run",
+ "finished": "2026-10-13T08:43:59.980006"
+}

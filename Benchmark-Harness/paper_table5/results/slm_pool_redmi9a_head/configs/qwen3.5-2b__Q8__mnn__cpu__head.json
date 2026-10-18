@@ -1,0 +1,89 @@
+{
+ "config": {
+  "id": "qwen3.5-2b__Q8__mnn__cpu__head",
+  "model": "qwen3.5-2b",
+  "quant": "Q8",
+  "bits": 8,
+  "framework": "mnn",
+  "backend": "cpu",
+  "ref": "head"
+ },
+ "model_file": {
+  "name": "qwen3.5-2b",
+  "hf_id": "Qwen/Qwen3.5-2B",
+  "framework": "mnn",
+  "quant": "Q8",
+  "bits": 8,
+  "ref": "head",
+  "path": "mnn/qwen3.5-2b-mnn-paper-default-q8-head",
+  "files": {
+   "config.json": 502,
+   "export_args.json": 1535,
+   "llm.mnn": 2681616,
+   "llm.mnn.json": 6712434,
+   "llm.mnn.weight": 1999728010,
+   "llm_config.json": 9117,
+   "tokenizer.mtok": 7342048
+  },
+  "recipe": "paper-default",
+  "converter": "llmexport.py @ MNN mnn-a8ec49781e19, MNNConvert /Users/ksd/SLM_Factory_Krishna_Personal/Benchmark-Harness/paper_table5/third_party/tools/mnnconvert_nolog"
+ },
+ "started": "2026-10-15T00:16:54.459200",
+ "invocations": {
+  "kv": {
+   "exit": -9,
+   "timed_out": false,
+   "seconds": 56.3,
+   "marks": 0,
+   "cpu_busy": null,
+   "gate": {
+    "passed": true,
+    "waited_s": 0.3,
+    "issues": null,
+    "battery_temp_c": 19.0,
+    "cpu_caps_khz": {
+     "policy0": 2001000,
+     "policy4": 1500000
+    },
+    "thermal_status": 0
+   },
+   "state_before": {
+    "epoch_ms": 1792050902858,
+    "battery_temp_c": 19.0,
+    "battery_level": 31,
+    "battery_status": 3,
+    "externally_powered": false,
+    "power_sources": [],
+    "cpu_caps_khz": {
+     "policy0": 2001000,
+     "policy4": 1500000
+    },
+    "cpu_hw_max_khz": {
+     "policy0": 2001000,
+     "policy4": 1500000
+    },
+    "cpu_capped": false,
+    "screen": "Asleep",
+    "thermal_status": 0
+   },
+   "state_after": {
+    "epoch_ms": 1792050959530,
+    "battery_temp_c": null,
+    "battery_level": null,
+    "battery_status": null,
+    "externally_powered": false,
+    "power_sources": [],
+    "cpu_caps_khz": {},
+    "cpu_hw_max_khz": {},
+    "cpu_capped": false,
+    "screen": null,
+    "thermal_status": null
+   },
+   "idle_window": null
+  }
+ },
+ "windows": [],
+ "status": "failed",
+ "error": "does not fit in RAM: 1959 MB of the benchmark process was swapped out (stopped at > 512 MB)",
+ "finished": "2026-10-15T00:56:14.536436"
+}

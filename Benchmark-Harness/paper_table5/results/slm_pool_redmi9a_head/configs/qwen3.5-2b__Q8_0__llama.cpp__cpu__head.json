@@ -1,0 +1,335 @@
+{
+ "config": {
+  "id": "qwen3.5-2b__Q8_0__llama.cpp__cpu__head",
+  "model": "qwen3.5-2b",
+  "quant": "Q8_0",
+  "bits": 8,
+  "framework": "llama.cpp",
+  "backend": "cpu",
+  "ref": "head"
+ },
+ "model_file": {
+  "name": "qwen3.5-2b",
+  "hf_id": "Qwen/Qwen3.5-2B",
+  "framework": "llama.cpp",
+  "quant": "Q8_0",
+  "bits": 8,
+  "ref": "head",
+  "path": "gguf/qwen3.5-2b-q8_0-head.gguf",
+  "files": {
+   "qwen3.5-2b-q8_0-head.gguf": 2076675008
+  },
+  "converter": "llama.cpp 9c2e0e491a82 convert_hf_to_gguf"
+ },
+ "started": "2026-10-15T03:07:09.756503",
+ "invocations": {
+  "prefill": {
+   "exit": 0,
+   "timed_out": false,
+   "seconds": 691.1,
+   "marks": 4,
+   "cpu_busy": 0.659,
+   "gate": {
+    "passed": true,
+    "waited_s": 0.3,
+    "issues": null,
+    "battery_temp_c": 24.0,
+    "cpu_caps_khz": {
+     "policy0": 2001000,
+     "policy4": 1500000
+    },
+    "thermal_status": 0
+   },
+   "state_before": {
+    "epoch_ms": 1792059228439,
+    "battery_temp_c": 24.0,
+    "battery_level": 35,
+    "battery_status": 2,
+    "externally_powered": true,
+    "power_sources": [
+     "ac"
+    ],
+    "cpu_caps_khz": {
+     "policy0": 2001000,
+     "policy4": 1500000
+    },
+    "cpu_hw_max_khz": {
+     "policy0": 2001000,
+     "policy4": 1500000
+    },
+    "cpu_capped": false,
+    "screen": "Asleep",
+    "thermal_status": 0
+   },
+   "state_after": {
+    "epoch_ms": 1792059920269,
+    "battery_temp_c": 28.0,
+    "battery_level": 41,
+    "battery_status": 2,
+    "externally_powered": true,
+    "power_sources": [
+     "ac"
+    ],
+    "cpu_caps_khz": {
+     "policy0": 2001000,
+     "policy4": 1500000
+    },
+    "cpu_hw_max_khz": {
+     "policy0": 2001000,
+     "policy4": 1500000
+    },
+    "cpu_capped": false,
+    "screen": "Asleep",
+    "thermal_status": 0
+   },
+   "idle_window": null,
+   "llama_bench": {
+    "build_commit": "9c2e0e4",
+    "backends": "CPU",
+    "n_threads": 4,
+    "flash_attn": -1,
+    "type_k": "f16",
+    "type_v": "f16",
+    "n_batch": 2048,
+    "n_ubatch": 512,
+    "use_mmap": null,
+    "avg_ts": 1.89872,
+    "stddev_ts": 0.178596,
+    "samples_ts": [
+     2.02939,
+     2.02705,
+     1.64962,
+     1.88882
+    ],
+    "model_type": "qwen35 2B Q8_0",
+    "model_size": 2065712384
+   },
+   "suspend_ratio": 1.0
+  },
+  "decode": {
+   "exit": 0,
+   "timed_out": false,
+   "seconds": 1135.5,
+   "marks": 4,
+   "cpu_busy": 0.734,
+   "gate": {
+    "passed": true,
+    "waited_s": 0.4,
+    "issues": null,
+    "battery_temp_c": 28.0,
+    "cpu_caps_khz": {
+     "policy0": 2001000,
+     "policy4": 1500000
+    },
+    "thermal_status": 0
+   },
+   "state_before": {
+    "epoch_ms": 1792059938382,
+    "battery_temp_c": 28.0,
+    "battery_level": 42,
+    "battery_status": 2,
+    "externally_powered": true,
+    "power_sources": [
+     "ac"
+    ],
+    "cpu_caps_khz": {
+     "policy0": 2001000,
+     "policy4": 1500000
+    },
+    "cpu_hw_max_khz": {
+     "policy0": 2001000,
+     "policy4": 1500000
+    },
+    "cpu_capped": false,
+    "screen": "Asleep",
+    "thermal_status": 0
+   },
+   "state_after": {
+    "epoch_ms": 1792061074552,
+    "battery_temp_c": 29.0,
+    "battery_level": 53,
+    "battery_status": 2,
+    "externally_powered": true,
+    "power_sources": [
+     "ac"
+    ],
+    "cpu_caps_khz": {
+     "policy0": 2001000,
+     "policy4": 1500000
+    },
+    "cpu_hw_max_khz": {
+     "policy0": 2001000,
+     "policy4": 1500000
+    },
+    "cpu_capped": false,
+    "screen": "Asleep",
+    "thermal_status": 0
+   },
+   "idle_window": null,
+   "llama_bench": {
+    "build_commit": "9c2e0e4",
+    "backends": "CPU",
+    "n_threads": 4,
+    "flash_attn": -1,
+    "type_k": "f16",
+    "type_v": "f16",
+    "n_batch": 2048,
+    "n_ubatch": 512,
+    "use_mmap": null,
+    "avg_ts": 1.042028,
+    "stddev_ts": 0.064868,
+    "samples_ts": [
+     1.09503,
+     1.08713,
+     1.03149,
+     0.954456
+    ],
+    "model_type": "qwen35 2B Q8_0",
+    "model_size": 2065712384
+   },
+   "suspend_ratio": 1.0
+  }
+ },
+ "windows": [
+  {
+   "phase": "prefill",
+   "source": "main",
+   "rep": 1,
+   "a": 206474.99042452,
+   "b": 206601.282145296,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "main",
+   "rep": 2,
+   "a": 206601.282485989,
+   "b": 206756.469472459,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "main",
+   "rep": 3,
+   "a": 206756.473263921,
+   "b": 206892.007973083,
+   "tokens": 256
+  },
+  {
+   "phase": "decode",
+   "source": "main",
+   "rep": 1,
+   "a": 207295.403369799,
+   "b": 207530.885415352,
+   "tokens": 256
+  },
+  {
+   "phase": "decode",
+   "source": "main",
+   "rep": 2,
+   "a": 207530.973862198,
+   "b": 207779.15816029,
+   "tokens": 256
+  },
+  {
+   "phase": "decode",
+   "source": "main",
+   "rep": 3,
+   "a": 207779.262068367,
+   "b": 208047.477751229,
+   "tokens": 256
+  }
+ ],
+ "prefill": {
+  "tps": 1.86,
+  "tps_std": 0.19,
+  "reps": [
+   2.03,
+   1.65,
+   1.89
+  ],
+  "tokens": [
+   256
+  ],
+  "uj_per_token": 733102.2,
+  "uj_per_token_gross": -3571970.2,
+  "energy_valid": false,
+  "energy_reason": "externally powered: battery reading follows the charger"
+ },
+ "decode": {
+  "tps": 1.02,
+  "tps_std": 0.07,
+  "reps": [
+   1.09,
+   1.03,
+   0.95
+  ],
+  "tokens": [
+   256
+  ],
+  "uj_per_token": 1457849.4,
+  "uj_per_token_gross": -6304266.8,
+  "energy_valid": false,
+  "energy_reason": "externally powered: battery reading follows the charger"
+ },
+ "status": "ok",
+ "finished": "2026-10-15T03:44:49.557918",
+ "energy": {
+  "sysfs:current_avg": {
+   "prefill": {
+    "uj_per_token": -3571970.2,
+    "net_uj_per_token": 733102.2,
+    "avg_power_mw": -6578.4,
+    "idle_power_mw": -7928.5,
+    "seconds": 417.01,
+    "tokens": 768,
+    "windows": 1,
+    "valid": false,
+    "reason": "externally powered: battery reading follows the charger",
+    "note": "current unit uA"
+   },
+   "decode": {
+    "uj_per_token": -6304266.8,
+    "net_uj_per_token": 1457849.4,
+    "avg_power_mw": -6439.4,
+    "idle_power_mw": -7928.5,
+    "seconds": 751.88,
+    "tokens": 768,
+    "windows": 1,
+    "valid": false,
+    "reason": "externally powered: battery reading follows the charger",
+    "note": "current unit uA"
+   }
+  },
+  "sysfs:charge_counter": {
+   "prefill": {
+    "uj_per_token": 3879741.8,
+    "net_uj_per_token": 3879741.8,
+    "avg_power_mw": 7145.2,
+    "idle_power_mw": 0.0,
+    "seconds": 417.01,
+    "tokens": 768,
+    "windows": 1,
+    "valid": false,
+    "reason": "externally powered: battery reading follows the charger; reading changed only 4 time(s) during the phase",
+    "note": "coulomb counter (uAh)"
+   },
+   "decode": {
+    "uj_per_token": 7822728.4,
+    "net_uj_per_token": 7822728.4,
+    "avg_power_mw": 7990.4,
+    "idle_power_mw": 0.0,
+    "seconds": 751.88,
+    "tokens": 768,
+    "windows": 1,
+    "valid": false,
+    "reason": "externally powered: battery reading follows the charger; reading changed only 8 time(s) during the phase",
+    "note": "coulomb counter (uAh)"
+   }
+  }
+ },
+ "energy_idle": "session start",
+ "energy_session": "2026-10-15T03:06:22.074422",
+ "energy_headline_method": "sysfs:current_avg",
+ "energy_kind": "whole device (net of idle)"
+}

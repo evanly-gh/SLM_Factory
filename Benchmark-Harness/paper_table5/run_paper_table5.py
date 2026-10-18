@@ -45,7 +45,7 @@ sys.path.insert(0, str(HERE.parent))
 import bench_common  # noqa: E402
 import energy_probe  # noqa: E402
 from common import (DEV_MODELS, DEV_ROOT, MODELS_DIR, RESULTS_DIR, DeviceControls, boottime_s,  # noqa: E402
-                    WakeHolder, dev_bin_dir, device_info, match_profile)
+                    WAKE_KICK_CMD, WakeHolder, dev_bin_dir, device_info, match_profile)
 from devenv import Adb  # noqa: E402
 from energy import EnergyRecorder, is_chip_method, probe_recommendation  # noqa: E402
 
@@ -152,11 +152,12 @@ def stop_benchmark(adb: Adb, work: str, exe: str):
 
 
 def run_on_device(adb: Adb, controls: DeviceControls, bin_dir: str, cmd: str, env: str, tag: str,
-                  raw_dir: Path, timeout_s: int) -> dict:
+                  raw_dir: Path, timeout_s: int, kick: bool = False) -> dict:
     """Run detached (survives an adb disconnect), poll for completion, fetch stdout/stderr."""
     work = f"{DEV_RUN}/{tag}"
     adb.sh(f"rm -rf {work}; mkdir -p {work}")
-    script = (f"cd {bin_dir} && {env} {cmd} > {work}/stdout.txt 2> {work}/stderr.txt; "
+    script = ((WAKE_KICK_CMD if kick else "") +
+              f"cd {bin_dir} && {env} {cmd} > {work}/stdout.txt 2> {work}/stderr.txt; "
               f"echo $? > {work}/exit")
     energy_probe.push_text(adb, script + "\n", f"{work}/run.sh")
     adb.sh(f"setsid sh {work}/run.sh </dev/null >/dev/null 2>&1 &")
@@ -419,7 +420,8 @@ class Session:
         before = bench_common.device_state(self.adb)
         log(f"   {phase_label}: {cmd}")
         j0 = energy_probe.read_cpu_jiffies(self.adb)
-        res = run_on_device(self.adb, self.controls, bin_dir, cmd, env, tag, self.raw, self.args.timeout)
+        kick = bool(self.profile.get("wake_kick")) and not self.controls.screen_on  # see WAKE_KICK_CMD
+        res = run_on_device(self.adb, self.controls, bin_dir, cmd, env, tag, self.raw, self.args.timeout, kick=kick)
         busy = energy_probe.busy_fraction(j0, energy_probe.read_cpu_jiffies(self.adb))
         after = bench_common.device_state(self.adb)
         res.update({"gate": gate, "state_before": before, "state_after": after, "cpu_busy": busy,

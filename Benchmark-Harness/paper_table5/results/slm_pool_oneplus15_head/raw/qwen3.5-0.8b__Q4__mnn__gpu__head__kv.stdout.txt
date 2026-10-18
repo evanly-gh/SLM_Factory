@@ -1,0 +1,12 @@
+CPU Group: [ 0  1  2  3  4  5 ], 384000 - 3628800
+CPU Group: [ 6  7 ], 768000 - 4608000
+(last_midr & (CPUINFO_ARM_MIDR_IMPLEMENTER_MASK | CPUINFO_ARM_MIDR_PART_MASK))=0x 51000020 in _getInfoArm, 1250 
+The device supports: i8sdot:1, fp16:1, i8mm: 1, sve2: 1, sme2: 0, perfCores: 0
+Can't open file:tmp/mnn_cachefile.bin
+Load Cache file error.
+| model                          |  modelSize | backend    | threads | precision  | llm_demo   | speed(tok/s) |
+| ------------------------------ | ---------: | ---------- | ----: | ---------- | ---------- | ------------ |
+| qwen3.5-0.8b-mnn-paper-default-q4-head | 403.75 MiB | OPENCL     |     4 | Low        | prompt=256<br>decode=256 | 1291.78 ± 7.10<br>80.22 ± 5.15 |
+decode wall speed (incl. sampling): 75.91 ± 5.70 tok/s
+Update cache to tmp/mnn_cachefile.bin, size = 1394280
+
