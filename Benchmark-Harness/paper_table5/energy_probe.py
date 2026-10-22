@@ -42,7 +42,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parent))
 import bench_common  # noqa: E402
-from common import ScreenKeeper, WakeHolder, is_wireless_serial  # noqa: E402
+from common import PanelOff, ScreenKeeper, WakeHolder, is_wireless_serial  # noqa: E402
 from devenv import Adb, list_devices  # noqa: E402
 
 DEV_DIR = "/data/local/tmp/energy_probe"
@@ -50,6 +50,10 @@ TRACE_REMOTE = "/data/misc/perfetto-traces/energy_probe.pftrace"
 SUPPLY_FILES = ("current_now", "current_avg", "voltage_now", "voltage_avg", "charge_counter",
                 "power_now", "power_avg", "energy_now")
 SAMPLED_CURRENT = ("current_now", "current_avg")
+# Battery-service sampler (tools/PbBattery.java): BatteryManager properties via app_process, for phones whose battery
+# sysfs files are hidden from the shell and whose Perfetto cannot record the battery counters (OnePlus 8 Pro).
+BM_JAR = f"{DEV_DIR}/pbbattery.jar"
+BM_SAMPLES = "bm_samples.txt"
 
 PERFETTO_CONFIG = """
 buffers { size_kb: 32768 fill_policy: RING_BUFFER }
@@ -135,8 +139,40 @@ def discover(adb: Adb) -> dict:
         "echo \"$f: $(cat /sys/class/power_supply/battery/$f 2>&1 | head -1)\"; done").strip()
 
     info["perfetto_version"] = adb.sh("perfetto --version 2>&1 | head -1").strip()
+    info["battery_service"] = battery_service_probe(adb)
     info["state"] = bench_common.device_state(adb)
     return info
+
+
+def battery_service_probe(adb: Adb) -> dict:
+    """One PbBattery sample: which BatteryManager properties this phone reports to the shell user."""
+    try:
+        from build_binaries import build_java_tool
+        jar = build_java_tool("PbBattery")
+    except (Exception, SystemExit) as e:  # noqa: BLE001 - no JDK/SDK on this computer: method unavailable
+        return {"usable": False, "error": f"could not build tools/PbBattery.java: {e}"}
+    adb.sh(f"mkdir -p {DEV_DIR}")
+    adb.run(["push", str(jar), BM_JAR], timeout=120)
+    out = adb.sh(f"CLASSPATH={BM_JAR} app_process / PbBattery --once 2>&1", timeout=60).strip()
+    lines = [ln for ln in out.splitlines() if ln.strip()]
+    if len(lines) < 2 or not lines[0].startswith("#"):
+        return {"usable": False, "error": out[-300:]}
+    sample = dict(zip(lines[0].lstrip("#").split()[1:], lines[1].split()[1:]))
+    current = any(sample.get(k, "NA") not in ("NA", "0") for k in ("bm:current_now", "bm:current_avg"))
+    return {"usable": current and sample.get("bm:voltage_now", "NA") != "NA", "sample": sample}
+
+
+def start_battery_service(adb: Adb, interval_ms: int = 100):
+    adb.sh("pkill -f 'PbBatter[y]'")
+    adb.sh(f"rm -f {DEV_DIR}/{BM_SAMPLES}; CLASSPATH={BM_JAR} setsid app_process / PbBattery "
+           f"{DEV_DIR}/{BM_SAMPLES} {DEV_DIR}/stop {interval_ms} </dev/null >/dev/null 2>&1 &")
+
+
+def pull_battery_service(adb: Adb, local_dir: Path):
+    """After the stop file: pull the samples (the sampler exits within one interval)."""
+    time.sleep(1)
+    adb.sh("pkill -f 'PbBatter[y]'")
+    adb.run(["pull", f"{DEV_DIR}/{BM_SAMPLES}", str(local_dir / BM_SAMPLES)], timeout=300)
 
 
 def print_discovery(d: dict):
@@ -156,6 +192,9 @@ def print_discovery(d: dict):
         for line in d.get("power_supply_diag", "").splitlines():
             print(f"   battery/{line.strip()[:120]}")
         print("   (the Perfetto battery methods still work without these files)")
+    bs = d.get("battery_service") or {}
+    print(f"Battery service:       {'usable' if bs.get('usable') else 'not usable'} "
+          f"{bs.get('sample') or bs.get('error', '')}"[:200])
     st = d["state"]
     print(f"Externally powered:    {st['externally_powered']} {st['power_sources']}  "
           f"battery {st['battery_level']}%  {st['battery_temp_c']} C  screen={st['screen']}")
@@ -309,6 +348,9 @@ def start_perfetto(adb: Adb) -> int | None:
     adb.sh(f"rm -f {TRACE_REMOTE}")
     out = adb.sh(f"cat {DEV_DIR}/perfetto.pbtx | perfetto --txt -c - -o {TRACE_REMOTE} --background-wait 2>&1")
     m = re.search(r"^\s*(\d+)\s*$", out, re.M)
+    if not m and "background-wait" in out:  # older Perfetto (e.g. v25 on the OnePlus 8 Pro) has only --background
+        out = adb.sh(f"cat {DEV_DIR}/perfetto.pbtx | perfetto --txt -c - -o {TRACE_REMOTE} --background 2>&1")
+        m = re.search(r"^\s*(\d+)\s*$", out, re.M)
     if not m:
         print(f"[WARN] perfetto did not start, Perfetto methods skipped: {out.strip()[:200]}")
         return None
@@ -352,7 +394,8 @@ def cmd_collect(args):
         if z["shell_readable"] or z.get("su_readable"):
             label = re.sub(r"\s+", "_", z["name"] or Path(z["path"]).name)
             columns.append((f"powercap:{label}", f"{z['path']}/energy_uj"))
-    if not columns and args.no_perfetto:
+    use_bm = info["battery_service"].get("usable", False)
+    if not columns and args.no_perfetto and not use_bm:
         sys.exit("Nothing readable to sample (no battery sysfs files, no powercap) and --no-perfetto was given.")
     if not columns:
         print("No sysfs/powercap files readable: the phone-side sampler records timestamps only (for sleep "
@@ -395,7 +438,8 @@ def cmd_collect(args):
             waker, args.screen = None, "on"
     meta["params"]["screen"] = args.screen
     meta["wake_lock"] = bool(waker)
-    keeper = ScreenKeeper(adb) if args.screen == "on" else None
+    keeper = ScreenKeeper(adb) if args.screen in ("on", "panel") else None
+    panel = PanelOff(adb) if args.screen == "panel" else None
     print(f"Screen: {args.screen}" + (" (minimum brightness)" if keeper else
                                       ", CPU kept awake by a partial wake lock" if waker else ""))
     try:
@@ -403,10 +447,15 @@ def cmd_collect(args):
             keeper.apply()
         else:
             adb.sh("input keyevent 223")
+        if panel:
+            panel.apply()
         adb.sh(f"{sampler_cmd} </dev/null >/dev/null 2>&1 &")
         if not args.no_perfetto:
             pid = start_perfetto(adb)
-            if pid is None and not columns:
+        if use_bm:
+            start_battery_service(adb, int(args.interval * 1000))
+        if not args.no_perfetto:
+            if pid is None and not columns and not use_bm:
                 raise SystemExit("Perfetto did not start and nothing else is readable; no energy method to test.")
         time.sleep(args.rest)
         for i, (w, rep) in enumerate(plan, 1):
@@ -440,7 +489,11 @@ def cmd_collect(args):
         if pid is not None:
             meta["trace"] = stop_perfetto(adb, pid, run_dir)
         adb.run(["pull", f"{DEV_DIR}/samples.txt", str(run_dir / "samples.txt")], timeout=120)
+        if use_bm:
+            pull_battery_service(adb, run_dir)
         adb.run(["pull", f"{DEV_DIR}/load.log", str(run_dir / "load.log")], timeout=60)
+        if panel:
+            panel.restore()
         if keeper:
             keeper.restore()
         if waker:
@@ -569,6 +622,9 @@ def power_functions(samples_path: Path, trace_path: Path | None, zones: list) ->
     header, rows = load_samples(samples_path) if samples_path.exists() else ([], [])
     idx = {name: i for i, name in enumerate(header)}
     col = {name: [(r[0], r[i]) for r in rows if r[i] is not None] for i, name in enumerate(header) if i}
+    bm_path = samples_path.parent / BM_SAMPLES
+    bm_header, bm_rows = load_samples(bm_path) if bm_path.exists() else ([], [])
+    bm_col = {name: [(r[0], r[i]) for r in bm_rows if r[i] is not None] for i, name in enumerate(bm_header) if i}
 
     def paired(a_name, b_name):
         """[(t, a, b)] from rows where both columns were read in the same sample."""
@@ -601,6 +657,24 @@ def power_functions(samples_path: Path, trace_path: Path | None, zones: list) ->
             v = time_weighted_mean(volt, a, b)
             return None if r is None or v is None else r * 3.6e-3 * v * vs * 1e3  # uAh/s -> C/s, x V -> W -> mW
         add("sysfs:charge_counter", charge_power, q, "coulomb counter (uAh)")
+    bv = bm_col.get("bm:voltage_now")
+    if bv:
+        bvs = voltage_scale([v for _, v in bv])
+        bi = {n: i for i, n in enumerate(bm_header)}
+        for f in SAMPLED_CURRENT:
+            cur = bm_col.get(f"bm:{f}")
+            if cur and len({v for _, v in cur}) > 1:
+                cs = current_scale([v for _, v in cur])
+                p = [(r[0], r[bi[f"bm:{f}"]] * cs * r[bi["bm:voltage_now"]] * bvs * 1e3) for r in bm_rows
+                     if r[bi[f"bm:{f}"]] is not None and r[bi["bm:voltage_now"]] is not None]
+                add(f"bm:{f}", lambda a, b, p=p: time_weighted_mean(p, a, b), cur,
+                    f"battery service (BatteryManager) current, unit {'mA' if cs == 1e-3 else 'uA'}")
+        bq = bm_col.get("bm:charge_counter")
+        if bq and len({v for _, v in bq}) > 1:
+            def bm_charge(a, b):
+                r, v = counter_rate(bq, a, b), time_weighted_mean(bv, a, b)
+                return None if r is None or v is None else r * 3.6e-3 * v * bvs * 1e3
+            add("bm:charge_counter", bm_charge, bq, "battery service charge counter (uAh)")
     zones = {z["name"]: z for z in zones}
     for name, series in col.items():
         if name.startswith("powercap:"):
@@ -829,7 +903,7 @@ def main():
     p.add_argument("--rest", type=int, default=20, help="seconds between windows")
     p.add_argument("--settle", type=float, default=5.0, help="seconds dropped from the start of each window")
     p.add_argument("--interval", type=float, default=0.1, help="sysfs sampling interval on the phone (s)")
-    p.add_argument("--screen", choices=("auto", "off", "on"), default="auto",
+    p.add_argument("--screen", choices=("auto", "off", "on", "panel"), default="auto",
                    help="auto: on (minimum brightness) over wireless adb, where a screen-off phone suspends; off on USB")
     p.add_argument("--no-perfetto", action="store_true")
     p.add_argument("--allow-powered", action="store_true", help="run even while plugged in (results flagged)")

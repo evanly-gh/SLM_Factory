@@ -21,17 +21,17 @@
   },
   "converter": "llama.cpp 46baf1f1fec5 convert_hf_to_gguf"
  },
- "started": "2026-10-08T15:48:07.328358",
+ "started": "2026-10-13T16:11:47.945040",
  "invocations": {
   "prefill": {
    "exit": 1,
    "timed_out": false,
-   "seconds": 10.4,
+   "seconds": 10.3,
    "marks": 0,
-   "cpu_busy": 0.079,
+   "cpu_busy": 0.075,
    "gate": {
     "passed": true,
-    "waited_s": 805.3,
+    "waited_s": 805.5,
     "issues": null,
     "battery_temp_c": 28.0,
     "cpu_caps_khz": {
@@ -42,9 +42,9 @@
     "thermal_status": 0
    },
    "state_before": {
-    "epoch_ms": 1791500505648,
+    "epoch_ms": 1791933936909,
     "battery_temp_c": 28.0,
-    "battery_level": 57,
+    "battery_level": 43,
     "battery_status": 3,
     "externally_powered": false,
     "power_sources": [],
@@ -63,9 +63,9 @@
     "thermal_status": 0
    },
    "state_after": {
-    "epoch_ms": 1791500517067,
-    "battery_temp_c": 27.9,
-    "battery_level": 57,
+    "epoch_ms": 1791933948088,
+    "battery_temp_c": 28.0,
+    "battery_level": 43,
     "battery_status": 3,
     "externally_powered": false,
     "power_sources": [],
@@ -84,13 +84,13 @@
     "thermal_status": 0
    },
    "idle_window": [
-    340045.16,
-    340055.31
+    56541.93,
+    56552.0
    ]
   }
  },
  "windows": [],
  "status": "failed",
  "error": "crash/error (exit 1): llama_model_load: error loading model: unable to allocate OpenCL buffer | llama_model_load_from_file_impl: failed to load model | llama_bench: error: failed to load model '/data/local/tmp/paper_bench/models/qwen3.5-2b-f16-head.gguf'",
- "finished": "2026-10-08T16:02:12.068527"
+ "finished": "2026-10-13T16:26:03.088936"
 }

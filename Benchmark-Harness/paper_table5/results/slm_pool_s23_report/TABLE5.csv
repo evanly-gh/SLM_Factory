@@ -20,9 +20,9 @@ gemma3-270m,cpu,mnn,Q8,galaxy_s23,prefill_uj,4759.3,,
 gemma3-270m,cpu,mnn,Q8,galaxy_s23,decode_tps,82.23,1.53,
 gemma3-270m,cpu,mnn,Q8,galaxy_s23,decode_uj,107626.9,,
 gemma3-270m,cpu,mnn,F16,galaxy_s23,prefill_tps,1082.34,43.3,
-gemma3-270m,cpu,mnn,F16,galaxy_s23,prefill_uj,,,
+gemma3-270m,cpu,mnn,F16,galaxy_s23,prefill_uj,5958.6,,
 gemma3-270m,cpu,mnn,F16,galaxy_s23,decode_tps,56.16,1.69,
-gemma3-270m,cpu,mnn,F16,galaxy_s23,decode_uj,,,
+gemma3-270m,cpu,mnn,F16,galaxy_s23,decode_uj,155276.2,,
 gemma3-270m,gpu,llama.cpp,Q4_0,galaxy_s23,prefill_tps,360.8,5.43,
 gemma3-270m,gpu,llama.cpp,Q4_0,galaxy_s23,prefill_uj,10007.1,,
 gemma3-270m,gpu,llama.cpp,Q4_0,galaxy_s23,decode_tps,33.3,1.9,
@@ -51,30 +51,206 @@ qwen3-0.6b,cpu,llama.cpp,Q4_0,galaxy_s23,prefill_tps,231.98,2.02,
 qwen3-0.6b,cpu,llama.cpp,Q4_0,galaxy_s23,prefill_uj,27444.7,,
 qwen3-0.6b,cpu,llama.cpp,Q4_0,galaxy_s23,decode_tps,49.8,1.11,
 qwen3-0.6b,cpu,llama.cpp,Q4_0,galaxy_s23,decode_uj,163667.2,,
+qwen3-0.6b,cpu,llama.cpp,Q8_0,galaxy_s23,prefill_tps,216.4,2.99,
+qwen3-0.6b,cpu,llama.cpp,Q8_0,galaxy_s23,prefill_uj,28999.7,,
+qwen3-0.6b,cpu,llama.cpp,Q8_0,galaxy_s23,decode_tps,47.14,0.39,
+qwen3-0.6b,cpu,llama.cpp,Q8_0,galaxy_s23,decode_uj,188186.7,,
+qwen3-0.6b,cpu,llama.cpp,F16,galaxy_s23,prefill_tps,29.59,0.0,
+qwen3-0.6b,cpu,llama.cpp,F16,galaxy_s23,prefill_uj,175994.6,,
+qwen3-0.6b,cpu,llama.cpp,F16,galaxy_s23,decode_tps,16.38,0.24,
+qwen3-0.6b,cpu,llama.cpp,F16,galaxy_s23,decode_uj,425410.5,,
 qwen3-0.6b,cpu,mnn,Q4,galaxy_s23,prefill_tps,370.83,17.68,
 qwen3-0.6b,cpu,mnn,Q4,galaxy_s23,prefill_uj,16638.6,,
 qwen3-0.6b,cpu,mnn,Q4,galaxy_s23,decode_tps,72.67,0.77,
 qwen3-0.6b,cpu,mnn,Q4,galaxy_s23,decode_uj,126189.7,,
 qwen3-0.6b,cpu,mnn,Q8,galaxy_s23,prefill_tps,368.01,13.96,
-qwen3-0.6b,cpu,mnn,Q8,galaxy_s23,prefill_uj,,,
+qwen3-0.6b,cpu,mnn,Q8,galaxy_s23,prefill_uj,17741.3,,
 qwen3-0.6b,cpu,mnn,Q8,galaxy_s23,decode_tps,49.84,0.29,
-qwen3-0.6b,cpu,mnn,Q8,galaxy_s23,decode_uj,,,
+qwen3-0.6b,cpu,mnn,Q8,galaxy_s23,decode_uj,181450.0,,
+qwen3-0.6b,cpu,mnn,F16,galaxy_s23,prefill_tps,240.35,17.31,
+qwen3-0.6b,cpu,mnn,F16,galaxy_s23,prefill_uj,23787.6,,
+qwen3-0.6b,cpu,mnn,F16,galaxy_s23,decode_tps,26.53,3.33,
+qwen3-0.6b,cpu,mnn,F16,galaxy_s23,decode_uj,335852.7,,
 qwen3-0.6b,gpu,llama.cpp,Q4_0,galaxy_s23,prefill_tps,132.61,0.16,
 qwen3-0.6b,gpu,llama.cpp,Q4_0,galaxy_s23,prefill_uj,27184.1,,
 qwen3-0.6b,gpu,llama.cpp,Q4_0,galaxy_s23,decode_tps,14.92,0.04,
 qwen3-0.6b,gpu,llama.cpp,Q4_0,galaxy_s23,decode_uj,188032.7,,
+qwen3-0.6b,gpu,llama.cpp,Q8_0,galaxy_s23,prefill_tps,6.29,0.01,
+qwen3-0.6b,gpu,llama.cpp,Q8_0,galaxy_s23,prefill_uj,542149.6,,
+qwen3-0.6b,gpu,llama.cpp,Q8_0,galaxy_s23,decode_tps,26.53,0.57,
+qwen3-0.6b,gpu,llama.cpp,Q8_0,galaxy_s23,decode_uj,188726.8,,
+qwen3-0.6b,gpu,llama.cpp,F16,galaxy_s23,prefill_tps,5.35,0.0,
+qwen3-0.6b,gpu,llama.cpp,F16,galaxy_s23,prefill_uj,662413.1,,
+qwen3-0.6b,gpu,llama.cpp,F16,galaxy_s23,decode_tps,22.2,0.27,
+qwen3-0.6b,gpu,llama.cpp,F16,galaxy_s23,decode_uj,265399.1,,
 qwen3-0.6b,gpu,mnn,Q4,galaxy_s23,prefill_tps,558.85,1.41,
 qwen3-0.6b,gpu,mnn,Q4,galaxy_s23,prefill_uj,8012.3,,
 qwen3-0.6b,gpu,mnn,Q4,galaxy_s23,decode_tps,9.74,1.33,
 qwen3-0.6b,gpu,mnn,Q4,galaxy_s23,decode_uj,167299.2,,
 qwen3-0.6b,gpu,mnn,Q8,galaxy_s23,prefill_tps,539.71,1.61,
-qwen3-0.6b,gpu,mnn,Q8,galaxy_s23,prefill_uj,,,
+qwen3-0.6b,gpu,mnn,Q8,galaxy_s23,prefill_uj,8446.0,,
 qwen3-0.6b,gpu,mnn,Q8,galaxy_s23,decode_tps,8.45,0.06,
-qwen3-0.6b,gpu,mnn,Q8,galaxy_s23,decode_uj,,,
+qwen3-0.6b,gpu,mnn,Q8,galaxy_s23,decode_uj,202280.2,,
+qwen3-0.6b,gpu,mnn,F16,galaxy_s23,prefill_tps,,,failed
+qwen3-0.6b,gpu,mnn,F16,galaxy_s23,prefill_uj,,,failed
+qwen3-0.6b,gpu,mnn,F16,galaxy_s23,decode_tps,,,failed
+qwen3-0.6b,gpu,mnn,F16,galaxy_s23,decode_uj,,,failed
+qwen3-1.7b,cpu,llama.cpp,Q4_0,galaxy_s23,prefill_tps,119.22,1.08,
+qwen3-1.7b,cpu,llama.cpp,Q4_0,galaxy_s23,prefill_uj,52585.8,,
+qwen3-1.7b,cpu,llama.cpp,Q4_0,galaxy_s23,decode_tps,24.37,0.48,
+qwen3-1.7b,cpu,llama.cpp,Q4_0,galaxy_s23,decode_uj,325948.2,,
+qwen3-1.7b,cpu,llama.cpp,Q8_0,galaxy_s23,prefill_tps,106.47,1.15,
+qwen3-1.7b,cpu,llama.cpp,Q8_0,galaxy_s23,prefill_uj,62690.7,,
+qwen3-1.7b,cpu,llama.cpp,Q8_0,galaxy_s23,decode_tps,20.53,0.22,
+qwen3-1.7b,cpu,llama.cpp,Q8_0,galaxy_s23,decode_uj,417213.2,,
+qwen3-1.7b,cpu,llama.cpp,F16,galaxy_s23,prefill_tps,9.25,0.1,
+qwen3-1.7b,cpu,llama.cpp,F16,galaxy_s23,prefill_uj,547454.5,,
+qwen3-1.7b,cpu,llama.cpp,F16,galaxy_s23,decode_tps,5.73,0.37,
+qwen3-1.7b,cpu,llama.cpp,F16,galaxy_s23,decode_uj,1081645.5,,
+qwen3-1.7b,cpu,mnn,Q4,galaxy_s23,prefill_tps,137.59,4.25,
+qwen3-1.7b,cpu,mnn,Q4,galaxy_s23,prefill_uj,43677.0,,
+qwen3-1.7b,cpu,mnn,Q4,galaxy_s23,decode_tps,31.28,0.31,
+qwen3-1.7b,cpu,mnn,Q4,galaxy_s23,decode_uj,296023.8,,
+qwen3-1.7b,cpu,mnn,Q8,galaxy_s23,prefill_tps,132.42,2.64,
+qwen3-1.7b,cpu,mnn,Q8,galaxy_s23,prefill_uj,46933.4,,
+qwen3-1.7b,cpu,mnn,Q8,galaxy_s23,decode_tps,20.41,0.15,
+qwen3-1.7b,cpu,mnn,Q8,galaxy_s23,decode_uj,395938.6,,
+qwen3-1.7b,cpu,mnn,F16,galaxy_s23,prefill_tps,,,failed
+qwen3-1.7b,cpu,mnn,F16,galaxy_s23,prefill_uj,,,failed
+qwen3-1.7b,cpu,mnn,F16,galaxy_s23,decode_tps,,,failed
+qwen3-1.7b,cpu,mnn,F16,galaxy_s23,decode_uj,,,failed
+qwen3-1.7b,gpu,llama.cpp,Q4_0,galaxy_s23,prefill_tps,106.78,0.1,
+qwen3-1.7b,gpu,llama.cpp,Q4_0,galaxy_s23,prefill_uj,38930.3,,
+qwen3-1.7b,gpu,llama.cpp,Q4_0,galaxy_s23,decode_tps,12.2,0.02,
+qwen3-1.7b,gpu,llama.cpp,Q4_0,galaxy_s23,decode_uj,347508.9,,
+qwen3-1.7b,gpu,llama.cpp,Q8_0,galaxy_s23,prefill_tps,2.05,0.0,
+qwen3-1.7b,gpu,llama.cpp,Q8_0,galaxy_s23,prefill_uj,1460834.7,,
+qwen3-1.7b,gpu,llama.cpp,Q8_0,galaxy_s23,decode_tps,16.32,0.19,
+qwen3-1.7b,gpu,llama.cpp,Q8_0,galaxy_s23,decode_uj,370200.8,,
+qwen3-1.7b,gpu,llama.cpp,F16,galaxy_s23,prefill_tps,1.69,0.0,
+qwen3-1.7b,gpu,llama.cpp,F16,galaxy_s23,prefill_uj,2180878.7,,
+qwen3-1.7b,gpu,llama.cpp,F16,galaxy_s23,decode_tps,11.2,0.06,
+qwen3-1.7b,gpu,llama.cpp,F16,galaxy_s23,decode_uj,595170.8,,
+qwen3-1.7b,gpu,mnn,Q4,galaxy_s23,prefill_tps,219.08,0.42,
+qwen3-1.7b,gpu,mnn,Q4,galaxy_s23,prefill_uj,24592.9,,
+qwen3-1.7b,gpu,mnn,Q4,galaxy_s23,decode_tps,8.52,0.07,
+qwen3-1.7b,gpu,mnn,Q4,galaxy_s23,decode_uj,302626.2,,
+qwen3-1.7b,gpu,mnn,Q8,galaxy_s23,prefill_tps,211.12,0.25,
+qwen3-1.7b,gpu,mnn,Q8,galaxy_s23,prefill_uj,27567.9,,
+qwen3-1.7b,gpu,mnn,Q8,galaxy_s23,decode_tps,7.99,0.07,
+qwen3-1.7b,gpu,mnn,Q8,galaxy_s23,decode_uj,435445.2,,
+qwen3-1.7b,gpu,mnn,F16,galaxy_s23,prefill_tps,,,failed
+qwen3-1.7b,gpu,mnn,F16,galaxy_s23,prefill_uj,,,failed
+qwen3-1.7b,gpu,mnn,F16,galaxy_s23,decode_tps,,,failed
+qwen3-1.7b,gpu,mnn,F16,galaxy_s23,decode_uj,,,failed
+qwen3-4b-instruct-2507,cpu,llama.cpp,Q4_0,galaxy_s23,prefill_tps,44.5,0.51,
+qwen3-4b-instruct-2507,cpu,llama.cpp,Q4_0,galaxy_s23,prefill_uj,132694.7,,
+qwen3-4b-instruct-2507,cpu,llama.cpp,Q4_0,galaxy_s23,decode_tps,10.85,0.19,
+qwen3-4b-instruct-2507,cpu,llama.cpp,Q4_0,galaxy_s23,decode_uj,676785.0,,
+qwen3-4b-instruct-2507,cpu,llama.cpp,Q8_0,galaxy_s23,prefill_tps,,,failed
+qwen3-4b-instruct-2507,cpu,llama.cpp,Q8_0,galaxy_s23,prefill_uj,,,failed
+qwen3-4b-instruct-2507,cpu,llama.cpp,Q8_0,galaxy_s23,decode_tps,,,failed
+qwen3-4b-instruct-2507,cpu,llama.cpp,Q8_0,galaxy_s23,decode_uj,,,failed
+qwen3-4b-instruct-2507,cpu,llama.cpp,F16,galaxy_s23,prefill_tps,,,failed
+qwen3-4b-instruct-2507,cpu,llama.cpp,F16,galaxy_s23,prefill_uj,,,failed
+qwen3-4b-instruct-2507,cpu,llama.cpp,F16,galaxy_s23,decode_tps,,,failed
+qwen3-4b-instruct-2507,cpu,llama.cpp,F16,galaxy_s23,decode_uj,,,failed
+qwen3-4b-instruct-2507,cpu,mnn,Q4,galaxy_s23,prefill_tps,53.45,1.92,
+qwen3-4b-instruct-2507,cpu,mnn,Q4,galaxy_s23,prefill_uj,111814.0,,
+qwen3-4b-instruct-2507,cpu,mnn,Q4,galaxy_s23,decode_tps,14.14,0.09,
+qwen3-4b-instruct-2507,cpu,mnn,Q4,galaxy_s23,decode_uj,601053.8,,
+qwen3-4b-instruct-2507,cpu,mnn,Q8,galaxy_s23,prefill_tps,,,failed
+qwen3-4b-instruct-2507,cpu,mnn,Q8,galaxy_s23,prefill_uj,,,failed
+qwen3-4b-instruct-2507,cpu,mnn,Q8,galaxy_s23,decode_tps,,,failed
+qwen3-4b-instruct-2507,cpu,mnn,Q8,galaxy_s23,decode_uj,,,failed
+qwen3-4b-instruct-2507,cpu,mnn,F16,galaxy_s23,prefill_tps,,,failed
+qwen3-4b-instruct-2507,cpu,mnn,F16,galaxy_s23,prefill_uj,,,failed
+qwen3-4b-instruct-2507,cpu,mnn,F16,galaxy_s23,decode_tps,,,failed
+qwen3-4b-instruct-2507,cpu,mnn,F16,galaxy_s23,decode_uj,,,failed
+qwen3-4b-instruct-2507,gpu,llama.cpp,Q4_0,galaxy_s23,prefill_tps,40.36,0.23,
+qwen3-4b-instruct-2507,gpu,llama.cpp,Q4_0,galaxy_s23,prefill_uj,108630.0,,
+qwen3-4b-instruct-2507,gpu,llama.cpp,Q4_0,galaxy_s23,decode_tps,8.69,0.05,
+qwen3-4b-instruct-2507,gpu,llama.cpp,Q4_0,galaxy_s23,decode_uj,652735.1,,
+qwen3-4b-instruct-2507,gpu,llama.cpp,Q8_0,galaxy_s23,prefill_tps,,,failed
+qwen3-4b-instruct-2507,gpu,llama.cpp,Q8_0,galaxy_s23,prefill_uj,,,failed
+qwen3-4b-instruct-2507,gpu,llama.cpp,Q8_0,galaxy_s23,decode_tps,,,failed
+qwen3-4b-instruct-2507,gpu,llama.cpp,Q8_0,galaxy_s23,decode_uj,,,failed
+qwen3-4b-instruct-2507,gpu,llama.cpp,F16,galaxy_s23,prefill_tps,,,failed
+qwen3-4b-instruct-2507,gpu,llama.cpp,F16,galaxy_s23,prefill_uj,,,failed
+qwen3-4b-instruct-2507,gpu,llama.cpp,F16,galaxy_s23,decode_tps,,,failed
+qwen3-4b-instruct-2507,gpu,llama.cpp,F16,galaxy_s23,decode_uj,,,failed
+qwen3-4b-instruct-2507,gpu,mnn,Q4,galaxy_s23,prefill_tps,88.36,0.01,
+qwen3-4b-instruct-2507,gpu,mnn,Q4,galaxy_s23,prefill_uj,69165.9,,
+qwen3-4b-instruct-2507,gpu,mnn,Q4,galaxy_s23,decode_tps,6.71,0.0,
+qwen3-4b-instruct-2507,gpu,mnn,Q4,galaxy_s23,decode_uj,621409.2,,
+qwen3-4b-instruct-2507,gpu,mnn,Q8,galaxy_s23,prefill_tps,,,failed
+qwen3-4b-instruct-2507,gpu,mnn,Q8,galaxy_s23,prefill_uj,,,failed
+qwen3-4b-instruct-2507,gpu,mnn,Q8,galaxy_s23,decode_tps,,,failed
+qwen3-4b-instruct-2507,gpu,mnn,Q8,galaxy_s23,decode_uj,,,failed
+qwen3-4b-instruct-2507,gpu,mnn,F16,galaxy_s23,prefill_tps,,,failed
+qwen3-4b-instruct-2507,gpu,mnn,F16,galaxy_s23,prefill_uj,,,failed
+qwen3-4b-instruct-2507,gpu,mnn,F16,galaxy_s23,decode_tps,,,failed
+qwen3-4b-instruct-2507,gpu,mnn,F16,galaxy_s23,decode_uj,,,failed
+qwen3.5-0.8b,cpu,llama.cpp,Q4_0 @head,galaxy_s23,prefill_tps,291.4,5.8,
+qwen3.5-0.8b,cpu,llama.cpp,Q4_0 @head,galaxy_s23,prefill_uj,,,
+qwen3.5-0.8b,cpu,llama.cpp,Q4_0 @head,galaxy_s23,decode_tps,43.01,0.9,
+qwen3.5-0.8b,cpu,llama.cpp,Q4_0 @head,galaxy_s23,decode_uj,195261.8,,
+qwen3.5-0.8b,cpu,llama.cpp,Q8_0 @head,galaxy_s23,prefill_tps,260.21,2.32,
+qwen3.5-0.8b,cpu,llama.cpp,Q8_0 @head,galaxy_s23,prefill_uj,26322.2,,
+qwen3.5-0.8b,cpu,llama.cpp,Q8_0 @head,galaxy_s23,decode_tps,41.22,0.32,
+qwen3.5-0.8b,cpu,llama.cpp,Q8_0 @head,galaxy_s23,decode_uj,223338.4,,
+qwen3.5-0.8b,cpu,llama.cpp,F16 @head,galaxy_s23,prefill_tps,26.36,0.3,
+qwen3.5-0.8b,cpu,llama.cpp,F16 @head,galaxy_s23,prefill_uj,184706.1,,
+qwen3.5-0.8b,cpu,llama.cpp,F16 @head,galaxy_s23,decode_tps,13.65,0.19,
+qwen3.5-0.8b,cpu,llama.cpp,F16 @head,galaxy_s23,decode_uj,526407.4,,
+qwen3.5-0.8b,cpu,mnn,Q4 @head,galaxy_s23,prefill_tps,273.38,10.34,
+qwen3.5-0.8b,cpu,mnn,Q4 @head,galaxy_s23,prefill_uj,22328.6,,
+qwen3.5-0.8b,cpu,mnn,Q4 @head,galaxy_s23,decode_tps,73.6,0.15,
+qwen3.5-0.8b,cpu,mnn,Q4 @head,galaxy_s23,decode_uj,123256.3,,
+qwen3.5-0.8b,cpu,mnn,Q8 @head,galaxy_s23,prefill_tps,273.95,8.92,
+qwen3.5-0.8b,cpu,mnn,Q8 @head,galaxy_s23,prefill_uj,22905.3,,
+qwen3.5-0.8b,cpu,mnn,Q8 @head,galaxy_s23,decode_tps,47.04,0.23,
+qwen3.5-0.8b,cpu,mnn,Q8 @head,galaxy_s23,decode_uj,196617.9,,
+qwen3.5-0.8b,cpu,mnn,F16 @head,galaxy_s23,prefill_tps,217.0,5.6,
+qwen3.5-0.8b,cpu,mnn,F16 @head,galaxy_s23,prefill_uj,27664.2,,
+qwen3.5-0.8b,cpu,mnn,F16 @head,galaxy_s23,decode_tps,20.9,0.66,
+qwen3.5-0.8b,cpu,mnn,F16 @head,galaxy_s23,decode_uj,383295.2,,
+qwen3.5-0.8b,gpu,llama.cpp,Q4_0 @head,galaxy_s23,prefill_tps,157.15,1.42,
+qwen3.5-0.8b,gpu,llama.cpp,Q4_0 @head,galaxy_s23,prefill_uj,22219.5,,
+qwen3.5-0.8b,gpu,llama.cpp,Q4_0 @head,galaxy_s23,decode_tps,13.38,0.07,
+qwen3.5-0.8b,gpu,llama.cpp,Q4_0 @head,galaxy_s23,decode_uj,249510.4,,
+qwen3.5-0.8b,gpu,llama.cpp,Q8_0 @head,galaxy_s23,prefill_tps,162.54,1.1,
+qwen3.5-0.8b,gpu,llama.cpp,Q8_0 @head,galaxy_s23,prefill_uj,21663.3,,
+qwen3.5-0.8b,gpu,llama.cpp,Q8_0 @head,galaxy_s23,decode_tps,15.24,0.19,
+qwen3.5-0.8b,gpu,llama.cpp,Q8_0 @head,galaxy_s23,decode_uj,283678.9,,
+qwen3.5-0.8b,gpu,llama.cpp,F16 @head,galaxy_s23,prefill_tps,159.12,1.71,
+qwen3.5-0.8b,gpu,llama.cpp,F16 @head,galaxy_s23,prefill_uj,27122.6,,
+qwen3.5-0.8b,gpu,llama.cpp,F16 @head,galaxy_s23,decode_tps,11.22,0.11,
+qwen3.5-0.8b,gpu,llama.cpp,F16 @head,galaxy_s23,decode_uj,396335.4,,
+qwen3.5-0.8b,gpu,mnn,Q4 @head,galaxy_s23,prefill_tps,454.39,7.53,
+qwen3.5-0.8b,gpu,mnn,Q4 @head,galaxy_s23,prefill_uj,7480.8,,
+qwen3.5-0.8b,gpu,mnn,Q4 @head,galaxy_s23,decode_tps,46.09,0.28,
+qwen3.5-0.8b,gpu,mnn,Q4 @head,galaxy_s23,decode_uj,109142.9,,
+qwen3.5-0.8b,gpu,mnn,Q8 @head,galaxy_s23,prefill_tps,379.05,7.0,
+qwen3.5-0.8b,gpu,mnn,Q8 @head,galaxy_s23,prefill_uj,10273.0,,
+qwen3.5-0.8b,gpu,mnn,Q8 @head,galaxy_s23,decode_tps,35.12,0.1,
+qwen3.5-0.8b,gpu,mnn,Q8 @head,galaxy_s23,decode_uj,181446.7,,
 qwen3.5-0.8b,gpu,mnn,F16 @head,galaxy_s23,prefill_tps,,,failed
 qwen3.5-0.8b,gpu,mnn,F16 @head,galaxy_s23,prefill_uj,,,failed
 qwen3.5-0.8b,gpu,mnn,F16 @head,galaxy_s23,decode_tps,,,failed
 qwen3.5-0.8b,gpu,mnn,F16 @head,galaxy_s23,decode_uj,,,failed
+qwen3.5-2b,cpu,llama.cpp,Q4_0 @head,galaxy_s23,prefill_tps,131.94,1.45,
+qwen3.5-2b,cpu,llama.cpp,Q4_0 @head,galaxy_s23,prefill_uj,49155.1,,
+qwen3.5-2b,cpu,llama.cpp,Q4_0 @head,galaxy_s23,decode_tps,21.17,0.42,
+qwen3.5-2b,cpu,llama.cpp,Q4_0 @head,galaxy_s23,decode_uj,369897.2,,
+qwen3.5-2b,cpu,llama.cpp,Q8_0 @head,galaxy_s23,prefill_tps,112.29,8.42,
+qwen3.5-2b,cpu,llama.cpp,Q8_0 @head,galaxy_s23,prefill_uj,61102.0,,
+qwen3.5-2b,cpu,llama.cpp,Q8_0 @head,galaxy_s23,decode_tps,19.45,0.53,
+qwen3.5-2b,cpu,llama.cpp,Q8_0 @head,galaxy_s23,decode_uj,447742.6,,
+qwen3.5-2b,cpu,llama.cpp,F16 @head,galaxy_s23,prefill_tps,9.4,0.09,
+qwen3.5-2b,cpu,llama.cpp,F16 @head,galaxy_s23,prefill_uj,492071.3,,
+qwen3.5-2b,cpu,llama.cpp,F16 @head,galaxy_s23,decode_tps,5.25,0.29,
+qwen3.5-2b,cpu,llama.cpp,F16 @head,galaxy_s23,decode_uj,1171938.2,,
 qwen3.5-2b,cpu,mnn,Q4 @head,galaxy_s23,prefill_tps,134.45,3.46,
 qwen3.5-2b,cpu,mnn,Q4 @head,galaxy_s23,prefill_uj,47138.6,,
 qwen3.5-2b,cpu,mnn,Q4 @head,galaxy_s23,decode_tps,34.11,0.61,
@@ -87,6 +263,14 @@ qwen3.5-2b,cpu,mnn,F16 @head,galaxy_s23,prefill_tps,,,failed
 qwen3.5-2b,cpu,mnn,F16 @head,galaxy_s23,prefill_uj,,,failed
 qwen3.5-2b,cpu,mnn,F16 @head,galaxy_s23,decode_tps,,,failed
 qwen3.5-2b,cpu,mnn,F16 @head,galaxy_s23,decode_uj,,,failed
+qwen3.5-2b,gpu,llama.cpp,Q4_0 @head,galaxy_s23,prefill_tps,108.83,0.84,
+qwen3.5-2b,gpu,llama.cpp,Q4_0 @head,galaxy_s23,prefill_uj,28703.4,,
+qwen3.5-2b,gpu,llama.cpp,Q4_0 @head,galaxy_s23,decode_tps,11.34,0.23,
+qwen3.5-2b,gpu,llama.cpp,Q4_0 @head,galaxy_s23,decode_uj,354025.4,,
+qwen3.5-2b,gpu,llama.cpp,Q8_0 @head,galaxy_s23,prefill_tps,113.0,2.29,
+qwen3.5-2b,gpu,llama.cpp,Q8_0 @head,galaxy_s23,prefill_uj,34865.9,,
+qwen3.5-2b,gpu,llama.cpp,Q8_0 @head,galaxy_s23,decode_tps,11.34,0.07,
+qwen3.5-2b,gpu,llama.cpp,Q8_0 @head,galaxy_s23,decode_uj,479609.4,,
 qwen3.5-2b,gpu,llama.cpp,F16 @head,galaxy_s23,prefill_tps,,,failed
 qwen3.5-2b,gpu,llama.cpp,F16 @head,galaxy_s23,prefill_uj,,,failed
 qwen3.5-2b,gpu,llama.cpp,F16 @head,galaxy_s23,decode_tps,,,failed
@@ -115,6 +299,14 @@ qwen3.5-4b,cpu,llama.cpp,F16 @head,galaxy_s23,prefill_tps,,,failed
 qwen3.5-4b,cpu,llama.cpp,F16 @head,galaxy_s23,prefill_uj,,,failed
 qwen3.5-4b,cpu,llama.cpp,F16 @head,galaxy_s23,decode_tps,,,failed
 qwen3.5-4b,cpu,llama.cpp,F16 @head,galaxy_s23,decode_uj,,,failed
+qwen3.5-4b,cpu,mnn,Q4 @head,galaxy_s23,prefill_tps,49.85,1.27,
+qwen3.5-4b,cpu,mnn,Q4 @head,galaxy_s23,prefill_uj,114711.5,,
+qwen3.5-4b,cpu,mnn,Q4 @head,galaxy_s23,decode_tps,14.58,0.41,
+qwen3.5-4b,cpu,mnn,Q4 @head,galaxy_s23,decode_uj,578231.3,,
+qwen3.5-4b,cpu,mnn,Q8 @head,galaxy_s23,prefill_tps,,,failed
+qwen3.5-4b,cpu,mnn,Q8 @head,galaxy_s23,prefill_uj,,,failed
+qwen3.5-4b,cpu,mnn,Q8 @head,galaxy_s23,decode_tps,,,failed
+qwen3.5-4b,cpu,mnn,Q8 @head,galaxy_s23,decode_uj,,,failed
 qwen3.5-4b,cpu,mnn,F16 @head,galaxy_s23,prefill_tps,,,failed
 qwen3.5-4b,cpu,mnn,F16 @head,galaxy_s23,prefill_uj,,,failed
 qwen3.5-4b,cpu,mnn,F16 @head,galaxy_s23,decode_tps,,,failed
@@ -131,6 +323,14 @@ qwen3.5-4b,gpu,llama.cpp,F16 @head,galaxy_s23,prefill_tps,,,failed
 qwen3.5-4b,gpu,llama.cpp,F16 @head,galaxy_s23,prefill_uj,,,failed
 qwen3.5-4b,gpu,llama.cpp,F16 @head,galaxy_s23,decode_tps,,,failed
 qwen3.5-4b,gpu,llama.cpp,F16 @head,galaxy_s23,decode_uj,,,failed
+qwen3.5-4b,gpu,mnn,Q4 @head,galaxy_s23,prefill_tps,114.55,0.16,
+qwen3.5-4b,gpu,mnn,Q4 @head,galaxy_s23,prefill_uj,40197.3,,
+qwen3.5-4b,gpu,mnn,Q4 @head,galaxy_s23,decode_tps,15.28,0.03,
+qwen3.5-4b,gpu,mnn,Q4 @head,galaxy_s23,decode_uj,560436.4,,
+qwen3.5-4b,gpu,mnn,Q8 @head,galaxy_s23,prefill_tps,,,failed
+qwen3.5-4b,gpu,mnn,Q8 @head,galaxy_s23,prefill_uj,,,failed
+qwen3.5-4b,gpu,mnn,Q8 @head,galaxy_s23,decode_tps,,,failed
+qwen3.5-4b,gpu,mnn,Q8 @head,galaxy_s23,decode_uj,,,failed
 qwen3.5-4b,gpu,mnn,F16 @head,galaxy_s23,prefill_tps,,,failed
 qwen3.5-4b,gpu,mnn,F16 @head,galaxy_s23,prefill_uj,,,failed
 qwen3.5-4b,gpu,mnn,F16 @head,galaxy_s23,decode_tps,,,failed
@@ -191,6 +391,10 @@ smollm2-360m,cpu,llama.cpp,Q8_0,galaxy_s23,prefill_tps,348.06,7.21,
 smollm2-360m,cpu,llama.cpp,Q8_0,galaxy_s23,prefill_uj,19445.7,,
 smollm2-360m,cpu,llama.cpp,Q8_0,galaxy_s23,decode_tps,75.19,0.97,
 smollm2-360m,cpu,llama.cpp,Q8_0,galaxy_s23,decode_uj,119285.6,,
+smollm2-360m,cpu,llama.cpp,F16,galaxy_s23,prefill_tps,42.11,0.03,
+smollm2-360m,cpu,llama.cpp,F16,galaxy_s23,prefill_uj,130481.2,,
+smollm2-360m,cpu,llama.cpp,F16,galaxy_s23,decode_tps,25.95,0.56,
+smollm2-360m,cpu,llama.cpp,F16,galaxy_s23,decode_uj,285856.3,,
 smollm2-360m,cpu,mnn,Q4,galaxy_s23,prefill_tps,554.25,44.3,
 smollm2-360m,cpu,mnn,Q4,galaxy_s23,prefill_uj,11698.2,,
 smollm2-360m,cpu,mnn,Q4,galaxy_s23,decode_tps,115.22,1.37,
@@ -199,6 +403,10 @@ smollm2-360m,cpu,mnn,Q8,galaxy_s23,prefill_tps,552.95,37.05,
 smollm2-360m,cpu,mnn,Q8,galaxy_s23,prefill_uj,12001.4,,
 smollm2-360m,cpu,mnn,Q8,galaxy_s23,decode_tps,79.87,0.88,
 smollm2-360m,cpu,mnn,Q8,galaxy_s23,decode_uj,112374.1,,
+smollm2-360m,cpu,mnn,F16,galaxy_s23,prefill_tps,405.06,13.65,
+smollm2-360m,cpu,mnn,F16,galaxy_s23,prefill_uj,15205.9,,
+smollm2-360m,cpu,mnn,F16,galaxy_s23,decode_tps,40.79,1.89,
+smollm2-360m,cpu,mnn,F16,galaxy_s23,decode_uj,204297.0,,
 smollm2-360m,gpu,llama.cpp,Q4_0,galaxy_s23,prefill_tps,218.6,0.62,
 smollm2-360m,gpu,llama.cpp,Q4_0,galaxy_s23,prefill_uj,17146.4,,
 smollm2-360m,gpu,llama.cpp,Q4_0,galaxy_s23,decode_tps,49.47,3.15,
@@ -207,6 +415,10 @@ smollm2-360m,gpu,llama.cpp,Q8_0,galaxy_s23,prefill_tps,8.9,0.0,
 smollm2-360m,gpu,llama.cpp,Q8_0,galaxy_s23,prefill_uj,376219.3,,
 smollm2-360m,gpu,llama.cpp,Q8_0,galaxy_s23,decode_tps,31.55,0.38,
 smollm2-360m,gpu,llama.cpp,Q8_0,galaxy_s23,decode_uj,145996.0,,
+smollm2-360m,gpu,llama.cpp,F16,galaxy_s23,prefill_tps,7.69,0.0,
+smollm2-360m,gpu,llama.cpp,F16,galaxy_s23,prefill_uj,442117.5,,
+smollm2-360m,gpu,llama.cpp,F16,galaxy_s23,decode_tps,26.04,0.33,
+smollm2-360m,gpu,llama.cpp,F16,galaxy_s23,decode_uj,183541.1,,
 smollm2-360m,gpu,mnn,Q4,galaxy_s23,prefill_tps,763.15,5.8,
 smollm2-360m,gpu,mnn,Q4,galaxy_s23,prefill_uj,5208.9,,
 smollm2-360m,gpu,mnn,Q4,galaxy_s23,decode_tps,9.09,1.1,
@@ -215,3 +427,7 @@ smollm2-360m,gpu,mnn,Q8,galaxy_s23,prefill_tps,734.81,4.07,
 smollm2-360m,gpu,mnn,Q8,galaxy_s23,prefill_uj,5301.0,,
 smollm2-360m,gpu,mnn,Q8,galaxy_s23,decode_tps,8.56,0.27,
 smollm2-360m,gpu,mnn,Q8,galaxy_s23,decode_uj,169676.5,,
+smollm2-360m,gpu,mnn,F16,galaxy_s23,prefill_tps,,,failed
+smollm2-360m,gpu,mnn,F16,galaxy_s23,prefill_uj,,,failed
+smollm2-360m,gpu,mnn,F16,galaxy_s23,decode_tps,,,failed
+smollm2-360m,gpu,mnn,F16,galaxy_s23,decode_uj,,,failed

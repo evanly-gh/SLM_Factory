@@ -165,15 +165,20 @@ def run_on_device(adb: Adb, controls: DeviceControls, bin_dir: str, cmd: str, en
     exit_code = None
     exe = Path(cmd.split()[0]).name
     swapped_mb = 0
+    min_caps = None  # lowest CPU frequency cap seen while the benchmark ran (a phone that falls asleep mid-run gets capped)
     while time.time() - t0 < timeout_s:
         time.sleep(POLL_S)
         out = adb.sh(f"cat {work}/exit 2>/dev/null", timeout=30).strip()
         if out == "" and controls.wireless and adb.sh("echo ok", timeout=15).strip() != "ok":
-            controls.reconnect()
+            controls.reconnect(900)  # campus Wi-Fi drops a phone for a few minutes at a time; the run keeps going on the phone
             continue
         if out.lstrip("-").isdigit():
             exit_code = int(out)
             break
+        caps = [int(x) for x in adb.sh("cat /sys/devices/system/cpu/cpufreq/policy*/scaling_max_freq",
+                                         timeout=30).split() if x.isdigit()]
+        if caps:
+            min_caps = caps if min_caps is None else [min(a, b) for a, b in zip(min_caps, caps)]
         kb = [int(x) for x in re.findall(r"VmSwap:\s+(\d+)", adb.sh(
             f"for p in $(pidof {exe}); do grep VmSwap /proc/$p/status; done", timeout=30))]
         swapped_mb = max([swapped_mb] + [k // 1024 for k in kb])
@@ -190,7 +195,8 @@ def run_on_device(adb: Adb, controls: DeviceControls, bin_dir: str, cmd: str, en
     (raw_dir / f"{tag}.stderr.txt").write_text(stderr, encoding="utf-8")
     (raw_dir / f"{tag}.cmd.txt").write_text(f"{env} {cmd}\n", encoding="utf-8")
     return {"exit": exit_code, "timed_out": exit_code is None, "stdout": stdout, "stderr": stderr,
-            "seconds": round(time.time() - t0, 1), "marks": parse_marks(stderr), "swapped_mb": swapped_mb}
+            "seconds": round(time.time() - t0, 1), "marks": parse_marks(stderr), "swapped_mb": swapped_mb,
+            "min_caps_khz": min_caps}
 
 
 def failure_reason(res: dict) -> str | None:
@@ -567,7 +573,7 @@ class Session:
         return {"exit": res["exit"], "timed_out": res["timed_out"], "seconds": res["seconds"],
                 "marks": len(res["marks"]), "cpu_busy": res.get("cpu_busy"), "gate": res.get("gate"),
                 "state_before": res.get("state_before"), "state_after": res.get("state_after"),
-                "idle_window": res.get("idle_window")}
+                "idle_window": res.get("idle_window"), "min_caps_khz": res.get("min_caps_khz")}
 
     def _fail(self, result, reason) -> dict:
         result["status"] = "failed"
@@ -577,7 +583,8 @@ class Session:
         return result
 
     # -- energy --------------------------------------------------------------
-    def attach_energy(self):
+    def attach_energy(self, until: str | None = None):
+        """until: the next session's start; configurations that started then or later belong to that session."""
         self.recorder.load()
         preferred = self.profile.get("energy_method") or probe_recommendation(self.info["model"])
         headline = self.recorder.headline(preferred)
@@ -590,8 +597,8 @@ class Session:
             r = json.loads(f.read_text())
             if r.get("status") != "ok" or r.get("energy_session") not in (None, session["started"]):
                 continue
-            if r.get("started", "") < session["started"]:
-                continue  # ran in an earlier session whose trace this is not
+            if r.get("started", "") < session["started"] or (until and r.get("started", "") >= until):
+                continue  # ran in another session whose recording this is not
             if r.get("energy_session") == session["started"] and "energy" in r:
                 continue
             powered = any((inv.get(k) or {}).get("externally_powered")
@@ -636,7 +643,7 @@ class Session:
         disc = energy_probe.discover(self.adb)
         session = {"started": datetime.now().isoformat(), "device": self.info, "profile": self.profile,
                    "energy_discovery": {k: disc[k] for k in ("root", "powercap", "powerstats", "battery_dir",
-                                                              "battery_files")},
+                                                              "battery_files", "battery_service")},
                    "params": {k: v for k, v in vars(a).items() if k not in ("func",)},
                    "max_temp_c": self.max_temp, "idle_cpu_busy_at_start": idle_busy,
                    "screen_on": self.controls.screen_on, "wireless_adb": self.controls.wireless,
@@ -663,7 +670,8 @@ class Session:
         try:
             if not a.no_controls:
                 self.controls.apply()
-                session.update({"screen_on": self.controls.screen_on, "wake_lock": bool(self.controls.waker),
+                session.update({"screen_on": self.controls.screen_on, "panel_off": bool(self.controls.panel),
+                                "wake_lock": bool(self.controls.waker),
                                 "radio_mode": self.controls.radio_mode})
                 for f in (self.out / "session.json", self.out / "sessions" / f"{stamp}.json"):
                     f.write_text(json.dumps(session, indent=1, default=str))
@@ -698,7 +706,9 @@ class Session:
                 self.recorder.stop()
             if not a.no_controls:
                 self.controls.restore()
-        if self.recorder and self.recorder.trace_name is None and not a.no_perfetto:
+        # a Perfetto trace that was started but could not be pulled means the phone dropped off; a phone whose
+        # Perfetto never started (too old for the config, e.g. v25) still has its sampler files
+        if self.recorder and self.recorder.trace_name is None and self.recorder.perfetto_started                 and not (self.recorder.out_dir / "samples.txt").exists():
             log(f"[ENERGY] the trace could not be pulled (phone unreachable?); energy not attached. Once the phone is "
                 f"back: python run_paper_table5.py --serial <serial> --results-dir {self.out} --recover-energy")
         else:
@@ -709,6 +719,40 @@ class Session:
 
 class BatteryLow(Exception):
     pass
+
+
+def attach_offline(args):
+    """Attach energy from the session folders already on this computer (energy/<stamp>/samples.txt, bm_samples.txt,
+    trace.pftrace), newest session first so each configuration gets its own session's recording. For sessions that
+    ended without attaching energy although their recordings were pulled (e.g. a phone whose Perfetto did not start)."""
+    out = Path(args.results_dir)
+    starts = {f.stem: json.loads(f.read_text())["started"] for f in (out / "sessions").glob("*.json")}
+    order = sorted(starts, key=starts.get)
+    nxt = {a: starts[b] for a, b in zip(order, order[1:])}
+    for f in (out / "configs").glob("*.json"):  # undo an attachment to the wrong session (recording of its own missing)
+        r = json.loads(f.read_text())
+        own = max((s for s in starts.values() if s <= r.get("started", "")), default=None)
+        if r.get("energy_session") and own and r["energy_session"] != own:
+            for k in ("energy", "energy_idle", "energy_session", "energy_headline_method", "energy_kind"):
+                r.pop(k, None)
+            for phase in ("prefill", "decode"):
+                for k in ("uj_per_token", "uj_per_token_gross", "energy_valid", "energy_reason"):
+                    (r.get(phase) or {}).pop(k, None)
+            f.write_text(json.dumps(r, indent=1))
+    for stamp in sorted(starts, key=starts.get, reverse=True):
+        edir = out / "energy" / stamp
+        if not any((edir / n).exists() for n in ("samples.txt", energy_probe.BM_SAMPLES, "trace.pftrace")):
+            log(f"[ENERGY] session {stamp}: no recording on this computer, skipped")
+            continue
+        session = json.loads((out / "sessions" / f"{stamp}.json").read_text())
+        sess = Session.__new__(Session)
+        sess.out, sess.adb, sess.info, sess.profile = out, None, session["device"], session["profile"]
+        sess.recorder = EnergyRecorder(None, edir, session["energy_discovery"], log=log)
+        sess.idle_window = session.get("idle_window")
+        (out / "session.json").write_text(json.dumps(session, indent=1, default=str))
+        log(f"[ENERGY] session {stamp}:")
+        sess.attach_energy(until=nxt.get(stamp))
+    write_summary(out)
 
 
 def recover_energy(args):
@@ -730,9 +774,11 @@ def recover_energy(args):
     if not trace:  # the phone rebooted: Perfetto is gone but its file (written every 5 s) is still there
         adb.run(["pull", energy_probe.TRACE_REMOTE, str(edir / "trace.pftrace")], timeout=300)
     adb.run(["pull", f"{energy_probe.DEV_DIR}/samples.txt", str(edir / "samples.txt")], timeout=300)
+    if (session["energy_discovery"].get("battery_service") or {}).get("usable"):
+        energy_probe.pull_battery_service(adb, edir)
     WakeHolder(adb).restore()
     adb.sh("cmd notification set_dnd off")
-    if not trace and not (edir / "trace.pftrace").exists():
+    if not trace and not (edir / "trace.pftrace").exists() and not (edir / "samples.txt").exists():
         sys.exit("no Perfetto trace on the phone for this session (it may have rebooted); energy cannot be recovered")
     sess = Session.__new__(Session)
     sess.out, sess.adb, sess.info, sess.profile = out, adb, session["device"], session["profile"]
@@ -809,18 +855,22 @@ def main():
     ap.add_argument("--llama-threads", type=int, default=None, help="llama-bench -t (default: its own default)")
     ap.add_argument("--mnn-threads", type=int, default=None, help="llm_bench -t (default: its own default, 4)")
     ap.add_argument("--no-controls", action="store_true", help="skip airplane mode / screen off / DND")
-    ap.add_argument("--screen", choices=["auto", "off", "on"], default="auto",
+    ap.add_argument("--screen", choices=["auto", "off", "on", "panel"], default="auto",
                     help="screen during runs: auto/off = off, as in the paper (over wireless adb a partial wake lock "
                          "keeps the CPU running; if it cannot be held, the screen stays on instead); on = minimum "
-                         "brightness")
+                         "brightness; panel = system awake with only the display panel off (phones that cap the CPU while asleep)")
     ap.add_argument("--no-perfetto", action="store_true")
     ap.add_argument("--results-dir", help="resume into an existing results directory")
     ap.add_argument("--force", action="store_true", help="rerun configurations that already have results")
     ap.add_argument("--plan", action="store_true", help="list configurations and exit")
     ap.add_argument("--smallest-first", action="store_true", help="run configurations in order of model size")
+    ap.add_argument("--attach-offline", action="store_true",
+                    help="with --results-dir: attach energy from the recordings already pulled to this computer")
     ap.add_argument("--recover-energy", action="store_true",
                     help="with --results-dir: attach energy for a session that stopped early (pulls its trace)")
     args = ap.parse_args()
+    if args.attach_offline:
+        return attach_offline(args)
     if args.recover_energy:
         if not args.results_dir:
             sys.exit("--recover-energy needs --results-dir")

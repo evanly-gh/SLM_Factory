@@ -609,7 +609,11 @@
   ],
   "tokens": [
    256
-  ]
+  ],
+  "uj_per_token": 130481.2,
+  "uj_per_token_gross": 136662.9,
+  "energy_valid": true,
+  "energy_reason": null
  },
  "decode": {
   "tps": 25.95,
@@ -621,8 +625,70 @@
   ],
   "tokens": [
    256
-  ]
+  ],
+  "uj_per_token": 285856.3,
+  "uj_per_token_gross": 295537.9,
+  "energy_valid": true,
+  "energy_reason": null
  },
  "status": "ok",
- "finished": "2026-10-11T00:08:58.790487"
+ "finished": "2026-10-11T00:08:58.790487",
+ "energy": {
+  "perfetto:current": {
+   "prefill": {
+    "uj_per_token": 136662.9,
+    "net_uj_per_token": 130481.2,
+    "avg_power_mw": 5467.9,
+    "idle_power_mw": 247.3,
+    "seconds": 255.93,
+    "tokens": 10240,
+    "windows": 1,
+    "valid": true,
+    "reason": null,
+    "note": "battery HAL current, unit mA"
+   },
+   "decode": {
+    "uj_per_token": 295537.9,
+    "net_uj_per_token": 285856.3,
+    "avg_power_mw": 7550.0,
+    "idle_power_mw": 247.3,
+    "seconds": 50.1,
+    "tokens": 1280,
+    "windows": 1,
+    "valid": true,
+    "reason": null,
+    "note": "battery HAL current, unit mA"
+   }
+  },
+  "perfetto:charge": {
+   "prefill": {
+    "uj_per_token": 96933.8,
+    "net_uj_per_token": 96933.8,
+    "avg_power_mw": 3878.4,
+    "idle_power_mw": -0.0,
+    "seconds": 255.93,
+    "tokens": 10240,
+    "windows": 1,
+    "valid": false,
+    "reason": "reading changed only 5 time(s) during the phase",
+    "note": "battery HAL charge counter"
+   },
+   "decode": {
+    "uj_per_token": 213489.9,
+    "net_uj_per_token": 213489.9,
+    "avg_power_mw": 5453.9,
+    "idle_power_mw": -0.0,
+    "seconds": 50.1,
+    "tokens": 1280,
+    "windows": 1,
+    "valid": false,
+    "reason": "reading changed only 1 time(s) during the phase",
+    "note": "battery HAL charge counter"
+   }
+  }
+ },
+ "energy_idle": "per invocation",
+ "energy_session": "2026-10-10T23:50:21.332366",
+ "energy_headline_method": "perfetto:current",
+ "energy_kind": "whole device (net of idle)"
 }

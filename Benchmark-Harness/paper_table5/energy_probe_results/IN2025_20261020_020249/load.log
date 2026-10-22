@@ -1,0 +1,11 @@
+start 542782.51 threads 0 seconds 40
+start 542843.69 threads 1 seconds 40
+end 542851.69
+start 542904.87 threads 8 seconds 40
+end 542951.30
+start 542966.07 threads 0 seconds 40
+end 543019.60
+start 543027.25 threads 1 seconds 40
+end 543077.20
+start 543088.40 threads 8 seconds 40
+end 543127.63

@@ -1,7 +1,7 @@
 {
- "started": "2026-10-10T23:50:21.332366",
+ "started": "2026-10-13T12:25:16.216362",
  "device": {
-  "serial": "192.168.86.75:5555",
+  "serial": "10.125.50.227:5555",
   "manufacturer": "samsung",
   "model": "SM-S911U",
   "device": "dm1q",
@@ -10,7 +10,7 @@
   "android": "16",
   "sdk": "36",
   "build": "samsung/dm1qsqw/dm1q:16/BP4A.251205.006/S911USQS8FZI1:user/release-keys",
-  "mem_total_kb": 7242456,
+  "mem_total_kb": 7242452,
   "cpu_clusters": {
    "policy0": {
     "max_khz": 2016000,
@@ -76,7 +76,7 @@
   "battery_files": []
  },
  "params": {
-  "serial": "192.168.86.75:5555",
+  "serial": "10.125.50.227:5555",
   "ref": "pinned",
   "models": [
    "qwen3-0.6b",
@@ -121,7 +121,7 @@
   "recover_energy": false
  },
  "max_temp_c": 28.0,
- "idle_cpu_busy_at_start": 0.075,
+ "idle_cpu_busy_at_start": 0.091,
  "screen_on": false,
  "wireless_adb": true,
  "binaries": {
@@ -224,11 +224,16 @@
    "built": "2026-10-06T22:57:49.571954"
   }
  },
- "energy_dir": "energy/20261010_235021",
+ "energy_dir": "energy/20261013_122516",
  "wake_lock": true,
  "radio_mode": "airplane mode already on (Wi-Fi kept on in it)",
  "idle_window": [
-  49366.83,
-  49405.0
+  42140.77,
+  42178.97
+ ],
+ "energy_headline_method": "perfetto:current",
+ "energy_methods": [
+  "perfetto:current",
+  "perfetto:charge"
  ]
 }

@@ -5,5 +5,5 @@ CPU Group: [ 7 ], 595200 - 3360000
 The device supports: i8sdot:1, fp16:1, i8mm: 1, sve2: 0, sme2: 0, perfCores: 0
 | model                          |  modelSize | backend    | threads | precision  | test          |        t/s |
 | ------------------------------ | ---------: | ---------- | ----: | ---------- | ------------- | ---------: |
-| qwen3.5-0.8b-mnn-paper-default-q4-head | 403.75 MiB | OPENCL     |     4 | Low        | pp256         | 446.23 ± 10.49 |
+| qwen3.5-0.8b-mnn-paper-default-q4-head | 403.75 MiB | OPENCL     |     4 | Low        | pp256         | 444.58 ± 10.74 |
 

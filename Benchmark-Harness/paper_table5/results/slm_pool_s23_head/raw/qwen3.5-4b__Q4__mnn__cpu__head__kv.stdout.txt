@@ -5,6 +5,6 @@ CPU Group: [ 7 ], 595200 - 3360000
 The device supports: i8sdot:1, fp16:1, i8mm: 1, sve2: 0, sme2: 0, perfCores: 0
 | model                          |  modelSize | backend    | threads | precision  | llm_demo   | speed(tok/s) |
 | ------------------------------ | ---------: | ---------- | ----: | ---------- | ---------- | ------------ |
-| qwen3.5-4b-mnn-paper-default-q4-head |   2.20 GiB | CPU        |     4 | Low        | prompt=256<br>decode=256 | 49.45 ± 1.61<br>14.70 ± 0.28 |
-decode wall speed (incl. sampling): 14.68 ± 0.28 tok/s
+| qwen3.5-4b-mnn-paper-default-q4-head |   2.20 GiB | CPU        |     4 | Low        | prompt=256<br>decode=256 | 49.85 ± 1.27<br>14.60 ± 0.41 |
+decode wall speed (incl. sampling): 14.57 ± 0.41 tok/s
 

@@ -86,3 +86,8 @@ llama-cpp-paper-repro/
 Benchmark-Harness/tools/bin/
 # Perfetto battery traces written by --energy runs (large, regenerable per run)
 *.pftrace
+
+# Results
+*.png
+*.txt
+*.json

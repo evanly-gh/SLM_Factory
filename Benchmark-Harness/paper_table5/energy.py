@@ -23,8 +23,9 @@ import energy_probe as ep
 
 # Current-based methods first: charge counters can be derived from the state-of-charge estimate (the S23's moves in
 # 0.1%-of-capacity steps about every 30 s), which cannot resolve a minute-long phase.
-BATTERY_PREFERENCE = ("perfetto:current", "sysfs:current_now", "sysfs:current_avg", "sysfs:power_now",
-                      "perfetto:charge", "sysfs:charge_counter")
+BATTERY_PREFERENCE = ("perfetto:current", "sysfs:current_now", "sysfs:current_avg", "bm:current_now",
+                      "bm:current_avg", "sysfs:power_now", "perfetto:charge", "sysfs:charge_counter",
+                      "bm:charge_counter")
 
 
 def is_chip_method(method: str) -> bool:
@@ -80,8 +81,12 @@ class EnergyRecorder:
         self.use_perfetto = use_perfetto
         self.columns: list[tuple[str, str]] = []
         self.perfetto_pid = None
+        self.perfetto_started = False
         self.trace_name = None
         self.funcs: dict | None = None
+        # battery-service sampler only where nothing else reads the battery (no sysfs files): it is a second
+        # process on the phone, and Perfetto or sysfs give the same health-HAL values where they work
+        self.use_bm = bool((discovery.get("battery_service") or {}).get("usable")) and not discovery.get("battery_files")
 
     def start(self):
         self.out_dir.mkdir(parents=True, exist_ok=True)
@@ -95,16 +100,17 @@ class EnergyRecorder:
         # A killed or crashed earlier session leaves its sampler loop and Perfetto trace running (they only stop on
         # the stop file); removing the stop file below would let them run alongside this session, adding CPU load
         # during the benchmarks. Stop them first.
-        stale = self.adb.sh("ps -A -o ARGS | grep -cE 'energy_probe/sample[r][.]sh|energy_probe[.]pftrac[e]'").strip()
+        stale = self.adb.sh("ps -A -o ARGS | grep -cE 'energy_probe/sample[r][.]sh|energy_probe[.]pftrac[e]|PbBatter[y]'").strip()
         if stale.isdigit() and int(stale) > 0:
             self.log(f"[ENERGY] stopping {stale} sampler/trace process(es) left by an earlier session")
             self.adb.sh(f"mkdir -p {ep.DEV_DIR}; touch {ep.DEV_DIR}/stop; pkill -f 'energy_probe[.]pftrace'")
             time.sleep(2)
-            self.adb.sh("pkill -f 'energy_probe/sample[r][.]sh'")
+            self.adb.sh("pkill -f 'energy_probe/sample[r][.]sh'; pkill -f 'PbBatter[y]'")
             # keep that session's data for --recover-energy instead of deleting it below / in start_perfetto
             stamp = time.strftime("%Y%m%d_%H%M%S")
             self.adb.sh(f"mv {ep.TRACE_REMOTE} {ep.TRACE_REMOTE}.{stamp} 2>/dev/null; "
-                        f"mv {ep.DEV_DIR}/samples.txt {ep.DEV_DIR}/samples.txt.{stamp} 2>/dev/null")
+                        f"mv {ep.DEV_DIR}/samples.txt {ep.DEV_DIR}/samples.txt.{stamp} 2>/dev/null; "
+                        f"mv {ep.DEV_DIR}/{ep.BM_SAMPLES} {ep.DEV_DIR}/{ep.BM_SAMPLES}.{stamp} 2>/dev/null")
             self.log(f"[ENERGY] its trace and samples were kept on the phone as *.{stamp}")
         self.adb.sh(f"mkdir -p {ep.DEV_DIR}; rm -f {ep.DEV_DIR}/stop {ep.DEV_DIR}/samples.txt")
         ep.push_text(self.adb, ep.sampler_script(self.columns, 0.1), f"{ep.DEV_DIR}/sampler.sh")
@@ -114,8 +120,11 @@ class EnergyRecorder:
         self.adb.sh(f"{cmd} </dev/null >/dev/null 2>&1 &")
         if self.use_perfetto:
             self.perfetto_pid = ep.start_perfetto(self.adb)
+            self.perfetto_started = self.perfetto_pid is not None
+        if self.use_bm:
+            ep.start_battery_service(self.adb)
         self.log(f"[ENERGY] sampler columns: {[c for c, _ in self.columns] or 'timestamps only'}; "
-                 f"perfetto: {'on' if self.perfetto_pid else 'off'}")
+                 f"perfetto: {'on' if self.perfetto_pid else 'off'}; battery service: {'on' if self.use_bm else 'off'}")
 
     def stop(self):
         self.adb.sh(f"touch {ep.DEV_DIR}/stop")
@@ -124,6 +133,8 @@ class EnergyRecorder:
             self.trace_name = ep.stop_perfetto(self.adb, self.perfetto_pid, self.out_dir)
             self.perfetto_pid = None
         self.adb.run(["pull", f"{ep.DEV_DIR}/samples.txt", str(self.out_dir / "samples.txt")], timeout=300)
+        if self.use_bm:
+            ep.pull_battery_service(self.adb, self.out_dir)
 
     def load(self):
         trace = self.out_dir / "trace.pftrace"

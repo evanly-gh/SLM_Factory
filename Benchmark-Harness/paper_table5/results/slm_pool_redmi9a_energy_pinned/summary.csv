@@ -1,0 +1,2 @@
+model,quant,framework,backend,status,error,prefill_tps,prefill_tps_std,prefill_reps,prefill_uj_per_token,prefill_energy_valid,decode_tps,decode_tps_std,decode_reps,decode_uj_per_token,decode_energy_valid,energy_kind,energy_method,warning
+qwen3-1.7b,Q8,mnn,cpu,ok,,3.76,0.02,3.78 3.75 3.73,323787.2,True,2.49,0.12,2.55 2.34 2.56,646610.6,True,whole device (net of idle),sysfs:current_avg,
