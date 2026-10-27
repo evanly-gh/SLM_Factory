@@ -23,7 +23,7 @@ qwen3.5-2b,Q8_0,llama.cpp,cpu,ok,,159.05,0.31,158.88 159.4 158.86,15107.7,True,2
 qwen3.5-2b,Q8_0,llama.cpp,gpu,ok,,550.53,2.08,550.59 548.42 552.59,8460.2,True,27.63,0.03,27.61 27.63 27.66,189184.7,True,whole device (net of idle),perfetto:current,
 qwen3.5-2b,Q8,mnn,cpu,ok,,168.74,1.04,167.54 169.26 169.42,17655.6,True,31.38,0.02,31.38 31.4 31.36,142464.9,True,whole device (net of idle),perfetto:current,
 qwen3.5-2b,Q8,mnn,gpu,ok,,457.58,18.87,479.14 449.58 444.04,8653.7,True,25.96,0.18,26.17 25.85 25.85,183484.2,True,whole device (net of idle),perfetto:current,
-qwen3.5-4b,Q4_0,llama.cpp,cpu,ok,,25.3,1.33,26.44 23.83 25.63,52396.8,True,15.05,0.59,15.69 14.96 14.51,294124.2,True,whole device (net of idle),perfetto:current,
+qwen3.5-4b,Q4_0,llama.cpp,cpu,ok,,59.79,0.1,59.9 59.75 59.73,39016.4,True,15.87,0.01,15.87 15.88 15.87,295468.7,True,whole device (net of idle),perfetto:current,
 qwen3.5-4b,Q4_0,llama.cpp,gpu,ok,,280.56,0.16,280.42 280.51 280.74,21312.5,True,14.5,1.04,15.69 13.96 13.84,284697.3,True,whole device (net of idle),perfetto:current,
 qwen3.5-4b,Q4,mnn,cpu,ok,,62.53,0.08,62.62 62.49 62.48,42716.3,True,16.91,0.05,16.97 16.9 16.88,184710.0,True,whole device (net of idle),perfetto:current,
 qwen3.5-4b,Q4,mnn,gpu,ok,,274.87,5.08,280.21 274.3 270.1,14850.9,True,21.71,0.24,21.98 21.59 21.55,231179.4,True,whole device (net of idle),perfetto:current,

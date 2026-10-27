@@ -41,6 +41,7 @@ exe=$1; out=$2
 while [ ! -f {work}/exit ]; do
   t=$(cat /proc/uptime); t=${{t%% *}}
   avail=$(grep MemAvailable /proc/meminfo); avail=${{avail//[!0-9]/}}
+  gsys=$(grep GPUTotalUsed /proc/meminfo); gsys=${{gsys//[!0-9]/}}
   pid=$(pidof $exe); pid=${{pid%% *}}
   if [ -n "$pid" ]; then
     set -- $(grep -E '^(VmRSS|VmHWM|VmSwap):' /proc/$pid/status | tr -s ' ' | cut -d' ' -f2)
@@ -48,9 +49,9 @@ while [ ! -f {work}/exit ]; do
     m=$(dumpsys meminfo $pid 2>/dev/null)
     gl=$(echo "$m" | grep 'GL mtrack' | tr -s ' ' | cut -d' ' -f4)
     pss=$(echo "$m" | grep 'TOTAL PSS:' | tr -s ' ' | cut -d' ' -f4)
-    echo "$t $avail $pid $hwm $rss $swp ${{gl:--}} ${{pss:--}}" >> $out
+    echo "$t $avail $pid $hwm $rss $swp ${{gl:--}} ${{pss:--}} ${{gsys:--}}" >> $out
   else
-    echo "$t $avail - - - - - -" >> $out
+    echo "$t $avail - - - - - - ${{gsys:--}}" >> $out
   fi
   sleep 0.5
 done
@@ -86,7 +87,7 @@ def run_one(adb: Adb, cfg: dict, model_path: str, ref: str, threads: int | None,
             code = int(out)
             break
         tail = adb.sh(f"tail -n 1 {WORK}/samples.txt 2>/dev/null").split()
-        if len(tail) == 8 and tail[5].isdigit():
+        if len(tail) >= 8 and tail[5].isdigit():
             swap_kb = max(swap_kb, int(tail[5]))
         if swap_kb > rpt.SWAP_LIMIT_MB * 1024:  # same guard as the benchmarks: do not drive the phone into swap
             rpt.stop_benchmark(adb, WORK, exe)
@@ -102,13 +103,31 @@ def run_one(adb: Adb, cfg: dict, model_path: str, ref: str, threads: int | None,
     run = [r for r in rows if r[2] != "-" and r[3].isdigit()]
     num = lambda i: [int(r[i]) for r in run if r[i].isdigit()]  # noqa: E731
     mib = lambda kb: round(kb / 1024, 1) if kb is not None else None  # noqa: E731
+    # Some phones (OnePlus 15, Android 16) report no per-process GPU memory in dumpsys meminfo ("GL mtrack" stays ~0.2 MiB while
+    # the GPU holds gigabytes), but /proc/meminfo has a system-wide GPUTotalUsed. Its rise above the pre-run baseline is the
+    # process's GPU memory (the device is otherwise idle: airplane mode, background apps killed). Where the counter is absent
+    # (e.g. the Galaxy S23) this stays inactive and the original GL-mtrack/PSS numbers are used.
+    gbase = sorted(int(r[8]) for r in rows[:len(rows)] if r[2] == "-" and len(r) > 8 and r[8].isdigit())
+    gbase_kb = gbase[len(gbase) // 2] if gbase else None
+    gpu_rise, totals = [], []
+    for r in run:
+        pss = int(r[7]) if r[7].isdigit() else None
+        gl = int(r[6]) if r[6].isdigit() else 0
+        gs = int(r[8]) if len(r) > 8 and r[8].isdigit() else None
+        rise = max(0, gs - gbase_kb) if (gs is not None and gbase_kb is not None) else None
+        if rise is not None:
+            gpu_rise.append(rise)
+        if pss is not None:
+            totals.append(pss + (max(0, rise - gl) if rise is not None else 0))
     return {
         "exit": code, "seconds": round(time.time() - t0, 1), "samples": len(run),
         # columns (kB): uptime, MemAvailable, pid, VmHWM, VmRSS, VmSwap, GL mtrack, TOTAL PSS (dumpsys meminfo)
         "peak_rss_mib": mib(max(num(3) + num(4), default=None)),  # CPU-side resident memory (VmHWM high-water mark)
         "peak_swap_mib": mib(max(num(5), default=None)),
-        "peak_gpu_mib": mib(max(num(6), default=None)),  # GPU buffers the driver allocated for the process
-        "peak_total_mib": mib(max(num(7), default=None)),  # PSS including GPU memory: the process's memory footprint
+        "peak_gpu_mib": mib(max(gpu_rise, default=None)) if gpu_rise else mib(max(num(6), default=None)),  # GPU buffers of the process
+        "peak_total_mib": mib(max(totals, default=None)),  # PSS + GPU memory not in PSS: the process's memory footprint
+        "gpu_source": "GPUTotalUsed rise over baseline (/proc/meminfo)" if gpu_rise else "GL mtrack (dumpsys meminfo)",
+        "gpu_baseline_mib": mib(gbase_kb),
         "mem_available_before_mib": mib(max(base[-20:], default=None)) if base else None,
         "mem_available_drop_mib": (mib(max(base[-20:]) - min(int(r[1]) for r in run)) if base and run else None),
         "stderr_tail": stderr[-600:] if code not in (0, None) else None,

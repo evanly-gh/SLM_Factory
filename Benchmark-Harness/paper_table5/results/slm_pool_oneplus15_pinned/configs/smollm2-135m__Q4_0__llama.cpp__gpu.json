@@ -3872,7 +3872,11 @@
   ],
   "tokens": [
    256
-  ]
+  ],
+  "uj_per_token": 1053.4,
+  "uj_per_token_gross": 1096.6,
+  "energy_valid": true,
+  "energy_reason": null
  },
  "decode": {
   "tps": 93.17,
@@ -3884,8 +3888,71 @@
   ],
   "tokens": [
    256
-  ]
+  ],
+  "uj_per_token": 32036.0,
+  "uj_per_token_gross": 33264.3,
+  "energy_valid": true,
+  "energy_reason": null
  },
  "status": "ok",
- "finished": "2026-10-12T20:27:21.340087"
+ "finished": "2026-10-12T20:27:21.340087",
+ "energy": {
+  "perfetto:current": {
+   "prefill": {
+    "uj_per_token": 1096.6,
+    "net_uj_per_token": 1053.4,
+    "avg_power_mw": 3898.3,
+    "idle_power_mw": 153.4,
+    "seconds": 30.46,
+    "tokens": 108288,
+    "windows": 2,
+    "valid": true,
+    "reason": null,
+    "note": "battery HAL current, unit mA"
+   },
+   "decode": {
+    "uj_per_token": 33264.3,
+    "net_uj_per_token": 32036.0,
+    "avg_power_mw": 4154.9,
+    "idle_power_mw": 153.4,
+    "seconds": 36.89,
+    "tokens": 4608,
+    "windows": 1,
+    "valid": true,
+    "reason": null,
+    "note": "battery HAL current, unit mA"
+   }
+  },
+  "perfetto:charge": {
+   "prefill": {
+    "uj_per_token": 2978.5,
+    "net_uj_per_token": 2978.5,
+    "avg_power_mw": 10588.6,
+    "idle_power_mw": -0.0,
+    "seconds": 30.46,
+    "tokens": 108288,
+    "windows": 2,
+    "valid": false,
+    "reason": "reading changed only 4 time(s) during the phase",
+    "note": "battery HAL charge counter"
+   },
+   "decode": {
+    "uj_per_token": 69702.3,
+    "net_uj_per_token": 69702.3,
+    "avg_power_mw": 8706.2,
+    "idle_power_mw": -0.0,
+    "seconds": 36.89,
+    "tokens": 4608,
+    "windows": 1,
+    "valid": false,
+    "reason": "reading changed only 4 time(s) during the phase",
+    "note": "battery HAL charge counter"
+   }
+  }
+ },
+ "energy_idle": "per invocation",
+ "energy_session": "2026-10-20T00:01:22.226732",
+ "energy_headline_method": "perfetto:current",
+ "energy_kind": "whole device (net of idle)",
+ "energy_source": "rerun 2026-10-20: results/slm_pool_oneplus15_pinned_energy_rerun (throughput kept from original run)"
 }

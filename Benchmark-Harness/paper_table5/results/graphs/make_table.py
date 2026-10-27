@@ -63,7 +63,7 @@ def load(stems):
             size = sum(mf["files"].values()) / 2**30 if mf.get("files") else None
             row = dict(model=c["model"], fw=c["framework"], bits=c["bits"], quant=c["quant"], backend=c["backend"],
                        build=stem.rsplit("_", 1)[1], size=size, status=status_text(j), pre=None, dec=None,
-                       pre_sd=None, dec_sd=None, pe=None, de=None)
+                       pre_sd=None, dec_sd=None, pe=None, de=None, id=c["id"], stem=stem, mem=None, mem_gpu=None, mem_note="")
             if j.get("status") == "ok":
                 p, d = j["prefill"], j["decode"]
                 row.update(pre=p.get("tps"), pre_sd=p.get("tps_std"), dec=d.get("tps"), dec_sd=d.get("tps_std"))
@@ -77,6 +77,31 @@ def load(stems):
     return rows
 
 
+# Peak memory exists for the OnePlus 15 only (memory_usage.py, patched to read the system-wide GPUTotalUsed counter; see the setup notes).
+# Exit 0 = clean run; exit 139 = the benchmark segfaulted after finishing its workload (MNN F16 on the GPU), the peak is still the workload's.
+# One cell uses its repeat measurement: the first reading of Gemma3-270M MNN Q4 CPU was 442 MiB, the repeat 272 MiB with identical resident
+# memory, i.e. PSS attribution noise on memory-mapped pages (results/_memory_repeat_oneplus15/).
+MEM_REPEAT_OVERRIDE = {"gemma3-270m__Q4__mnn__cpu": "pinned"}
+
+
+def attach_memory(rows):
+    for r in rows:
+        f = os.path.join(RES, f"slm_pool_{r['stem']}", "memory", f"{r['id']}.json")
+        if r["id"] in MEM_REPEAT_OVERRIDE and r["stem"].endswith(MEM_REPEAT_OVERRIDE[r["id"]]):
+            g = os.path.join(RES, "_memory_repeat_oneplus15", MEM_REPEAT_OVERRIDE[r["id"]], "memory", f"{r['id']}.json")
+            if os.path.exists(g):
+                f = g
+                r["mem_note"] += " ‡"
+        if not os.path.exists(f):
+            continue
+        m = json.load(open(f))
+        if m.get("exit") in (0, 139) and m.get("peak_total_mib"):
+            r["mem"] = m["peak_total_mib"]
+            r["mem_gpu"] = m.get("peak_gpu_mib") or None
+            if m["exit"] == 139:
+                r["mem_note"] += " †"
+
+
 def main():
     out = []
     out.append("# All results: every model, quantization, engine, backend and phone\n")
@@ -87,9 +112,16 @@ def main():
                "- **Build** `pinned` = the paper's llama.cpp `eadc418` / MNN `510ac8f` (Qwen3, SmolLM2, Gemma3). "
                "`head` = llama.cpp `9c2e0e4` / MNN `a8ec497` (Qwen3.5 only; its architecture needs a newer build).\n"
                "- **Precision** columns use each engine's own label: llama.cpp Q4_0 / Q8_0 / F16, MNN 4 / 8 / 16-bit (shown as Q4 / Q8 / F16).\n"
-               "- **Size (GiB)** is the on-disk weight size of the model file(s) pushed to the phone. Per-run memory use was not logged, "
-               "so this is the only memory figure we have. The RAM guard refuses a run when estimated resident weights exceed 55% of the phone's RAM "
+               "- **Size (GiB)** is the on-disk weight size of the model file(s) pushed to the phone. The RAM guard refuses a run when estimated resident weights exceed 55% of the phone's RAM "
                "(MNN F16 is estimated at about 2x its file size).\n"
+               "- **Peak memory (MiB)** is the largest total memory of the inference process during one run of the same workload (256-token prompt, 256 generated tokens): "
+               "PSS from `dumpsys meminfo` plus the GPU buffers that PSS does not show, sampled every 0.5 s by `memory_usage.py`; **GPU (MiB)** is the GPU part of it. "
+               "**Measured on the OnePlus 15 only; — on the other phones means not measured.** On the OnePlus 15 `dumpsys meminfo` reports almost no GPU memory, so the GPU part is the rise of the "
+               "system-wide `GPUTotalUsed` counter (`/proc/meminfo`) above its pre-run baseline (a patch to `memory_usage.py`). "
+               "† = the benchmark segfaulted after completing the workload (MNN F16 on the GPU), so the peak is still the workload's. "
+               "‡ = repeat measurement used: the first reading of Gemma3-270M MNN Q4 CPU was 442 MiB, the repeat 272 MiB with the same resident memory (PSS attribution noise on memory-mapped pages); "
+               "a repeat of 24 cells otherwise agreed within 10% (median 0.4%). Peak memory can exceed the phone's RAM because PSS also counts memory-mapped weight pages that are copied into GPU memory; "
+               "the drop in the phone's free memory is saved in the raw records.\n"
                "- **Energy (mJ/token)** is whole-device battery energy net of idle, measured through Perfetto (OnePlus 15) or sysfs battery current (Redmi 9A). "
                "— means not measured or not valid. **The OnePlus 8 Pro has no energy data at all** (Perfetto v25 on Android 13 cannot read its battery counters and sysfs battery files are not readable without root). The paper's energy is SoC-only, so it is not directly comparable.\n"
                "- **Status**: `ok` = measured. Anything else says why there is no number.\n")
@@ -104,6 +136,8 @@ def main():
                                      status="not run: head llama.cpp OpenCL build needs OpenCL symbols this phone's driver lacks",
                                      pre=None, dec=None, pre_sd=None, dec_sd=None, pe=None, de=None))
         rows = [r for r in rows if r["model"] in MODEL_ORDER]
+        if key == "oneplus15":
+            attach_memory(rows)
         if key != "oneplus8pro":  # 8 Pro never had energy; for the others flag measured cells that lack a valid reading
             for r in rows:
                 if r["status"] == "ok" and r["pe"] is None and r["de"] is None:
@@ -112,12 +146,14 @@ def main():
         ok = sum(r["status"].startswith("ok") for r in rows)
         out.append(f"\n## {label}\n")
         out.append(f"{note}. {len(rows)} configurations, {ok} measured.\n")
-        out.append("| Model | Build | Engine | Backend | Precision | Size (GiB) | Prefill (t/s) | Decode (t/s) | Prefill energy (mJ/tok) | Decode energy (mJ/tok) | Status |")
-        out.append("|---|---|---|---|---|---:|---:|---:|---:|---:|---|")
+        out.append("| Model | Build | Engine | Backend | Precision | Size (GiB) | Peak memory (MiB) | GPU (MiB) | Prefill (t/s) | Decode (t/s) | Prefill energy (mJ/tok) | Decode energy (mJ/tok) | Status |")
+        out.append("|---|---|---|---|---|---:|---:|---:|---:|---:|---:|---:|---|")
         for r in rows:
             out.append("| " + " | ".join([
                 MODEL_LABEL[r["model"]], r["build"], "llama.cpp" if r["fw"] == "llama.cpp" else "MNN", r["backend"].upper(), r["quant"],
-                fmt(r["size"], nd=2) if r["size"] else "—", fmt(r["pre"], r["pre_sd"], 2 if (r["pre"] or 99) < 10 else 1), fmt(r["dec"], r["dec_sd"], 2),
+                fmt(r["size"], nd=2) if r["size"] else "—",
+                (f"{r['mem']:,.0f}{r['mem_note']}" if r.get("mem") else "—"), (f"{r['mem_gpu']:,.0f}" if r.get("mem_gpu") else "—"),
+                fmt(r["pre"], r["pre_sd"], 2 if (r["pre"] or 99) < 10 else 1), fmt(r["dec"], r["dec_sd"], 2),
                 fmt(r["pe"], nd=1), fmt(r["de"], nd=1), r["status"]]) + " |")
     path = os.path.join(RES, "all_results.md")
     open(path, "w").write("\n".join(out) + "\n")

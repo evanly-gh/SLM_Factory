@@ -3704,7 +3704,11 @@
   ],
   "tokens": [
    256
-  ]
+  ],
+  "uj_per_token": 853.6,
+  "uj_per_token_gross": 890.8,
+  "energy_valid": true,
+  "energy_reason": null
  },
  "decode": {
   "tps": 42.24,
@@ -3716,8 +3720,71 @@
   ],
   "tokens": [
    256
-  ]
+  ],
+  "uj_per_token": 35491.8,
+  "uj_per_token_gross": 38695.0,
+  "energy_valid": true,
+  "energy_reason": null
  },
  "status": "ok",
- "finished": "2026-10-12T19:58:45.684884"
+ "finished": "2026-10-12T19:58:45.684884",
+ "energy": {
+  "perfetto:current": {
+   "prefill": {
+    "uj_per_token": 890.8,
+    "net_uj_per_token": 853.6,
+    "avg_power_mw": 3246.1,
+    "idle_power_mw": 135.7,
+    "seconds": 30.28,
+    "tokens": 110336,
+    "windows": 4,
+    "valid": true,
+    "reason": null,
+    "note": "battery HAL current, unit mA"
+   },
+   "decode": {
+    "uj_per_token": 38695.0,
+    "net_uj_per_token": 35491.8,
+    "avg_power_mw": 1639.5,
+    "idle_power_mw": 135.7,
+    "seconds": 30.21,
+    "tokens": 1280,
+    "windows": 4,
+    "valid": true,
+    "reason": null,
+    "note": "battery HAL current, unit mA"
+   }
+  },
+  "perfetto:charge": {
+   "prefill": {
+    "uj_per_token": 1795.6,
+    "net_uj_per_token": 1795.6,
+    "avg_power_mw": 6542.7,
+    "idle_power_mw": -0.0,
+    "seconds": 30.07,
+    "tokens": 109568,
+    "windows": 1,
+    "valid": false,
+    "reason": "3 window(s) without samples; reading changed only 5 time(s) during the phase",
+    "note": "battery HAL charge counter"
+   },
+   "decode": {
+    "uj_per_token": 116010.4,
+    "net_uj_per_token": 116010.4,
+    "avg_power_mw": 4915.3,
+    "idle_power_mw": -0.0,
+    "seconds": 30.21,
+    "tokens": 1280,
+    "windows": 4,
+    "valid": false,
+    "reason": "reading changed only 4 time(s) during the phase",
+    "note": "battery HAL charge counter"
+   }
+  }
+ },
+ "energy_idle": "per invocation",
+ "energy_session": "2026-10-20T00:01:22.226732",
+ "energy_headline_method": "perfetto:current",
+ "energy_kind": "whole device (net of idle)",
+ "energy_source": "rerun 2026-10-20: results/slm_pool_oneplus15_pinned_energy_rerun (throughput kept from original run)"
 }

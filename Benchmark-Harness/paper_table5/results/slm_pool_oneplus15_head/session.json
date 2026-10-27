@@ -1,5 +1,5 @@
 {
- "started": "2026-10-14T19:25:09.325478",
+ "started": "2026-10-26T18:11:37.138727",
  "device": {
   "serial": "10.0.0.239:5555",
   "manufacturer": "OnePlus",
@@ -9,8 +9,8 @@
   "platform": "canoe",
   "android": "16",
   "sdk": "36",
-  "build": "OnePlus/CPH2749/OP611FL1:16/BP2A.250605.015/B.R4T3.250fe8f-2b9793-2d9dba:user/release-keys",
-  "mem_total_kb": 15475008,
+  "build": "OnePlus/CPH2749/OP611FL1:16/BP2A.250605.015/B.R4T3.16cae21_dc209e_dc22f5:user/release-keys",
+  "mem_total_kb": 15475012,
   "cpu_clusters": {
    "policy0": {
     "max_khz": 3628800,
@@ -70,34 +70,32 @@
    "dump_head": "Error with service 'android.hardware.power.stats.IPowerStats/default' while dumping: FAILED_TRANSACTION\n"
   },
   "battery_dir": null,
-  "battery_files": []
+  "battery_files": [],
+  "battery_service": {
+   "usable": true,
+   "sample": {
+    "bm:current_now": "72",
+    "bm:current_avg": "NA",
+    "bm:charge_counter": "5060000",
+    "bm:voltage_now": "4257"
+   }
+  }
  },
  "params": {
   "serial": "10.0.0.239:5555",
   "ref": "head",
   "models": [
-   "qwen3.5-0.8b",
-   "qwen3.5-2b",
-   "qwen3.5-4b",
-   "qwen3.5-0.8b",
-   "qwen3.5-2b",
    "qwen3.5-4b"
   ],
-  "pool_file": "pools/slm_factory_android_pool.py",
+  "pool_file": null,
   "quants": [
-   "Q4_0",
-   "Q8_0",
-   "F16",
-   "Q4",
-   "Q8"
+   "Q4_0"
   ],
   "frameworks": [
-   "llama.cpp",
-   "mnn"
+   "llama.cpp"
   ],
   "backends": [
-   "cpu",
-   "gpu"
+   "cpu"
   ],
   "trials": 3,
   "n_prompt": 256,
@@ -121,10 +119,11 @@
   "force": false,
   "plan": false,
   "smallest_first": true,
+  "attach_offline": false,
   "recover_energy": false
  },
  "max_temp_c": 28.0,
- "idle_cpu_busy_at_start": 0.082,
+ "idle_cpu_busy_at_start": 0.031,
  "screen_on": false,
  "wireless_adb": true,
  "binaries": {
@@ -227,15 +226,18 @@
    "built": "2026-10-11T09:57:47.303734"
   }
  },
- "energy_dir": "energy/20261014_192509",
+ "energy_dir": "energy/20261026_181137",
+ "panel_off": false,
  "wake_lock": true,
- "radio_mode": "airplane mode on (Wi-Fi stays on in it)",
+ "radio_mode": "airplane mode already on (Wi-Fi kept on in it)",
  "idle_window": [
-  2349597.99,
-  2349636.16
+  402418.75,
+  402456.85
  ],
  "energy_headline_method": "perfetto:current",
  "energy_methods": [
+  "bm:current_now",
+  "bm:charge_counter",
   "perfetto:current",
   "perfetto:charge"
  ]
