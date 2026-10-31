@@ -30,12 +30,15 @@ public class PbPanel {
 
     public static void main(String[] args) throws Exception {
         File stop = new File(args.length > 0 ? args[0] : "/data/local/tmp/paper_bench/pbpanel.stop");
+        // "keep": keep the phone awake but leave the panel on (screen on at minimum brightness). llama.cpp's OpenCL
+        // backend with Q8_0/F16 weights kernel-panicked the OnePlus 8 Pro three times with the panel off (2026-10-21/22)
+        boolean panelOff = !(args.length > 1 && args[1].equals("keep"));
         Class<?> sc = Class.forName("android.view.SurfaceControl");
         Method setMode = sc.getMethod("setDisplayPowerMode", IBinder.class, int.class);
         IBinder token = displayToken(sc);
         if (token == null) throw new IllegalStateException("no built-in display token");
-        setMode.invoke(null, token, POWER_MODE_OFF);
-        System.out.println("PB_PANEL off");
+        if (panelOff) setMode.invoke(null, token, POWER_MODE_OFF);
+        System.out.println(panelOff ? "PB_PANEL off" : "PB_PANEL keep-awake");
         System.out.flush();
         Object pm = Class.forName("android.os.IPowerManager$Stub").getMethod("asInterface", IBinder.class).invoke(null,
                 Class.forName("android.os.ServiceManager").getMethod("getService", String.class).invoke(null, "power"));
@@ -52,9 +55,9 @@ public class PbPanel {
                 lastPoke = System.currentTimeMillis();
             }
             Thread.sleep(2000);
-            setMode.invoke(null, token, POWER_MODE_OFF);
+            if (panelOff) setMode.invoke(null, token, POWER_MODE_OFF);
         }
-        setMode.invoke(null, token, POWER_MODE_NORMAL);
+        if (panelOff) setMode.invoke(null, token, POWER_MODE_NORMAL);
         System.out.println("PB_PANEL on");
     }
 }

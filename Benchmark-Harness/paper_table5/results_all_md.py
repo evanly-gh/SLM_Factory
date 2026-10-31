@@ -30,6 +30,8 @@ from results_md import (C, COMBO_COLOR, COMBO_LABEL, COMBOS, DOCS, GRID, INK, IN
 
 HERE = Path(__file__).resolve().parent
 PHASES = ("prefill", "decode")
+T5_ALL = T5_MODELS + ["qwen2.5-7b"]  # Qwen2.5-7B: OnePlus 15 only (does not fit the S23's 8 GB)
+SUPPLEMENT = RESULTS / "oneplus15_supplement.json"  # OnePlus 15 values whose raw files are not in this repository
 EXCLUDED = {("qwen3.5-4b", "F16")}  # never prepared on any phone: not part of the 104-configuration table
 
 PHONES = [
@@ -99,8 +101,45 @@ def load_phone(phone) -> dict:
                 sessions.append(json.loads(f.read_text()))
             except ValueError:
                 pass
+    if phone["id"] == "oneplus15" and SUPPLEMENT.exists():
+        apply_supplement(json.loads(SUPPLEMENT.read_text(encoding="utf-8")), pool, t5, memory)
     return {"pool": {k: v for k, v in pool.items() if k in set(candidates(phone))}, "t5": t5, "memory": memory,
             "sessions": sessions, "cands": candidates(phone)}
+
+
+def apply_supplement(sup: dict, pool: dict, t5: dict, memory: dict):
+    """OnePlus 15 peak memory and energy cells (pool), and the paper-model reruns with energy (t5), from
+    results/oneplus15_supplement.json. Fills only what the raw results here lack; the throughput in it is checked to match."""
+    for x in sup["pool"]:
+        k = (x["model"], x["backend"], x["framework"], x["quant"])
+        if x.get("peak_total_mib") and k not in memory:
+            memory[k] = {"peak_total_mib": x["peak_total_mib"], "peak_gpu_mib": x.get("peak_gpu_mib"),
+                         "exit": 139 if x.get("crashed_after_workload") else 0,
+                         "stderr_tail": "gen=256" if x.get("crashed_after_workload") else None, "source": "supplement"}
+        r = pool.get(k)
+        if not r or r.get("status") != "ok":
+            continue
+        for ph in PHASES:
+            mj = x.get(f"{ph}_mj")
+            if mj is not None and not (r.get(ph) or {}).get("energy_valid"):
+                r[ph] = dict(r[ph], uj_per_token=mj * 1e3, energy_valid=True, energy_reason=None, energy_source="supplement")
+    for x in sup.get("reruns", []):  # replace a first run that showed the slow-governor symptom
+        k = (x["model"], x["backend"], x["framework"], x["quant"])
+        if k in pool:
+            for ph in PHASES:
+                pool[k][ph] = dict(pool[k][ph], tps=x[f"{ph}_tps"], tps_std=x.get(f"{ph}_std"),
+                                   uj_per_token=x[f"{ph}_mj"] * 1e3, energy_valid=True, energy_reason=None,
+                                   energy_source="supplement rerun")
+            pool[k]["rerun_note"] = (f"rerun; first run {x['first_run']['prefill_tps']} / {x['first_run']['decode_tps']} "
+                                     "tokens/s (slow governor)")
+    for x in sup["t5"]:
+        k = (x["model"], x["backend"], x["framework"], x["quant"])
+        t5[k] = {"status": "ok", "config": {"id": f"{x['model']}__{x['quant']}__{x['framework']}__{x['backend']}",
+                                            "model": x["model"], "backend": x["backend"], "framework": x["framework"],
+                                            "quant": x["quant"]},
+                 **{ph: {"tps": x[f"{ph}_tps"], "tps_std": x.get(f"{ph}_std"), "energy_valid": x.get(f"{ph}_mj") is not None,
+                         "uj_per_token": x[f"{ph}_mj"] * 1e3 if x.get(f"{ph}_mj") is not None else None}
+                    for ph in PHASES}, "note": x.get("note")}
 
 
 def manifest_storage() -> dict:
@@ -276,11 +315,11 @@ def _lines(values, unit, fmt=lambda v: f"{v:g}"):
 def fig_t5(data):
     """The paper's models: our phones that ran them next to the paper's four phones (bars) - throughput."""
     ran = [p for p in PHONES if data[p["id"]]["t5"]]
-    fig, axes = plt.subplots(2, 3, figsize=(12, 5.8), sharex=True)
+    fig, axes = plt.subplots(2, len(T5_ALL), figsize=(4 * len(T5_ALL), 5.8), sharex=True)
     xs = range(len(COMBOS))
     n = len(ran) + 1
     wdt = 0.8 / n
-    for j, m in enumerate(T5_MODELS):
+    for j, m in enumerate(T5_ALL):
         for i, ph in enumerate(PHASES):
             ax = axes[i][j]
             for k, p in enumerate(ran):
@@ -309,7 +348,7 @@ def fig_t5(data):
 
 def fig_t5_ratio(data):
     ran = [p for p in PHONES if data[p["id"]]["t5"] and p["paper_idx"] is not None]
-    rows = [(m, b, f) for m in T5_MODELS for b, f in COMBOS]
+    rows = [(m, b, f) for m in T5_ALL for b, f in COMBOS]
     fig, axes = plt.subplots(1, len(ran), figsize=(5.2 * len(ran), 5.4), sharey=True, squeeze=False)
     ys = list(range(len(rows)))[::-1]
     for ax, p in zip(axes[0], ran):
@@ -437,7 +476,7 @@ def main():
           f"| Model | Backend | Framework | Prefill {hdr_ours} | paper X17 | OP15 | X15 | X14 | Decode {hdr_ours} | "
           "paper X17 | OP15 | X15 | X14 |",
           "|---|---|---|" + "--:|" * (2 * (len(ran) + 4))]
-    for m in T5_MODELS:
+    for m in T5_ALL:
         first = True
         for b, f in [("cpu", "llama.cpp"), ("cpu", "mnn"), ("gpu", "llama.cpp"), ("gpu", "mnn")]:
             cells = []
@@ -452,11 +491,14 @@ def main():
     not_ran = [p["label"] for p in PHONES if not data[p["id"]]["t5"]]
     L += ["", "X17 = Xiaomi 17, OP15 = OnePlus 15, X15 = Xiaomi 15, X14 = Xiaomi 14 (paper values). "
           f"{' and '.join(not_ran)} did not run the paper's models (only the SLM_Factory pool, sections 3–4). "
-          "Qwen2.5-7B is not shown: it does not fit in the S23's 8 GB, and the OnePlus 15's 7B session did not complete.",
+          "Qwen2.5-7B does not fit in the S23's 8 GB (–). OnePlus 15 paper-model rows: 1 warm-up + 3 repetitions, "
+          "wake/sleep key pair before each run; four cells (Llama-3.2-1B and Qwen2.5-1.5B llama.cpp CPU, Qwen2.5-1.5B and "
+          "Qwen2.5-7B MNN CPU) are reruns after a slow-governor first pass or a swap-guard stop (first-pass prefill: "
+          "92.3, 28.8, 111.7 tokens/s and failed).",
           "", "### Energy (µJ/token), 4-bit", "",
           f"| Model | Backend | Framework | Prefill {hdr_ours} | paper X17 | OP15 | Decode {hdr_ours} | paper X17 | OP15 |",
           "|---|---|---|" + "--:|" * (2 * (len(ran) + 2))]
-    for m in T5_MODELS:
+    for m in T5_ALL:
         first = True
         for b, f in [("cpu", "llama.cpp"), ("cpu", "mnn"), ("gpu", "llama.cpp"), ("gpu", "mnn")]:
             cells = []
@@ -466,8 +508,8 @@ def main():
                 cells += [uj(ref[i]) if len(ref) > i else "–" for i in range(2)]
             L.append(f"| {LABEL[m] if first else ''} | {b.upper()} | {report.FRAMEWORK_LABEL[f]} | " + " | ".join(cells) + " |")
             first = False
-    L += ["", "The OnePlus 15's paper-model runs have no valid energy (they ran before its energy method was "
-          "settled); its pool rows in section 3 do.", ""]
+    L += ["", "Energy is whole-phone net of idle (ours) against SoC-only (paper), so ours should read higher; on the "
+          "OnePlus 15 most cells read lower instead (section 2).", ""]
 
     # ---- 2. comparison ----
     L += ["## 2. How our phones compare with the paper", "", f"![Throughput vs paper]({figs['t5']})", "",
@@ -480,17 +522,30 @@ def main():
         if p["paper_idx"] is None:
             continue
         rs = {ph: [] for ph in PHASES}
-        for m in T5_MODELS:
+        for m in T5_ALL:
             for b, f in COMBOS:
                 for ph in PHASES:
                     o, ref = val(data[p["id"]]["t5"].get((m, b, f, W4[f])), ph, "tps"), paper(m, b, f, ph, "tps")
                     if o and len(ref) > p["paper_idx"]:
                         rs[ph].append(o / ref[p["paper_idx"]])
         allr = rs["prefill"] + rs["decode"]
+        es = {ph: [] for ph in PHASES}  # energy against the same paper phone (the paper reports X17 and OP15 only)
+        if p["paper_idx"] == 1:
+            for m in T5_ALL:
+                for b, f in COMBOS:
+                    for ph in PHASES:
+                        o, ref = val(data[p["id"]]["t5"].get((m, b, f, W4[f])), ph, "uj"), paper(m, b, f, ph, "uj")
+                        if o and len(ref) > 1:
+                            es[ph].append(o / ref[1])
         if allr:
             L.append(f"- **{p['label']}** ({p['paper_rel']}): {sum(0.75 <= x <= 1.25 for x in allr)} of {len(allr)} "
                      f"throughput cells within ±25%; median ratio {statistics.median(rs['prefill']):.2f} for prefill, "
-                     f"{statistics.median(rs['decode']):.2f} for decode.")
+                     f"{statistics.median(rs['decode']):.2f} for decode."
+                     + (f" Energy per token against the paper's own OnePlus 15 values: median {statistics.median(es['prefill']):.2f}× "
+                        f"for prefill, {statistics.median(es['decode']):.2f}× for decode; ours is whole-phone net of idle and "
+                        "the paper's SoC-only, so ours should not read lower, yet prefill does in most cells. The paper's "
+                        "SoC counters and our idle-subtracted battery reading split the phone's power differently, so "
+                        "treat the absolute comparison as approximate." if es["prefill"] else ""))
     L += ["- **OnePlus 8 Pro and Redmi 9A** are not in the paper and have no close proxy (the Snapdragon 865 is four "
           "generations older than the Xiaomi 14; the Helio G25 is an entry-level chip), so they are compared with the "
           "other phones on the pool in sections 3–4.", ""]
@@ -554,7 +609,21 @@ def main():
                 reasons.append(f"`{r['config']['id']}` ({why})")
             L += ["", f"`–` energy ({len(noe)} rows): " + ", ".join(reasons) + "."]
         if p["id"] == "oneplus8pro":
-            first_runs = merge_dirs([RESULTS / "slm_pool_oneplus8pro_pinned", RESULTS / "slm_pool_oneplus8pro_head"],
+            aborted = []
+            for n in p["pool"]:
+                for f in sorted((RESULTS / n / "configs").glob("*.json")) if (RESULTS / n / "configs").is_dir() else []:
+                    x = json.loads(f.read_text())
+                    k = (x["config"]["model"], x["config"]["backend"], x["config"]["framework"], x["config"]["quant"])
+                    if x.get("status") != "ok" and "exit 134" in (x.get("error") or "") \
+                            and (d["pool"].get(k) or {}).get("status") == "ok":
+                        aborted.append(f"`{x['config']['id']}`")
+            if aborted:
+                L += ["", f"**Energy not measurable ({len(aborted)} llama.cpp GPU rows):** " + ", ".join(sorted(set(aborted)))
+                      + ". Their throughput above comes from the first (screen-on) runs. The energy runs abort inside the Adreno "
+                      "650 OpenCL driver (`cl_a6x_cmdbuf_mgr_submit_ibs`, exit 134) minutes into the first prefill. These rows "
+                      "prefill at 0.5–3 tokens/s, so one GPU call runs for minutes; a driver hang watchdog is the likely cause "
+                      "(not confirmed). The same kind of row kernel-panicked the phone three times with the display panel off."]
+            first_runs =merge_dirs([RESULTS / "slm_pool_oneplus8pro_pinned", RESULTS / "slm_pool_oneplus8pro_head"],
                                     lambda dd: load_dir(dd) if (dd / "configs").is_dir() else {})
             diffs = []
             for k in d["cands"]:
@@ -577,6 +646,11 @@ def main():
                       "The harness now keeps the phone awake (checked every 2 s) and records the lowest cap during every "
                       "run; rows measured before that fix with only a once-a-minute wake (2026-10-20 12:39–19:00) are "
                       "being rerun."]
+        rr = [f"`{d['pool'][k]['config']['id']}` ({d['pool'][k]['rerun_note']})" for k in d["cands"]
+              if (d["pool"].get(k) or {}).get("rerun_note")]
+        if rr:
+            L += ["", "**Rerun after a slow-governor first run** (prefill far below the phone's other measurements, "
+                  "decode normal; the rerun replaces it): " + ", ".join(rr) + "."]
         odd = [d["pool"][k]["config"]["id"] for k in d["cands"] if (d["pool"].get(k) or {}).get("status") == "ok"
                and k[1] == "gpu" and k[2] == "llama.cpp"
                and (val(d["pool"][k], "prefill", "tps") or 0) < (val(d["pool"][k], "decode", "tps") or 0)]

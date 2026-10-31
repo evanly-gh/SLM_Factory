@@ -146,7 +146,7 @@ def main():
     ap.add_argument("--force", action="store_true")
     ap.add_argument("--min-battery", type=int, default=5, help="stop below this battery level (%%)")
     ap.add_argument("--backends", nargs="+", choices=["cpu", "gpu"], default=["cpu", "gpu"])
-    ap.add_argument("--screen", choices=["off", "on", "panel"], default="off",
+    ap.add_argument("--screen", choices=["off", "on", "panel", "awake"], default="off",
                     help="as in run_paper_table5.py; panel for phones that cap the CPU while asleep (OnePlus 8 Pro)")
     a = ap.parse_args()
     out = Path(a.results_dir)

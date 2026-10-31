@@ -586,6 +586,9 @@ class Session:
     def attach_energy(self, until: str | None = None):
         """until: the next session's start; configurations that started then or later belong to that session."""
         self.recorder.load()
+        if not self.recorder.funcs:  # no recording here (e.g. the phone dropped off before it was pulled): leave the
+            log("[ENERGY] no energy recording for this session; configurations left for --recover-energy")
+            return                   # configurations unstamped so a later --recover-energy can attach them
         preferred = self.profile.get("energy_method") or probe_recommendation(self.info["model"])
         headline = self.recorder.headline(preferred)
         session = json.loads((self.out / "session.json").read_text())
@@ -670,7 +673,7 @@ class Session:
         try:
             if not a.no_controls:
                 self.controls.apply()
-                session.update({"screen_on": self.controls.screen_on, "panel_off": bool(self.controls.panel),
+                session.update({"screen_on": self.controls.screen_on, "panel_off": bool(self.controls.panel) and not self.controls.panel.keep_only,
                                 "wake_lock": bool(self.controls.waker),
                                 "radio_mode": self.controls.radio_mode})
                 for f in (self.out / "session.json", self.out / "sessions" / f"{stamp}.json"):
@@ -855,7 +858,7 @@ def main():
     ap.add_argument("--llama-threads", type=int, default=None, help="llama-bench -t (default: its own default)")
     ap.add_argument("--mnn-threads", type=int, default=None, help="llm_bench -t (default: its own default, 4)")
     ap.add_argument("--no-controls", action="store_true", help="skip airplane mode / screen off / DND")
-    ap.add_argument("--screen", choices=["auto", "off", "on", "panel"], default="auto",
+    ap.add_argument("--screen", choices=["auto", "off", "on", "panel", "awake"], default="auto",
                     help="screen during runs: auto/off = off, as in the paper (over wireless adb a partial wake lock "
                          "keeps the CPU running; if it cannot be held, the screen stays on instead); on = minimum "
                          "brightness; panel = system awake with only the display panel off (phones that cap the CPU while asleep)")

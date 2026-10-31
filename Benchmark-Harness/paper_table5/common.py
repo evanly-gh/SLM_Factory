@@ -198,8 +198,9 @@ class PanelOff:
     STOP = f"{DEV_ROOT}/pbpanel.stop"
     LOG = f"{DEV_ROOT}/pbpanel.log"
 
-    def __init__(self, adb):
+    def __init__(self, adb, keep_only: bool = False):
         self.adb = adb
+        self.keep_only = keep_only  # keep the phone awake, panel stays on (screen "awake" mode)
 
     def apply(self):
         from build_binaries import build_java_tool
@@ -208,10 +209,11 @@ class PanelOff:
         r = self.adb.run(["push", str(jar), self.JAR], timeout=120)
         if r.returncode != 0:
             raise RuntimeError(f"pushing the panel-off helper failed: {r.stderr.strip()}")
-        self.adb.sh(f"CLASSPATH={self.JAR} setsid app_process / PbPanel {self.STOP} </dev/null >{self.LOG} 2>&1 &")
+        mode = " keep" if self.keep_only else ""
+        self.adb.sh(f"CLASSPATH={self.JAR} setsid app_process / PbPanel {self.STOP}{mode} </dev/null >{self.LOG} 2>&1 &")
         for _ in range(20):
             time.sleep(0.5)
-            if "PB_PANEL off" in self.adb.sh(f"cat {self.LOG}"):
+            if "PB_PANEL " in self.adb.sh(f"cat {self.LOG}"):
                 return
         raise RuntimeError(f"the panel-off helper did not start: {self.adb.sh(f'cat {self.LOG}')[-500:]}")
 
@@ -237,9 +239,10 @@ class DeviceControls:
     def __init__(self, adb, log=print, screen: str = "auto"):
         self.adb, self.log = adb, log
         self.wireless = is_wireless_serial(adb.serial)
-        self.screen_on = screen in ("on", "panel")  # panel: system awake (screen on), only the panel is off
+        self.screen_on = screen in ("on", "panel", "awake")  # panel: system awake, only the panel is off
         self.keeper = ScreenKeeper(adb) if self.screen_on else None
-        self.panel = PanelOff(adb) if screen == "panel" else None
+        # awake: screen on at minimum brightness, kept awake by PbPanel (OxygenOS ignores screen_off_timeout)
+        self.panel = PanelOff(adb, keep_only=screen == "awake") if screen in ("panel", "awake") else None
         self.waker = WakeHolder(adb) if self.wireless and not self.screen_on else None
         self.saved: dict = {}
         self.radio_mode = None
@@ -303,7 +306,9 @@ class DeviceControls:
                 self.panel.restore()
                 self.panel = None
         self.ensure_screen()
-        screen = ("awake with the display panel off (system interactive: no screen-off CPU caps, no suspend)"
+        screen = ("on at minimum brightness, kept awake (no screen-off CPU caps, no suspend)"
+                  if self.panel and self.panel.keep_only else
+                  "awake with the display panel off (system interactive: no screen-off CPU caps, no suspend)"
                   if self.panel else
                   "on at minimum brightness (wireless adb: keeps the phone from suspending)" if self.screen_on else
                   "off, CPU kept awake by a partial wake lock (wireless adb)" if self.waker else "off")

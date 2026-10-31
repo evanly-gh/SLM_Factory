@@ -109,6 +109,14 @@ def pct(v):
     return "n/a" if v is None else f"{v:.0%}"
 
 
+def bit_cost(rows):
+    """Median 8-bit / 4-bit decode speed over the configurations that ran at both."""
+    eight = {"Q4_0": "Q8_0", "Q4": "Q8"}
+    v = [rows[(m, fw, be, eight[q])]["dec"] / r["dec"] for (m, fw, be, q), r in rows.items()
+         if q in eight and r["ok"] and (m, fw, be, eight[q]) in rows and rows[(m, fw, be, eight[q])]["ok"]]
+    return st.median(v) if v else float("nan")
+
+
 def transfer(req, P):
     """The Factory has another phone's measurements: (a) deploy every configuration that met the requirement there;
     (b) deploy the single configuration with the most headroom there. Success = it meets the requirement here."""
@@ -117,7 +125,9 @@ def transfer(req, P):
         for ref in SNAP:
             if ref == tgt or req.candidates(P[ref]) is None or req.candidates(P[tgt]) is None:
                 continue
-            ok_ref = [k for k, r in P[ref].items() if req.meta(r) and req.meets(r) and k in P[tgt]]
+            known = lambda r: not req.energy or not r["ok"] or r.get("req_j") is not None  # energy unknown: skip
+            ok_ref = [k for k, r in P[ref].items()
+                      if req.meta(r) and known(r) and req.meets(r) and k in P[tgt] and known(P[tgt][k])]
             if not ok_ref:
                 continue
             sets.append(sum(req.meets(P[tgt][k]) for k in ok_ref) / len(ok_ref))
@@ -134,7 +144,7 @@ def main():
 
     L = ["# Why each phone needs its own measurements: requirement difficulty", "",
          f"Generated {datetime.now().isoformat(timespec='minutes')} by `Benchmark-Harness/paper_table5/requirements_md.py` "
-         "from the four measured phones ([all_results.md](all_results.md) and [RESULTS.md](RESULTS.md)).", "",
+         "from the four measured phones ([RESULTS.md](RESULTS.md)).", "",
          "## The question", "",
          "A user asks the SLM Factory for a model that meets a requirement on *their* phone, for example \"a 1.5B+ "
          "model that streams at 20 tokens/s\". From the model card alone, the Factory knows each configuration's file "
@@ -249,9 +259,9 @@ def main():
     L += [f"4. **Whether a configuration runs at all differs by phone** (it runs on one phone but not the other): "
           f"{'; '.join(runs)}. Memory limits, OpenCL driver support and crashes are device-specific: the head "
           "llama.cpp GPU build cannot even load on the OnePlus 8 Pro's driver.",
-          "5. **The cost of more bits differs by phone.** Going from 4-bit to 8-bit keeps a median 0.87–0.88× of decode "
-          "speed on the Galaxy S23 and OnePlus 15 but only 0.66× on the OnePlus 8 Pro, and on the S23's llama.cpp "
-          "GPU path 8-bit even decodes faster than 4-bit for some small models.", ""]
+          "5. **The cost of more bits differs by phone.** Going from 4-bit to 8-bit keeps a median "
+          + ", ".join(f"{bit_cost(P[x]):.2f}× on the {x}" for x in SNAP) + " of decode speed, and on the S23's "
+          "llama.cpp GPU path 8-bit even decodes faster than 4-bit for some small models.", ""]
 
     # ---- budget phone ----
     L += [f"## The budget phone ({BUDGET})", "",

@@ -1,9 +1,7 @@
-"""Per-phone configuration table for requirements_md.py: the Galaxy S23 from its result JSONs, the other phones from
-docs/all_results.md (their raw results live elsewhere)."""
+"""Per-phone configuration table for requirements_md.py, from the same merged data as docs/RESULTS.md
+(results_all_md.py)."""
 from __future__ import annotations
 
-import json
-import re
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -19,54 +17,32 @@ PHONES = {"Galaxy S23": "Snapdragon 8 Gen 2, 8 GB", "OnePlus 15": "Snapdragon 8 
           "OnePlus 8 Pro": "Snapdragon 865, 12 GB", "Redmi 9A": "Helio G25, 4 GB, CPU only"}
 
 
-def num(cell: str):
-    m = re.match(r"\s*([\d.]+)", cell.replace(",", ""))
-    return float(m.group(1)) if m else None
-
-
-def key(model, fw, be, quant):
-    return (model, {"llama.cpp": "llama.cpp", "MNN": "mnn", "mnn": "mnn"}[fw], be.lower(), quant)
-
-
-def load_all_results(path: Path = DOCS / "all_results.md") -> dict:
-    phones, cur = {}, None
-    for line in path.read_text(encoding="utf-8").splitlines():
-        if line.startswith("## ") and not line.startswith("## Setup"):
-            cur = phones.setdefault(line[3:].strip(), {})
-        elif cur is not None and line.startswith("| ") and not line.startswith("| Model") and not line.startswith("|---"):
-            c = [x.strip() for x in line.strip().strip("|").split("|")]
-            model, build, fw, be, prec, size, pre, dec, ep, ed, status = c
-            ok = status.startswith("ok")
-            cur[key(NAME[model], fw, be, prec)] = dict(
-                ok=ok, status=status, size_gb=(num(size) or 0) * 2**30 / 1e9 if num(size) else None,
-                pre=num(pre) if ok else None, dec=num(dec) if ok else None,
-                e_pre=num(ep) if ok else None, e_dec=num(ed) if ok else None, mem_mb=None)  # energy in mJ/token
-    return phones
-
-
-def load_s23() -> dict:
+def load_phones() -> dict:
+    """{phone label: {(model, framework, backend, quant): row}} from results_all_md.py's merged data (the same values
+    as docs/RESULTS.md: raw result JSONs, the OnePlus 8 Pro / Redmi 9A reruns, the OnePlus 15 supplement)."""
+    import results_all_md as ram
     out = {}
-    for d in ("slm_pool_s23_pinned", "slm_pool_s23_head"):
-        for f in (HERE / "results" / d / "configs").glob("*.json"):
-            r = json.loads(f.read_text())
-            c = r["config"]
-            mf = HERE / "results" / d / "memory" / f.name
-            m = json.loads(mf.read_text()) if mf.exists() else {}
-            ok = r.get("status") == "ok"
-            e = lambda ph: (r[ph]["uj_per_token"] / 1e3 if ok and r[ph].get("energy_valid") and r[ph].get("uj_per_token")
-                            else None)
-            out[(c["model"], c["framework"], c["backend"], c["quant"])] = dict(
-                ok=ok, status="ok" if ok else (r.get("error") or "failed")[:60],
-                size_gb=sum(r["model_file"]["files"].values()) / 1e9,
-                pre=r["prefill"]["tps"] if ok else None, dec=r["decode"]["tps"] if ok else None,
+    for phone in ram.PHONES:
+        d = ram.load_phone(phone)
+        rows = {}
+        for k in d["cands"]:
+            m, be, fw, q = k
+            r = d["pool"].get(k)
+            ok = bool(r) and r.get("status") == "ok"
+            e = lambda ph: ram.val(r, ph, "uj") / 1e3 if ok and ram.val(r, ph, "uj") else None
+            rows[(m, fw, be, q)] = dict(
+                ok=ok, status="ok" if ok else ((r or {}).get("error") or "not run")[:60],
+                size_gb=(ram.storage(k) or 0) / 1e3 or None,
+                pre=ram.val(r, "prefill", "tps") if ok else None, dec=ram.val(r, "decode", "tps") if ok else None,
                 e_pre=e("prefill"), e_dec=e("decode"),
-                mem_mb=m.get("peak_total_mib") * 1.048576 if m.get("exit") == 0 and m.get("peak_total_mib") else None)
+                mem_mb=ram.peak_mb(d["memory"].get(k)) if ok else None)
+        out[phone["label"]] = rows
     return out
 
 
 def load() -> dict:
     """{phone: {(model, framework, backend, quant): row}}; rows carry params_b and bits too."""
-    phones = {"Galaxy S23": load_s23(), **load_all_results()}
+    phones = load_phones()
     sizes = {k: r["size_gb"] for p in phones.values() for k, r in p.items() if r.get("size_gb")}
     for p in phones.values():
         for k, r in p.items():
