@@ -826,8 +826,7 @@ def keep_host_awake():
         ctypes.windll.kernel32.SetThreadExecutionState(0x80000000 | 0x00000001)  # ES_CONTINUOUS | ES_SYSTEM_REQUIRED
 
 
-def main():
-    keep_host_awake()
+def build_parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--serial")
     ap.add_argument("--ref", choices=["pinned", "head"], default="pinned", help="which build_binaries.py build to use")
@@ -871,7 +870,12 @@ def main():
                     help="with --results-dir: attach energy from the recordings already pulled to this computer")
     ap.add_argument("--recover-energy", action="store_true",
                     help="with --results-dir: attach energy for a session that stopped early (pulls its trace)")
-    args = ap.parse_args()
+    return ap
+
+
+def main():
+    keep_host_awake()
+    args = build_parser().parse_args()
     if args.attach_offline:
         return attach_offline(args)
     if args.recover_energy:

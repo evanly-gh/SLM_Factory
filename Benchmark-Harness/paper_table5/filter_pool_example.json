@@ -1,0 +1,2197 @@
+{
+ "contract_version": 1,
+ "generated": "2026-11-03T03:10:25",
+ "complete": null,
+ "not_measured": [],
+ "phone": {
+  "serial": "10.0.0.36:5555",
+  "manufacturer": "OnePlus",
+  "model": "IN2025",
+  "soc": "SM8250",
+  "android": "13",
+  "abi64": null,
+  "llama_march": null,
+  "opencl_lib": null,
+  "label": "OnePlus 8 Pro",
+  "profile": "oneplus8pro",
+  "ram_gib": 11.24
+ },
+ "gpu": {},
+ "conversion_failed": {},
+ "measurement": {
+  "results_dirs": [
+   "results/slm_pool_oneplus8pro_pinned",
+   "results/slm_pool_oneplus8pro_head",
+   "results/slm_pool_oneplus8pro_energy_pinned",
+   "results/slm_pool_oneplus8pro_energy_head"
+  ],
+  "request": {
+   "prompt_tokens": 32,
+   "answer_tokens": 45
+  },
+  "configs_expected": 99,
+  "configs_measured": 99,
+  "configs_benchmarked": 79,
+  "energy_methods": [
+   "bm:current_now"
+  ]
+ },
+ "limits": {
+  "max_peak_memory_mb": 5800.0,
+  "min_prefill_tps": 2.96,
+  "min_decode_tps": 5.0,
+  "max_energy_j": 15.66
+ },
+ "rank_by": "decode",
+ "filtered_pool": [
+  {
+   "model": "gemma3-270m",
+   "hf_id": "google/gemma-3-270m-it",
+   "bits": 4,
+   "quant": "Q4_0",
+   "runtime": "llama.cpp",
+   "format": "GGUF",
+   "backend": "cpu"
+  },
+  {
+   "model": "gemma3-270m",
+   "hf_id": "google/gemma-3-270m-it",
+   "bits": 8,
+   "quant": "Q8_0",
+   "runtime": "llama.cpp",
+   "format": "GGUF",
+   "backend": "cpu"
+  },
+  {
+   "model": "gemma3-270m",
+   "hf_id": "google/gemma-3-270m-it",
+   "bits": 16,
+   "quant": "F16",
+   "runtime": "llama.cpp",
+   "format": "GGUF",
+   "backend": "cpu"
+  },
+  {
+   "model": "smollm2-135m",
+   "hf_id": "HuggingFaceTB/SmolLM2-135M-Instruct",
+   "bits": 4,
+   "quant": "Q4_0",
+   "runtime": "llama.cpp",
+   "format": "GGUF",
+   "backend": "cpu"
+  },
+  {
+   "model": "smollm2-135m",
+   "hf_id": "HuggingFaceTB/SmolLM2-135M-Instruct",
+   "bits": 8,
+   "quant": "Q8_0",
+   "runtime": "llama.cpp",
+   "format": "GGUF",
+   "backend": "cpu"
+  },
+  {
+   "model": "smollm2-135m",
+   "hf_id": "HuggingFaceTB/SmolLM2-135M-Instruct",
+   "bits": 16,
+   "quant": "F16",
+   "runtime": "llama.cpp",
+   "format": "GGUF",
+   "backend": "cpu"
+  },
+  {
+   "model": "smollm2-360m",
+   "hf_id": "HuggingFaceTB/SmolLM2-360M-Instruct",
+   "bits": 4,
+   "quant": "Q4_0",
+   "runtime": "llama.cpp",
+   "format": "GGUF",
+   "backend": "cpu"
+  },
+  {
+   "model": "smollm2-360m",
+   "hf_id": "HuggingFaceTB/SmolLM2-360M-Instruct",
+   "bits": 8,
+   "quant": "Q8_0",
+   "runtime": "llama.cpp",
+   "format": "GGUF",
+   "backend": "cpu"
+  },
+  {
+   "model": "smollm2-360m",
+   "hf_id": "HuggingFaceTB/SmolLM2-360M-Instruct",
+   "bits": 16,
+   "quant": "F16",
+   "runtime": "llama.cpp",
+   "format": "GGUF",
+   "backend": "cpu"
+  },
+  {
+   "model": "qwen3-0.6b",
+   "hf_id": "Qwen/Qwen3-0.6B",
+   "bits": 4,
+   "quant": "Q4_0",
+   "runtime": "llama.cpp",
+   "format": "GGUF",
+   "backend": "cpu"
+  },
+  {
+   "model": "qwen3-0.6b",
+   "hf_id": "Qwen/Qwen3-0.6B",
+   "bits": 8,
+   "quant": "Q8_0",
+   "runtime": "llama.cpp",
+   "format": "GGUF",
+   "backend": "cpu"
+  },
+  {
+   "model": "qwen3.5-0.8b",
+   "hf_id": "Qwen/Qwen3.5-0.8B",
+   "bits": 4,
+   "quant": "Q4",
+   "runtime": "mnn",
+   "format": "MNN",
+   "backend": "cpu"
+  },
+  {
+   "model": "qwen3.5-0.8b",
+   "hf_id": "Qwen/Qwen3.5-0.8B",
+   "bits": 8,
+   "quant": "Q8",
+   "runtime": "mnn",
+   "format": "MNN",
+   "backend": "cpu"
+  },
+  {
+   "model": "qwen3.5-2b",
+   "hf_id": "Qwen/Qwen3.5-2B",
+   "bits": 4,
+   "quant": "Q4",
+   "runtime": "mnn",
+   "format": "MNN",
+   "backend": "gpu"
+  }
+ ],
+ "entries": [
+  {
+   "model": "gemma3-270m",
+   "hf_id": "google/gemma-3-270m-it",
+   "bits": 4,
+   "kept": true,
+   "best": {
+    "quant": "Q4_0",
+    "runtime": "llama.cpp",
+    "format": "GGUF",
+    "backend": "cpu",
+    "peak_memory_mb": 534,
+    "prefill_tps": 1014.7,
+    "decode_tps": 84.31,
+    "energy_j_per_request": 3.838
+   },
+   "alternatives": [
+    {
+     "quant": "Q4",
+     "runtime": "mnn",
+     "format": "MNN",
+     "backend": "cpu",
+     "peak_memory_mb": 261,
+     "prefill_tps": 897.91,
+     "decode_tps": 65.28,
+     "energy_j_per_request": 4.286
+    },
+    {
+     "quant": "Q4",
+     "runtime": "mnn",
+     "format": "MNN",
+     "backend": "gpu",
+     "peak_memory_mb": 295,
+     "prefill_tps": 745.67,
+     "decode_tps": 8.27,
+     "energy_j_per_request": 5.537
+    },
+    {
+     "quant": "Q4_0",
+     "runtime": "llama.cpp",
+     "format": "GGUF",
+     "backend": "gpu",
+     "peak_memory_mb": 1429,
+     "prefill_tps": 77.82,
+     "decode_tps": 7.09,
+     "energy_j_per_request": 8.944
+    }
+   ],
+   "tried": [
+    {
+     "quant": "Q4_0",
+     "runtime": "llama.cpp",
+     "format": "GGUF",
+     "backend": "cpu",
+     "passes": true,
+     "reasons": [],
+     "peak_memory_mb": 534,
+     "prefill_tps": 1014.7,
+     "decode_tps": 84.31,
+     "energy_j_per_request": 3.838
+    },
+    {
+     "quant": "Q4_0",
+     "runtime": "llama.cpp",
+     "format": "GGUF",
+     "backend": "gpu",
+     "passes": true,
+     "reasons": [],
+     "peak_memory_mb": 1429,
+     "prefill_tps": 77.82,
+     "decode_tps": 7.09,
+     "energy_j_per_request": 8.944
+    },
+    {
+     "quant": "Q4",
+     "runtime": "mnn",
+     "format": "MNN",
+     "backend": "cpu",
+     "passes": true,
+     "reasons": [],
+     "peak_memory_mb": 261,
+     "prefill_tps": 897.91,
+     "decode_tps": 65.28,
+     "energy_j_per_request": 4.286
+    },
+    {
+     "quant": "Q4",
+     "runtime": "mnn",
+     "format": "MNN",
+     "backend": "gpu",
+     "passes": true,
+     "reasons": [],
+     "peak_memory_mb": 295,
+     "prefill_tps": 745.67,
+     "decode_tps": 8.27,
+     "energy_j_per_request": 5.537
+    }
+   ]
+  },
+  {
+   "model": "gemma3-270m",
+   "hf_id": "google/gemma-3-270m-it",
+   "bits": 8,
+   "kept": true,
+   "best": {
+    "quant": "Q8_0",
+    "runtime": "llama.cpp",
+    "format": "GGUF",
+    "backend": "cpu",
+    "peak_memory_mb": 634,
+    "prefill_tps": 1012.95,
+    "decode_tps": 70.44,
+    "energy_j_per_request": 4.762
+   },
+   "alternatives": [
+    {
+     "quant": "Q8",
+     "runtime": "mnn",
+     "format": "MNN",
+     "backend": "cpu",
+     "peak_memory_mb": 395,
+     "prefill_tps": 926.07,
+     "decode_tps": 46.17,
+     "energy_j_per_request": 6.027
+    },
+    {
+     "quant": "Q8",
+     "runtime": "mnn",
+     "format": "MNN",
+     "backend": "gpu",
+     "peak_memory_mb": 430,
+     "prefill_tps": 736.2,
+     "decode_tps": 8.35,
+     "energy_j_per_request": 6.362
+    },
+    {
+     "quant": "Q8_0",
+     "runtime": "llama.cpp",
+     "format": "GGUF",
+     "backend": "gpu",
+     "peak_memory_mb": 1478,
+     "prefill_tps": 10.96,
+     "decode_tps": 6.11,
+     "energy_j_per_request": 15.028
+    }
+   ],
+   "tried": [
+    {
+     "quant": "Q8_0",
+     "runtime": "llama.cpp",
+     "format": "GGUF",
+     "backend": "cpu",
+     "passes": true,
+     "reasons": [],
+     "peak_memory_mb": 634,
+     "prefill_tps": 1012.95,
+     "decode_tps": 70.44,
+     "energy_j_per_request": 4.762
+    },
+    {
+     "quant": "Q8_0",
+     "runtime": "llama.cpp",
+     "format": "GGUF",
+     "backend": "gpu",
+     "passes": true,
+     "reasons": [],
+     "peak_memory_mb": 1478,
+     "prefill_tps": 10.96,
+     "decode_tps": 6.11,
+     "energy_j_per_request": 15.028
+    },
+    {
+     "quant": "Q8",
+     "runtime": "mnn",
+     "format": "MNN",
+     "backend": "cpu",
+     "passes": true,
+     "reasons": [],
+     "peak_memory_mb": 395,
+     "prefill_tps": 926.07,
+     "decode_tps": 46.17,
+     "energy_j_per_request": 6.027
+    },
+    {
+     "quant": "Q8",
+     "runtime": "mnn",
+     "format": "MNN",
+     "backend": "gpu",
+     "passes": true,
+     "reasons": [],
+     "peak_memory_mb": 430,
+     "prefill_tps": 736.2,
+     "decode_tps": 8.35,
+     "energy_j_per_request": 6.362
+    }
+   ]
+  },
+  {
+   "model": "gemma3-270m",
+   "hf_id": "google/gemma-3-270m-it",
+   "bits": 16,
+   "kept": true,
+   "best": {
+    "quant": "F16",
+    "runtime": "llama.cpp",
+    "format": "GGUF",
+    "backend": "cpu",
+    "peak_memory_mb": 602,
+    "prefill_tps": 483.64,
+    "decode_tps": 42.83,
+    "energy_j_per_request": 7.883
+   },
+   "alternatives": [
+    {
+     "quant": "F16",
+     "runtime": "mnn",
+     "format": "MNN",
+     "backend": "cpu",
+     "peak_memory_mb": 1435,
+     "prefill_tps": 755.19,
+     "decode_tps": 31.08,
+     "energy_j_per_request": 9.172
+    }
+   ],
+   "tried": [
+    {
+     "quant": "F16",
+     "runtime": "llama.cpp",
+     "format": "GGUF",
+     "backend": "cpu",
+     "passes": true,
+     "reasons": [],
+     "peak_memory_mb": 602,
+     "prefill_tps": 483.64,
+     "decode_tps": 42.83,
+     "energy_j_per_request": 7.883
+    },
+    {
+     "quant": "F16",
+     "runtime": "llama.cpp",
+     "format": "GGUF",
+     "backend": "gpu",
+     "passes": false,
+     "reasons": [
+      "energy 21.38 J > 15.66 J"
+     ],
+     "peak_memory_mb": 1886,
+     "prefill_tps": 6.2,
+     "decode_tps": 6.35,
+     "energy_j_per_request": 21.38
+    },
+    {
+     "quant": "F16",
+     "runtime": "mnn",
+     "format": "MNN",
+     "backend": "cpu",
+     "passes": true,
+     "reasons": [],
+     "peak_memory_mb": 1435,
+     "prefill_tps": 755.19,
+     "decode_tps": 31.08,
+     "energy_j_per_request": 9.172
+    },
+    {
+     "quant": "F16",
+     "runtime": "mnn",
+     "format": "MNN",
+     "backend": "gpu",
+     "passes": false,
+     "reasons": [
+      "does not run: crashed"
+     ],
+     "peak_memory_mb": null,
+     "prefill_tps": null,
+     "decode_tps": null,
+     "energy_j_per_request": null
+    }
+   ]
+  },
+  {
+   "model": "smollm2-135m",
+   "hf_id": "HuggingFaceTB/SmolLM2-135M-Instruct",
+   "bits": 4,
+   "kept": true,
+   "best": {
+    "quant": "Q4_0",
+    "runtime": "llama.cpp",
+    "format": "GGUF",
+    "backend": "cpu",
+    "peak_memory_mb": 220,
+    "prefill_tps": 919.18,
+    "decode_tps": 150.29,
+    "energy_j_per_request": 2.176
+   },
+   "alternatives": [
+    {
+     "quant": "Q4",
+     "runtime": "mnn",
+     "format": "MNN",
+     "backend": "cpu",
+     "peak_memory_mb": 152,
+     "prefill_tps": 835.61,
+     "decode_tps": 137.61,
+     "energy_j_per_request": 2.086
+    },
+    {
+     "quant": "Q4_0",
+     "runtime": "llama.cpp",
+     "format": "GGUF",
+     "backend": "gpu",
+     "peak_memory_mb": 681,
+     "prefill_tps": 104.76,
+     "decode_tps": 13.3,
+     "energy_j_per_request": 5.762
+    },
+    {
+     "quant": "Q4",
+     "runtime": "mnn",
+     "format": "MNN",
+     "backend": "gpu",
+     "peak_memory_mb": 186,
+     "prefill_tps": 743.36,
+     "decode_tps": 9.88,
+     "energy_j_per_request": 4.24
+    }
+   ],
+   "tried": [
+    {
+     "quant": "Q4_0",
+     "runtime": "llama.cpp",
+     "format": "GGUF",
+     "backend": "cpu",
+     "passes": true,
+     "reasons": [],
+     "peak_memory_mb": 220,
+     "prefill_tps": 919.18,
+     "decode_tps": 150.29,
+     "energy_j_per_request": 2.176
+    },
+    {
+     "quant": "Q4_0",
+     "runtime": "llama.cpp",
+     "format": "GGUF",
+     "backend": "gpu",
+     "passes": true,
+     "reasons": [],
+     "peak_memory_mb": 681,
+     "prefill_tps": 104.76,
+     "decode_tps": 13.3,
+     "energy_j_per_request": 5.762
+    },
+    {
+     "quant": "Q4",
+     "runtime": "mnn",
+     "format": "MNN",
+     "backend": "cpu",
+     "passes": true,
+     "reasons": [],
+     "peak_memory_mb": 152,
+     "prefill_tps": 835.61,
+     "decode_tps": 137.61,
+     "energy_j_per_request": 2.086
+    },
+    {
+     "quant": "Q4",
+     "runtime": "mnn",
+     "format": "MNN",
+     "backend": "gpu",
+     "passes": true,
+     "reasons": [],
+     "peak_memory_mb": 186,
+     "prefill_tps": 743.36,
+     "decode_tps": 9.88,
+     "energy_j_per_request": 4.24
+    }
+   ]
+  },
+  {
+   "model": "smollm2-135m",
+   "hf_id": "HuggingFaceTB/SmolLM2-135M-Instruct",
+   "bits": 8,
+   "kept": true,
+   "best": {
+    "quant": "Q8_0",
+    "runtime": "llama.cpp",
+    "format": "GGUF",
+    "backend": "cpu",
+    "peak_memory_mb": 326,
+    "prefill_tps": 917.37,
+    "decode_tps": 115.77,
+    "energy_j_per_request": 2.909
+   },
+   "alternatives": [
+    {
+     "quant": "Q8",
+     "runtime": "mnn",
+     "format": "MNN",
+     "backend": "cpu",
+     "peak_memory_mb": 217,
+     "prefill_tps": 867.13,
+     "decode_tps": 94.99,
+     "energy_j_per_request": 3.018
+    },
+    {
+     "quant": "Q8",
+     "runtime": "mnn",
+     "format": "MNN",
+     "backend": "gpu",
+     "peak_memory_mb": 253,
+     "prefill_tps": 743.15,
+     "decode_tps": 9.84,
+     "energy_j_per_request": 4.608
+    },
+    {
+     "quant": "Q8_0",
+     "runtime": "llama.cpp",
+     "format": "GGUF",
+     "backend": "gpu",
+     "peak_memory_mb": 734,
+     "prefill_tps": 11.39,
+     "decode_tps": 9.26,
+     "energy_j_per_request": 11.662
+    }
+   ],
+   "tried": [
+    {
+     "quant": "Q8_0",
+     "runtime": "llama.cpp",
+     "format": "GGUF",
+     "backend": "cpu",
+     "passes": true,
+     "reasons": [],
+     "peak_memory_mb": 326,
+     "prefill_tps": 917.37,
+     "decode_tps": 115.77,
+     "energy_j_per_request": 2.909
+    },
+    {
+     "quant": "Q8_0",
+     "runtime": "llama.cpp",
+     "format": "GGUF",
+     "backend": "gpu",
+     "passes": true,
+     "reasons": [],
+     "peak_memory_mb": 734,
+     "prefill_tps": 11.39,
+     "decode_tps": 9.26,
+     "energy_j_per_request": 11.662
+    },
+    {
+     "quant": "Q8",
+     "runtime": "mnn",
+     "format": "MNN",
+     "backend": "cpu",
+     "passes": true,
+     "reasons": [],
+     "peak_memory_mb": 217,
+     "prefill_tps": 867.13,
+     "decode_tps": 94.99,
+     "energy_j_per_request": 3.018
+    },
+    {
+     "quant": "Q8",
+     "runtime": "mnn",
+     "format": "MNN",
+     "backend": "gpu",
+     "passes": true,
+     "reasons": [],
+     "peak_memory_mb": 253,
+     "prefill_tps": 743.15,
+     "decode_tps": 9.84,
+     "energy_j_per_request": 4.608
+    }
+   ]
+  },
+  {
+   "model": "smollm2-135m",
+   "hf_id": "HuggingFaceTB/SmolLM2-135M-Instruct",
+   "bits": 16,
+   "kept": true,
+   "best": {
+    "quant": "F16",
+    "runtime": "llama.cpp",
+    "format": "GGUF",
+    "backend": "cpu",
+    "peak_memory_mb": 310,
+    "prefill_tps": 447.73,
+    "decode_tps": 75.52,
+    "energy_j_per_request": 4.814
+   },
+   "alternatives": [
+    {
+     "quant": "F16",
+     "runtime": "mnn",
+     "format": "MNN",
+     "backend": "cpu",
+     "peak_memory_mb": 458,
+     "prefill_tps": 721.77,
+     "decode_tps": 66.05,
+     "energy_j_per_request": 4.714
+    }
+   ],
+   "tried": [
+    {
+     "quant": "F16",
+     "runtime": "llama.cpp",
+     "format": "GGUF",
+     "backend": "cpu",
+     "passes": true,
+     "reasons": [],
+     "peak_memory_mb": 310,
+     "prefill_tps": 447.73,
+     "decode_tps": 75.52,
+     "energy_j_per_request": 4.814
+    },
+    {
+     "quant": "F16",
+     "runtime": "llama.cpp",
+     "format": "GGUF",
+     "backend": "gpu",
+     "passes": false,
+     "reasons": [
+      "energy 18.008 J > 15.66 J"
+     ],
+     "peak_memory_mb": 886,
+     "prefill_tps": 5.44,
+     "decode_tps": 9.81,
+     "energy_j_per_request": 18.008
+    },
+    {
+     "quant": "F16",
+     "runtime": "mnn",
+     "format": "MNN",
+     "backend": "cpu",
+     "passes": true,
+     "reasons": [],
+     "peak_memory_mb": 458,
+     "prefill_tps": 721.77,
+     "decode_tps": 66.05,
+     "energy_j_per_request": 4.714
+    },
+    {
+     "quant": "F16",
+     "runtime": "mnn",
+     "format": "MNN",
+     "backend": "gpu",
+     "passes": false,
+     "reasons": [
+      "does not run: crashed"
+     ],
+     "peak_memory_mb": null,
+     "prefill_tps": null,
+     "decode_tps": null,
+     "energy_j_per_request": null
+    }
+   ]
+  },
+  {
+   "model": "smollm2-360m",
+   "hf_id": "HuggingFaceTB/SmolLM2-360M-Instruct",
+   "bits": 4,
+   "kept": true,
+   "best": {
+    "quant": "Q4_0",
+    "runtime": "llama.cpp",
+    "format": "GGUF",
+    "backend": "cpu",
+    "peak_memory_mb": 509,
+    "prefill_tps": 378.92,
+    "decode_tps": 71.69,
+    "energy_j_per_request": 4.741
+   },
+   "alternatives": [
+    {
+     "quant": "Q4",
+     "runtime": "mnn",
+     "format": "MNN",
+     "backend": "cpu",
+     "peak_memory_mb": 312,
+     "prefill_tps": 326.21,
+     "decode_tps": 67.59,
+     "energy_j_per_request": 4.702
+    },
+    {
+     "quant": "Q4",
+     "runtime": "mnn",
+     "format": "MNN",
+     "backend": "gpu",
+     "peak_memory_mb": 333,
+     "prefill_tps": 298.61,
+     "decode_tps": 9.3,
+     "energy_j_per_request": 6.291
+    },
+    {
+     "quant": "Q4_0",
+     "runtime": "llama.cpp",
+     "format": "GGUF",
+     "backend": "gpu",
+     "peak_memory_mb": 901,
+     "prefill_tps": 57.95,
+     "decode_tps": 9.02,
+     "energy_j_per_request": 8.435
+    }
+   ],
+   "tried": [
+    {
+     "quant": "Q4_0",
+     "runtime": "llama.cpp",
+     "format": "GGUF",
+     "backend": "cpu",
+     "passes": true,
+     "reasons": [],
+     "peak_memory_mb": 509,
+     "prefill_tps": 378.92,
+     "decode_tps": 71.69,
+     "energy_j_per_request": 4.741
+    },
+    {
+     "quant": "Q4_0",
+     "runtime": "llama.cpp",
+     "format": "GGUF",
+     "backend": "gpu",
+     "passes": true,
+     "reasons": [],
+     "peak_memory_mb": 901,
+     "prefill_tps": 57.95,
+     "decode_tps": 9.02,
+     "energy_j_per_request": 8.435
+    },
+    {
+     "quant": "Q4",
+     "runtime": "mnn",
+     "format": "MNN",
+     "backend": "cpu",
+     "passes": true,
+     "reasons": [],
+     "peak_memory_mb": 312,
+     "prefill_tps": 326.21,
+     "decode_tps": 67.59,
+     "energy_j_per_request": 4.702
+    },
+    {
+     "quant": "Q4",
+     "runtime": "mnn",
+     "format": "MNN",
+     "backend": "gpu",
+     "passes": true,
+     "reasons": [],
+     "peak_memory_mb": 333,
+     "prefill_tps": 298.61,
+     "decode_tps": 9.3,
+     "energy_j_per_request": 6.291
+    }
+   ]
+  },
+  {
+   "model": "smollm2-360m",
+   "hf_id": "HuggingFaceTB/SmolLM2-360M-Instruct",
+   "bits": 8,
+   "kept": true,
+   "best": {
+    "quant": "Q8_0",
+    "runtime": "llama.cpp",
+    "format": "GGUF",
+    "backend": "cpu",
+    "peak_memory_mb": 825,
+    "prefill_tps": 377.02,
+    "decode_tps": 51.22,
+    "energy_j_per_request": 6.524
+   },
+   "alternatives": [
+    {
+     "quant": "Q8",
+     "runtime": "mnn",
+     "format": "MNN",
+     "backend": "cpu",
+     "peak_memory_mb": 492,
+     "prefill_tps": 342.07,
+     "decode_tps": 44.6,
+     "energy_j_per_request": 6.942
+    },
+    {
+     "quant": "Q8",
+     "runtime": "mnn",
+     "format": "MNN",
+     "backend": "gpu",
+     "peak_memory_mb": 514,
+     "prefill_tps": 298.36,
+     "decode_tps": 9.25,
+     "energy_j_per_request": 7.674
+    }
+   ],
+   "tried": [
+    {
+     "quant": "Q8_0",
+     "runtime": "llama.cpp",
+     "format": "GGUF",
+     "backend": "cpu",
+     "passes": true,
+     "reasons": [],
+     "peak_memory_mb": 825,
+     "prefill_tps": 377.02,
+     "decode_tps": 51.22,
+     "energy_j_per_request": 6.524
+    },
+    {
+     "quant": "Q8_0",
+     "runtime": "llama.cpp",
+     "format": "GGUF",
+     "backend": "gpu",
+     "passes": false,
+     "reasons": [
+      "energy 26.43 J > 15.66 J"
+     ],
+     "peak_memory_mb": 1216,
+     "prefill_tps": 3.76,
+     "decode_tps": 6.17,
+     "energy_j_per_request": 26.43
+    },
+    {
+     "quant": "Q8",
+     "runtime": "mnn",
+     "format": "MNN",
+     "backend": "cpu",
+     "passes": true,
+     "reasons": [],
+     "peak_memory_mb": 492,
+     "prefill_tps": 342.07,
+     "decode_tps": 44.6,
+     "energy_j_per_request": 6.942
+    },
+    {
+     "quant": "Q8",
+     "runtime": "mnn",
+     "format": "MNN",
+     "backend": "gpu",
+     "passes": true,
+     "reasons": [],
+     "peak_memory_mb": 514,
+     "prefill_tps": 298.36,
+     "decode_tps": 9.25,
+     "energy_j_per_request": 7.674
+    }
+   ]
+  },
+  {
+   "model": "smollm2-360m",
+   "hf_id": "HuggingFaceTB/SmolLM2-360M-Instruct",
+   "bits": 16,
+   "kept": true,
+   "best": {
+    "quant": "F16",
+    "runtime": "llama.cpp",
+    "format": "GGUF",
+    "backend": "cpu",
+    "peak_memory_mb": 779,
+    "prefill_tps": 161.45,
+    "decode_tps": 30.26,
+    "energy_j_per_request": 11.813
+   },
+   "alternatives": [
+    {
+     "quant": "F16",
+     "runtime": "mnn",
+     "format": "MNN",
+     "backend": "cpu",
+     "peak_memory_mb": 803,
+     "prefill_tps": 280.28,
+     "decode_tps": 25.9,
+     "energy_j_per_request": 11.461
+    }
+   ],
+   "tried": [
+    {
+     "quant": "F16",
+     "runtime": "llama.cpp",
+     "format": "GGUF",
+     "backend": "cpu",
+     "passes": true,
+     "reasons": [],
+     "peak_memory_mb": 779,
+     "prefill_tps": 161.45,
+     "decode_tps": 30.26,
+     "energy_j_per_request": 11.813
+    },
+    {
+     "quant": "F16",
+     "runtime": "llama.cpp",
+     "format": "GGUF",
+     "backend": "gpu",
+     "passes": false,
+     "reasons": [
+      "prefill 2.01 < 2.96 tokens/s",
+      "energy not measured"
+     ],
+     "peak_memory_mb": 1389,
+     "prefill_tps": 2.01,
+     "decode_tps": 6.34,
+     "energy_j_per_request": null
+    },
+    {
+     "quant": "F16",
+     "runtime": "mnn",
+     "format": "MNN",
+     "backend": "cpu",
+     "passes": true,
+     "reasons": [],
+     "peak_memory_mb": 803,
+     "prefill_tps": 280.28,
+     "decode_tps": 25.9,
+     "energy_j_per_request": 11.461
+    },
+    {
+     "quant": "F16",
+     "runtime": "mnn",
+     "format": "MNN",
+     "backend": "gpu",
+     "passes": false,
+     "reasons": [
+      "does not run: crashed"
+     ],
+     "peak_memory_mb": null,
+     "prefill_tps": null,
+     "decode_tps": null,
+     "energy_j_per_request": null
+    }
+   ]
+  },
+  {
+   "model": "qwen3-0.6b",
+   "hf_id": "Qwen/Qwen3-0.6B",
+   "bits": 4,
+   "kept": true,
+   "best": {
+    "quant": "Q4_0",
+    "runtime": "llama.cpp",
+    "format": "GGUF",
+    "backend": "cpu",
+    "peak_memory_mb": 833,
+    "prefill_tps": 260.82,
+    "decode_tps": 48.21,
+    "energy_j_per_request": 7.749
+   },
+   "alternatives": [
+    {
+     "quant": "Q4",
+     "runtime": "mnn",
+     "format": "MNN",
+     "backend": "cpu",
+     "peak_memory_mb": 537,
+     "prefill_tps": 227.4,
+     "decode_tps": 42.75,
+     "energy_j_per_request": 7.221
+    },
+    {
+     "quant": "Q4",
+     "runtime": "mnn",
+     "format": "MNN",
+     "backend": "gpu",
+     "peak_memory_mb": 546,
+     "prefill_tps": 213.87,
+     "decode_tps": 9.15,
+     "energy_j_per_request": 7.708
+    }
+   ],
+   "tried": [
+    {
+     "quant": "Q4_0",
+     "runtime": "llama.cpp",
+     "format": "GGUF",
+     "backend": "cpu",
+     "passes": true,
+     "reasons": [],
+     "peak_memory_mb": 833,
+     "prefill_tps": 260.82,
+     "decode_tps": 48.21,
+     "energy_j_per_request": 7.749
+    },
+    {
+     "quant": "Q4_0",
+     "runtime": "llama.cpp",
+     "format": "GGUF",
+     "backend": "gpu",
+     "passes": false,
+     "reasons": [
+      "decode 3.49 < 5 tokens/s",
+      "energy 17.503 J > 15.66 J"
+     ],
+     "peak_memory_mb": 1315,
+     "prefill_tps": 35.06,
+     "decode_tps": 3.49,
+     "energy_j_per_request": 17.503
+    },
+    {
+     "quant": "Q4",
+     "runtime": "mnn",
+     "format": "MNN",
+     "backend": "cpu",
+     "passes": true,
+     "reasons": [],
+     "peak_memory_mb": 537,
+     "prefill_tps": 227.4,
+     "decode_tps": 42.75,
+     "energy_j_per_request": 7.221
+    },
+    {
+     "quant": "Q4",
+     "runtime": "mnn",
+     "format": "MNN",
+     "backend": "gpu",
+     "passes": true,
+     "reasons": [],
+     "peak_memory_mb": 546,
+     "prefill_tps": 213.87,
+     "decode_tps": 9.15,
+     "energy_j_per_request": 7.708
+    }
+   ]
+  },
+  {
+   "model": "qwen3-0.6b",
+   "hf_id": "Qwen/Qwen3-0.6B",
+   "bits": 8,
+   "kept": true,
+   "best": {
+    "quant": "Q8_0",
+    "runtime": "llama.cpp",
+    "format": "GGUF",
+    "backend": "cpu",
+    "peak_memory_mb": 1440,
+    "prefill_tps": 258.81,
+    "decode_tps": 30.31,
+    "energy_j_per_request": 10.346
+   },
+   "alternatives": [
+    {
+     "quant": "Q8",
+     "runtime": "mnn",
+     "format": "MNN",
+     "backend": "cpu",
+     "peak_memory_mb": 962,
+     "prefill_tps": 238.72,
+     "decode_tps": 27.77,
+     "energy_j_per_request": 11.167
+    },
+    {
+     "quant": "Q8",
+     "runtime": "mnn",
+     "format": "MNN",
+     "backend": "gpu",
+     "peak_memory_mb": 844,
+     "prefill_tps": 213.1,
+     "decode_tps": 8.89,
+     "energy_j_per_request": 10.521
+    }
+   ],
+   "tried": [
+    {
+     "quant": "Q8_0",
+     "runtime": "llama.cpp",
+     "format": "GGUF",
+     "backend": "cpu",
+     "passes": true,
+     "reasons": [],
+     "peak_memory_mb": 1440,
+     "prefill_tps": 258.81,
+     "decode_tps": 30.31,
+     "energy_j_per_request": 10.346
+    },
+    {
+     "quant": "Q8_0",
+     "runtime": "llama.cpp",
+     "format": "GGUF",
+     "backend": "gpu",
+     "passes": false,
+     "reasons": [
+      "prefill 2.82 < 2.96 tokens/s",
+      "decode 4.35 < 5 tokens/s",
+      "energy not measured"
+     ],
+     "peak_memory_mb": 1908,
+     "prefill_tps": 2.82,
+     "decode_tps": 4.35,
+     "energy_j_per_request": null
+    },
+    {
+     "quant": "Q8",
+     "runtime": "mnn",
+     "format": "MNN",
+     "backend": "cpu",
+     "passes": true,
+     "reasons": [],
+     "peak_memory_mb": 962,
+     "prefill_tps": 238.72,
+     "decode_tps": 27.77,
+     "energy_j_per_request": 11.167
+    },
+    {
+     "quant": "Q8",
+     "runtime": "mnn",
+     "format": "MNN",
+     "backend": "gpu",
+     "passes": true,
+     "reasons": [],
+     "peak_memory_mb": 844,
+     "prefill_tps": 213.1,
+     "decode_tps": 8.89,
+     "energy_j_per_request": 10.521
+    }
+   ]
+  },
+  {
+   "model": "qwen3-0.6b",
+   "hf_id": "Qwen/Qwen3-0.6B",
+   "bits": 16,
+   "kept": false,
+   "best": null,
+   "alternatives": [],
+   "tried": [
+    {
+     "quant": "F16",
+     "runtime": "llama.cpp",
+     "format": "GGUF",
+     "backend": "cpu",
+     "passes": false,
+     "reasons": [
+      "energy 19.453 J > 15.66 J"
+     ],
+     "peak_memory_mb": 1626,
+     "prefill_tps": 99.53,
+     "decode_tps": 18.28,
+     "energy_j_per_request": 19.453
+    },
+    {
+     "quant": "F16",
+     "runtime": "llama.cpp",
+     "format": "GGUF",
+     "backend": "gpu",
+     "passes": false,
+     "reasons": [
+      "prefill 1.43 < 2.96 tokens/s",
+      "decode 4.5 < 5 tokens/s",
+      "energy not measured"
+     ],
+     "peak_memory_mb": 2344,
+     "prefill_tps": 1.43,
+     "decode_tps": 4.5,
+     "energy_j_per_request": null
+    },
+    {
+     "quant": "F16",
+     "runtime": "mnn",
+     "format": "MNN",
+     "backend": "cpu",
+     "passes": false,
+     "reasons": [
+      "energy 18.283 J > 15.66 J"
+     ],
+     "peak_memory_mb": 1811,
+     "prefill_tps": 168.29,
+     "decode_tps": 16.48,
+     "energy_j_per_request": 18.283
+    },
+    {
+     "quant": "F16",
+     "runtime": "mnn",
+     "format": "MNN",
+     "backend": "gpu",
+     "passes": false,
+     "reasons": [
+      "does not run: crashed"
+     ],
+     "peak_memory_mb": null,
+     "prefill_tps": null,
+     "decode_tps": null,
+     "energy_j_per_request": null
+    }
+   ]
+  },
+  {
+   "model": "qwen3-1.7b",
+   "hf_id": "Qwen/Qwen3-1.7B",
+   "bits": 4,
+   "kept": false,
+   "best": null,
+   "alternatives": [],
+   "tried": [
+    {
+     "quant": "Q4_0",
+     "runtime": "llama.cpp",
+     "format": "GGUF",
+     "backend": "cpu",
+     "passes": false,
+     "reasons": [
+      "energy 17.75 J > 15.66 J"
+     ],
+     "peak_memory_mb": 2140,
+     "prefill_tps": 99.27,
+     "decode_tps": 21.11,
+     "energy_j_per_request": 17.75
+    },
+    {
+     "quant": "Q4_0",
+     "runtime": "llama.cpp",
+     "format": "GGUF",
+     "backend": "gpu",
+     "passes": false,
+     "reasons": [
+      "decode 2.58 < 5 tokens/s",
+      "energy 28.339 J > 15.66 J"
+     ],
+     "peak_memory_mb": 2753,
+     "prefill_tps": 28.93,
+     "decode_tps": 2.58,
+     "energy_j_per_request": 28.339
+    },
+    {
+     "quant": "Q4",
+     "runtime": "mnn",
+     "format": "MNN",
+     "backend": "cpu",
+     "passes": false,
+     "reasons": [
+      "energy 18.134 J > 15.66 J"
+     ],
+     "peak_memory_mb": 1270,
+     "prefill_tps": 81.77,
+     "decode_tps": 19.08,
+     "energy_j_per_request": 18.134
+    },
+    {
+     "quant": "Q4",
+     "runtime": "mnn",
+     "format": "MNN",
+     "backend": "gpu",
+     "passes": false,
+     "reasons": [
+      "energy 15.77 J > 15.66 J"
+     ],
+     "peak_memory_mb": 1211,
+     "prefill_tps": 77.28,
+     "decode_tps": 9.06,
+     "energy_j_per_request": 15.77
+    }
+   ]
+  },
+  {
+   "model": "qwen3-1.7b",
+   "hf_id": "Qwen/Qwen3-1.7B",
+   "bits": 8,
+   "kept": false,
+   "best": null,
+   "alternatives": [],
+   "tried": [
+    {
+     "quant": "Q8_0",
+     "runtime": "llama.cpp",
+     "format": "GGUF",
+     "backend": "cpu",
+     "passes": false,
+     "reasons": [
+      "energy 27.731 J > 15.66 J"
+     ],
+     "peak_memory_mb": 3678,
+     "prefill_tps": 96.76,
+     "decode_tps": 12.01,
+     "energy_j_per_request": 27.731
+    },
+    {
+     "quant": "Q8_0",
+     "runtime": "llama.cpp",
+     "format": "GGUF",
+     "backend": "gpu",
+     "passes": false,
+     "reasons": [
+      "prefill 0.88 < 2.96 tokens/s",
+      "decode 3.24 < 5 tokens/s",
+      "energy not measured"
+     ],
+     "peak_memory_mb": 4474,
+     "prefill_tps": 0.88,
+     "decode_tps": 3.24,
+     "energy_j_per_request": null
+    },
+    {
+     "quant": "Q8",
+     "runtime": "mnn",
+     "format": "MNN",
+     "backend": "cpu",
+     "passes": false,
+     "reasons": [
+      "energy 28.838 J > 15.66 J"
+     ],
+     "peak_memory_mb": 2416,
+     "prefill_tps": 83.23,
+     "decode_tps": 10.95,
+     "energy_j_per_request": 28.838
+    },
+    {
+     "quant": "Q8",
+     "runtime": "mnn",
+     "format": "MNN",
+     "backend": "gpu",
+     "passes": false,
+     "reasons": [
+      "energy 23.763 J > 15.66 J"
+     ],
+     "peak_memory_mb": 2072,
+     "prefill_tps": 73.77,
+     "decode_tps": 8.38,
+     "energy_j_per_request": 23.763
+    }
+   ]
+  },
+  {
+   "model": "qwen3-1.7b",
+   "hf_id": "Qwen/Qwen3-1.7B",
+   "bits": 16,
+   "kept": false,
+   "best": null,
+   "alternatives": [],
+   "tried": [
+    {
+     "quant": "F16",
+     "runtime": "llama.cpp",
+     "format": "GGUF",
+     "backend": "cpu",
+     "passes": false,
+     "reasons": [
+      "energy 51.777 J > 15.66 J"
+     ],
+     "peak_memory_mb": 4196,
+     "prefill_tps": 27.45,
+     "decode_tps": 6.88,
+     "energy_j_per_request": 51.777
+    },
+    {
+     "quant": "F16",
+     "runtime": "llama.cpp",
+     "format": "GGUF",
+     "backend": "gpu",
+     "passes": false,
+     "reasons": [
+      "prefill 0.46 < 2.96 tokens/s",
+      "decode 3.09 < 5 tokens/s",
+      "energy not measured"
+     ],
+     "peak_memory_mb": 4908,
+     "prefill_tps": 0.46,
+     "decode_tps": 3.09,
+     "energy_j_per_request": null
+    },
+    {
+     "quant": "F16",
+     "runtime": "mnn",
+     "format": "MNN",
+     "backend": "cpu",
+     "passes": false,
+     "reasons": [
+      "does not run: does not fit"
+     ],
+     "peak_memory_mb": null,
+     "prefill_tps": null,
+     "decode_tps": null,
+     "energy_j_per_request": null
+    },
+    {
+     "quant": "F16",
+     "runtime": "mnn",
+     "format": "MNN",
+     "backend": "gpu",
+     "passes": false,
+     "reasons": [
+      "does not run: crashed"
+     ],
+     "peak_memory_mb": null,
+     "prefill_tps": null,
+     "decode_tps": null,
+     "energy_j_per_request": null
+    }
+   ]
+  },
+  {
+   "model": "qwen3-4b-instruct-2507",
+   "hf_id": "Qwen/Qwen3-4B-Instruct-2507",
+   "bits": 4,
+   "kept": false,
+   "best": null,
+   "alternatives": [],
+   "tried": [
+    {
+     "quant": "Q4_0",
+     "runtime": "llama.cpp",
+     "format": "GGUF",
+     "backend": "cpu",
+     "passes": false,
+     "reasons": [
+      "energy 38.475 J > 15.66 J"
+     ],
+     "peak_memory_mb": 4560,
+     "prefill_tps": 41.06,
+     "decode_tps": 8.93,
+     "energy_j_per_request": 38.475
+    },
+    {
+     "quant": "Q4_0",
+     "runtime": "llama.cpp",
+     "format": "GGUF",
+     "backend": "gpu",
+     "passes": false,
+     "reasons": [
+      "decode 1.66 < 5 tokens/s",
+      "energy 59.264 J > 15.66 J"
+     ],
+     "peak_memory_mb": 5216,
+     "prefill_tps": 10.9,
+     "decode_tps": 1.66,
+     "energy_j_per_request": 59.264
+    },
+    {
+     "quant": "Q4",
+     "runtime": "mnn",
+     "format": "MNN",
+     "backend": "cpu",
+     "passes": false,
+     "reasons": [
+      "energy 41.151 J > 15.66 J"
+     ],
+     "peak_memory_mb": 2755,
+     "prefill_tps": 32.1,
+     "decode_tps": 8.66,
+     "energy_j_per_request": 41.151
+    },
+    {
+     "quant": "Q4",
+     "runtime": "mnn",
+     "format": "MNN",
+     "backend": "gpu",
+     "passes": false,
+     "reasons": [
+      "energy 34.252 J > 15.66 J"
+     ],
+     "peak_memory_mb": 2580,
+     "prefill_tps": 31.07,
+     "decode_tps": 6.33,
+     "energy_j_per_request": 34.252
+    }
+   ]
+  },
+  {
+   "model": "qwen3-4b-instruct-2507",
+   "hf_id": "Qwen/Qwen3-4B-Instruct-2507",
+   "bits": 8,
+   "kept": false,
+   "best": null,
+   "alternatives": [],
+   "tried": [
+    {
+     "quant": "Q8_0",
+     "runtime": "llama.cpp",
+     "format": "GGUF",
+     "backend": "cpu",
+     "passes": false,
+     "reasons": [
+      "does not run: does not fit"
+     ],
+     "peak_memory_mb": null,
+     "prefill_tps": null,
+     "decode_tps": null,
+     "energy_j_per_request": null
+    },
+    {
+     "quant": "Q8_0",
+     "runtime": "llama.cpp",
+     "format": "GGUF",
+     "backend": "gpu",
+     "passes": false,
+     "reasons": [
+      "does not run: load failed"
+     ],
+     "peak_memory_mb": null,
+     "prefill_tps": null,
+     "decode_tps": null,
+     "energy_j_per_request": null
+    },
+    {
+     "quant": "Q8",
+     "runtime": "mnn",
+     "format": "MNN",
+     "backend": "cpu",
+     "passes": false,
+     "reasons": [
+      "decode 4.85 < 5 tokens/s",
+      "energy 66.67 J > 15.66 J"
+     ],
+     "peak_memory_mb": 5065,
+     "prefill_tps": 31.0,
+     "decode_tps": 4.85,
+     "energy_j_per_request": 66.67
+    },
+    {
+     "quant": "Q8",
+     "runtime": "mnn",
+     "format": "MNN",
+     "backend": "gpu",
+     "passes": false,
+     "reasons": [
+      "decode 0.71 < 5 tokens/s",
+      "energy 98.918 J > 15.66 J"
+     ],
+     "peak_memory_mb": 4179,
+     "prefill_tps": 26.43,
+     "decode_tps": 0.71,
+     "energy_j_per_request": 98.918
+    }
+   ]
+  },
+  {
+   "model": "qwen3-4b-instruct-2507",
+   "hf_id": "Qwen/Qwen3-4B-Instruct-2507",
+   "bits": 16,
+   "kept": false,
+   "best": null,
+   "alternatives": [],
+   "tried": [
+    {
+     "quant": "F16",
+     "runtime": "llama.cpp",
+     "format": "GGUF",
+     "backend": "cpu",
+     "passes": false,
+     "reasons": [
+      "does not run: does not fit"
+     ],
+     "peak_memory_mb": null,
+     "prefill_tps": null,
+     "decode_tps": null,
+     "energy_j_per_request": null
+    },
+    {
+     "quant": "F16",
+     "runtime": "llama.cpp",
+     "format": "GGUF",
+     "backend": "gpu",
+     "passes": false,
+     "reasons": [
+      "does not run: does not fit"
+     ],
+     "peak_memory_mb": null,
+     "prefill_tps": null,
+     "decode_tps": null,
+     "energy_j_per_request": null
+    },
+    {
+     "quant": "F16",
+     "runtime": "mnn",
+     "format": "MNN",
+     "backend": "cpu",
+     "passes": false,
+     "reasons": [
+      "does not run: does not fit"
+     ],
+     "peak_memory_mb": null,
+     "prefill_tps": null,
+     "decode_tps": null,
+     "energy_j_per_request": null
+    },
+    {
+     "quant": "F16",
+     "runtime": "mnn",
+     "format": "MNN",
+     "backend": "gpu",
+     "passes": false,
+     "reasons": [
+      "does not run: does not fit"
+     ],
+     "peak_memory_mb": null,
+     "prefill_tps": null,
+     "decode_tps": null,
+     "energy_j_per_request": null
+    }
+   ]
+  },
+  {
+   "model": "qwen3.5-0.8b",
+   "hf_id": "Qwen/Qwen3.5-0.8B",
+   "bits": 4,
+   "kept": true,
+   "best": {
+    "quant": "Q4",
+    "runtime": "mnn",
+    "format": "MNN",
+    "backend": "cpu",
+    "peak_memory_mb": 550,
+    "prefill_tps": 166.59,
+    "decode_tps": 45.94,
+    "energy_j_per_request": 7.035
+   },
+   "alternatives": [
+    {
+     "quant": "Q4_0",
+     "runtime": "llama.cpp",
+     "format": "GGUF",
+     "backend": "cpu",
+     "peak_memory_mb": 1114,
+     "prefill_tps": 206.64,
+     "decode_tps": 34.83,
+     "energy_j_per_request": 10.165
+    },
+    {
+     "quant": "Q4",
+     "runtime": "mnn",
+     "format": "MNN",
+     "backend": "gpu",
+     "peak_memory_mb": 583,
+     "prefill_tps": 207.2,
+     "decode_tps": 24.12,
+     "energy_j_per_request": 5.658
+    }
+   ],
+   "tried": [
+    {
+     "quant": "Q4_0",
+     "runtime": "llama.cpp",
+     "format": "GGUF",
+     "backend": "cpu",
+     "passes": true,
+     "reasons": [],
+     "peak_memory_mb": 1114,
+     "prefill_tps": 206.64,
+     "decode_tps": 34.83,
+     "energy_j_per_request": 10.165
+    },
+    {
+     "quant": "Q4",
+     "runtime": "mnn",
+     "format": "MNN",
+     "backend": "cpu",
+     "passes": true,
+     "reasons": [],
+     "peak_memory_mb": 550,
+     "prefill_tps": 166.59,
+     "decode_tps": 45.94,
+     "energy_j_per_request": 7.035
+    },
+    {
+     "quant": "Q4",
+     "runtime": "mnn",
+     "format": "MNN",
+     "backend": "gpu",
+     "passes": true,
+     "reasons": [],
+     "peak_memory_mb": 583,
+     "prefill_tps": 207.2,
+     "decode_tps": 24.12,
+     "energy_j_per_request": 5.658
+    }
+   ]
+  },
+  {
+   "model": "qwen3.5-0.8b",
+   "hf_id": "Qwen/Qwen3.5-0.8B",
+   "bits": 8,
+   "kept": true,
+   "best": {
+    "quant": "Q8",
+    "runtime": "mnn",
+    "format": "MNN",
+    "backend": "cpu",
+    "peak_memory_mb": 926,
+    "prefill_tps": 182.17,
+    "decode_tps": 26.01,
+    "energy_j_per_request": 11.549
+   },
+   "alternatives": [
+    {
+     "quant": "Q8_0",
+     "runtime": "llama.cpp",
+     "format": "GGUF",
+     "backend": "cpu",
+     "peak_memory_mb": 1735,
+     "prefill_tps": 204.35,
+     "decode_tps": 23.05,
+     "energy_j_per_request": 14.172
+    },
+    {
+     "quant": "Q8",
+     "runtime": "mnn",
+     "format": "MNN",
+     "backend": "gpu",
+     "peak_memory_mb": 959,
+     "prefill_tps": 181.66,
+     "decode_tps": 17.88,
+     "energy_j_per_request": 9.383
+    }
+   ],
+   "tried": [
+    {
+     "quant": "Q8_0",
+     "runtime": "llama.cpp",
+     "format": "GGUF",
+     "backend": "cpu",
+     "passes": true,
+     "reasons": [],
+     "peak_memory_mb": 1735,
+     "prefill_tps": 204.35,
+     "decode_tps": 23.05,
+     "energy_j_per_request": 14.172
+    },
+    {
+     "quant": "Q8",
+     "runtime": "mnn",
+     "format": "MNN",
+     "backend": "cpu",
+     "passes": true,
+     "reasons": [],
+     "peak_memory_mb": 926,
+     "prefill_tps": 182.17,
+     "decode_tps": 26.01,
+     "energy_j_per_request": 11.549
+    },
+    {
+     "quant": "Q8",
+     "runtime": "mnn",
+     "format": "MNN",
+     "backend": "gpu",
+     "passes": true,
+     "reasons": [],
+     "peak_memory_mb": 959,
+     "prefill_tps": 181.66,
+     "decode_tps": 17.88,
+     "energy_j_per_request": 9.383
+    }
+   ]
+  },
+  {
+   "model": "qwen3.5-0.8b",
+   "hf_id": "Qwen/Qwen3.5-0.8B",
+   "bits": 16,
+   "kept": false,
+   "best": null,
+   "alternatives": [],
+   "tried": [
+    {
+     "quant": "F16",
+     "runtime": "llama.cpp",
+     "format": "GGUF",
+     "backend": "cpu",
+     "passes": false,
+     "reasons": [
+      "energy 24.599 J > 15.66 J"
+     ],
+     "peak_memory_mb": 1642,
+     "prefill_tps": 80.19,
+     "decode_tps": 14.17,
+     "energy_j_per_request": 24.599
+    },
+    {
+     "quant": "F16",
+     "runtime": "mnn",
+     "format": "MNN",
+     "backend": "cpu",
+     "passes": false,
+     "reasons": [
+      "energy 21.221 J > 15.66 J"
+     ],
+     "peak_memory_mb": 2906,
+     "prefill_tps": 152.7,
+     "decode_tps": 14.36,
+     "energy_j_per_request": 21.221
+    },
+    {
+     "quant": "F16",
+     "runtime": "mnn",
+     "format": "MNN",
+     "backend": "gpu",
+     "passes": false,
+     "reasons": [
+      "does not run: crashed"
+     ],
+     "peak_memory_mb": null,
+     "prefill_tps": null,
+     "decode_tps": null,
+     "energy_j_per_request": null
+    }
+   ]
+  },
+  {
+   "model": "qwen3.5-2b",
+   "hf_id": "Qwen/Qwen3.5-2B",
+   "bits": 4,
+   "kept": true,
+   "best": {
+    "quant": "Q4",
+    "runtime": "mnn",
+    "format": "MNN",
+    "backend": "gpu",
+    "peak_memory_mb": 1259,
+    "prefill_tps": 101.89,
+    "decode_tps": 14.23,
+    "energy_j_per_request": 12.863
+   },
+   "alternatives": [],
+   "tried": [
+    {
+     "quant": "Q4_0",
+     "runtime": "llama.cpp",
+     "format": "GGUF",
+     "backend": "cpu",
+     "passes": false,
+     "reasons": [
+      "energy 20.211 J > 15.66 J"
+     ],
+     "peak_memory_mb": 2523,
+     "prefill_tps": 98.77,
+     "decode_tps": 17.42,
+     "energy_j_per_request": 20.211
+    },
+    {
+     "quant": "Q4",
+     "runtime": "mnn",
+     "format": "MNN",
+     "backend": "cpu",
+     "passes": false,
+     "reasons": [
+      "energy 16.567 J > 15.66 J"
+     ],
+     "peak_memory_mb": 1218,
+     "prefill_tps": 77.93,
+     "decode_tps": 20.72,
+     "energy_j_per_request": 16.567
+    },
+    {
+     "quant": "Q4",
+     "runtime": "mnn",
+     "format": "MNN",
+     "backend": "gpu",
+     "passes": true,
+     "reasons": [],
+     "peak_memory_mb": 1259,
+     "prefill_tps": 101.89,
+     "decode_tps": 14.23,
+     "energy_j_per_request": 12.863
+    }
+   ]
+  },
+  {
+   "model": "qwen3.5-2b",
+   "hf_id": "Qwen/Qwen3.5-2B",
+   "bits": 8,
+   "kept": false,
+   "best": null,
+   "alternatives": [],
+   "tried": [
+    {
+     "quant": "Q8_0",
+     "runtime": "llama.cpp",
+     "format": "GGUF",
+     "backend": "cpu",
+     "passes": false,
+     "reasons": [
+      "energy 30.791 J > 15.66 J"
+     ],
+     "peak_memory_mb": 4141,
+     "prefill_tps": 94.01,
+     "decode_tps": 10.56,
+     "energy_j_per_request": 30.791
+    },
+    {
+     "quant": "Q8",
+     "runtime": "mnn",
+     "format": "MNN",
+     "backend": "cpu",
+     "passes": false,
+     "reasons": [
+      "energy 27.629 J > 15.66 J"
+     ],
+     "peak_memory_mb": 2974,
+     "prefill_tps": 81.59,
+     "decode_tps": 11.15,
+     "energy_j_per_request": 27.629
+    },
+    {
+     "quant": "Q8",
+     "runtime": "mnn",
+     "format": "MNN",
+     "backend": "gpu",
+     "passes": false,
+     "reasons": [
+      "energy 21.847 J > 15.66 J"
+     ],
+     "peak_memory_mb": 2221,
+     "prefill_tps": 83.66,
+     "decode_tps": 9.33,
+     "energy_j_per_request": 21.847
+    }
+   ]
+  },
+  {
+   "model": "qwen3.5-2b",
+   "hf_id": "Qwen/Qwen3.5-2B",
+   "bits": 16,
+   "kept": false,
+   "best": null,
+   "alternatives": [],
+   "tried": [
+    {
+     "quant": "F16",
+     "runtime": "llama.cpp",
+     "format": "GGUF",
+     "backend": "cpu",
+     "passes": false,
+     "reasons": [
+      "energy 56.829 J > 15.66 J"
+     ],
+     "peak_memory_mb": 3908,
+     "prefill_tps": 28.2,
+     "decode_tps": 6.07,
+     "energy_j_per_request": 56.829
+    },
+    {
+     "quant": "F16",
+     "runtime": "mnn",
+     "format": "MNN",
+     "backend": "cpu",
+     "passes": false,
+     "reasons": [
+      "does not run: does not fit"
+     ],
+     "peak_memory_mb": null,
+     "prefill_tps": null,
+     "decode_tps": null,
+     "energy_j_per_request": null
+    },
+    {
+     "quant": "F16",
+     "runtime": "mnn",
+     "format": "MNN",
+     "backend": "gpu",
+     "passes": false,
+     "reasons": [
+      "does not run: crashed"
+     ],
+     "peak_memory_mb": null,
+     "prefill_tps": null,
+     "decode_tps": null,
+     "energy_j_per_request": null
+    }
+   ]
+  },
+  {
+   "model": "qwen3.5-4b",
+   "hf_id": "Qwen/Qwen3.5-4B",
+   "bits": 4,
+   "kept": false,
+   "best": null,
+   "alternatives": [],
+   "tried": [
+    {
+     "quant": "Q4_0",
+     "runtime": "llama.cpp",
+     "format": "GGUF",
+     "backend": "cpu",
+     "passes": false,
+     "reasons": [
+      "energy 42.915 J > 15.66 J"
+     ],
+     "peak_memory_mb": 5264,
+     "prefill_tps": 39.75,
+     "decode_tps": 8.01,
+     "energy_j_per_request": 42.915
+    },
+    {
+     "quant": "Q4",
+     "runtime": "mnn",
+     "format": "MNN",
+     "backend": "cpu",
+     "passes": false,
+     "reasons": [
+      "energy 37.083 J > 15.66 J"
+     ],
+     "peak_memory_mb": 2875,
+     "prefill_tps": 29.59,
+     "decode_tps": 9.25,
+     "energy_j_per_request": 37.083
+    },
+    {
+     "quant": "Q4",
+     "runtime": "mnn",
+     "format": "MNN",
+     "backend": "gpu",
+     "passes": false,
+     "reasons": [
+      "energy 30.34 J > 15.66 J"
+     ],
+     "peak_memory_mb": 2655,
+     "prefill_tps": 39.5,
+     "decode_tps": 7.07,
+     "energy_j_per_request": 30.34
+    }
+   ]
+  },
+  {
+   "model": "qwen3.5-4b",
+   "hf_id": "Qwen/Qwen3.5-4B",
+   "bits": 8,
+   "kept": false,
+   "best": null,
+   "alternatives": [],
+   "tried": [
+    {
+     "quant": "Q8_0",
+     "runtime": "llama.cpp",
+     "format": "GGUF",
+     "backend": "cpu",
+     "passes": false,
+     "reasons": [
+      "does not run: does not fit"
+     ],
+     "peak_memory_mb": null,
+     "prefill_tps": null,
+     "decode_tps": null,
+     "energy_j_per_request": null
+    },
+    {
+     "quant": "Q8",
+     "runtime": "mnn",
+     "format": "MNN",
+     "backend": "cpu",
+     "passes": false,
+     "reasons": [
+      "does not run: does not fit"
+     ],
+     "peak_memory_mb": null,
+     "prefill_tps": null,
+     "decode_tps": null,
+     "energy_j_per_request": null
+    },
+    {
+     "quant": "Q8",
+     "runtime": "mnn",
+     "format": "MNN",
+     "backend": "gpu",
+     "passes": false,
+     "reasons": [
+      "peak memory 5968 MB > 5800 MB",
+      "decode 3.96 < 5 tokens/s",
+      "energy 50.936 J > 15.66 J"
+     ],
+     "peak_memory_mb": 5968,
+     "prefill_tps": 32.68,
+     "decode_tps": 3.96,
+     "energy_j_per_request": 50.936
+    }
+   ]
+  },
+  {
+   "model": "qwen3.5-4b",
+   "hf_id": "Qwen/Qwen3.5-4B",
+   "bits": 16,
+   "kept": false,
+   "best": null,
+   "alternatives": [],
+   "tried": [
+    {
+     "quant": "F16",
+     "runtime": "llama.cpp",
+     "format": "GGUF",
+     "backend": "cpu",
+     "passes": false,
+     "reasons": [
+      "does not run: does not fit"
+     ],
+     "peak_memory_mb": null,
+     "prefill_tps": null,
+     "decode_tps": null,
+     "energy_j_per_request": null
+    },
+    {
+     "quant": "F16",
+     "runtime": "mnn",
+     "format": "MNN",
+     "backend": "cpu",
+     "passes": false,
+     "reasons": [
+      "does not run: does not fit"
+     ],
+     "peak_memory_mb": null,
+     "prefill_tps": null,
+     "decode_tps": null,
+     "energy_j_per_request": null
+    },
+    {
+     "quant": "F16",
+     "runtime": "mnn",
+     "format": "MNN",
+     "backend": "gpu",
+     "passes": false,
+     "reasons": [
+      "does not run: does not fit"
+     ],
+     "peak_memory_mb": null,
+     "prefill_tps": null,
+     "decode_tps": null,
+     "energy_j_per_request": null
+    }
+   ]
+  }
+ ],
+ "summary": {
+  "entries": 27,
+  "kept": 14,
+  "removed": 13,
+  "models_kept": 6,
+  "backend": {
+   "cpu": 13,
+   "gpu": 1
+  },
+  "runtime": {
+   "llama.cpp": 11,
+   "mnn": 3
+  }
+ }
+}

@@ -57,6 +57,122 @@ per line (see `pool.py`). Each model runs on the pinned build if the paper's lla
 else on `--ref head` (e.g. Qwen3.5). The same `--pool-file` works on `prepare_models.py` and `run_paper_table5.py`
 individually; other `run_paper_table5.py` options (`--quants`, `--backends`, `--llama-threads`) pass through.
 
+## Filtered model pool for a phone
+
+`filter_pool.py` is the deployment tool, separate from the research sweep above: plug in any 64-bit Android phone,
+give limits on the four measured fields, and it tries the pool on that phone top to bottom and returns what passes,
+with the runtime (llama.cpp GGUF / MNN) and backend (CPU / GPU) to use for each model and quantization. Accuracy is
+not considered.
+```
+python filter_pool.py --serial S --max-memory 2048 --min-prefill 128 --min-decode 10 --max-energy-j 60
+python filter_pool.py --serial S --max-memory 40% --min-decode 5 --prompt-tokens 32 --answer-tokens 45
+python filter_pool.py --serial S --no-measure --min-decode 20      # re-filter what this phone already measured
+python filter_pool.py --from results/slm_pool_s23_pinned results/slm_pool_s23_head --min-decode 10   # no phone
+```
+```python
+from filter_pool import filter_pool
+result = filter_pool("SERIAL", {"max_peak_memory_mb": 2048, "min_prefill_tps": 128, "min_decode_tps": 10,
+                                "max_energy_j": 60}, prompt_tokens=256, answer_tokens=256)
+```
+
+**Input.** A phone (`--serial`) and any of four limits; a limit left out is not checked:
+
+| Limit | CLI | Python key | Unit |
+|---|---|---|---|
+| Peak memory | `--max-memory` | `max_peak_memory_mb` | MB, or a share of the phone's RAM (`"40%"`) |
+| Prefill speed | `--min-prefill` | `min_prefill_tps` | tokens/s |
+| Decode speed | `--min-decode` | `min_decode_tps` | tokens/s |
+| Energy per request | `--max-energy-j` | `max_energy_j` | J for `prompt_tokens` + `answer_tokens` (default 256 + 256) |
+
+Optional: `--pool-file` (default `pools/slm_factory_android_pool.py`), `--gguf` / `--mnn` (default Q4_0 Q8_0 F16 /
+4 8 16), `--rank-by decode|prefill|energy`, `--wireless-timeout` (s, default 900), `--screen`.
+
+**What it does.** It reads the phone (64-bit ABI required; the llama.cpp `-march` its CPU supports, rebuilding the
+binaries if the last build was for another; OpenCL), checks which GPU paths load, converts each pool model for both
+runtimes (each conversion separately: one that fails is recorded and the rest go on), then for each configuration in
+pool order (models as listed, 4 / 8 / 16-bit, llama.cpp CPU / GPU, MNN CPU / GPU):
+1. weights too large for the phone's RAM: removed without running;
+2. peak memory from one 256 + 256-token inference; over the limit: removed, not benchmarked;
+3. benchmark, 1 warm-up + 1 timed run of prefill and decode, behind the same cool-down gate as the research protocol
+   (battery at or below the profile's limit, 28 C, and CPU caps back at baseline; airplane mode; background apps
+   killed); over the prefill or decode limit: removed;
+4. energy, measured during the benchmark when an energy limit is given, checked when the session ends.
+
+One timed run is enough: across the four phones the timed runs of a configuration differed by a median 0.3%
+(prefill) and 0.4% (decode), 90% of configurations within 4.5% and 2.6%.
+
+Energy needs the phone on battery. With an energy limit over USB (and no chip power counters) the tool prints how to
+switch to wireless adb, waits for the same phone to reconnect wirelessly and unplugged, and stops after
+`--wireless-timeout`. Without an energy limit, USB is fine and the energy-only work is skipped.
+
+Measurements go to `results/filter_<device profile>_{pinned,head}` and are reused: a rerun measures only what is
+missing. A session stops below 20% battery; charge and rerun the same command (`complete` is false until then).
+
+**Output.** `results/filter_<device profile>_filtered_pool.json` (or `--out`), and the return value of
+`filter_pool()`. JSON Schema: [filter_pool_contract.schema.json](filter_pool_contract.schema.json); a real example
+(OnePlus 8 Pro measurements, scenario M07 limits): [filter_pool_example.json](filter_pool_example.json).
+`contract_version` 1:
+```jsonc
+{
+  "contract_version": 1,
+  "generated": "2026-11-03T03:30:00",
+  "complete": true,                  // false: configurations still missing (rerun); null: unknown (--from)
+  "not_measured": [],                // ids "<model>__<quant>__<runtime>__<backend>" still missing
+  "phone": {"serial", "manufacturer", "model", "soc", "android", "abi64", "llama_march", "opencl_lib",
+            "label", "profile", "ram_gib"},                      // any of them may be null
+  "gpu": {"pinned": {"llama.cpp": null, "mnn": null},           // null: that GPU path runs; else why not
+          "head": {"llama.cpp": "llama.cpp head OpenCL build finds no device: ...", "mnn": null}},
+  "conversion_failed": {"<model>": {"<runtime>": {"<quant>": "conversion to MNN failed (...): ..."}}},
+  "measurement": {"results_dirs": ["results/filter_oneplus8pro_pinned", "results/filter_oneplus8pro_head"],
+                  "request": {"prompt_tokens": 32, "answer_tokens": 45},
+                  "configs_expected": 108, "configs_measured": 99, "configs_benchmarked": 79,
+                  "energy_methods": ["bm:current_now"]},
+  "limits": {"max_peak_memory_mb": 5800, "min_prefill_tps": 2.96, "min_decode_tps": 5, "max_energy_j": 15.66},
+  "rank_by": "decode",
+
+  "filtered_pool": [                 // what to deploy: one row per kept model x bit-width, in pool order
+    {"model": "qwen3.5-0.8b", "hf_id": "Qwen/Qwen3.5-0.8B", "bits": 4, "quant": "Q4",
+     "runtime": "mnn", "format": "MNN", "backend": "cpu"},
+    {"model": "qwen3.5-2b", "hf_id": "Qwen/Qwen3.5-2B", "bits": 4, "quant": "Q4",
+     "runtime": "mnn", "format": "MNN", "backend": "gpu"}
+  ],
+
+  "entries": [                       // every model x bit-width of the pool, kept or removed, in pool order
+    {"model": "qwen3.5-2b", "hf_id": "Qwen/Qwen3.5-2B", "bits": 4, "kept": true,
+     "best": {"quant": "Q4", "runtime": "mnn", "format": "MNN", "backend": "gpu",
+              "peak_memory_mb": 1259, "prefill_tps": 101.89, "decode_tps": 14.23, "energy_j_per_request": 12.863},
+     "alternatives": [],             // other passing combinations, ranked, same fields as best
+     "tried": [                      // always the 4 runtime x backend combinations
+       {"quant": "Q4_0", "runtime": "llama.cpp", "format": "GGUF", "backend": "cpu", "passes": false,
+        "reasons": ["energy 20.211 J > 15.66 J"],
+        "peak_memory_mb": 2523, "prefill_tps": 98.77, "decode_tps": 17.42, "energy_j_per_request": 20.211},
+       {"quant": "Q4_0", "runtime": "llama.cpp", "format": "GGUF", "backend": "gpu", "passes": false,
+        "reasons": ["not tried: llama.cpp head OpenCL build finds no device: ..."],
+        "peak_memory_mb": null, "prefill_tps": null, "decode_tps": null, "energy_j_per_request": null},
+       {"quant": "Q4", "runtime": "mnn", "format": "MNN", "backend": "cpu", "passes": false,
+        "reasons": ["energy 16.567 J > 15.66 J"],
+        "peak_memory_mb": 1218, "prefill_tps": 77.93, "decode_tps": 20.72, "energy_j_per_request": 16.567},
+       {"quant": "Q4", "runtime": "mnn", "format": "MNN", "backend": "gpu", "passes": true, "reasons": [],
+        "peak_memory_mb": 1259, "prefill_tps": 101.89, "decode_tps": 14.23, "energy_j_per_request": 12.863}]},
+    {"model": "qwen3-1.7b", "hf_id": "Qwen/Qwen3-1.7B", "bits": 4, "kept": false, "best": null,
+     "alternatives": [], "tried": [ /* 4 combinations, each with its reasons */ ]}
+  ],
+  "summary": {"entries": 27, "kept": 14, "removed": 13, "models_kept": 6,
+              "backend": {"cpu": 13, "gpu": 1}, "runtime": {"llama.cpp": 11, "mnn": 3}}
+}
+```
+- `best` is the passing combination with the fastest decode (`rank_by` prefill / energy to change), ties to lower
+  energy; `filtered_pool` repeats it for the kept entries.
+- `reasons` (empty when it passes), one per broken limit: `peak memory X MB > Y MB`, `prefill X < Y tokens/s`,
+  `decode X < Y tokens/s`, `energy X J > Y J`, `energy not measured`, `peak memory not measured`; or why it did not
+  run: `does not run: <does not fit | crashed | killed (out of memory) | load failed | failed>`,
+  `not tried: <the GPU path cannot run | conversion failed ...>`, `not measured yet`, or
+  `not benchmarked: removed at the memory check under earlier limits` (after loosening limits with `--no-measure`).
+- Units: MB = 10^6 bytes of peak process memory (PSS + GPU buffers); tokens/s at a 256-token prompt and a 256-token
+  answer; energy = prompt tokens x prefill J/token + answer tokens x decode J/token, whole device net of idle.
+- `python tests/fake_filter_test.py` runs the tool against a simulated phone and validates the output against the
+  schema (needs `pip install jsonschema` for that check).
+
 ## Validation, then the model pool
 
 1. **Validate against the paper** with its models at 4 bits (the comparison section of `TABLE5.md` passes a cell

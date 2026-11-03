@@ -175,9 +175,16 @@ def main():
             rec = {"config": {k: v for k, v in cfg.items() if k != "entry"},
                    "storage_bytes": sum(cfg["entry"]["files"].values()), "measured": datetime.now().isoformat()}
             bench = out / "configs" / f"{cfg['id']}.json"
-            err = json.loads(bench.read_text()).get("error", "") if bench.exists() else ""
+            if not bench.exists():
+                log(f"[{i}/{len(cfgs)}] {cfg['id']}: no benchmark result yet; not measured")
+                continue
+            r = json.loads(bench.read_text())
+            err = r.get("error", "")
             if str(err).startswith("does not fit in RAM:"):
                 rec.update(exit="skipped", reason=err)
+            elif r.get("status") != "ok":  # crashed / failed to load: nothing to measure, and it can hang to --timeout
+                log(f"[{i}/{len(cfgs)}] {cfg['id']}: benchmark failed ({str(err)[:80]}); not measured")
+                continue
             else:
                 level = rpt.bench_common.device_state(adb).get("battery_level")
                 if level is not None and level < a.min_battery:
