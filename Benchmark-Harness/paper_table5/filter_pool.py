@@ -108,7 +108,8 @@ def wait_for_wireless(adb, serialno: str, timeout_s: int):
         f"   1. phone and this computer on the same Wi-Fi network\n"
         f"   2. python energy_probe.py wireless --serial {adb.serial}\n"
         f"      (or: adb -s {adb.serial} tcpip 5555, then adb connect <phone Wi-Fi IP>:5555)\n"
-        f"   3. unplug the USB cable\n"
+        f"   3. unplug the USB cable (do not run the 'energy_probe.py collect' it suggests: this tool runs it\n"
+        f"      itself on a new phone, and two at once load the phone during the benchmark)\n"
         f"   Waiting up to {timeout_s // 60} min for the phone to reconnect wirelessly, unplugged ...")
     t0, last = time.time(), ""
     while time.time() - t0 < timeout_s:
@@ -196,8 +197,11 @@ class FilterSession(rpt.Session):
         self.adb.sh("am kill-all")
         rec = {"config": {k: v for k, v in cfg.items() if k != "entry"},
                "storage_bytes": sum(cfg["entry"]["files"].values()), "measured": datetime.now().isoformat()}
-        rec.update(memory_usage.run_one(self.adb, cfg, path, self.args.ref, self.args.llama_threads,
-                                        self.args.timeout))
+        res = memory_usage.run_one(self.adb, cfg, path, self.args.ref, self.args.llama_threads, self.args.timeout)
+        if res.get("exit") is None and self.adb.run(["get-state"], timeout=15).stdout.strip() != "device":
+            # the phone dropped off (Wi-Fi, this computer asleep): stop the session; a rerun measures this again
+            raise RuntimeError("phone unreachable during the memory measurement")
+        rec.update(res)
         f.write_text(json.dumps(rec, indent=1))
         time.sleep(10)  # let the kernel return the memory before the benchmark's free-RAM check
         return rec
@@ -221,6 +225,28 @@ class FilterSession(rpt.Session):
             log("   REMOVED: " + "; ".join(miss) if miss else "   passes memory, prefill and decode (energy: at "
                 "the end of the session)" if self.limits["max_energy_j"] is not None else "   passes")
         return r
+
+
+def recover_stopped_session(out: Path, serial: str):
+    """A session that stopped before its energy step (phone unreachable) left its recording on the phone: pull it
+    and attach it before the next session overwrites it. If that fails, its configurations are measured again."""
+    starts = {f.stem: json.loads(f.read_text())["started"] for f in (out / "sessions").glob("*.json")}
+    if not starts:
+        return
+    stamp = max(starts, key=starts.get)
+    edir = out / "energy" / stamp
+    if edir.is_dir() and any(edir.iterdir()):
+        return
+    log(f"[ENERGY] session {stamp} stopped before its energy step; recovering its recording from the phone")
+    try:
+        rpt.recover_energy(argparse.Namespace(results_dir=str(out), serial=serial))
+        return
+    except (SystemExit, RuntimeError, OSError, ValueError) as e:
+        log(f"[ENERGY] could not recover it ({e}); its configurations are measured again")
+    for f in (out / "configs").glob("*.json"):
+        r = json.loads(f.read_text())
+        if r.get("status") == "ok" and not r.get("energy") and r.get("started", "") >= starts[stamp]:
+            f.unlink()
 
 
 def session_args(serial, ref, models, quants, out, screen, energy: bool, extra) -> argparse.Namespace:
@@ -510,12 +536,23 @@ def filter_pool(serial: str, limits: dict | None = None, *, pool_file=DEFAULT_PO
     state_file = RESULTS_DIR / f"{prefix}_state.json"
     state = json.loads(state_file.read_text()) if state_file.is_file() else {"gpu": {}, "conversion_failed": {}}
     if measure:
+        rpt.keep_host_awake()  # a computer that sleeps drops the phone's wireless adb connection mid-run
         if lim["max_energy_j"] is not None:
             import energy_probe
             disc = energy_probe.discover(adb)
             if disc["state"]["externally_powered"] and not disc["powercap"]["usable"]:
                 adb = wait_for_wireless(adb, info["serialno"], wireless_timeout_s)
                 info["serial"] = adb.serial
+            from energy import probe_recommendation
+            if not disc["powercap"]["usable"] and not profile.get("energy_method") \
+                    and not probe_recommendation(info["model"]):
+                # a phone seen for the first time: find which battery reading is repeatable before relying on it
+                log("[ENERGY] first run on this phone model: energy_probe.py collect picks the battery energy "
+                    "method (~15 min)")
+                code, tail = _run_tail(["energy_probe.py", "collect", "--serial", adb.serial])
+                if code or not probe_recommendation(info["model"]):
+                    log(f"[ENERGY] energy probe gave no recommendation (exit {code}: {tail}); using the default "
+                        f"battery method order")
         screen = screen or profile.get("screen", "auto")
         order = {n: i for i, n in enumerate(pool)}
         state["conversion_failed"] = {}
@@ -537,6 +574,8 @@ def filter_pool(serial: str, limits: dict | None = None, *, pool_file=DEFAULT_PO
             state_file.write_text(json.dumps(state, indent=1))
             if not models:
                 continue
+            if lim["max_energy_j"] is not None:
+                recover_stopped_session(out_dir, adb.serial)
             args = session_args(adb.serial, ref, models, quants, out_dir, screen, lim["max_energy_j"] is not None,
                                 list(extra_args))
             FilterSession(args, lim, order, {fw for fw, why in state["gpu"][ref].items() if why}).run()

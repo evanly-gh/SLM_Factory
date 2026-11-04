@@ -388,11 +388,11 @@ OnePlus 15,prefill throughput,CPU,Qwen3.5-0.8B,llama.cpp,4-bit,306.89
 OnePlus 15,prefill throughput,CPU,Qwen3-1.7B,llama.cpp,4-bit,144.05
 OnePlus 15,prefill throughput,CPU,Qwen3.5-2B,llama.cpp,4-bit,150.48
 OnePlus 15,prefill throughput,CPU,Qwen3-4B,llama.cpp,4-bit,56.41
-OnePlus 15,prefill throughput,CPU,Qwen3.5-4B,llama.cpp,4-bit,25.3
+OnePlus 15,prefill throughput,CPU,Qwen3.5-4B,llama.cpp,4-bit,59.79
 OnePlus 15,prefill throughput,CPU,SmolLM2-135M,llama.cpp,8-bit,1045.08
 OnePlus 15,prefill throughput,CPU,Gemma3-270M,llama.cpp,8-bit,1105.29
 OnePlus 15,prefill throughput,CPU,SmolLM2-360M,llama.cpp,8-bit,472.22
-OnePlus 15,prefill throughput,CPU,Qwen3-0.6B,llama.cpp,8-bit,60.05
+OnePlus 15,prefill throughput,CPU,Qwen3-0.6B,llama.cpp,8-bit,315.4
 OnePlus 15,prefill throughput,CPU,Qwen3.5-0.8B,llama.cpp,8-bit,316.0
 OnePlus 15,prefill throughput,CPU,Qwen3-1.7B,llama.cpp,8-bit,150.21
 OnePlus 15,prefill throughput,CPU,Qwen3.5-2B,llama.cpp,8-bit,159.05
@@ -481,11 +481,11 @@ OnePlus 15,decode throughput,CPU,Qwen3.5-0.8B,llama.cpp,4-bit,60.06
 OnePlus 15,decode throughput,CPU,Qwen3-1.7B,llama.cpp,4-bit,34.91
 OnePlus 15,decode throughput,CPU,Qwen3.5-2B,llama.cpp,4-bit,32.68
 OnePlus 15,decode throughput,CPU,Qwen3-4B,llama.cpp,4-bit,16.26
-OnePlus 15,decode throughput,CPU,Qwen3.5-4B,llama.cpp,4-bit,15.05
+OnePlus 15,decode throughput,CPU,Qwen3.5-4B,llama.cpp,4-bit,15.87
 OnePlus 15,decode throughput,CPU,SmolLM2-135M,llama.cpp,8-bit,226.08
 OnePlus 15,decode throughput,CPU,Gemma3-270M,llama.cpp,8-bit,169.24
 OnePlus 15,decode throughput,CPU,SmolLM2-360M,llama.cpp,8-bit,98.4
-OnePlus 15,decode throughput,CPU,Qwen3-0.6B,llama.cpp,8-bit,66.96
+OnePlus 15,decode throughput,CPU,Qwen3-0.6B,llama.cpp,8-bit,67.78
 OnePlus 15,decode throughput,CPU,Qwen3.5-0.8B,llama.cpp,8-bit,59.6
 OnePlus 15,decode throughput,CPU,Qwen3-1.7B,llama.cpp,8-bit,30.78
 OnePlus 15,decode throughput,CPU,Qwen3.5-2B,llama.cpp,8-bit,29.32
@@ -566,6 +566,7 @@ OnePlus 15,decode throughput,GPU,Qwen3-1.7B,MNN,8-bit,22.81
 OnePlus 15,decode throughput,GPU,Qwen3.5-2B,MNN,8-bit,25.96
 OnePlus 15,decode throughput,GPU,Qwen3-4B,MNN,8-bit,12.6
 OnePlus 15,decode throughput,GPU,Qwen3.5-4B,MNN,8-bit,13.38
+OnePlus 15,energy prefill (mJ/token),CPU,SmolLM2-135M,llama.cpp,4-bit,1.33
 OnePlus 15,energy prefill (mJ/token),CPU,Gemma3-270M,llama.cpp,4-bit,1.78
 OnePlus 15,energy prefill (mJ/token),CPU,SmolLM2-360M,llama.cpp,4-bit,3.96
 OnePlus 15,energy prefill (mJ/token),CPU,Qwen3-0.6B,llama.cpp,4-bit,6.27
@@ -573,11 +574,11 @@ OnePlus 15,energy prefill (mJ/token),CPU,Qwen3.5-0.8B,llama.cpp,4-bit,6.78
 OnePlus 15,energy prefill (mJ/token),CPU,Qwen3-1.7B,llama.cpp,4-bit,13.36
 OnePlus 15,energy prefill (mJ/token),CPU,Qwen3.5-2B,llama.cpp,4-bit,13.5
 OnePlus 15,energy prefill (mJ/token),CPU,Qwen3-4B,llama.cpp,4-bit,41.19
-OnePlus 15,energy prefill (mJ/token),CPU,Qwen3.5-4B,llama.cpp,4-bit,52.4
+OnePlus 15,energy prefill (mJ/token),CPU,Qwen3.5-4B,llama.cpp,4-bit,39.02
 OnePlus 15,energy prefill (mJ/token),CPU,SmolLM2-135M,llama.cpp,8-bit,1.37
 OnePlus 15,energy prefill (mJ/token),CPU,Gemma3-270M,llama.cpp,8-bit,1.94
 OnePlus 15,energy prefill (mJ/token),CPU,SmolLM2-360M,llama.cpp,8-bit,4.27
-OnePlus 15,energy prefill (mJ/token),CPU,Qwen3-0.6B,llama.cpp,8-bit,23.6
+OnePlus 15,energy prefill (mJ/token),CPU,Qwen3-0.6B,llama.cpp,8-bit,7.01
 OnePlus 15,energy prefill (mJ/token),CPU,Qwen3.5-0.8B,llama.cpp,8-bit,7.13
 OnePlus 15,energy prefill (mJ/token),CPU,Qwen3-1.7B,llama.cpp,8-bit,16.72
 OnePlus 15,energy prefill (mJ/token),CPU,Qwen3.5-2B,llama.cpp,8-bit,15.11
@@ -590,6 +591,8 @@ OnePlus 15,energy prefill (mJ/token),CPU,Qwen3.5-0.8B,llama.cpp,16-bit,41.11
 OnePlus 15,energy prefill (mJ/token),CPU,Qwen3-1.7B,llama.cpp,16-bit,128.86
 OnePlus 15,energy prefill (mJ/token),CPU,Qwen3.5-2B,llama.cpp,16-bit,106.42
 OnePlus 15,energy prefill (mJ/token),CPU,Qwen3-4B,llama.cpp,16-bit,303.41
+OnePlus 15,energy prefill (mJ/token),CPU,SmolLM2-135M,MNN,4-bit,1.22
+OnePlus 15,energy prefill (mJ/token),CPU,Gemma3-270M,MNN,4-bit,1.36
 OnePlus 15,energy prefill (mJ/token),CPU,SmolLM2-360M,MNN,4-bit,3.42
 OnePlus 15,energy prefill (mJ/token),CPU,Qwen3-0.6B,MNN,4-bit,5.68
 OnePlus 15,energy prefill (mJ/token),CPU,Qwen3.5-0.8B,MNN,4-bit,4.92
@@ -612,6 +615,7 @@ OnePlus 15,energy prefill (mJ/token),CPU,Qwen3-0.6B,MNN,16-bit,10.11
 OnePlus 15,energy prefill (mJ/token),CPU,Qwen3.5-0.8B,MNN,16-bit,9.85
 OnePlus 15,energy prefill (mJ/token),CPU,Qwen3-1.7B,MNN,16-bit,36.75
 OnePlus 15,energy prefill (mJ/token),CPU,Qwen3.5-2B,MNN,16-bit,21.74
+OnePlus 15,energy prefill (mJ/token),GPU,SmolLM2-135M,llama.cpp,4-bit,1.05
 OnePlus 15,energy prefill (mJ/token),GPU,Gemma3-270M,llama.cpp,4-bit,1.31
 OnePlus 15,energy prefill (mJ/token),GPU,SmolLM2-360M,llama.cpp,4-bit,2.48
 OnePlus 15,energy prefill (mJ/token),GPU,Qwen3-0.6B,llama.cpp,4-bit,2.28
@@ -637,6 +641,8 @@ OnePlus 15,energy prefill (mJ/token),GPU,Qwen3.5-0.8B,llama.cpp,16-bit,3.63
 OnePlus 15,energy prefill (mJ/token),GPU,Qwen3-1.7B,llama.cpp,16-bit,14.53
 OnePlus 15,energy prefill (mJ/token),GPU,Qwen3.5-2B,llama.cpp,16-bit,7.63
 OnePlus 15,energy prefill (mJ/token),GPU,Qwen3-4B,llama.cpp,16-bit,42.54
+OnePlus 15,energy prefill (mJ/token),GPU,SmolLM2-135M,MNN,4-bit,0.85
+OnePlus 15,energy prefill (mJ/token),GPU,Gemma3-270M,MNN,4-bit,0.86
 OnePlus 15,energy prefill (mJ/token),GPU,SmolLM2-360M,MNN,4-bit,2.56
 OnePlus 15,energy prefill (mJ/token),GPU,Qwen3-0.6B,MNN,4-bit,3.13
 OnePlus 15,energy prefill (mJ/token),GPU,Qwen3.5-0.8B,MNN,4-bit,2.98
@@ -653,6 +659,7 @@ OnePlus 15,energy prefill (mJ/token),GPU,Qwen3-1.7B,MNN,8-bit,11.13
 OnePlus 15,energy prefill (mJ/token),GPU,Qwen3.5-2B,MNN,8-bit,8.65
 OnePlus 15,energy prefill (mJ/token),GPU,Qwen3-4B,MNN,8-bit,33.51
 OnePlus 15,energy prefill (mJ/token),GPU,Qwen3.5-4B,MNN,8-bit,23.15
+OnePlus 15,energy decode (mJ/token),CPU,SmolLM2-135M,llama.cpp,4-bit,11.96
 OnePlus 15,energy decode (mJ/token),CPU,Gemma3-270M,llama.cpp,4-bit,15.74
 OnePlus 15,energy decode (mJ/token),CPU,SmolLM2-360M,llama.cpp,4-bit,24.16
 OnePlus 15,energy decode (mJ/token),CPU,Qwen3-0.6B,llama.cpp,4-bit,47.18
@@ -660,11 +667,11 @@ OnePlus 15,energy decode (mJ/token),CPU,Qwen3.5-0.8B,llama.cpp,4-bit,60.28
 OnePlus 15,energy decode (mJ/token),CPU,Qwen3-1.7B,llama.cpp,4-bit,121.31
 OnePlus 15,energy decode (mJ/token),CPU,Qwen3.5-2B,llama.cpp,4-bit,135.73
 OnePlus 15,energy decode (mJ/token),CPU,Qwen3-4B,llama.cpp,4-bit,271.28
-OnePlus 15,energy decode (mJ/token),CPU,Qwen3.5-4B,llama.cpp,4-bit,294.12
+OnePlus 15,energy decode (mJ/token),CPU,Qwen3.5-4B,llama.cpp,4-bit,295.47
 OnePlus 15,energy decode (mJ/token),CPU,SmolLM2-135M,llama.cpp,8-bit,12.9
 OnePlus 15,energy decode (mJ/token),CPU,Gemma3-270M,llama.cpp,8-bit,20.65
 OnePlus 15,energy decode (mJ/token),CPU,SmolLM2-360M,llama.cpp,8-bit,33.3
-OnePlus 15,energy decode (mJ/token),CPU,Qwen3-0.6B,llama.cpp,8-bit,54.63
+OnePlus 15,energy decode (mJ/token),CPU,Qwen3-0.6B,llama.cpp,8-bit,55.93
 OnePlus 15,energy decode (mJ/token),CPU,Qwen3.5-0.8B,llama.cpp,8-bit,68.12
 OnePlus 15,energy decode (mJ/token),CPU,Qwen3-1.7B,llama.cpp,8-bit,140.98
 OnePlus 15,energy decode (mJ/token),CPU,Qwen3.5-2B,llama.cpp,8-bit,154.73
@@ -677,6 +684,8 @@ OnePlus 15,energy decode (mJ/token),CPU,Qwen3.5-0.8B,llama.cpp,16-bit,148.13
 OnePlus 15,energy decode (mJ/token),CPU,Qwen3-1.7B,llama.cpp,16-bit,334.18
 OnePlus 15,energy decode (mJ/token),CPU,Qwen3.5-2B,llama.cpp,16-bit,351.91
 OnePlus 15,energy decode (mJ/token),CPU,Qwen3-4B,llama.cpp,16-bit,789.31
+OnePlus 15,energy decode (mJ/token),CPU,SmolLM2-135M,MNN,4-bit,9.88
+OnePlus 15,energy decode (mJ/token),CPU,Gemma3-270M,MNN,4-bit,19.57
 OnePlus 15,energy decode (mJ/token),CPU,SmolLM2-360M,MNN,4-bit,22.68
 OnePlus 15,energy decode (mJ/token),CPU,Qwen3-0.6B,MNN,4-bit,36.6
 OnePlus 15,energy decode (mJ/token),CPU,Qwen3.5-0.8B,MNN,4-bit,35.77
@@ -699,6 +708,7 @@ OnePlus 15,energy decode (mJ/token),CPU,Qwen3-0.6B,MNN,16-bit,95.23
 OnePlus 15,energy decode (mJ/token),CPU,Qwen3.5-0.8B,MNN,16-bit,104.81
 OnePlus 15,energy decode (mJ/token),CPU,Qwen3-1.7B,MNN,16-bit,249.03
 OnePlus 15,energy decode (mJ/token),CPU,Qwen3.5-2B,MNN,16-bit,279.39
+OnePlus 15,energy decode (mJ/token),GPU,SmolLM2-135M,llama.cpp,4-bit,32.04
 OnePlus 15,energy decode (mJ/token),GPU,Gemma3-270M,llama.cpp,4-bit,35.54
 OnePlus 15,energy decode (mJ/token),GPU,SmolLM2-360M,llama.cpp,4-bit,43.68
 OnePlus 15,energy decode (mJ/token),GPU,Qwen3-0.6B,llama.cpp,4-bit,69.82
@@ -724,6 +734,8 @@ OnePlus 15,energy decode (mJ/token),GPU,Qwen3.5-0.8B,llama.cpp,16-bit,133.64
 OnePlus 15,energy decode (mJ/token),GPU,Qwen3-1.7B,llama.cpp,16-bit,284.54
 OnePlus 15,energy decode (mJ/token),GPU,Qwen3.5-2B,llama.cpp,16-bit,302.58
 OnePlus 15,energy decode (mJ/token),GPU,Qwen3-4B,llama.cpp,16-bit,665.38
+OnePlus 15,energy decode (mJ/token),GPU,SmolLM2-135M,MNN,4-bit,35.49
+OnePlus 15,energy decode (mJ/token),GPU,Gemma3-270M,MNN,4-bit,44.4
 OnePlus 15,energy decode (mJ/token),GPU,SmolLM2-360M,MNN,4-bit,53.9
 OnePlus 15,energy decode (mJ/token),GPU,Qwen3-0.6B,MNN,4-bit,62.93
 OnePlus 15,energy decode (mJ/token),GPU,Qwen3.5-0.8B,MNN,4-bit,40.61
@@ -800,7 +812,7 @@ OnePlus 15 vs paper,Prefill throughput,CPU,Qwen3.5-0.8B,llama.cpp,4-bit (ours),3
 OnePlus 15 vs paper,Prefill throughput,CPU,Qwen3-1.7B,llama.cpp,4-bit (ours),144.05
 OnePlus 15 vs paper,Prefill throughput,CPU,Qwen3.5-2B,llama.cpp,4-bit (ours),150.48
 OnePlus 15 vs paper,Prefill throughput,CPU,Qwen3-4B,llama.cpp,4-bit (ours),56.41
-OnePlus 15 vs paper,Prefill throughput,CPU,Qwen3.5-4B,llama.cpp,4-bit (ours),25.3
+OnePlus 15 vs paper,Prefill throughput,CPU,Qwen3.5-4B,llama.cpp,4-bit (ours),59.79
 OnePlus 15 vs paper,Prefill throughput,CPU,Llama-3.2-1B (paper),llama.cpp,4-bit (paper),287.6
 OnePlus 15 vs paper,Prefill throughput,CPU,Qwen2.5-1.5B (paper),llama.cpp,4-bit (paper),299.9
 OnePlus 15 vs paper,Prefill throughput,CPU,Llama-3.2-3B (paper),llama.cpp,4-bit (paper),109.8
@@ -901,7 +913,7 @@ OnePlus 15 vs paper,Decode throughput,CPU,Qwen3.5-0.8B,llama.cpp,4-bit (ours),60
 OnePlus 15 vs paper,Decode throughput,CPU,Qwen3-1.7B,llama.cpp,4-bit (ours),34.91
 OnePlus 15 vs paper,Decode throughput,CPU,Qwen3.5-2B,llama.cpp,4-bit (ours),32.68
 OnePlus 15 vs paper,Decode throughput,CPU,Qwen3-4B,llama.cpp,4-bit (ours),16.26
-OnePlus 15 vs paper,Decode throughput,CPU,Qwen3.5-4B,llama.cpp,4-bit (ours),15.05
+OnePlus 15 vs paper,Decode throughput,CPU,Qwen3.5-4B,llama.cpp,4-bit (ours),15.87
 OnePlus 15 vs paper,Decode throughput,CPU,Llama-3.2-1B (paper),llama.cpp,4-bit (paper),72.2
 OnePlus 15 vs paper,Decode throughput,CPU,Qwen2.5-1.5B (paper),llama.cpp,4-bit (paper),55.7
 OnePlus 15 vs paper,Decode throughput,CPU,Llama-3.2-3B (paper),llama.cpp,4-bit (paper),30.5
@@ -994,6 +1006,7 @@ OnePlus 8 Pro vs paper,Decode throughput,GPU,Llama-3.2-1B (paper),MNN,4-bit (pap
 OnePlus 8 Pro vs paper,Decode throughput,GPU,Qwen2.5-1.5B (paper),MNN,4-bit (paper),26.2
 OnePlus 8 Pro vs paper,Decode throughput,GPU,Llama-3.2-3B (paper),MNN,4-bit (paper),17.1
 OnePlus 8 Pro vs paper,Decode throughput,GPU,Qwen2.5-7B (paper),MNN,4-bit (paper),11.7
+OnePlus 15 vs paper,Prefill energy,CPU,SmolLM2-135M,llama.cpp,4-bit (ours),1.33
 OnePlus 15 vs paper,Prefill energy,CPU,Gemma3-270M,llama.cpp,4-bit (ours),1.78
 OnePlus 15 vs paper,Prefill energy,CPU,SmolLM2-360M,llama.cpp,4-bit (ours),3.96
 OnePlus 15 vs paper,Prefill energy,CPU,Qwen3-0.6B,llama.cpp,4-bit (ours),6.27
@@ -1001,11 +1014,13 @@ OnePlus 15 vs paper,Prefill energy,CPU,Qwen3.5-0.8B,llama.cpp,4-bit (ours),6.78
 OnePlus 15 vs paper,Prefill energy,CPU,Qwen3-1.7B,llama.cpp,4-bit (ours),13.36
 OnePlus 15 vs paper,Prefill energy,CPU,Qwen3.5-2B,llama.cpp,4-bit (ours),13.5
 OnePlus 15 vs paper,Prefill energy,CPU,Qwen3-4B,llama.cpp,4-bit (ours),41.19
-OnePlus 15 vs paper,Prefill energy,CPU,Qwen3.5-4B,llama.cpp,4-bit (ours),52.4
+OnePlus 15 vs paper,Prefill energy,CPU,Qwen3.5-4B,llama.cpp,4-bit (ours),39.02
 OnePlus 15 vs paper,Prefill energy,CPU,Llama-3.2-1B (paper),llama.cpp,4-bit (paper),16.0
 OnePlus 15 vs paper,Prefill energy,CPU,Qwen2.5-1.5B (paper),llama.cpp,4-bit (paper),15.0
 OnePlus 15 vs paper,Prefill energy,CPU,Llama-3.2-3B (paper),llama.cpp,4-bit (paper),41.0
 OnePlus 15 vs paper,Prefill energy,CPU,Qwen2.5-7B (paper),llama.cpp,4-bit (paper),79.0
+OnePlus 15 vs paper,Prefill energy,CPU,SmolLM2-135M,MNN,4-bit (ours),1.22
+OnePlus 15 vs paper,Prefill energy,CPU,Gemma3-270M,MNN,4-bit (ours),1.36
 OnePlus 15 vs paper,Prefill energy,CPU,SmolLM2-360M,MNN,4-bit (ours),3.42
 OnePlus 15 vs paper,Prefill energy,CPU,Qwen3-0.6B,MNN,4-bit (ours),5.68
 OnePlus 15 vs paper,Prefill energy,CPU,Qwen3.5-0.8B,MNN,4-bit (ours),4.92
@@ -1017,6 +1032,7 @@ OnePlus 15 vs paper,Prefill energy,CPU,Llama-3.2-1B (paper),MNN,4-bit (paper),15
 OnePlus 15 vs paper,Prefill energy,CPU,Qwen2.5-1.5B (paper),MNN,4-bit (paper),15.0
 OnePlus 15 vs paper,Prefill energy,CPU,Llama-3.2-3B (paper),MNN,4-bit (paper),44.0
 OnePlus 15 vs paper,Prefill energy,CPU,Qwen2.5-7B (paper),MNN,4-bit (paper),100.0
+OnePlus 15 vs paper,Prefill energy,GPU,SmolLM2-135M,llama.cpp,4-bit (ours),1.05
 OnePlus 15 vs paper,Prefill energy,GPU,Gemma3-270M,llama.cpp,4-bit (ours),1.31
 OnePlus 15 vs paper,Prefill energy,GPU,SmolLM2-360M,llama.cpp,4-bit (ours),2.48
 OnePlus 15 vs paper,Prefill energy,GPU,Qwen3-0.6B,llama.cpp,4-bit (ours),2.28
@@ -1029,6 +1045,8 @@ OnePlus 15 vs paper,Prefill energy,GPU,Llama-3.2-1B (paper),llama.cpp,4-bit (pap
 OnePlus 15 vs paper,Prefill energy,GPU,Qwen2.5-1.5B (paper),llama.cpp,4-bit (paper),11.0
 OnePlus 15 vs paper,Prefill energy,GPU,Llama-3.2-3B (paper),llama.cpp,4-bit (paper),21.0
 OnePlus 15 vs paper,Prefill energy,GPU,Qwen2.5-7B (paper),llama.cpp,4-bit (paper),65.0
+OnePlus 15 vs paper,Prefill energy,GPU,SmolLM2-135M,MNN,4-bit (ours),0.85
+OnePlus 15 vs paper,Prefill energy,GPU,Gemma3-270M,MNN,4-bit (ours),0.86
 OnePlus 15 vs paper,Prefill energy,GPU,SmolLM2-360M,MNN,4-bit (ours),2.56
 OnePlus 15 vs paper,Prefill energy,GPU,Qwen3-0.6B,MNN,4-bit (ours),3.13
 OnePlus 15 vs paper,Prefill energy,GPU,Qwen3.5-0.8B,MNN,4-bit (ours),2.98
@@ -1040,6 +1058,7 @@ OnePlus 15 vs paper,Prefill energy,GPU,Llama-3.2-1B (paper),MNN,4-bit (paper),13
 OnePlus 15 vs paper,Prefill energy,GPU,Qwen2.5-1.5B (paper),MNN,4-bit (paper),17.0
 OnePlus 15 vs paper,Prefill energy,GPU,Llama-3.2-3B (paper),MNN,4-bit (paper),35.0
 OnePlus 15 vs paper,Prefill energy,GPU,Qwen2.5-7B (paper),MNN,4-bit (paper),91.0
+OnePlus 15 vs paper,Decode energy,CPU,SmolLM2-135M,llama.cpp,4-bit (ours),11.96
 OnePlus 15 vs paper,Decode energy,CPU,Gemma3-270M,llama.cpp,4-bit (ours),15.74
 OnePlus 15 vs paper,Decode energy,CPU,SmolLM2-360M,llama.cpp,4-bit (ours),24.16
 OnePlus 15 vs paper,Decode energy,CPU,Qwen3-0.6B,llama.cpp,4-bit (ours),47.18
@@ -1047,11 +1066,13 @@ OnePlus 15 vs paper,Decode energy,CPU,Qwen3.5-0.8B,llama.cpp,4-bit (ours),60.28
 OnePlus 15 vs paper,Decode energy,CPU,Qwen3-1.7B,llama.cpp,4-bit (ours),121.31
 OnePlus 15 vs paper,Decode energy,CPU,Qwen3.5-2B,llama.cpp,4-bit (ours),135.73
 OnePlus 15 vs paper,Decode energy,CPU,Qwen3-4B,llama.cpp,4-bit (ours),271.28
-OnePlus 15 vs paper,Decode energy,CPU,Qwen3.5-4B,llama.cpp,4-bit (ours),294.12
+OnePlus 15 vs paper,Decode energy,CPU,Qwen3.5-4B,llama.cpp,4-bit (ours),295.47
 OnePlus 15 vs paper,Decode energy,CPU,Llama-3.2-1B (paper),llama.cpp,4-bit (paper),74.0
 OnePlus 15 vs paper,Decode energy,CPU,Qwen2.5-1.5B (paper),llama.cpp,4-bit (paper),97.0
 OnePlus 15 vs paper,Decode energy,CPU,Llama-3.2-3B (paper),llama.cpp,4-bit (paper),210.0
 OnePlus 15 vs paper,Decode energy,CPU,Qwen2.5-7B (paper),llama.cpp,4-bit (paper),440.0
+OnePlus 15 vs paper,Decode energy,CPU,SmolLM2-135M,MNN,4-bit (ours),9.88
+OnePlus 15 vs paper,Decode energy,CPU,Gemma3-270M,MNN,4-bit (ours),19.57
 OnePlus 15 vs paper,Decode energy,CPU,SmolLM2-360M,MNN,4-bit (ours),22.68
 OnePlus 15 vs paper,Decode energy,CPU,Qwen3-0.6B,MNN,4-bit (ours),36.6
 OnePlus 15 vs paper,Decode energy,CPU,Qwen3.5-0.8B,MNN,4-bit (ours),35.77
@@ -1063,6 +1084,7 @@ OnePlus 15 vs paper,Decode energy,CPU,Llama-3.2-1B (paper),MNN,4-bit (paper),66.
 OnePlus 15 vs paper,Decode energy,CPU,Qwen2.5-1.5B (paper),MNN,4-bit (paper),92.0
 OnePlus 15 vs paper,Decode energy,CPU,Llama-3.2-3B (paper),MNN,4-bit (paper),180.0
 OnePlus 15 vs paper,Decode energy,CPU,Qwen2.5-7B (paper),MNN,4-bit (paper),390.0
+OnePlus 15 vs paper,Decode energy,GPU,SmolLM2-135M,llama.cpp,4-bit (ours),32.04
 OnePlus 15 vs paper,Decode energy,GPU,Gemma3-270M,llama.cpp,4-bit (ours),35.54
 OnePlus 15 vs paper,Decode energy,GPU,SmolLM2-360M,llama.cpp,4-bit (ours),43.68
 OnePlus 15 vs paper,Decode energy,GPU,Qwen3-0.6B,llama.cpp,4-bit (ours),69.82
@@ -1075,6 +1097,8 @@ OnePlus 15 vs paper,Decode energy,GPU,Llama-3.2-1B (paper),llama.cpp,4-bit (pape
 OnePlus 15 vs paper,Decode energy,GPU,Qwen2.5-1.5B (paper),llama.cpp,4-bit (paper),140.0
 OnePlus 15 vs paper,Decode energy,GPU,Llama-3.2-3B (paper),llama.cpp,4-bit (paper),250.0
 OnePlus 15 vs paper,Decode energy,GPU,Qwen2.5-7B (paper),llama.cpp,4-bit (paper),570.0
+OnePlus 15 vs paper,Decode energy,GPU,SmolLM2-135M,MNN,4-bit (ours),35.49
+OnePlus 15 vs paper,Decode energy,GPU,Gemma3-270M,MNN,4-bit (ours),44.4
 OnePlus 15 vs paper,Decode energy,GPU,SmolLM2-360M,MNN,4-bit (ours),53.9
 OnePlus 15 vs paper,Decode energy,GPU,Qwen3-0.6B,MNN,4-bit (ours),62.93
 OnePlus 15 vs paper,Decode energy,GPU,Qwen3.5-0.8B,MNN,4-bit (ours),40.61

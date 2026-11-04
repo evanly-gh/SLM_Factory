@@ -11,6 +11,7 @@ filtered out, and the most capable survivor is picked. 20 easy, 20 medium and 20
 from __future__ import annotations
 
 import csv
+import math
 from collections import Counter
 from datetime import datetime
 
@@ -35,105 +36,256 @@ FW_LABEL = {"llama.cpp": "llama.cpp", "mnn": "MNN"}
 BITS_LABEL = {4: "4-bit", 8: "8-bit", 16: "F16"}
 
 
-class UseCase:
-    """A request shape (prompt and answer tokens) plus the limits an app developer would set for it. mem is MB, or a
-    fraction of the phone's RAM for an app that is the only thing running (a dedicated assistant, an overnight job)."""
+class Task:
+    """One of the ten SLM Factory benchmark tasks: the benchmark it comes from, a neutral name and description (the
+    baseline prompt uses only these, so the benchmark is not named), its request in tokens, and the most accurate
+    student the Factory trained for it.
 
-    def __init__(self, name, what, prompt, answer, ttft_s, decode, mem, per_day, battery_pct, why):
-        self.name, self.what, self.prompt, self.answer = name, what, prompt, answer
-        self.ttft_s, self.decode, self.mem, self.per_day, self.battery_pct, self.why = (
-            ttft_s, decode, mem, per_day, battery_pct, why)
+    A request is the task's real prompt (SLM Factory eval/scorers) with a median-length input. `cached` is the fixed
+    part before the input (instructions, label list, tool schemas): the app computes it once and keeps its KV cache,
+    so a request processes only `prompt` tokens (the input, any fixed text after it, the chat-template tail)."""
+
+    def __init__(self, key, title, label, what, cached, prompt, answer, shape, best):
+        self.key, self.title, self.label, self.what = key, title, label, what
+        self.cached, self.prompt, self.answer, self.shape, self.best = cached, prompt, answer, shape, best
+        self.best_key = BEST_STUDENT[key]
+
+    def best_fits(self, kept) -> bool:
+        """Whether the most accurate student (its model at its bit width, any runtime or backend) survived."""
+        return any((r["model"], r["bits"]) == self.best_key for r, _, _ in kept)
+
+
+# The most accurate student per task (SLM Factory RESULTS.md I.1) as (model, bits) in this pool. The Factory's
+# Q4_K_M / Q8_0 GGUFs map to the pool's 4-bit and 8-bit builds of the same model.
+BEST_STUDENT = {'clinc150': ('qwen3-4b-instruct-2507', 8),
+                'sms_spam': ('qwen3-1.7b', 4),
+                'calendar_json': ('qwen3.5-0.8b', 4),
+                'xlam_bfcl': ('qwen3.5-4b', 4),
+                'ner_bc5cdr': ('qwen3.5-0.8b', 4),
+                'goemotions': ('qwen3-4b-instruct-2507', 8),
+                'gec_bea19': ('qwen3-4b-instruct-2507', 8),
+                'multiconer': ('qwen3-4b-instruct-2507', 8),
+                'dialogsum': ('qwen3-4b-instruct-2507', 8),
+                'topv2': ('qwen3-4b-instruct-2507', 8)}
+
+# Token counts from the Qwen3 / Qwen3.5 tokenizers (they agree within 1-3%) on each task's real prompt and chat
+# template, with an input of the task's median length (SLM Factory RESULTS.md IV.3) and a typical answer.
+TASKS = {t.key: t for t in [
+    Task("clinc150", "CLINC150", "Intent routing",
+         "classify a user's request to an assistant into one of a large fixed set of intents (banking, travel, "
+         "home, small talk, ...) or out-of-scope", 540, 515, 4,
+         "the prompt lists every intent name before the request and again after it, so about 500 tokens follow the "
+         "request and cannot be cached; the answer is one intent name",
+         "0.9372 macro-F1, Qwen3-4B-Instruct-2507 Q8_0"),
+    Task("sms_spam", "SMS Spam", "SMS spam check", "label a text message as spam or not", 67, 42, 2,
+         "one text message; the answer is one label", "0.9609 minority-class F1, Qwen3-1.7B Q4_K_M"),
+    Task("calendar_json", "Calendar NL→JSON", "Calendar event from a request",
+         "turn a user's scheduling request (\"lunch with Sam Friday at 1\") into one create-event API call in JSON, "
+         "with dates resolved against the current date", 370, 40, 85,
+         "the API schema and rules are fixed; the request is the current date plus one sentence; the answer is one "
+         "JSON call", "0.8112 argument match, Qwen3.5-0.8B Q4_K_M"),
+    Task("xlam_bfcl", "Function calling (xLAM/BFCL)", "Tool calling",
+         "turn a user's request into JSON calls to the app's declared functions (name and arguments)", 310, 35, 35,
+         "the app's function schemas are fixed (about 300 tokens for three functions); the request is one sentence; "
+         "the answer is usually one call", "0.8520 argument match, Qwen3.5-4B Q4_K_M"),
+    Task("ner_bc5cdr", "Biomedical NER (BC5CDR)", "Drug and disease tagging",
+         "find the chemical/drug and disease mentions in one sentence of biomedical text", 40, 32, 45,
+         "one sentence; longer text is sent sentence by sentence; the answer is a JSON span list",
+         "0.8301 span F1, Qwen3.5-0.8B Q4_K_M"),
+    Task("goemotions", "GoEmotions", "Emotion tagging",
+         "tag the emotions a short message expresses, from a fixed list of emotions (one or more)", 85, 57, 5,
+         "one short message plus a fixed reply rule after it; longer text is sent sentence by sentence; the answer is "
+         "one to three labels", "0.5979 Ekman macro-F1, Qwen3-4B-Instruct-2507 Q8_0"),
+    Task("gec_bea19", "Grammar correction (BEA-2019)", "Grammar correction",
+         "rewrite one English sentence with its grammatical errors fixed", 58, 24, 20,
+         "one sentence; longer text is sent sentence by sentence; the answer is the corrected sentence",
+         "0.5647 ERRANT F0.5, Qwen3-4B-Instruct-2507 Q8_0"),
+    Task("multiconer", "Fine-grained NER (MultiCoNER II)", "Fine-grained entity tagging",
+         "tag the named entities in a short query or sentence with about 30 fine-grained types (artist, software, "
+         "food, medication, ...)", 153, 22, 35,
+         "one query or short sentence; longer text is sent sentence by sentence; the answer is a JSON span list",
+         "0.6532 micro-F1, Qwen3-4B-Instruct-2507 Q8_0"),
+    Task("dialogsum", "DialogSum", "Conversation summary",
+         "summarize a short conversation between two or more people in one to three sentences", 30, 175, 40,
+         "one conversation of about 10 turns; the answer is a short summary, shown as it streams",
+         "0.4817 ROUGE-L, Qwen3-4B-Instruct-2507 Q8_0"),
+    Task("topv2", "TOPv2 (reminder, weather)", "Reminder and weather command parsing",
+         "parse a reminder or weather command into a nested intent and slot tree", 876, 17, 40,
+         "the intent and slot lists and the grammar are fixed (about 880 tokens); the command is a few words; the "
+         "answer is a bracketed parse", "0.5990 exact match, Qwen3-4B-Instruct-2507 Q8_0"),
+]}
+
+
+# Each kind of deployment has the same memory budget and latency, so limits are not tuned per scenario. Memory is the
+# peak an app can hold without the system killing it: MB (but never more than RAM_CAP of the phone's RAM), or a share
+# of RAM for an app the user opened for this or an overnight job with nothing else running. Latency is first token
+# within, whole answer within (seconds); an overnight job instead gets its share of the night (see UseCase).
+KINDS = {
+    "keyboard": (300, 0.3, 1.0, "keyboard (input method)",
+                 "stays resident all day next to every app; a suggestion must appear within ~1 s"),
+    "voice": (1536, 0.5, 2.0, "system voice assistant",
+              "a privileged system app at foreground priority while invoked; the reply should come within ~2 s of "
+              "the user finishing"),
+    "in-app": (1024, 0.5, 3.0, "feature inside an app",
+               "shares the app's memory; the user tapped or typed and waits up to ~3 s"),
+    "service": (512, 1.0, 5.0, "background service",
+                "runs while other apps are in the foreground; nobody is watching, a few seconds is fine"),
+    "app": (0.4, 1.0, 5.0, "dedicated app",
+            "the foreground app the user opened for this; a wait of up to ~5 s is accepted"),
+    "overnight": (0.5, None, None, "overnight job",
+                  "on the charger with nothing else running; all requests must finish within a 6-hour night"),
+}
+RAM_CAP = 0.25  # a fixed MB budget is capped at a quarter of the phone's RAM (it matters only on the 4 GB Redmi 9A)
+OVERNIGHT_PCT = 25  # an overnight job may use up to a quarter of a full charge, so the phone is still charged by morning
+NIGHT_S = 6 * 3600  # an overnight job's requests share a 6-hour night, at most a minute each
+READ_TPS = 5  # a streamed answer the user reads as it arrives (silent reading ~4 words/s ≈ 5 tokens/s)
+
+
+class UseCase:
+    """A deployment of one task. Every request has the task's shape; text longer than what the task was trained on
+    is sent as several task-sized requests, counted in per_day. The kind sets memory and latency. An answer that is
+    only usable complete (a label, JSON, a parse, a corrected sentence) must be done in time, so decode >= answer
+    tokens / (done - first token); a streamed answer the user reads needs decode >= READ_TPS. An overnight request
+    gets NIGHT_S / per_day seconds (at most 60), half of it for the first token."""
+
+    def __init__(self, task, kind, name, what, per_day, battery_pct, why, streamed=False):
+        self.task, self.kind, self.name, self.what = TASKS[task], kind, name, what
+        self.prompt, self.answer = self.task.prompt, self.task.answer
+        self.mem, self.ttft_s, self.done_s = KINDS[kind][:3]
+        if kind == "overnight":
+            self.done_s = min(60.0, NIGHT_S / per_day)
+            self.ttft_s, streamed = self.done_s / 2, False
+        self.per_day, self.why, self.streamed = per_day, why, streamed
+        self.battery_pct = OVERNIGHT_PCT if kind == "overnight" else battery_pct
+        self.decode = READ_TPS if streamed else math.ceil(self.answer / (self.done_s - self.ttft_s))
+
+    @property
+    def ctx(self) -> int:
+        """Tokens in the KV cache at the end of a request."""
+        return self.task.cached + self.prompt + self.answer
 
     def limits(self, phone) -> dict:
-        mem = self.mem if self.mem > 1 else round(self.mem * RAM_GIB[phone] * 1024, -2)
+        ram_mb = RAM_GIB[phone] * 1024
+        mem = min(self.mem, round(RAM_CAP * ram_mb, -1)) if self.mem > 1 else round(self.mem * ram_mb, -2)
         joules = BATTERY[phone][1] * 3600 * self.battery_pct / 100 / self.per_day
         return dict(mem=mem, pre=self.prompt / self.ttft_s, dec=self.decode, energy=joules)
 
     def mem_txt(self):
         return f"{self.mem:,} MB" if self.mem > 1 else f"{self.mem:.0%} of RAM"
 
+    def time_txt(self):
+        if self.streamed:
+            return f"first token ≤ {self.ttft_s:g} s, then ≥ {self.decode:g} tokens/s"
+        return f"first token ≤ {self.ttft_s:.3g} s, answer done ≤ {self.done_s:.3g} s"
 
+
+# KV-cache bytes per token for the layers whose cache grows with context (F16 K and V): 2 × layers × KV heads ×
+# head dim × 2 bytes, from each model's config.json. Qwen3.5 caches only its full-attention layers (1 in 4; the
+# linear-attention layers keep a fixed-size state) and Gemma 3 only its global layers beyond its 512-token window.
+KV_BYTES = {"smollm2-135m": 2 * 30 * 3 * 64 * 2, "gemma3-270m": 2 * 3 * 1 * 256 * 2, "smollm2-360m": 2 * 32 * 5 * 64 * 2,
+            "qwen3-0.6b": 2 * 28 * 8 * 128 * 2, "qwen3.5-0.8b": 2 * 6 * 2 * 256 * 2, "qwen3-1.7b": 2 * 28 * 8 * 128 * 2,
+            "qwen3.5-2b": 2 * 6 * 2 * 256 * 2, "qwen3-4b-instruct-2507": 2 * 36 * 8 * 128 * 2,
+            "qwen3.5-4b": 2 * 8 * 4 * 256 * 2}
+MEASURED_CTX = 512  # peak memory was measured with a 256-token prompt and a 256-token answer
+
+
+def peak_mb(r, uc) -> float:
+    """Measured peak memory plus the KV cache of the tokens a request holds beyond the measured context."""
+    return r["mem_mb"] + max(0, uc.ctx - MEASURED_CTX) * KV_BYTES[r["model"]] / 2 ** 20
+
+
+# Three to five deployments per task, each something a phone user would actually use, with the task's input as it was
+# trained on. per_day is requests a day (or a night); battery_pct is the share of a day's charge the feature may take.
+# Every deployment assumes the model stays loaded; loading it is not counted.
 USE_CASES = [
-    UseCase("Keyboard next-phrase", "suggest the next words while typing", 64, 8, 0.3, 20, 300, 1000, 3,
-            "an input method stays resident all day, so it must be small; suggestions are useless after ~0.3 s"),
-    UseCase("Smart replies", "three reply chips under a received message", 128, 24, 0.5, 15, 512, 200, 2,
-            "runs inside a messaging app; chips must appear before the user starts typing"),
-    UseCase("Live message translation", "translate each chat message as it arrives", 64, 64, 0.5, 10, 1024, 200, 3,
-            "part of a messaging app; the translation should keep up with the conversation"),
-    UseCase("Game NPC dialogue", "a character answers the player", 200, 40, 1.0, 12, 768, 100, 2,
-            "the game itself holds most of the memory; a reply within a second keeps the scene moving"),
-    UseCase("Notification triage", "classify incoming notifications in the background", 128, 8, 5.0, 2, 512, 300, 1,
-            "background services get killed above a few hundred MB; nobody waits on the result"),
-    UseCase("Screen-reader descriptions", "describe a screen's content aloud", 400, 60, 2.0, 5, 1024, 100, 3,
-            "output is spoken (~3.5 tokens/s), so decode only needs to stay ahead of the voice"),
-    UseCase("Voice assistant", "spoken answer to a spoken question", 256, 64, 1.0, 5, 1536, 50, 2,
-            "a pause over ~1 s feels broken in conversation; decode only needs to beat speech"),
-    UseCase("Language tutor", "conversational practice with corrections", 300, 100, 2.0, 6, 1536, 40, 3,
-            "read along at a learner's pace, slightly faster than reading speed"),
-    UseCase("Journaling prompts", "a reflective question after a journal entry", 300, 150, 5.0, 5, 1536, 5, 1,
-            "a few uses a day; the user is not in a hurry"),
-    UseCase("Interactive chat", "a general chat assistant", 256, 256, 2.0, 10, 2048, 50, 3,
-            "first token within 2 s and text faster than reading speed (~5-7 tokens/s) with margin"),
-    UseCase("Email summary on open", "summarize an email when it is opened", 1000, 100, 4.0, 8, 2048, 30, 2,
-            "the summary should be ready by the time the user has glanced at the email"),
-    UseCase("Recipe / how-to helper", "step-by-step instructions", 150, 300, 5.0, 5, 2048, 10, 1,
-            "read while cooking; reading speed is enough"),
-    UseCase("Bedtime story", "a story read aloud by text-to-speech", 100, 500, 3.0, 4, 2048, 3, 1,
-            "spoken output; must not drain the battery overnight on the nightstand"),
-    UseCase("Notes Q&A (RAG)", "answer from retrieved personal notes", 1500, 200, 5.0, 10, 2560, 20, 2,
-            "a long retrieved context must be read within ~5 s"),
-    UseCase("Fluent premium chat", "a chat assistant that streams fast", 512, 256, 1.5, 20, 3072, 50, 3,
-            "the flagship-app experience: fast first token and fast streaming"),
-    UseCase("Coding helper", "explain or fix a code snippet", 1000, 150, 3.0, 15, 3072, 30, 3,
-            "code context is long and answers are scanned quickly"),
-    UseCase("Private chat app", "a dedicated on-device chat app the user opens", 256, 256, 2.0, 10, 0.4, 50, 3,
-            "the user opened the AI app itself, so it can hold a large share of RAM; same speed as chat"),
-    UseCase("Offline translator app", "a dedicated translation app for travel", 100, 100, 3.0, 5, 0.4, 50, 3,
-            "the app in use; the translation is read, so reading speed is enough"),
-    UseCase("Study tutor app", "explain homework questions", 300, 100, 5.0, 6, 0.4, 40, 3,
-            "a dedicated app; students wait a few seconds for an explanation"),
-    UseCase("Document Q&A app", "ask questions about an opened PDF", 1000, 200, 10.0, 8, 0.4, 20, 3,
-            "a dedicated app; reading a long document takes a few seconds anyway"),
-    UseCase("Essay feedback app", "comments on a pasted essay", 500, 300, 10.0, 5, 0.4, 20, 3,
-            "a dedicated app; feedback is read at reading speed"),
-    UseCase("Trip planner app", "plan a day from a list of places", 400, 400, 5.0, 5, 0.4, 10, 2,
-            "a dedicated app, used a few times a day while travelling"),
-    UseCase("Story-writing app", "co-write fiction with the user", 300, 600, 5.0, 6, 0.4, 20, 3,
-            "a dedicated app; long answers read at a relaxed pace"),
-    UseCase("Email drafting app", "draft an email from bullet points", 300, 200, 3.0, 8, 0.4, 20, 2,
-            "a dedicated app; the draft is skimmed as it streams"),
-    UseCase("Offline medical reference", "answer questions from a clinical reference", 300, 300, 5.0, 5, 0.4, 10, 2,
-            "a dedicated app in clinics with poor connectivity; correctness over speed"),
-    UseCase("Language practice app", "spoken-style conversation practice", 300, 150, 3.0, 6, 0.4, 30, 3,
-            "a dedicated app; replies a little faster than a learner reads"),
-    UseCase("Field-guide app", "explain a plant or bird from a description, offline", 200, 250, 5.0, 5, 0.4, 10, 2,
-            "a dedicated app used outdoors without signal"),
-    UseCase("Offline Q&A (travel)", "an assistant with no network", 200, 200, 10.0, 4, 0.4, 20, 3,
-            "the only app in use; the user accepts a wait but needs to read the answer as it comes"),
-    UseCase("Meeting-notes cleanup", "turn a transcript into notes after a meeting", 1500, 300, 30.0, 3, 0.4, 3, 2,
-            "the user starts it and comes back; it must finish within a few minutes"),
-    UseCase("Document translation", "translate a page while the user does something else", 500, 500, 30.0, 2, 0.4,
-            10, 3, "batch work; finishing in a few minutes is fine"),
-    UseCase("Voice-memo summary", "title and summarize a recorded voice memo", 800, 80, 20.0, 2, 0.4, 10, 1,
-            "starts after the recording ends; the user checks back later"),
-    UseCase("Morning digest", "a scheduled summary of overnight messages", 2000, 300, 120.0, 1, 0.4, 1, 1,
-            "runs before the user wakes up; only the battery cost matters"),
-    UseCase("Weekly journal summary", "summarize a week of entries", 3000, 400, 120.0, 1, 0.5, 1, 1,
-            "rare, scheduled, nothing else running"),
-    UseCase("Statement categorization", "categorize a month of bank transactions", 2500, 500, 120.0, 1, 0.4, 1, 1,
-            "a scheduled monthly job; it only has to finish and not cost much battery"),
-    UseCase("Overnight photo captioning", "caption the photo library while charging", 200, 40, 30.0, 1, 0.5, 300, 20,
-            "on the charger, but heat and charging time still cap the energy"),
-    UseCase("Overnight inbox sorting", "label every email while charging", 300, 10, 10.0, 1, 0.5, 500, 20,
-            "on the charger; many short requests"),
-    UseCase("Field data-entry helper", "fill forms from notes on a low-cost phone", 128, 64, 10.0, 2, 1024, 30, 3,
-            "aimed at budget phones; a slow but steady answer is acceptable"),
-    UseCase("SMS auto-reply", "draft a reply to a text message", 128, 32, 5.0, 3, 768, 50, 2,
-            "a short reply; the user can wait a few seconds"),
-    UseCase("Async FAQ answers", "answer a question, delivered like a text message", 128, 64, 30.0, 1, 1024, 20, 3,
-            "the user is not watching; the answer arrives within a minute or two"),
-    UseCase("Health-worker checklist", "guide an offline checklist on a budget phone", 256, 128, 20.0, 2, 1536, 20, 3,
-            "offline, low-end hardware; correctness matters more than speed"),
+    # clinc150: the front door of an assistant
+    UseCase("clinc150", "voice", "Voice-assistant intent router", "route each spoken request to the skill that "
+            "handles it", 20, 1, "every voice request goes through it"),
+    UseCase("clinc150", "in-app", "Banking app assistant", "route a typed question in a bank's assistant chat to the "
+            "right flow; non-banking intents are answered as out-of-scope", 1, 0.5, "an occasional question"),
+    UseCase("clinc150", "app", "Offline assistant app", "a private assistant app that routes typed requests on the "
+            "device", 30, 1, "the user's main assistant"),
+    # sms_spam
+    UseCase("sms_spam", "service", "Messaging app spam check", "the default messaging app checks each incoming text "
+            "before notifying", 50, 0.5, "dozens of texts a day; a filter must be nearly free"),
+    UseCase("sms_spam", "app", "Scam-check app", "paste a suspicious message into a scam-checker app", 5, 0.5,
+            "used only when a message looks suspicious"),
+    UseCase("sms_spam", "overnight", "First-run inbox scan", "after install, check the whole SMS history (5,000 "
+            "messages) overnight", 5000, None, "a one-time backlog"),
+    # calendar_json
+    UseCase("calendar_json", "voice", "Voice 'add to my calendar'", "create an event from a spoken request", 3, 0.5,
+            "a few events a day"),
+    UseCase("calendar_json", "in-app", "Calendar quick add", "type an event in plain language in the calendar app", 5,
+            0.5, "a few events a day"),
+    UseCase("calendar_json", "service", "Smartwatch event dictation", "events dictated on a paired watch, parsed on the "
+            "phone", 5, 0.5, "the watch shows a spinner while the phone works"),
+    UseCase("calendar_json", "app", "Planner app", "a planning assistant app that turns typed requests into events", 10,
+            1, "the user plans the week in one sitting"),
+    # xlam_bfcl
+    UseCase("xlam_bfcl", "voice", "Voice-assistant actions", "turn a spoken request into a call to one of the "
+            "assistant's phone actions (send a message, set an alarm, get the weather)", 20, 1,
+            "a couple of dozen commands a day"),
+    UseCase("xlam_bfcl", "in-app", "Smart-home app commands", "\"turn off the kitchen lights\" typed in a smart-home "
+            "app, turned into a device call", 20, 0.5, "a few commands each morning and evening"),
+    UseCase("xlam_bfcl", "service", "Smartwatch actions relay", "requests spoken to a paired watch, turned into calls "
+            "on the phone", 20, 0.5, "the watch shows a spinner while the phone works"),
+    UseCase("xlam_bfcl", "app", "Shortcuts app", "an on-device shortcuts app that turns a typed request into an "
+            "action call", 20, 1, "used for quick actions through the day"),
+    # ner_bc5cdr
+    UseCase("ner_bc5cdr", "app", "Paper reader app", "highlight drug and disease names in abstracts, sentence by "
+            "sentence, as the user reads", 200, 2, "20 abstracts of ~10 sentences a day"),
+    UseCase("ner_bc5cdr", "in-app", "Reference-manager highlight tags", "tag the drugs and diseases in a sentence the "
+            "user highlights in a reference-manager app", 20, 0.5, "a couple of dozen highlights a day"),
+    UseCase("ner_bc5cdr", "overnight", "Paper-alert abstract index", "index the abstracts of the day's saved and "
+            "alerted papers for search, sentence by sentence", 1000, None, "~100 abstracts of ~10 sentences"),
+    # goemotions
+    UseCase("goemotions", "keyboard", "Keyboard tone check", "show the tone of a message before it is sent", 100, 1,
+            "checks every message the user writes"),
+    UseCase("goemotions", "in-app", "Comment tone check", "warn before posting a comment that reads as angry, in a "
+            "social app", 10, 0.5, "a check on the post button"),
+    UseCase("goemotions", "app", "Journaling app mood tags", "tag the emotions in each sentence of a journal entry "
+            "after it is saved", 20, 0.5, "one entry of ~20 sentences a day"),
+    UseCase("goemotions", "overnight", "Keyboard mood insights", "an opt-in keyboard feature: tag the messages the "
+            "user typed that day, for a mood summary in the morning", 100, None, "the day's typed messages"),
+    # gec_bea19
+    UseCase("gec_bea19", "keyboard", "English-learner keyboard", "a keyboard for English learners that suggests a "
+            "correction when a sentence is finished", 200, 1, "checks every sentence the user types"),
+    UseCase("gec_bea19", "in-app", "Email 'fix grammar' button", "correct a sentence in an email being written", 10,
+            0.5, "used on the emails that matter"),
+    UseCase("gec_bea19", "app", "English-learning feedback", "correct a learner's English practice sentence in a "
+            "language-learning app", 50, 1, "a practice session of ~50 sentences a day"),
+    UseCase("gec_bea19", "app", "Essay proofreading app", "proofread an English essay in a writing app, sentence by "
+            "sentence, corrections filling a review list", 30, 1, "one essay of ~30 sentences a day"),
+    UseCase("gec_bea19", "overnight", "English journal corrections", "correct the day's English journal entries of a "
+            "learner, ready in the morning", 60, None, "a few entries of ~20 sentences"),
+    # multiconer
+    UseCase("multiconer", "in-app", "Search query understanding", "find the people, titles and products in a query "
+            "typed into a search app", 50, 0.5, "dozens of searches a day"),
+    UseCase("multiconer", "service", "Long-press smart actions", "a system feature: find the entities in text the "
+            "user long-presses on screen, to offer actions", 20, 0.5, "a few dozen selections a day"),
+    UseCase("multiconer", "app", "Read-later entity tags", "tag people, places and products in a saved article, "
+            "sentence by sentence", 200, 1, "five articles of ~40 sentences a day"),
+    UseCase("multiconer", "overnight", "Photo and notes library index", "after install, tag the entities in the "
+            "existing photo captions and notes (2,000 items)", 2000, None, "a one-time backlog"),
+    # dialogsum
+    UseCase("dialogsum", "in-app", "Dialer call summary", "the phone's built-in dialer summarizes a short recorded call "
+            "(from its transcript)", 3, 0.5, "the user opens the summary after the call and reads it as it streams",
+            streamed=True),
+    UseCase("dialogsum", "in-app", "Chat catch-up", "summarize the last ~10 unread messages of a one-to-one "
+            "conversation when it is opened", 10, 0.5, "the user reads the summary as it streams", streamed=True),
+    UseCase("dialogsum", "app", "Meeting-notes app", "summarize a short recorded conversation (from its transcript) "
+            "in a notes app", 5, 0.5, "the user taps summarize and reads as it streams", streamed=True),
+    UseCase("dialogsum", "overnight", "Overnight call summaries", "the built-in dialer summarizes the day's recorded "
+            "calls overnight", 10, None, "read in the morning"),
+    # topv2
+    UseCase("topv2", "voice", "Voice reminders and weather", "parse a spoken reminder or weather command", 10, 0.5,
+            "about ten commands a day"),
+    UseCase("topv2", "in-app", "Reminders app quick add", "parse a typed reminder in the reminders app", 10, 0.5,
+            "a few reminders a day"),
+    UseCase("topv2", "service", "Smartwatch command relay", "parse reminder and weather commands relayed from a paired "
+            "watch", 30, 1, "the watch shows a spinner while the phone works"),
+    UseCase("topv2", "app", "Reminders and weather app", "an assistant app for reminders and weather that parses "
+            "requests on the device", 20, 1, "the user's main way of setting reminders"),
 ]
 
 
@@ -166,8 +318,9 @@ def evaluate(rows, uc, phone) -> dict:
             continue
         e = request_j(r, uc)
         miss = []
-        if r["mem_mb"] is None or r["mem_mb"] > lim["mem"]:
-            miss.append(("M", f"peak memory {num(r['mem_mb'])} MB > {num(lim['mem'])}", f"{num(r['mem_mb'])} MB"))
+        mem = None if r["mem_mb"] is None else peak_mb(r, uc)
+        if mem is None or mem > lim["mem"]:
+            miss.append(("M", f"peak memory {num(mem)} MB > {num(lim['mem'])}", f"{num(mem)} MB"))
         if r["pre"] < lim["pre"]:
             miss.append(("P", f"prefill {num(r['pre'])} < {num(lim['pre'])} tokens/s", num(r["pre"])))
         if r["dec"] < lim["dec"]:
@@ -187,15 +340,17 @@ def evaluate(rows, uc, phone) -> dict:
 
 def select(all_results) -> list[dict]:
     """PER_TIER scenarios per tier, each with at least one surviving configuration. Greedy for variety: always take
-    the phone, then the use case, used least so far."""
+    the task, then the phone, then the use case, used least so far."""
     out, used = [], Counter()
     for tier, _, _ in TIERS:
         pool = [s for s in all_results if s["tier"] == tier and s["best"]]
-        phones, cases = Counter(), Counter()
+        tasks, phones, cases = Counter(), Counter(), Counter()
         while len([s for s in out if s["tier"] == tier]) < PER_TIER and pool:
-            s = min(pool, key=lambda s: (phones[s["phone"]], cases[s["uc"].name] + used[s["uc"].name],
+            s = min(pool, key=lambda s: (tasks[s["uc"].task.key], phones[s["phone"]],
+                                         cases[s["uc"].name] + used[s["uc"].name],
                                          PHONE_ORDER.index(s["phone"]), USE_CASES.index(s["uc"])))
             pool.remove(s)
+            tasks[s["uc"].task.key] += 1
             phones[s["phone"]] += 1
             cases[s["uc"].name] += 1
             out.append(s)
@@ -242,7 +397,7 @@ def figure(s, fname):
     ax.tick_params(length=0)
     for sp in ax.spines.values():
         sp.set_visible(False)
-    fig.suptitle(f"{s['id']} · {s['phone']} · {s['uc'].name}", fontsize=8.5, color="#1f1f1d", x=0.01, ha="left")
+    fig.suptitle(f"{s['id']} · {s['phone']} · {s['uc'].task.key}: {s['uc'].name}", fontsize=8.5, color="#1f1f1d", x=0.01, ha="left")
     fig.text(0.01, 0.004, "★ pick: chosen   ✓ kept   can't run: dropped first\nletters: filtered out by M memory, "
              "P prefill, D decode, E energy, E? no energy reading", fontsize=6.3, color="#5f5e58", linespacing=1.4)
     fig.tight_layout(rect=(0, 0.045, 1, 0.98))
@@ -257,7 +412,7 @@ def fmt_lim(lim, uc):
 
 def metrics(r, uc):
     e = request_j(r, uc)
-    return (f"{num(r['mem_mb'])} MB, {num(r['pre'])} / {num(r['dec'])} tokens/s, "
+    return (f"{num(peak_mb(r, uc))} MB, {num(r['pre'])} / {num(r['dec'])} tokens/s, "
             f"{num(e)} J" if e is not None else "")
 
 
@@ -265,6 +420,7 @@ def scenarios(data) -> tuple[list[dict], list[dict]]:
     """(every use case on every phone, the chosen 60 with their IDs E01..H20)."""
     results = [evaluate(data[p], uc, p) for p in PHONE_ORDER for uc in USE_CASES]
     chosen = select(results)
+    assert {s["uc"].task.key for s in chosen} == set(TASKS), "every task must be used"
     for i, s in enumerate(chosen, 1):
         s["id"] = f"{s['tier'][0]}{sum(1 for t in chosen[:i] if t['tier'] == s['tier']):02d}"
     return results, chosen
@@ -290,13 +446,13 @@ def main():
             for r, miss, e in s["kept"] + s["failed"]:
                 verdict = "pick" if r is s["best"] else "kept" if not miss else "filtered"
                 w.writerow(head + [LABEL[r["model"]], r["quant"], FW_LABEL[r["fw"]], r["be"].upper(), verdict,
-                                   "; ".join(m[1] for m in miss), round(r["mem_mb"]), round(r["pre"], 2),
+                                   "; ".join(m[1] for m in miss), round(peak_mb(r, s["uc"])), round(r["pre"], 2),
                                    round(r["dec"], 2), None if e is None else round(e, 3)])
             for r, why in s["cant"]:
                 w.writerow(head + [LABEL[r["model"]], r["quant"], FW_LABEL[r["fw"]], r["be"].upper(),
                                    "cannot run", why, None, None, None, None])
 
-    L = ["# Requirement-filter test: 60 realistic scenarios", "",
+    L = ["# Requirement-filter test: 60 scenarios from the ten SLM Factory tasks", "",
          f"Generated {datetime.now():%Y-%m-%dT%H:%M} by `Benchmark-Harness/paper_table5/scenarios_md.py` from the "
          "measured values in [RESULTS.md](RESULTS.md). Every configuration's verdict, with values, is in "
          "`Benchmark-Harness/paper_table5/results/scenarios.csv`.", "",
@@ -318,30 +474,73 @@ def main():
          "that cannot run count against the share, a phone that runs few of them cannot have easy scenarios: the "
          "Galaxy S23 runs 82 of 104 and the OnePlus 8 Pro 79, so an easy scenario there would have to keep 77-80% "
          "of what runs.", "",
+         "## The ten tasks", "",
+         "Every scenario deploys one of the ten tasks the SLM Factory trains students for (SLM Factory "
+         "RESULTS.md, Part I), with the task's own request: its real prompt (SLM Factory `eval/scorers`) and chat "
+         "template around an input of the task's median length (RESULTS.md IV.3), counted with the Qwen3 and "
+         "Qwen3.5 tokenizers (they agree within 1-3%), and a typical answer.", "",
+         "**The fixed part of the prompt is cached.** Every task's prompt starts with fixed text (instructions, label "
+         "lists, tool schemas) and puts the input after it. A deployed app computes that prefix once and keeps its "
+         "KV cache, so a request only prefills the input, any fixed text after it and the chat-template tail. "
+         "Intent routing is the exception that matters: its prompt repeats all 151 intent names after the "
+         "request, so about 500 tokens are new on every request.", "",
+         "**Inputs stay the size the model was trained on.** Text longer than that (an abstract, an essay, an "
+         "article, a journal entry) is sent sentence by sentence, as several requests.", "",
+         "| Task | Benchmark | What the deployed model does | Cached prefix (tokens) | Prefilled per request | "
+         "Answer | Request | Factory's most accurate student (RESULTS.md I.1) |", "|---|---|---|--:|--:|--:|---|---|",
+         *[f"| {t.key} | {t.title} | {t.what} | {t.cached:,} | {t.prompt:,} | {t.answer} | {t.shape} | {t.best} |"
+           for t in TASKS.values()],
+         "",
          "## How the limits are set", "",
-         "The limits come from the use case, not from the measurements; the tier is whatever the measurements "
-         "then give.", "",
-         "- **Prefill** = prompt tokens ÷ the longest acceptable wait for the first token.",
-         "- **Decode**: silent reading is about 5-7 tokens/s, speech about 3.5 tokens/s; chat that feels fluent "
-         "needs 10-20 tokens/s; background work only needs to finish.",
-         "- **Peak memory**: what the app can hold without the system killing it. A keyboard stays resident all "
-         "day (≤ 300 MB); background services and features inside another app get 0.5-1 GB; a foreground "
-         "assistant 1.5-3 GB so it works on mainstream phones; an app that is the only thing running (a "
-         "dedicated offline assistant, an overnight job) a share of the target phone's RAM.",
-         "- **Energy per request** = a daily battery budget ÷ requests per day, using each phone's battery "
-         "(" + ", ".join(f"{p} {mah:,} mAh ≈ {wh} Wh" for p, (mah, wh) in BATTERY.items()) + "). A configuration's "
-         "request energy is prompt tokens × its prefill mJ/token + answer tokens × its decode mJ/token.", "",
-         "| Use case | What it does | Request (prompt / answer tokens) | First token within | Decode ≥ | Peak memory ≤ | "
-         "Energy budget | Why these limits |",
-         "|---|---|--:|--:|--:|--:|---|---|"]
+         "Each task gets three to five deployments that a phone user would actually use. Every deployment of the same "
+         "kind gets the same memory budget and latency, so the limits are not tuned per scenario; only the request "
+         "count and the battery share differ. The limits come from the deployment, not from the measurements; the "
+         "tier is whatever the measurements then give.", "",
+         "| Kind | Peak memory ≤ | First token within | Whole answer within | Why |", "|---|--:|--:|--:|---|",
+         *[f"| {label} | {f'{mem:,} MB' if mem > 1 else f'{mem:.0%} of RAM'} | "
+           f"{f'{ttft:g} s' if ttft else 'half the window'} | {f'{done:g} s' if done else '6 h ÷ requests, ≤ 60 s'} | "
+           f"{why} |" for mem, ttft, done, label, why in KINDS.values()],
+         "",
+         f"- **Peak memory**: a fixed MB budget is capped at {RAM_CAP:.0%} of the phone's RAM, which matters only on "
+         "the 4 GB Redmi 9A. A configuration's peak is its measured peak (at a 512-token context) plus the KV cache "
+         "of the tokens a request holds beyond 512: cached prefix + prefilled + answer, which exceeds 512 only for "
+         "intent routing (~1,060) and reminder parsing (~930). The KV cache per token comes from each model's "
+         "architecture (F16 keys and values; Qwen3.5 caches only its full-attention layers, 1 in 4), so it adds at "
+         "most ~80 MB (Qwen3-4B).",
+         "- **Prefill** ≥ tokens prefilled per request ÷ the first-token time.",
+         "- **Decode**: an answer that is only usable complete (a label, JSON, a parse, a corrected sentence) must be "
+         "done in time, so decode ≥ answer tokens ÷ (whole-answer time − first-token time). A summary the user reads "
+         f"as it streams needs decode ≥ {READ_TPS} tokens/s (silent reading, ~4 words/s).",
+         "- **Overnight**: all of a night's requests must finish in 6 hours, so each gets 6 h ÷ requests per night "
+         "(at most a minute), half of it for the first token. 5,000 messages get 4.3 s each.",
+         "- **Energy per request** = the deployment's battery budget ÷ its requests per day, using each phone's "
+         "battery (" + ", ".join(f"{p} {mah:,} mAh ≈ {wh} Wh" for p, (mah, wh) in BATTERY.items()) + "). A "
+         "configuration's request energy is prefilled tokens × its prefill mJ/token + answer tokens × its decode "
+         f"mJ/token. An overnight job may use up to {OVERNIGHT_PCT}% of a full charge, so the phone still finishes "
+         "charging by morning and does not heat up while it charges.", "",
+         "| Task | Deployment | Kind | What it does | Requests | Energy budget | Prefill ≥ | Decode ≥ | Why |",
+         "|---|---|---|---|--:|---|--:|--:|---|"]
     for uc in USE_CASES:
-        L.append(f"| {uc.name} | {uc.what} | {uc.prompt:,} / {uc.answer:,} | {uc.ttft_s:g} s | {uc.decode:g} "
-                 f"tokens/s | {uc.mem_txt()} | {uc.per_day:,} request{'s' * (uc.per_day > 1)} ≤ {uc.battery_pct}% of battery a day | "
-                 f"{uc.why} |")
-    L += ["", "**Caveats.** Values come from the benchmark's 256-token prompt and 256-token answer. For longer prompts "
-          "(RAG, coding, summaries) real prefill is somewhat slower and the KV cache adds memory, so those "
-          "scenarios are slightly optimistic. Energy is whole-phone energy net of idle, so it excludes the "
-          "screen.", "",
+        L.append(f"| {uc.task.key} | {uc.name} | {KINDS[uc.kind][3]} | {uc.what} | {uc.per_day:,} a "
+                 f"{'night' if uc.kind == 'overnight' else 'day'} | ≤ {uc.battery_pct}% of a charge | "
+                 f"{num(uc.prompt / uc.ttft_s)} tokens/s | {uc.decode:g} tokens/s | {uc.why} |")
+    L += ["", "**Assumptions and caveats.**", "",
+          "- **Request size versus the measurement.** Values come from a 256-token prompt and a 256-token answer, "
+          "run from an empty context. Here a request prefills 17-515 tokens and answers 2-85, on top of a cached "
+          "prefix of up to ~880 tokens. Attention over the longer context makes prefill and decode somewhat "
+          "slower. Very short prefills run below the measured tokens/s, most of all on the GPU, where a 256-token "
+          "batch fills the hardware and a 20-token one does not, and each call has a fixed overhead the "
+          "throughput numbers do not include. So interactive scenarios with short requests are optimistic, GPU "
+          "ones most. Re-measuring at the task sizes (e.g. `llama-bench -p 32 -n 40 -d 880`) would remove this.",
+          "- **Cached prefix.** llama.cpp can keep a prefix's KV cache and drop everything after it, or save and "
+          "restore the state. For Qwen3.5, whose linear-attention layers cannot be cut back, the state has to be "
+          "saved after the prefix and restored. We assume MNN can do the same with the pinned builds; if it cannot, "
+          "its rows would have to prefill prefix + request. The prefix's one-time prefill is not counted.",
+          "- **Resident model.** Every deployment assumes the model stays loaded. Loading it (seconds, and energy) "
+          "is not counted, which matters most for keyboards and background services.",
+          "- **Transcription.** The conversation summaries start from a transcript; speech recognition is not "
+          "counted.",
+          "- **Energy** is whole-phone energy net of idle, so it excludes the screen.", "",
           "## Which scenarios", "",
           f"All {len(USE_CASES)} use cases were run on all four phones ({len(results)} combinations). Tiers that "
           "came out:", "",
@@ -350,24 +549,33 @@ def main():
         c = Counter(s["tier"] for s in results if s["phone"] == p)
         none = sum(1 for s in results if s["phone"] == p and not s["best"])
         L.append(f"| {p} | {c['Easy']} | {c['Medium']} | {c['Hard']} | {none} |")
-    L += ["", f"From these, {PER_TIER} per tier were chosen, spreading them across phones and use cases, and only "
-          "combinations where at least one configuration survives (a scenario with no survivor has no answer to "
-          "check). **All 20 easy scenarios are on the OnePlus 15.** It is the only phone where a realistic use case "
-          "keeps 60% of the whole pool: it runs 93 of 104 configurations and has 16 GB of RAM. The most any use "
-          "case keeps on the other phones: " + ", ".join(
+    easy = Counter(s["phone"] for s in chosen if s["tier"] == "Easy")
+    no_tier = sorted(f"{t} in {tier.lower()}" for t in TASKS for tier, _, _ in TIERS
+                     if not any(s["uc"].task.key == t and s["tier"] == tier for s in chosen))
+    L += ["", f"From these, {PER_TIER} per tier were chosen, spreading them across tasks, phones and deployments, "
+          "and only combinations where at least one configuration survives (a scenario with no survivor has no "
+          "answer to check). All ten tasks are used" + (
+              f", but none appears as {', '.join(no_tier)}: none of its deployments lands in that tier on any phone"
+              if no_tier
+              else ", each in every tier") + ". Easy scenarios by phone: " +
+          ", ".join(f"{p} {n}" for p, n in easy.most_common()) + ". Easy is rare away from the OnePlus 15, which "
+          "runs 93 of 104 configurations and has 16 GB of RAM: elsewhere only overnight jobs keep 60% of the pool. "
+          "The most any deployment keeps on each of the other phones: " + ", ".join(
               f"{p} {max(len(s['kept']) for s in results if s['phone'] == p)} of "
               f"{next(s['pool'] for s in results if s['phone'] == p)}" for p in PHONE_ORDER if p != "OnePlus 15") +
           ".", "",
           "## Results", "",
-          "| ID | Phone | Use case | Limits (memory / prefill / decode / energy) | Kept | Pick (model, precision, "
-          "runtime, backend) | Pick's values (memory, prefill / decode, energy) |",
-          "|---|---|---|---|--:|---|---|"]
+          "| ID | Task | Phone | Deployment | Limits (memory / prefill / decode / energy) | Kept | Pick (model, "
+          "precision, runtime, backend) | Pick's values (memory, prefill / decode, energy) | Most accurate student "
+          "fits? |",
+          "|---|---|---|---|---|--:|---|---|---|"]
     for s in chosen:
         lim, b = s["limits"], s["best"]
-        L.append(f"| [{s['id']}](#{s['id'].lower()}) | {s['phone']} | {s['uc'].name} | ≤ {num(lim['mem'])} MB / "
+        L.append(f"| [{s['id']}](#{s['id'].lower()}) | {s['uc'].task.key} | {s['phone']} | {s['uc'].name} | ≤ {num(lim['mem'])} MB / "
                  f"≥ {num(lim['pre'])} / ≥ {lim['dec']:g} tokens/s / ≤ {num(lim['energy'])} J | {len(s['kept'])} of "
                  f"{s['pool']} ({s['share']:.0%}) | **{LABEL[b['model']]} {b['quant']}** {FW_LABEL[b['fw']]} "
-                 f"{b['be'].upper()} | {metrics(b, s['uc'])} |")
+                 f"{b['be'].upper()} | {metrics(b, s['uc'])} | "
+                 f"{'yes' if s['uc'].task.best_fits(s['kept']) else '**no**'} |")
 
     picks = Counter((FW_LABEL[s["best"]["fw"]], s["best"]["be"].upper()) for s in chosen)
     by_tier = {t: Counter(LABEL[s["best"]["model"]] for s in chosen if s["tier"] == t) for t, _, _ in TIERS}
@@ -377,6 +585,11 @@ def main():
             for m in miss:
                 reasons[m[0]] += 1
     L += ["", "### What the picks show", "",
+          f"- **The Factory's most accurate student for the task fits in "
+          f"{sum(s['uc'].task.best_fits(s['kept']) for s in chosen)} of 60 scenarios** (its model at its bit "
+          "width survives the filter, on any runtime and backend). In the rest, the most accurate model the "
+          "Factory trained cannot meet the deployment's limits on that phone, and the pick is the most capable "
+          "model that can.",
           "- **Runtime and backend of the pick:** " + ", ".join(f"{fw} {be} {n}" for (fw, be), n in
                                                                  picks.most_common()) + " of 60.",
           *[f"- **{t} picks:** " + ", ".join(f"{m} ×{n}" for m, n in c.most_common()) for t, c in by_tier.items()],
@@ -389,20 +602,23 @@ def main():
     for s in chosen:
         uc, lim, b = s["uc"], s["limits"], s["best"]
         L += [f"### {s['id']}", "",
-              f"**{s['tier']} · {s['phone']} · {uc.name}**: {uc.what}; {uc.prompt:,}-token prompt, "
-              f"{uc.answer:,}-token answer, first token within {uc.ttft_s:g} s, {uc.per_day:,} request{'s' * (uc.per_day > 1)} ≤ "
-              f"{uc.battery_pct}% of battery a day.", "",
+              f"**{s['tier']} · {s['phone']} · {uc.task.key} · {uc.name}** ({KINDS[uc.kind][3]}): {uc.what}. "
+              f"{uc.prompt:,} prefilled + {uc.answer:,} answer tokens per request ({uc.task.cached:,}-token prefix "
+              f"cached); {uc.time_txt()}; {uc.per_day:,} requests ≤ {uc.battery_pct}% of a charge a "
+              f"{'night' if uc.kind == 'overnight' else 'day'}.", "",
               f"Limits: {fmt_lim(lim, uc)}.", "",
               f"**Pick: {LABEL[b['model']]} {b['quant']}, {FW_LABEL[b['fw']]}, {b['be'].upper()}** "
               f"({metrics(b, uc)}). Kept {len(s['kept'])} of {s['pool']} configurations "
-              f"({s['share']:.0%}); {len(s['failed'])} filtered out; {len(s['cant'])} cannot run on this phone.", "",
+              f"({s['share']:.0%}); {len(s['failed'])} filtered out; {len(s['cant'])} cannot run on this phone. "
+              f"The Factory's most accurate {uc.task.key} student ({uc.task.best}) "
+              f"{'fits' if uc.task.best_fits(s['kept']) else '**does not fit**'} under these limits.", "",
               f"![{s['id']}](figures/scenarios/{s['id']}.png)", ""]
         kept = sorted((x for x in s["kept"]), key=lambda x: capability(x[0]), reverse=True)
         L += [f"<details><summary>Kept pool ({len(kept)}), most capable first</summary>", "",
               "| Configuration | Peak memory (MB) | Prefill (tokens/s) | Decode (tokens/s) | Energy (J per request) |",
               "|---|--:|--:|--:|--:|"]
         for r, _, e in kept:
-            L.append(f"| {name(r)}{' **(pick)**' if r is b else ''} | {num(r['mem_mb'])} | {num(r['pre'])} | "
+            L.append(f"| {name(r)}{' **(pick)**' if r is b else ''} | {num(peak_mb(r, uc))} | {num(r['pre'])} | "
                      f"{num(r['dec'])} | {num(e)} |")
         groups = {}
         for r, miss, e in s["failed"]:

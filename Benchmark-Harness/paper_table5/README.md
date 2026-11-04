@@ -87,6 +87,33 @@ result = filter_pool("SERIAL", {"max_peak_memory_mb": 2048, "min_prefill_tps": 1
 Optional: `--pool-file` (default `pools/slm_factory_android_pool.py`), `--gguf` / `--mnn` (default Q4_0 Q8_0 F16 /
 4 8 16), `--rank-by decode|prefill|energy`, `--wireless-timeout` (s, default 900), `--screen`.
 
+**Running it on a phone, step by step.** Run from this folder (`Benchmark-Harness/paper_table5`) with the
+environment from "One-time setup" (`.venv_pb\Scripts\python` on Windows, `.venv_pb/bin/python` on macOS; plain
+`python` below).
+1. **Phone:** Developer options with USB debugging on, plugged in by USB, battery above ~80%, in a cool room (the
+   cool-down gate waits for the battery to drop to 28 C before every timed run). `adb devices` must list it as
+   `device`; that first column is the serial.
+2. **Nothing to set up per phone.** An unknown phone gets a generic profile. With an energy limit, a phone model
+   that has no energy method yet (not in `devices.json`, no earlier `energy_probe.py collect`, no chip power
+   counters) gets one measured automatically once it is on battery (~15 min), before the benchmarks start.
+3. **Turn the scenario into flags.** A scenario's limits in `docs/SCENARIOS.md` map one to one:
+   `peak memory ≤ M MB` → `--max-memory M`, `prefill ≥ P` → `--min-prefill P`, `decode ≥ D` → `--min-decode D`,
+   `energy ≤ E J per request` → `--max-energy-j E`, and its "N prefilled + A answer tokens per request" →
+   `--prompt-tokens N --answer-tokens A` (the request shape the energy is computed for).
+4. **Start it:** `python filter_pool.py --serial <serial> <flags>`. It builds and pushes the binaries if needed and
+   converts any pool model not on this computer yet (downloads from Hugging Face). Models already in `models/` are
+   reused.
+5. **Energy limit set:** right after reading the phone it prints how to switch to wireless adb
+   (`python energy_probe.py wireless --serial <usb serial>` in a second terminal), then waits for you to unplug the
+   cable; it carries on by itself once the same phone is back over Wi-Fi and on battery. Keep the phone and computer
+   on the same network for the whole run, and keep the phone unplugged.
+6. **Let it run.** Progress is printed per configuration. With a loose memory limit expect most of a day for the
+   full pool. It is safe to stop with Ctrl+C (the phone's settings are restored), and it stops by itself below 20%
+   battery. Charge, then rerun the same command: it only measures what is missing.
+7. **Result:** a table on the terminal and `results/filter_<profile>_filtered_pool.json` (contract below). Check
+   `complete`: `false` means some configurations are still missing, so rerun. To try other limits on what is already
+   measured, without running anything again: add `--no-measure`.
+
 **What it does.** It reads the phone (64-bit ABI required; the llama.cpp `-march` its CPU supports, rebuilding the
 binaries if the last build was for another; OpenCL), checks which GPU paths load, converts each pool model for both
 runtimes (each conversion separately: one that fails is recorded and the rest go on), then for each configuration in
