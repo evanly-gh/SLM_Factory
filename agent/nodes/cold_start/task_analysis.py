@@ -128,7 +128,10 @@ def task_analysis_node(state: AgentState) -> AgentState:
     # Stage 1 + 2: hardware filter (inequality + on-device stub)
     feasible = run_hardware_filter(state["hardware_constraints"])
     if not feasible:
-        raise RuntimeError("No models in Android pool satisfy hardware constraints.")
+        raise RuntimeError(
+            "No models in Android pool satisfy hardware constraints "
+            "(and the phone-measured filtered pool, if one is in force — see config/filtered_pool.py)."
+        )
 
     # Sort largest→smallest. The model_selection strategies read feasible_models;
     # interpolation relies on feasible[0]=largest / feasible[-1]=smallest.

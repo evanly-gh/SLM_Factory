@@ -162,7 +162,7 @@ def _probe_model(
                 model.quant,
                 model.label,
             )
-        from training.quant_backend import resolve_backend
+        from training.quant_backend import backend_for_model
 
         result = run_eval(
             state["eval_set"],
@@ -170,7 +170,7 @@ def _probe_model(
             model.model_id,
             quant=model.quant,
             quant_artifact=quant_artifact,
-            quant_backend=resolve_backend(),
+            quant_backend=backend_for_model(model.model_id, model.quant),
         )
         logger.info("[interpolation] Probe %s -> f1=%.4f", model.model_id, result.f1)
         return result.f1

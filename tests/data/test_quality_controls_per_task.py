@@ -23,6 +23,8 @@ from __future__ import annotations
 
 import json
 
+import re
+
 import pytest
 
 from data.curriculum import apply_quality_controls
@@ -108,6 +110,15 @@ ROW_BUILDERS = {
     # imbalance tests below rather than by the healthy fixture.
     "sms_spam": lambda i: {"text": f"message number {i} about the weekend plan",
                            "label": "ham" if i % 2 else "spam"},
+    # Alternating rather than the corpus's 25/75: `balance_labels(max_ratio=4)` is exercised by
+    # the imbalance tests rather than by the healthy fixture. `bucket` is present because the
+    # task's failure taxonomy reads it, and a row without one is grouped as `synthetic`.
+    "address_bench": lambda i: {
+        "text": f"Conversation so far:\nSpeaker2: line {i}\n\n"
+                f'Latest line, User: "utterance number {i} about the plan"',
+        "label": "addressed" if i % 2 else "not_addressed",
+        "bucket": "P1" if i % 2 else "N1",
+    },
     "proactive_listening": lambda i: {"text": f"speaker A pauses after clause {i} here",
                                       "label": "wait" if i % 2 else "interrupt"},
     "clinc150": lambda i: {"text": f"utterance number {i} about money",
@@ -140,6 +151,7 @@ ALLOWED_LABELS = {
     "ner_bc5cdr": None,
     "routerbench": {"local", "route"},
     "sms_spam": {"ham", "spam"},
+    "address_bench": {"addressed", "not_addressed"},
     "proactive_listening": {"interrupt", "wait"},
     "clinc150": {"transfer", "balance"},
     # None for all four. `topv2`, `multiconer` and `gec_bea19` have no `label` field at all, and
@@ -254,7 +266,14 @@ def test_the_removal_report_names_the_step_the_count_and_the_reason(task):
                               {**build(999), "text": HUGE, "_provenance": "mined_real"}])
     line = next(line for line in logs if "length-outlier" in line)
     assert "removed 1 row(s)" in line
-    assert "longer than 3x the median" in line
+    # The message must NAME the threshold it applied; it need not be the 3x default. A `QCStep` is
+    # a bare closure with no introspectable `max_ratio`, so the assertion checks the shape rather
+    # than a value read back off the spec. `address_bench` declares 5x on purpose — a transcript
+    # block with no context runs ~60 chars and one with eight context lines ~400, so the default
+    # would discard the short, context-free rows, which are exactly the P1/P10 wake-word shapes
+    # the gate most needs to get right. Hardcoding 3x here would have forced that task to accept a
+    # ratio that is wrong for its data in order to pass a test about log formatting.
+    assert re.search(r"longer than \d+(?:\.\d+)?x the median", line), line
 
 
 # --------------------------------------------------------------------------

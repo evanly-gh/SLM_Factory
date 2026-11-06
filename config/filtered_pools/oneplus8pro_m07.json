@@ -1,0 +1,79 @@
+{
+ "contract_version": 1,
+ "generated": "2026-11-03T18:19:10",
+ "complete": true,
+ "not_measured": [],
+ "phone": {
+  "serial": "10.125.50.235:5555",
+  "manufacturer": "OnePlus",
+  "model": "IN2025",
+  "soc": "SM8250",
+  "android": "13",
+  "abi64": "arm64-v8a",
+  "llama_march": "armv8.2-a+dotprod+fp16",
+  "opencl_lib": "/vendor/lib64/libOpenCL.so",
+  "label": "OnePlus 8 Pro",
+  "profile": "oneplus8pro",
+  "ram_gib": 11.24
+ },
+ "gpu": {
+  "pinned": {
+   "llama.cpp": null,
+   "mnn": null
+  },
+  "head": {
+   "llama.cpp": "head llama.cpp OpenCL build needs OpenCL symbols this phone's driver lacks",
+   "mnn": null
+  }
+ },
+ "conversion_failed": {},
+ "measurement": {
+  "results_dirs": [
+   "C:/Users/evanl/Documents/VSCode/Personal/SLM_Factory-1/Benchmark-Harness/paper_table5/results/slm_pool_oneplus8pro_pinned",
+   "C:/Users/evanl/Documents/VSCode/Personal/SLM_Factory-1/Benchmark-Harness/paper_table5/results/slm_pool_oneplus8pro_head",
+   "C:/Users/evanl/Documents/VSCode/Personal/SLM_Factory-1/Benchmark-Harness/paper_table5/results/slm_pool_oneplus8pro_energy_pinned",
+   "C:/Users/evanl/Documents/VSCode/Personal/SLM_Factory-1/Benchmark-Harness/paper_table5/results/slm_pool_oneplus8pro_energy_head"
+  ],
+  "request": {
+   "prompt_tokens": 32,
+   "answer_tokens": 45
+  },
+  "configs_expected": 108,
+  "configs_measured": 99,
+  "configs_benchmarked": 79,
+  "energy_methods": [
+   "bm:current_now"
+  ]
+ },
+ "limits": {
+  "max_peak_memory_mb": 5800.0,
+  "min_prefill_tps": 2.96,
+  "min_decode_tps": 5.0,
+  "max_energy_j": 15.66
+ },
+ "rank_by": "decode",
+ "filtered_pool": [
+  {"model": "qwen3-0.6b", "hf_id": "Qwen/Qwen3-0.6B", "bits": 4, "quant": "Q4_0", "runtime": "llama.cpp", "format": "GGUF", "backend": "cpu"},
+  {"model": "qwen3-0.6b", "hf_id": "Qwen/Qwen3-0.6B", "bits": 8, "quant": "Q8_0", "runtime": "llama.cpp", "format": "GGUF", "backend": "cpu"},
+  {"model": "smollm2-360m", "hf_id": "HuggingFaceTB/SmolLM2-360M-Instruct", "bits": 4, "quant": "Q4_0", "runtime": "llama.cpp", "format": "GGUF", "backend": "cpu"},
+  {"model": "smollm2-360m", "hf_id": "HuggingFaceTB/SmolLM2-360M-Instruct", "bits": 8, "quant": "Q8_0", "runtime": "llama.cpp", "format": "GGUF", "backend": "cpu"},
+  {"model": "smollm2-360m", "hf_id": "HuggingFaceTB/SmolLM2-360M-Instruct", "bits": 16, "quant": "F16", "runtime": "llama.cpp", "format": "GGUF", "backend": "cpu"},
+  {"model": "gemma3-270m", "hf_id": "google/gemma-3-270m-it", "bits": 4, "quant": "Q4_0", "runtime": "llama.cpp", "format": "GGUF", "backend": "cpu"},
+  {"model": "gemma3-270m", "hf_id": "google/gemma-3-270m-it", "bits": 8, "quant": "Q8_0", "runtime": "llama.cpp", "format": "GGUF", "backend": "cpu"},
+  {"model": "gemma3-270m", "hf_id": "google/gemma-3-270m-it", "bits": 16, "quant": "F16", "runtime": "llama.cpp", "format": "GGUF", "backend": "cpu"},
+  {"model": "smollm2-135m", "hf_id": "HuggingFaceTB/SmolLM2-135M-Instruct", "bits": 4, "quant": "Q4_0", "runtime": "llama.cpp", "format": "GGUF", "backend": "cpu"},
+  {"model": "smollm2-135m", "hf_id": "HuggingFaceTB/SmolLM2-135M-Instruct", "bits": 8, "quant": "Q8_0", "runtime": "llama.cpp", "format": "GGUF", "backend": "cpu"},
+  {"model": "smollm2-135m", "hf_id": "HuggingFaceTB/SmolLM2-135M-Instruct", "bits": 16, "quant": "F16", "runtime": "llama.cpp", "format": "GGUF", "backend": "cpu"},
+  {"model": "qwen3.5-0.8b", "hf_id": "Qwen/Qwen3.5-0.8B", "bits": 4, "quant": "Q4", "runtime": "mnn", "format": "MNN", "backend": "cpu"},
+  {"model": "qwen3.5-0.8b", "hf_id": "Qwen/Qwen3.5-0.8B", "bits": 8, "quant": "Q8", "runtime": "mnn", "format": "MNN", "backend": "cpu"},
+  {"model": "qwen3.5-2b", "hf_id": "Qwen/Qwen3.5-2B", "bits": 4, "quant": "Q4", "runtime": "mnn", "format": "MNN", "backend": "gpu"}
+ ],
+ "summary": {
+  "entries": 27,
+  "kept": 14,
+  "removed": 13,
+  "models_kept": 6,
+  "backend": {"cpu": 13, "gpu": 1},
+  "runtime": {"llama.cpp": 11, "mnn": 3}
+ }
+}

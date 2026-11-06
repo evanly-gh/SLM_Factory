@@ -113,12 +113,12 @@ def _train_and_eval(
             model.quant,
             model.label,
         )
-    from training.quant_backend import resolve_backend
+    from training.quant_backend import backend_for_model
 
     result = run_eval(
         state["eval_set"], weights_ref, model_id,
         quant=model.quant, quant_artifact=quant_artifact,
-        quant_backend=resolve_backend(),
+        quant_backend=backend_for_model(model.model_id, model.quant),
     )
     return weights_ref, result
 

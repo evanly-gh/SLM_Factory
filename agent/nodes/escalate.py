@@ -5,7 +5,7 @@ Node 8: escalate to the next model tier.
 On stagnation, finds all feasible models in the tier above the current model,
 calls the orchestrator LLM to choose which specific model to try based on task
 context, then resets score history for a fresh start with the new model.
-Falls back to the largest feasible model in the next tier if the LLM call fails.
+Falls back to the smallest (lowest on-disk size) feasible model in the next tier if the LLM call fails.
 """
 import logging
 from agent.cost import tracked_anthropic_messages_create
@@ -64,7 +64,7 @@ def _llm_choose_model(
     direction: str = "up",
 ) -> ModelSpec:
     """Ask the orchestrator LLM to choose a model from `candidates` given the task context.
-    Returns the chosen ModelSpec. Falls back to the largest candidate on any failure.
+    Returns the chosen ModelSpec. Falls back to the smallest candidate on any failure.
     The chosen model AND the orchestrator's one-sentence reason are printed via `log`
     (Q13) so the model-selection rationale is visible in the run log, not just logging.
 
@@ -259,8 +259,9 @@ def escalate_node(state: AgentState) -> AgentState:
             )
 
     # Escalate to the nearest higher (more RAM) non-empty tier. Tiers are per-variant
-    # RAM buckets, so a bucket can be empty for a given hardware budget — step past gaps
-    # rather than terminating on the first empty tier. Exclude variants of the CURRENT
+    # RAM buckets, so a bucket can be empty for a given hardware budget — or because the
+    # phone-measured filtered pool (config/filtered_pool.py) removed every variant in it — step
+    # past gaps rather than terminating on the first empty tier. Exclude variants of the CURRENT
     # model_id at the same tier (no point re-selecting what already stagnated).
     feasible = filter_pool(state["hardware_constraints"])
     from config.config import size_sweep_enabled

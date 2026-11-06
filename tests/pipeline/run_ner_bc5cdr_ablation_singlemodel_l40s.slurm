@@ -8,7 +8,7 @@
 #SBATCH --gres=gpu:l40s:2
 #SBATCH --cpus-per-task=16
 #SBATCH --mem=160G
-#SBATCH --time=7-00:00:00
+#SBATCH --time=12:00:00
 #SBATCH --requeue
 #SBATCH --signal=B:USR1@7200
 #SBATCH --output=/mmfs1/gscratch/intelligentsystems/evanly/SLM_Factory/logs/slurm/slm-ner-bc5cdr-ablation-singlemodel-l40s-%j.out
@@ -39,13 +39,22 @@
 #
 # `unset SLM_SYNTH_API_MODE` keeps the local Qwen teacher the baseline used: sbatch forwards the
 # submitting shell's environment, which is how run 39361648 silently became a DeepSeek run.
+#
+# WALL CLOCK CUT 7d -> 12h on 2026-10-06, after job 40831542 had already run (it took 1h59m, so
+# this changes nothing about that result — the limit was never approached). The seven-day request
+# was inherited from the baseline and is wrong for this arm in a way that has a measured cost: the
+# nine arms generated for the other tasks were all unschedulable with it, sitting
+# `ReqNodeNotAvail, Reserved_for_maintenance` against the cluster's October13_Maintenance
+# reservation, and a weeklong request gets no backfill on a 10-GPU account shared by a dozen users.
+# A `single_model` run is pinned to one variant and bounded by the 30-eval cap, so unlike a
+# ladder-climbing baseline it has a real ceiling and can ask for it honestly.
 # ============================================================================================
 #
 # CURATED BENCHMARK: ner_bc5cdr (format-bound, metric span_f1). Promoted 2026-08-13 from the
 # autonomous path, where it reached BC5CDR only because the orchestrator happened to emit a plan
 # web_acquire could resolve — not reproducible. SLM_BENCHMARK_TASK pins the loader.
 #
-# Dedicated gpu-l40s-intelligentsystems quota: 2x L40S (auto-2gpu profile), seven-day wall.
+# Dedicated gpu-l40s-intelligentsystems quota: 2x L40S (auto-2gpu profile), 12h wall (above).
 # --requeue + USR1 remain a safety net against node failure, not a wall-clock mechanism.
 export SLM_CUDA_ISOLATION=1
 export SLM_BENCHMARK_TASK=ner_bc5cdr

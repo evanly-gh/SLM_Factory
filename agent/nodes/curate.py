@@ -1,7 +1,7 @@
 """Grow the training curriculum, one `data_rebuild` at a time.
 
 The curriculum is CUMULATIVE: cold start loads gold rows from the task's own loader, every rebuild
-ADDS to what is already there, and rows leave only via quality control or the eval firewall. Two
+ADDS to what is already there, and rows leave only via quality control, the eval firewall, or a rollback of the change that added them. Two
 mechanisms can add rows — `mine_new_real` and `surgical_synthesis` — and a plan names exactly one.
 
 Nothing re-draws from a pool it has already drawn from. That was the gold FILL, removed on
@@ -1020,7 +1020,7 @@ def curate_node(state: AgentState) -> AgentState:
     """Grow the curriculum by one data_rebuild, or build it for the first time.
 
     The curriculum is CUMULATIVE. Cold start loads gold rows; every rebuild ADDS to what is already
-    there; rows leave only via quality control or the eval firewall. Nothing re-draws from a pool it
+    there; rows leave only via quality control, the eval firewall, or a rollback of the change that added them. Nothing re-draws from a pool it
     has already drawn from — that was the removed gold FILL, which re-selected the same ~3,235 rows
     and honestly reported `0 novel` on eight consecutive rebuilds of one run.
 

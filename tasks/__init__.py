@@ -1,13 +1,14 @@
 """The benchmark task registry — the single place a task is defined.
 
-Ten tasks in three categories:
+Tasks in three categories:
 
     in_distribution      gsm8k                 DialogSum + SAMSum       sms_spam
     format_bound         xlam_bfcl             calendar_json            ner_bc5cdr
                          toolbench
     out_of_distribution  routerbench           proactive_listening      clinc150
+                         address_bench
 
-Adding an eleventh means writing one module here and registering it below. Nothing else in the
+Adding another means writing one module here and registering it below. Nothing else in the
 pipeline dispatches on task identity, so there is no second place to remember — which is the
 whole point: the previous design needed five separate side registries kept in sync by hand, and
 every one of them was added after a bug caused by their being out of sync.
@@ -17,6 +18,7 @@ from __future__ import annotations
 from tasks.spec import MiningSource, TaskSpec, spec_field_names
 
 from tasks import (
+    address_bench,
     calendar_json,
     clinc150,
     dialogsum,
@@ -48,6 +50,7 @@ _MODULES = (
     multiconer,
     gec_bea19,
     goemotions,
+    address_bench,
 )
 
 TASKS: dict[str, TaskSpec] = {}

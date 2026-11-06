@@ -159,6 +159,13 @@ _RESUME_ENV_DEFAULTS: dict[str, str] = {
     # reason: a resume that changed either would compare scores from two different sets of weights.
     "SLM_MNN_QUANT_BLOCK": "",
     "SLM_MNN_HQQ": "",
+    # The phone-measured filtered pool (config/filtered_pool.py): which variants the run may select
+    # and which runtime each is built for. A resume against a different contract — or one that
+    # appeared or vanished at the default path — would change the candidate set and the runtime
+    # under scores already in the checkpoint. Both are filled in by `runtime_config_snapshot` from
+    # the resolved contract, not read from the environment; "" means the full pool.
+    "SLM_FILTERED_POOL": "",
+    "SLM_FILTERED_POOL_SHA256": "",
 }
 
 
@@ -231,6 +238,11 @@ def runtime_config_snapshot(mode: str) -> dict[str, Any]:
         name: os.environ.get(name, default)
         for name, default in env_defaults.items()
     })
+    from config.filtered_pool import active as active_filtered_pool
+
+    contract = active_filtered_pool()
+    snapshot["SLM_FILTERED_POOL"] = contract.path if contract else ""
+    snapshot["SLM_FILTERED_POOL_SHA256"] = contract.sha256 if contract else ""
     return snapshot
 
 

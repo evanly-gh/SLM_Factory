@@ -37,6 +37,7 @@ The pipeline is a **LangGraph state machine** (`agent/graph.py`) over a single `
 Runs in the driver before the graph builds (`agent/nodes/cold_start/hardware_research.py`, `hardware_filter.py`):
 1. Resolve the device (local `data/devices.csv` fuzzy match → Exa fallback → LLM extracts only device-specific values: usable RAM, storage budget, reference chip).
 2. Filter the model pool on quantities that are *known, not modelled* — the on-disk weight file must fit storage, and weight bytes must fit RAM. Throughput is never estimated; unmeasured candidates are never gated on a guess. Real measurements (`config/measured_metrics.json`) additionally gate when present.
+3. Apply the phone-measured filtered pool (`config/filtered_pool.py`), **on by default** whenever `config/filtered_pool.json` exists — copy or symlink `filter_pool.py`'s `results/filter_<profile>_filtered_pool.json` there (contract v1). Only variants in its `filtered_pool` can be selected, at cold start, on escalation, or by the downward probe; a tier with nothing kept is skipped. Each kept variant is quantized and scored on the runtime the contract chose for it (llama.cpp or MNN), so `--quant-backend` only covers runs without a contract. The pipeline's quant recipe is unchanged (4-bit → `Q4_K_M`). `SLM_FILTERED_POOL=<path>` uses another file; `SLM_FILTERED_POOL=off` disables it. A contract with `complete` ≠ `true` is used with a warning. The contract's path and hash are part of the resume fingerprint.
 
 ### Cold-start entry stages
 1. **`task_analysis`** — plan the task (type, labels, benchmark, threshold, data sizes); sort feasible models largest→smallest.
@@ -165,7 +166,7 @@ docs/                       PIPELINE.md (spec), PAPER.md (analysis+critique),
 
 **Known gaps** (tracked in `docs/PIPELINE.md §12` and `docs/BUGS.md`):
 - Production mode is architected but not runnable end-to-end (the production graph never builds an eval set, which `curate` requires).
-- Synthesis has not yet run at scale in a completed benchmark run (endpoint availability); several curation strategies steer *which* strategy runs but do not yet reweight individual rows.
+- ~~Synthesis has not yet run at scale in a completed benchmark run (endpoint availability);~~ <span style="color:red">Synthesis ran in every main benchmark run (teacher Qwen3.6-35B-A3B on vLLM; see `docs/SLMF_Results/RESULTS.md`), with the 0.80 gate bypassed by `SLM_TEACHER_SYNTH_BYPASS=1` on seven tasks;</span> several curation strategies steer *which* strategy runs but do not yet reweight individual rows.
 - The `delegate_task` / sub-agent tooling is defined but not yet wired into either graph.
 
 **Roadmap** (from `docs/PAPER.md` §16, informed by 2024–2026 literature): CURLoRA to resist sequential-task collapse, a calibration-aware (KL/ECE) regression gate, formalized on-policy replay, and — Phase 2+ — GRPO as an SFT replacement for on-distribution continual learning.

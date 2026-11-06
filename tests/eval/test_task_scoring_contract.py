@@ -326,6 +326,28 @@ FIXTURES: dict[str, dict] = {
         "unreadable": [CHATTY] * 4,
         "wrong_but_readable": ["spam", "ham", "spam", "ham"],
     },
+    # Two addressed and two not, so F2's recall term has support in both directions. The `bucket`
+    # field rides along because this task's failure taxonomy is bucket-named (`missed_P1` /
+    # `false_yes_N1`) rather than the flat `wrong_label` every other classification task reports.
+    "address_bench": {
+        "rows": [
+            {"text": 'Conversation so far:\n(nothing yet)\n\nLatest line, User: '
+                     '"Glasses, add lunch with Sam on Thursday at noon."',
+             "label": "addressed", "bucket": "P1"},
+            {"text": 'Conversation so far:\nSpeaker2: we should get lunch this week\n\n'
+                     'Latest line, User: "Sure, can you do Thursday at noon?"',
+             "label": "not_addressed", "bucket": "N10"},
+            {"text": 'Conversation so far:\nAssistant: Sunny, high of 72.\n\n'
+                     'Latest line, User: "And on Saturday?"',
+             "label": "addressed", "bucket": "P2"},
+            {"text": 'Conversation so far:\nSpeaker3: how does that thing work\n\n'
+                     'Latest line, User: "I just say hey agent, set a timer, and it does it."',
+             "label": "not_addressed", "bucket": "N3"},
+        ],
+        "perfect": ["addressed", "not_addressed", "addressed", "not_addressed"],
+        "unreadable": [CHATTY] * 4,
+        "wrong_but_readable": ["not_addressed", "addressed", "not_addressed", "addressed"],
+    },
     "proactive_listening": {
         "rows": [
             {"text": "A: I need the code... um...", "label": "interrupt"},

@@ -28,7 +28,7 @@ WHAT WAS REMOVED, AND WHY (2026-08-19)
     ``target_rows`` — the curriculum no longer has a target. It has a starting size and it grows.
 
 The plan carries no seed and no dedup identity: the orchestrator freely re-picks a strategy each
-turn, and escalation-on-no-improvement is the sole stuck-run backstop.
+turn, and escalation-on-no-improvement is the main stuck-run backstop (agent/run_health.py's watchdog is the other).
 """
 from __future__ import annotations
 

@@ -19,7 +19,9 @@ from training.quantize import (
 from training.quant_backend import (
     artifact_name as quant_artifact_name,
     artifacts_subdir,
+    backend_for_model,
     backend_label,
+    deployment_note,
     invalidate_cache,
     quantize_from_model_spec,
     resolve_backend,
@@ -151,7 +153,8 @@ def _reap_quant_artifacts(state, artifact_paths, keep_path, mlabel: str = "") ->
             retained.append(keep_path)
             retained_abs.add(keep_abs)
 
-    backend = resolve_backend()
+    selected = state["selected_model"]
+    backend = backend_for_model(selected.model_id, selected.quant)
     for path in artifact_paths:
         if not path or os.path.abspath(path) in retained_abs:
             continue
@@ -179,7 +182,7 @@ def _build_quant_artifact_for_eval(
         run_isolated,
     )
 
-    backend = resolve_backend()
+    backend = backend_for_model(model_id, quant)
     try:
         if isolation_enabled():
             artifact_path = run_isolated(
@@ -225,7 +228,11 @@ def evaluate_node(state: AgentState) -> AgentState:
         raise RuntimeError("evaluate_node called before eval_setup_node built the eval set")
     pending = state.get("_pending_weights_refs") or {}
 
-    quant_backend = resolve_backend()
+    # Per variant: the phone-measured filtered pool's runtime for this variant when one is in
+    # force, else the run-wide SLM_QUANT_BACKEND.
+    quant_backend = backend_for_model(model_id, state["selected_model"].quant)
+    if state["iteration"] == 1:
+        _log(mlabel, f"Deployment: {deployment_note(model_id, state['selected_model'].quant)}")
 
     # --- Baseline measurement (first eval for this model) ---
     baseline_result = None
@@ -487,6 +494,12 @@ def evaluate_node(state: AgentState) -> AgentState:
             "score": scored[label][1].f1,
             "H": normalized_config,
         })
+    from config.filtered_pool import active as _active_filtered_pool
+
+    _contract = _active_filtered_pool()
+    _deployment = (
+        _contract.deployment_for(model_id, state["selected_model"].quant) if _contract else None
+    )
     dag_node = {
         "iteration": state["iteration"],
         "parent_iteration": parent_iteration,
@@ -498,6 +511,8 @@ def evaluate_node(state: AgentState) -> AgentState:
         # same variant are different measurements of different artifacts. Recorded per iteration
         # so a post-run report cannot average across the two.
         "quant_backend": quant_backend,
+        # The phone backend (cpu/gpu) the filtered pool chose for this variant; None without one.
+        "device_backend": (_deployment or {}).get("backend"),
         # The size tier this iteration ran on. Recorded because a run that escalates is really several
         # experiments, and both the score-attribution table and the accuracy chart group by tier to
         # avoid averaging deltas across models with different ceilings. Both read it from here, and

@@ -114,6 +114,14 @@ args = parser.parse_args()
 # Re-export after parsing so an `SLM_QUANT_BACKEND` inherited from the submitting shell and an
 # explicit flag cannot disagree, and so argparse's `choices` is what validated the value.
 os.environ["SLM_QUANT_BACKEND"] = args.quant_backend
+# The phone-measured filtered pool is ON BY DEFAULT: config/filtered_pool.json is used whenever it
+# exists (SLM_FILTERED_POOL=<path> picks another file, =off disables). Pinned to an absolute path
+# here so CUDA workers resolve the same contract as this process, and pinned to `off` when there
+# is none so a contract dropped at the default path mid-run cannot change this run's pool. With a
+# contract in force, --quant-backend only applies to variants the contract does not cover.
+from config.filtered_pool import contract_path as _filtered_pool_path
+
+os.environ["SLM_FILTERED_POOL"] = _filtered_pool_path() or "off"
 
 _configured_run_dir = os.environ.get("SLM_RUN_DIR", "").strip()
 _resume_value = args.resume.strip() or os.environ.get("SLM_RESUME", "").strip()
@@ -1123,6 +1131,15 @@ record_timing_event(TimingEvent(
 # model reference. Fully guarded: any failure logs and continues.
 hardware_eval_report = None
 _hw_verify_t0 = time.perf_counter()
+
+
+def _final_backend(model) -> str:
+    """The runtime the final variant was built for (filtered pool's choice, else run-wide)."""
+    from training.quant_backend import backend_for_model
+
+    return backend_for_model(model.model_id, model.quant)
+
+
 if config.HW_VERIFY_ON_DEVICE:
     log("")
     log("  ▶ on-device hardware verification")
@@ -1134,13 +1151,13 @@ if config.HW_VERIFY_ON_DEVICE:
         elif final_model.quant is None:
             log("      [hw-verify] final model is BF16 (no GGUF path) — skipping "
                 "SmolChat/GGUF verification; set a quantized variant to enable")
-        elif config.QUANT_BACKEND != "llama_cpp":
+        elif _final_backend(final_model) != "llama_cpp":
             # Every measuring backend in hardware_eval/on_device_eval.py speaks GGUF: llama-cli
             # locally, llama-cli over adb, or a SmolChat broadcast. An MNN artifact handed to any
             # of them is not a slower measurement, it is a meaningless one, and measuring MNN on a
             # phone needs MNN-Chat's own benchmark receiver (the reference harness's
             # run_mnn_autobench.py). Skipped loudly rather than attempted.
-            log(f"      [hw-verify] quantization backend is {config.QUANT_BACKEND!r}; the "
+            log(f"      [hw-verify] quantization backend is {_final_backend(final_model)!r}; the "
                 "on-device backends here measure GGUF only — skipping. Accuracy for this run "
                 "was still measured on the real MNN artifact by the eval loop.")
         else:
@@ -1154,6 +1171,7 @@ if config.HW_VERIFY_ON_DEVICE:
                 os.path.join(ART, "merged", mid_safe, "final_verify"),
                 os.path.join(ART, "gguf", mid_safe, "final_verify"),
                 final_model.quant,
+                "llama_cpp",
             )
 
             hw_result = run_on_device_eval(

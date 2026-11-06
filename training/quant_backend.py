@@ -4,7 +4,9 @@ The single place the pipeline decides WHICH on-device runtime a quantized artifa
 
 Two backends exist (see `config.QUANT_BACKEND` for the full rationale): llama.cpp's GGUF, which
 is the default and the format every published number so far was measured in, and MNN, which is
-what the Qwen-family mobile stack and MNN-Chat actually run. One run uses one of them.
+what the Qwen-family mobile stack and MNN-Chat actually run. One run uses one of them — unless a
+phone-measured filtered pool is in force, in which case each variant uses the runtime the contract
+chose for it (`backend_for_model`).
 
 Everything backend-specific about an artifact — how it is built, how it is validated, how a warm
 cache is recognised, what "its size" means, and which engine scores it — is routed through the
@@ -41,6 +43,33 @@ def resolve_backend(backend: str | None = None) -> str:
             f"Set it with {_ENV_VAR} or `python tests/pipeline/run.py --quant-backend ...`."
         )
     return value
+
+
+def backend_for_model(model_id: str, quant: str | None) -> str:
+    """The backend for one deployment variant.
+
+    The phone-measured filtered pool (`config/filtered_pool.py`) names the runtime that won for
+    each kept variant; that wins when present. Otherwise the run-wide `resolve_backend()`.
+    """
+    from config.filtered_pool import active
+
+    contract = active()
+    runtime = contract.runtime_for(model_id, quant) if contract else None
+    return resolve_backend(runtime)
+
+
+def deployment_note(model_id: str, quant: str | None) -> str:
+    """One log line saying which runtime a variant is built for, and why."""
+    from config.filtered_pool import active
+
+    contract = active()
+    deployment = contract.deployment_for(model_id, quant) if contract else None
+    if deployment is None:
+        return f"runtime {backend_label()} (run-wide SLM_QUANT_BACKEND)"
+    return (
+        f"runtime {backend_label(deployment['runtime'])} on phone {deployment['backend'].upper()} "
+        f"(filtered pool {contract.path})"
+    )
 
 
 def backend_label(backend: str | None = None) -> str:

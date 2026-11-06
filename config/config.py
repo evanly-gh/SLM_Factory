@@ -318,7 +318,23 @@ LOCAL_DATASET_DIR = os.environ.get(
 # let Slurm USR1 drive safe segment rollover.
 MAX_WALLCLOCK_S = int(os.environ.get("SLM_MAX_WALLCLOCK_S", str(14 * 3600)))
 
-MAX_TURNS_MAIN = 1500
+# --- Cumulative LangGraph step budget ---
+# Counted across ALL segments of a run, not per segment: `_must_terminate` diverts the graph to
+# END once `state["_graph_steps"]` reaches this, and `remaining_recursion_limit` hands LangGraph
+# only the balance. At roughly 4.3 node executions per train->eval iteration, 1500 is ~350
+# iterations — ample for a run that climbs a tier ladder and stops at its goal.
+#
+# IT IS NOT AMPLE FOR AN EXHAUSTIVE SWEEP, and that is why this is now overridable. Run 40827150
+# (`size_sweep` over all 27 variants with the goal pinned at 0.99, so no variant could stop early)
+# spent its 1500 steps on 18 of them and routed to END mid-sweep — reported as "budget exhausted",
+# with 1,460 of its 1,500 TURNS still unused, so the turn budget was never the binding constraint.
+# A sweep sized in advance can raise this; nothing else should need to.
+#
+# RAISING IT CHANGES THE RESUME FINGERPRINT. `MAX_TURNS_MAIN` is in `runtime_config_snapshot`, so
+# a checkpoint written under one value refuses to resume under another. That is deliberate and is
+# left alone: a budget change is a change to where the run stops, and silently resuming across it
+# would make "budget exhausted" unfalsifiable after the fact.
+MAX_TURNS_MAIN = max(1, int(os.environ.get("SLM_MAX_TURNS_MAIN", "1500")))
 
 DEFAULT_STOP_THRESHOLD = 0.96
 
@@ -360,7 +376,8 @@ HW_VERIFY_ON_DEVICE = os.environ.get("SLM_HW_VERIFY_ON_DEVICE", "0") == "1"
 # QUANT_ACCURACY_EVAL — score the ACTUAL quantized GGUF (Q4_K_M / Q8_0) for honest
 # per-quant ACCURACY, WITHOUT any on-device (latency/power) measurement. When True,
 # evaluate_node merges the LoRA adapter, quantizes to the variant's GGUF via llama.cpp,
-# and scores it on-CPU through llama-cpp-python — so Q4_K_M and Q8_0 of a model finally
+# and scores it through llama-cpp-python with layers offloaded to the GPU (SLM_GGUF_GPU_LAYERS,
+# default -1 = all; MNN 4-bit is exported as HQQ-32) — so Q4_K_M and Q8_0 of a model finally
 # produce DIFFERENT accuracy numbers (in theoretical mode they were identical, B156).
 # DEFAULT ON (B160): the deployed artifact is the quantized GGUF, so its measured accuracy
 # is the number that actually matters — theoretical bf16-as-a-proxy is misleading. The GGUF
@@ -392,6 +409,11 @@ QUANT_ACCURACY_EVAL = os.environ.get("SLM_QUANT_EVAL", "1") == "1"
 # `training/quantize_mnn.export_recipe`), so the
 # backend is the only thing that changes between two otherwise identical runs — which is what
 # makes a llama.cpp-vs-MNN accuracy comparison meaningful.
+#
+# EXCEPTION — the phone-measured filtered pool (config/filtered_pool.py, on by default when
+# config/filtered_pool.json exists): each kept variant is built for the runtime that won on the
+# phone, so one run can use both. Callers resolve a variant's runtime with
+# `training.quant_backend.backend_for_model`; this value only covers variants without a contract.
 QUANT_BACKENDS = ("llama_cpp", "mnn")
 QUANT_BACKEND = os.environ.get("SLM_QUANT_BACKEND", "llama_cpp").strip().lower()
 if QUANT_BACKEND not in QUANT_BACKENDS:

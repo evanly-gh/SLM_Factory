@@ -1,20 +1,21 @@
 # android_pool.py
 #
-# MODEL POOL DESIGN — QWEN-ONLY BRANCH
+# MODEL POOL DESIGN
 #
-# This branch restricts the model pool to the Qwen architecture family for
-# controlled ablation of model selection strategies. All models share the same
-# tokenizer lineage and MNN-LLM runtime compatibility.
+# Nine base models (SmolLM2-135M/360M, Gemma 3 270M, Qwen3-0.6B/1.7B/4B, Qwen3.5-0.8B/2B/4B),
+# each at BF16 / Q8_0 / Q4_K_M = 27 variants. (This header used to describe an earlier
+# Qwen-only branch with 18 variants and tiers 0-3; that pool is gone.)
 #
 # Tier structure rationale:
 #   Tiers are ON-DISK WEIGHT SIZE buckets of each deployed variant, NOT param-count bands.
 #   The loop selects the smallest variant that still hits the accuracy goal, and a single
 #   model's BF16/Q8/Q4 variants can land in different tiers.
 #
-#     Tier 0  size < 750 MB
-#     Tier 1  size 750–1500 MB
-#     Tier 2  size 1500–2500 MB
-#     Tier 3  size >= 2500 MB
+#     Tier 1  size < 300 MB
+#     Tier 2  size 300–750 MB
+#     Tier 3  size 750–1500 MB
+#     Tier 4  size 1500–2500 MB
+#     Tier 5  size >= 2500 MB      (TIER_UPPER_BOUNDS_MB; 6/5/5/4/7 variants)
 #
 #   Tier used to bucket a MODELLED peak-inference-RAM figure. It now buckets weight size,
 #   which is verifiable. See "NOTE ON THROUGHPUT AND PEAK RAM" below.
@@ -23,7 +24,7 @@
 #   candidates (BF16 / Q8_0 / Q4_K_M) at bytes/param BF16 2.0, Q8_0 1.0, Q4_K_M 0.55 —
 #   overridden by a REAL measured size whenever config/measured_metrics.json has one.
 #
-# Pool members (6 official Qwen base models × 3 quant variants = 18 entries):
+# Qwen members (6 of the 9 base models; tier labels below are from the old 0-3 scheme):
 #   Qwen3-0.6B                 (text)       — Tier 0 Q4 seed
 #   Qwen3-1.7B                 (text)       — Tier 1 Q4 seed
 #   Qwen3-4B-Instruct-2507     (text)       — Tier 3 Q4 seed; NON-thinking
@@ -106,6 +107,7 @@ KNOWN_CHIPS: tuple[str, ...] = (
     "snapdragon_730",
     "snapdragon_750g",
     "snapdragon_778g",
+    "snapdragon_865",
     "snapdragon_870",
     "snapdragon_888",
     "snapdragon_8gen1",
@@ -161,7 +163,7 @@ class CapabilityMeasurement:
 class ModelSpec:
     model_id: str          # HuggingFace model ID
     size_mb: int           # on-disk weight size in MB for THIS variant's quant (see `quant`)
-    tier: int              # size bucket of size_mb: 0=<0.75GB, 1=0.75-1.5GB, 2=1.5-2.5GB, 3=>=2.5GB
+    tier: int              # size bucket of size_mb, 1-5: <300MB, 300-750MB, 0.75-1.5GB, 1.5-2.5GB, >=2.5GB
     # There is deliberately no tok/s or peak_memory_mb field here — see the note above
     # ANDROID_POOL. Those come from `measured_metrics_for()` or they are unknown.
     # Optional, sourced measurements (0–1 scale). Missing means unknown, not zero.
@@ -1066,12 +1068,20 @@ def filter_pool(constraints: HardwareConstraints) -> list[ModelSpec]:
 
     Throughput is NOT gated from an estimate. `min_tok_s` applies only where a real
     measurement exists; unmeasured candidates are not eliminated on a guess.
+
+    When a phone-measured filtered pool is in force (`config/filtered_pool.py`), variants it did
+    not keep are dropped too. Cold start, escalation and the downward probe all draw candidates
+    from here, so a removed variant can never be selected and a fully removed tier is empty.
     """
+    from config.filtered_pool import active as _active_filtered_pool
+
+    contract = _active_filtered_pool()
     feasible = [
         m for m in ANDROID_POOL
         if m.size_mb <= constraints.storage_mb
         and m.size_mb <= constraints.memory_mb
         and all_constraints_pass(check_hardware_constraints(m, constraints))
+        and (contract is None or contract.allows(m))
     ]
     return sorted(feasible, key=lambda m: (m.tier, m.size_mb))
 

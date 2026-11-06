@@ -36,7 +36,14 @@ def extract_predictions(raw_outputs: list[str], eval_set: EvalSet) -> list[list[
             if not isinstance(spans, list):
                 results.append(None)
                 continue
-            results.append([s for s in spans if isinstance(s, dict) and "text" in s and "type" in s])
+            # Both fields must be strings: a model can emit {"text": [...], "type": ...}, and a
+            # list there is unhashable and crashed scoring (job 42809109). Such a span is
+            # malformed, so it is dropped like one missing a key; the row's other spans still count.
+            results.append([
+                s for s in spans
+                if isinstance(s, dict)
+                and isinstance(s.get("text"), str) and isinstance(s.get("type"), str)
+            ])
         except Exception:
             results.append(None)
     return results

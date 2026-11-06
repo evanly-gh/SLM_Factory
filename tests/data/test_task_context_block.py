@@ -351,6 +351,19 @@ TASK_FIXTURES = {
         ],
         ("ham", "spam"),
     ),
+    # Both labels are opaque without the gate's definition — `not_addressed` especially, which a
+    # teacher left to guess reads as "nobody was addressed" rather than "addressed to a person".
+    "address_bench": (
+        [
+            {"text": 'Conversation so far:\n(nothing yet)\n\n'
+                     'Latest line, User: "Glasses, set a timer for ten minutes."',
+             "label": "addressed"},
+            {"text": 'Conversation so far:\nSpeaker2: where are we meeting\n\n'
+                     'Latest line, User: "the usual place, I already told Sam"',
+             "label": "not_addressed"},
+        ],
+        ("addressed", "not_addressed"),
+    ),
     "proactive_listening": (
         [
             {"text": "so anyway, as I was saying about the report", "label": "wait"},
@@ -488,7 +501,7 @@ def test_the_fixture_table_covers_the_whole_registry():
     than silently inheriting no coverage, which is the shape of failure the task registry exists to
     prevent (a task inheriting whatever an `else` branch did)."""
     assert sorted(TASK_FIXTURES) == sorted(task_names())
-    assert len(TASK_FIXTURES) == 14
+    assert len(TASK_FIXTURES) == 15
 
 
 def _verifier_prompt_for(task: str, rows: list[dict]) -> str:

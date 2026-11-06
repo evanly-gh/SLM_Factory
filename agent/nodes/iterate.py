@@ -807,7 +807,7 @@ def _build_intervention_prompt_for_test() -> str:
 #
 # Worked example of the intended semantics: an improvement, then 9 regressions, then another
 # improvement, then 4 more regressions = 15 evals. If the best score across that whole window
-# beat the score at its start by <= 2%, escalate — the two improvements do NOT reset anything,
+# beat the score at its start by less than 0.02 (absolute), escalate — the two improvements do NOT reset anything,
 # because what matters is total progress over the window, not recency of the last gain.
 import os as _os
 import time as _time
@@ -1394,7 +1394,7 @@ def _log(model_id: str, msg: str):
 # ---------------------------------------------------------------------------
 # Stretch goals: raising the accuracy target when a model converges quickly
 # ---------------------------------------------------------------------------
-# A goal derived from the teacher's zero-shot score (or from the 0.80 floor when the teacher scored
+# A goal derived from the teacher's five-shot score (or from the 0.80 floor when the teacher scored
 # below it) is a floor on ambition, not a ceiling. BC5CDR cleared 0.8000 in five iterations and 81
 # minutes and stopped; the floor had set the bar, not the task's difficulty, and the run had hours
 # of budget left. When a score clears the goal the orchestrator is now asked whether the goal should
@@ -1442,6 +1442,21 @@ def _threshold_raise_enabled() -> bool:
     # Cheap mode exists to keep API spend near zero; a stretch goal is an optimisation, not a
     # correctness requirement, so it is the right thing to drop there.
     return _os.environ.get("SLM_CHEAP") != "1"
+
+
+def _goal_stops_run() -> bool:
+    """False when SLM_GOAL_NO_STOP=1: meeting the goal no longer ends the run.
+
+    The calibrated goal is still measured, banked when met and reported, so the run records that
+    it converged and at which iteration. What changes is routing: no stretch-goal call and no
+    downward probe, and stagnation / the per-model eval cap escalate exactly as they do below the
+    goal. The run therefore climbs every tier and ends on the top tier's stagnation (or the
+    wall-clock / turn budget / watchdog), like a run whose goal is pinned at 0.99, but without
+    replacing the calibrated goal with an unreachable one.
+    """
+    import os as _os
+
+    return _os.environ.get("SLM_GOAL_NO_STOP") != "1"
 
 
 def _llm_threshold_raise(
@@ -1771,6 +1786,17 @@ def _route_score_at_threshold(
     if current_score < state["stop_threshold"]:
         return False
 
+    if not _goal_stops_run():
+        first_time = not state.get("convergence_banked")
+        _bank_convergence(state, current_score, model_id)
+        if first_time:
+            _log(
+                model_id,
+                "  SLM_GOAL_NO_STOP=1 — goal met but not terminal: the run keeps searching and "
+                "escalates on stagnation / the eval cap until the top tier is exhausted",
+            )
+        return False
+
     # Ask about a stretch goal BEFORE the downward-probe/terminate decision. Both of those treat
     # the goal as settled, and if the bar is about to move the whole convergence question reopens:
     # probing for a smaller model that clears a goal we are about to abandon wastes a tier.
@@ -1974,14 +2000,19 @@ def iterate_node(state: AgentState) -> AgentState:
     # orchestrator LLM call (the LLM cannot override it anyway). Only applies below the stop
     # threshold; the converged path below still runs. This saves an API call every time a
     # model plateaus (which is exactly when the run makes the most iterate calls).
-    if current_score < state["stop_threshold"] and (stagnant or eval_cap_hit):
+    # Under SLM_GOAL_NO_STOP a score above the goal is not terminal, so the same escalation rules
+    # apply there too — otherwise a model that met the goal would never leave its tier.
+    below_goal = current_score < state["stop_threshold"]
+    if (below_goal or not _goal_stops_run()) and (stagnant or eval_cap_hit):
         if stagnant:
             reason = (
                 f"no gain > {STAGNATION_MIN_DELTA:.0%} across the last "
                 f"{STAGNATION_WINDOW} evals"
             )
-        else:
+        elif below_goal:
             reason = f"{evals_run} evals without meeting the goal"
+        else:
+            reason = f"{evals_run} evals on this model (goal met; SLM_GOAL_NO_STOP=1)"
         if state.get("_largest_first_phase") == "probe":
             _log(model_id, "  → TERMINATE (largest_first probe stagnated — task infeasible)")
             state["next_action"] = "terminate"

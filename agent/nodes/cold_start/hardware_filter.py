@@ -15,6 +15,7 @@ from config.android_pool import (
     all_constraints_pass,
     ANDROID_POOL,
 )
+from config.filtered_pool import active as active_filtered_pool
 from hardware_eval.on_device_eval import run_on_device_eval
 
 logger = logging.getLogger(__name__)
@@ -33,6 +34,14 @@ def run_hardware_filter(constraints: HardwareConstraints) -> list[ModelSpec]:
     stage1 = filter_pool(constraints)
     logger.info("[hardware_filter] Stage 1: %d/%d models passed inequality checks",
                 len(stage1), len(ANDROID_POOL))
+    contract = active_filtered_pool()
+    if contract is None:
+        print("      [hardware_filter] no filtered pool (config/filtered_pool.json absent or "
+              "SLM_FILTERED_POOL=off) — using the full pool")
+    else:
+        print(f"      [hardware_filter] filtered pool {contract.describe()}: "
+              f"{len(stage1)}/{len(ANDROID_POOL)} variants remain → "
+              f"{[m.selector for m in stage1]}")
 
     if not stage1:
         logger.warning("[hardware_filter] Stage 1 eliminated all models.")

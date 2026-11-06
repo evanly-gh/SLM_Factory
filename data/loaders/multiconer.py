@@ -279,8 +279,8 @@ def stratified_slice(
 _PER_TYPE_FLOOR = 40
 
 
-def _cover_every_type(rows: list[dict], budget: int) -> list[dict]:
-    """`budget` rows chosen so every entity type in the corpus survives the cut.
+def training_priority_order(rows: list[dict], floor: int = _PER_TYPE_FLOOR) -> list[int]:
+    """Every row index of the training split, in the order `load_multiconer` hands rows out.
 
     WHY A PREFIX SLICE WAS NOT GOOD ENOUGH, MEASURED
         This used to be `train[:max_train]`. MultiCoNER's CoNLL file is not shuffled with respect
@@ -293,40 +293,48 @@ def _cover_every_type(rows: list[dict], budget: int) -> list[dict]:
         another 168 near-unanswerable: 244 of 1,296, 19% of the eval set, lost to a slicing choice
         rather than to model quality. The damage lands hardest on the REPORT metric, `macro_f1`,
         which weights all 33 classes equally — six classes pinned at 0.0 cap it near 0.82 before
-        the model answers anything.
+        the model answers anything. Every multiconer run up to 2026-10-21 trained on that prefix.
 
-    Rarest type first, because the head classes will be re-supplied by the corpus-order fill at the
-    end whereas a thin class gets one chance. Deterministic throughout: types are visited in
-    ascending corpus frequency with the name as tie-break, and rows are taken in file order, so the
-    same corpus and budget always yield the same slice — `initial_train_cap` has to be reproducible
-    for a paired comparison across runs to mean anything.
+    WHY AN ORDER, NOT A BUDGETED SELECTION
+        The first fix (`_cover_every_type`, never wired in) chose a SET for a given budget. Two
+        callers break that:
+          * `curate._mine_from_task_sources` asks for `consumed + k` rows and keeps `[consumed:]` as
+            new. That is only correct if every load is a prefix of every larger load; a per-budget
+            selection re-draws rows already held and skips others.
+          * the data-scarcity ablation loads 100 rows. A 40-mention floor taken rarest-type-first
+            spends all 100 on the two or three rarest types.
+        One fixed order serves both: `load(N)` is its first N rows, so loads nest, and a small N
+        still gets the head of a round-robin across all 33 types.
+
+    THE ORDER. Round-robin across types, rarest type first (corpus frequency, then name), one new
+    row per type per round, for `floor` rounds — each type's rows in file order. Then every row not
+    yet placed, in file order, so the bulk of a large slice keeps the corpus's distribution. Fully
+    deterministic: the same corpus always yields the same order.
     """
-    if budget >= len(rows) or budget <= 0:
-        return rows[:budget] if budget > 0 else []
-
     by_type: dict[str, list[int]] = {}
     for index, row in enumerate(rows):
         for entity in row.get("entities") or []:
-            by_type.setdefault(str(entity.get("type")), []).append(index)
+            members = by_type.setdefault(str(entity.get("type")), [])
+            if not members or members[-1] != index:
+                members.append(index)
 
-    order = sorted(by_type, key=lambda t: (len(by_type[t]), t))
-    taken: set[int] = set()
-    for entity_type in order:
-        secured = 0
-        for index in by_type[entity_type]:
-            if secured >= _PER_TYPE_FLOOR or len(taken) >= budget:
-                break
-            if index not in taken:
-                taken.add(index)
-            secured += 1
-
-    # Remaining budget goes to corpus order, which keeps the slice's overall distribution close to
-    # the corpus's instead of over-representing whatever the floor pass happened to pull in.
-    for index in range(len(rows)):
-        if len(taken) >= budget:
-            break
-        taken.add(index)
-    return [rows[i] for i in sorted(taken)]
+    types = sorted(by_type, key=lambda t: (len(by_type[t]), t))
+    cursor = {t: 0 for t in types}
+    placed: set[int] = set()
+    order: list[int] = []
+    for _ in range(floor):
+        for entity_type in types:
+            members = by_type[entity_type]
+            # This type's next row not already placed by another type's turn.
+            while cursor[entity_type] < len(members) and members[cursor[entity_type]] in placed:
+                cursor[entity_type] += 1
+            if cursor[entity_type] < len(members):
+                index = members[cursor[entity_type]]
+                placed.add(index)
+                order.append(index)
+                cursor[entity_type] += 1
+    order.extend(i for i in range(len(rows)) if i not in placed)
+    return order
 
 
 def load_multiconer(
@@ -349,21 +357,22 @@ def load_multiconer(
         f"(dev is the SELECTION split; the headline comes from load_report_split)")
     if removed:
         log(f"      [multiconer] dropped {removed} train row(s) whose text also appears in dev")
-    # NOT YET STRATIFIED — see patches/multiconer.py.stratified-slice and the note below.
-    #
-    # `_cover_every_type` is written, tested and measured (33/33 types in the same 5,000-row
-    # budget, versus 27/33 for this prefix slice) but is deliberately NOT wired in while run
-    # 39881531 is live: that run would re-import this module on a Slurm requeue and any subsequent
-    # `mine_new_real` would then draw from a different distribution than the one it started on,
-    # splicing two datasets into one result. Wire it in when 39881531 finishes.
+    # Type-covering order, not a prefix — see `training_priority_order`. Wired in 2026-10-21; every
+    # multiconer run before that trained on `train[:max_train]` and saw 27 of the 33 types.
+    order = training_priority_order(train)
+    train = [train[i] for i in order[:max_train]]
     # Counted on the slice we RETURN, not on the corpus we discard. This line used to describe all
     # 16,763 rows and report "rarest: PrivateCorp 201, ArtWork 199, Clothing 198" while handing the
     # caller a 5,000-row prefix in which SIX of the 33 types had zero mentions — so the log
     # certified coverage the training data did not have.
     mentions = Counter(e["type"] for row in train for e in row["entities"])
-    log(f"      [multiconer] train mentions across {len(mentions)} type(s); "
-        f"rarest: {dict(mentions.most_common()[-3:])}")
-    return train[:max_train], dev[:max_test]
+    missing = [t for t in ENTITY_TYPES if t not in mentions]
+    log(f"      [multiconer] train={len(train)} row(s), {len(mentions)}/{len(ENTITY_TYPES)} "
+        f"type(s) present; rarest: {dict(mentions.most_common()[-3:])}")
+    if missing:
+        log(f"      [multiconer] WARNING: no training mentions of {missing} — macro_f1 scores "
+            f"these classes 0 by construction")
+    return train, dev[:max_test]
 
 
 def load_report_split(log=print) -> list[dict]:

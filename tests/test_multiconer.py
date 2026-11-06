@@ -288,3 +288,60 @@ def test_an_empty_eval_set_scores_zero_without_dividing_by_zero():
         result = score_fn(empty, [])
         assert result["f1"] == 0.0
         assert result["format_valid"] == 0.0
+
+
+# --------------------------------------------------------------------------
+# The TRAINING slice (`load_multiconer`), as opposed to the report slice above
+# --------------------------------------------------------------------------
+
+
+def _file_ordered_corpus() -> list[dict]:
+    """The shape that broke the prefix slice: the CoNLL file is not shuffled by entity type, so
+    the first rows only ever mention a few head types and every rare type sits at the end."""
+    head = [_row([ENTITY_TYPES[i % 3]], f"h{i}") for i in range(6000)]
+    tail = [_row([t], f"{t}{k}") for t in ENTITY_TYPES[3:] for k in range(60)]
+    return head + tail
+
+
+def test_the_training_order_covers_every_type_at_the_full_budget():
+    """THE BUG THIS FIXES. `train[:5000]` of the real file held 27 of 33 types; the eval split
+    holds all 33, so six classes were unanswerable by construction."""
+    from data.loaders.multiconer import training_priority_order
+
+    rows = _file_ordered_corpus()
+    assert {e["type"] for r in rows[:5000] for e in r["entities"]} == set(ENTITY_TYPES[:3])
+    picked = [rows[i] for i in training_priority_order(rows)[:5000]]
+    assert {e["type"] for r in picked for e in r["entities"]} == set(ENTITY_TYPES)
+
+
+def test_a_scarce_budget_still_spreads_across_every_type():
+    """The data-scarcity ablation loads 100 rows. A fixed 40-mention floor taken rarest-type-first
+    would spend all 100 on the two or three rarest types; the round-robin gives each type a few."""
+    from data.loaders.multiconer import training_priority_order
+
+    rows = _file_ordered_corpus()
+    picked = [rows[i] for i in training_priority_order(rows)[:100]]
+    assert {e["type"] for r in picked for e in r["entities"]} == set(ENTITY_TYPES)
+
+
+def test_a_larger_load_extends_a_smaller_one_so_mining_reads_only_new_rows():
+    """`curate._mine_from_task_sources` asks for `consumed + k` rows and keeps `[consumed:]` as new.
+    That is only correct if every load is a prefix of every larger one."""
+    from data.loaders.multiconer import training_priority_order
+
+    order = training_priority_order(_file_ordered_corpus())
+    assert len(order) == len(set(order)) == len(_file_ordered_corpus())
+    assert order == training_priority_order(_file_ordered_corpus())
+
+
+def test_load_multiconer_returns_the_priority_prefix(monkeypatch):
+    import data.loaders.multiconer as loader
+
+    corpus = _file_ordered_corpus()
+    dev = [_row([t], f"dev-{t}") for t in ENTITY_TYPES]
+    monkeypatch.setattr(loader, "_read_rows",
+                        lambda split: [dict(r) for r in (corpus if split == "train" else dev)])
+    small, _ = loader.load_multiconer(max_train=300, log=lambda *_: None)
+    large, _ = loader.load_multiconer(max_train=900, log=lambda *_: None)
+    assert [r["text"] for r in large[:300]] == [r["text"] for r in small]
+    assert {e["type"] for r in small for e in r["entities"]} == set(ENTITY_TYPES)
