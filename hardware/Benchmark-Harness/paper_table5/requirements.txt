@@ -1,0 +1,26 @@
+# One environment for the whole Table 5 pipeline (Python 3.10-3.13; MNN 3.4.0 has no 3.14 wheel):
+#   uv venv .venv_pb --python 3.12      (or: python3.12 -m venv .venv_pb)
+#   uv pip install --python .venv_pb -r requirements.txt     (or: .venv_pb/bin/pip install -r requirements.txt)
+# Versions follow the pinned tools: llama.cpp eadc418 requirements-convert_hf_to_gguf.txt and
+# MNN 510ac8f transformers/llm/export/requirements.txt, with MNN pinned to 3.4.0 (28 commits after 510ac8f),
+# whose bundled converter (mnnconvert) produces models the pinned runtime can load.
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch~=2.6.0
+numpy~=1.26.4
+sentencepiece~=0.2.0
+transformers>=4.57.1,<5.0.0
+protobuf>=4.21.0,<5.0.0
+safetensors
+huggingface_hub
+MNN==3.4.0
+onnx
+onnxslim
+onnxruntime
+peft
+datasets
+Pillow
+requests
+tqdm
+yaspin
+perfetto
+truststore

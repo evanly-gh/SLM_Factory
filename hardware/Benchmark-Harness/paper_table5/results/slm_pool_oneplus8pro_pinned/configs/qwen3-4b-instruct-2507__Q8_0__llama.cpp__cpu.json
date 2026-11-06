@@ -1,0 +1,93 @@
+{
+ "config": {
+  "id": "qwen3-4b-instruct-2507__Q8_0__llama.cpp__cpu",
+  "model": "qwen3-4b-instruct-2507",
+  "quant": "Q8_0",
+  "bits": 8,
+  "framework": "llama.cpp",
+  "backend": "cpu",
+  "ref": "pinned"
+ },
+ "model_file": {
+  "name": "qwen3-4b-instruct-2507",
+  "hf_id": "Qwen/Qwen3-4B-Instruct-2507",
+  "framework": "llama.cpp",
+  "quant": "Q8_0",
+  "bits": 8,
+  "ref": "pinned",
+  "path": "gguf/qwen3-4b-instruct-2507-q8_0.gguf",
+  "files": {
+   "qwen3-4b-instruct-2507-q8_0.gguf": 4280403616
+  },
+  "converter": "llama.cpp eadc4184caee convert_hf_to_gguf"
+ },
+ "started": "2026-10-14T21:12:43.229654",
+ "invocations": {
+  "prefill": {
+   "exit": -9,
+   "timed_out": false,
+   "seconds": 73.3,
+   "marks": 2,
+   "cpu_busy": 0.612,
+   "gate": {
+    "passed": true,
+    "waited_s": 0.4,
+    "issues": null,
+    "battery_temp_c": 23.2,
+    "cpu_caps_khz": {
+     "policy0": 1804800,
+     "policy4": 2419200,
+     "policy7": 2841600
+    },
+    "thermal_status": 0
+   },
+   "state_before": {
+    "epoch_ms": 1792037682509,
+    "battery_temp_c": 23.2,
+    "battery_level": 49,
+    "battery_status": 4,
+    "externally_powered": false,
+    "power_sources": [],
+    "cpu_caps_khz": {
+     "policy0": 1804800,
+     "policy4": 2419200,
+     "policy7": 2841600
+    },
+    "cpu_hw_max_khz": {
+     "policy0": 1804800,
+     "policy4": 2419200,
+     "policy7": 2841600
+    },
+    "cpu_capped": false,
+    "screen": "Awake",
+    "thermal_status": 0
+   },
+   "state_after": {
+    "epoch_ms": 1792037756551,
+    "battery_temp_c": 24.0,
+    "battery_level": 48,
+    "battery_status": 4,
+    "externally_powered": false,
+    "power_sources": [],
+    "cpu_caps_khz": {
+     "policy0": 1804800,
+     "policy4": 2419200,
+     "policy7": 2841600
+    },
+    "cpu_hw_max_khz": {
+     "policy0": 1804800,
+     "policy4": 2419200,
+     "policy7": 2841600
+    },
+    "cpu_capped": false,
+    "screen": "Awake",
+    "thermal_status": 0
+   },
+   "idle_window": null
+  }
+ },
+ "windows": [],
+ "status": "failed",
+ "error": "does not fit in RAM: 657 MB of the benchmark process was swapped out (stopped at > 512 MB)",
+ "finished": "2026-10-14T21:16:11.557211"
+}

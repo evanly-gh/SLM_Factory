@@ -1,0 +1,237 @@
+{
+ "started": "2026-10-15T03:06:21.881357",
+ "device": {
+  "serial": "10.0.0.36:5555",
+  "manufacturer": "OnePlus",
+  "model": "IN2025",
+  "device": "OnePlus8Pro",
+  "soc": "SM8250",
+  "platform": "kona",
+  "android": "13",
+  "sdk": "33",
+  "build": "OnePlus/OnePlus8Pro/OnePlus8Pro:13/RKQ1.211119.001/Q.204faf2-2-7cfdc8:user/release-keys",
+  "mem_total_kb": 11789764,
+  "cpu_clusters": {
+   "policy0": {
+    "max_khz": 1804800,
+    "cpus": [
+     0,
+     1,
+     2,
+     3
+    ]
+   },
+   "policy4": {
+    "max_khz": 2419200,
+    "cpus": [
+     4,
+     5,
+     6
+    ]
+   },
+   "policy7": {
+    "max_khz": 2841600,
+    "cpus": [
+     7
+    ]
+   }
+  },
+  "ncpu": 8
+ },
+ "profile": {
+  "id": "oneplus8pro",
+  "label": "OnePlus 8 Pro",
+  "match": {
+   "model": "^IN2025"
+  },
+  "paper_column": null,
+  "proxy_column": "xiaomi14",
+  "max_temp_c": 28.0,
+  "energy_method": null,
+  "_note": "Snapdragon 865 (SM8250), 1+3+4 cores, dotprod and fp16 but no i8mm: llama.cpp must be built with -march=armv8.2-a+dotprod+fp16, not the default armv8.7a. The paper's oldest phone (Xiaomi 14, SM8650) is four SoC generations newer, so it is only a loose proxy."
+ },
+ "energy_discovery": {
+  "root": {
+   "su_output": "/system/bin/sh: su: inaccessible or not found",
+   "rooted": false
+  },
+  "powercap": {
+   "zones": [],
+   "usable": false,
+   "needs_su": false
+  },
+  "powerstats": {
+   "services": [
+    "android.hardware.power.IPower/default",
+    "power",
+    "power_monitor",
+    "powerstats",
+    "vendor.oplus.hardware.power.powermonitor.IPowerMonitor/default"
+   ],
+   "service": null,
+   "dump_head": null
+  },
+  "battery_dir": null,
+  "battery_files": []
+ },
+ "params": {
+  "serial": "10.0.0.36:5555",
+  "ref": "head",
+  "models": [
+   "qwen3.5-0.8b",
+   "qwen3.5-2b",
+   "qwen3.5-4b",
+   "qwen3.5-0.8b",
+   "qwen3.5-2b",
+   "qwen3.5-4b"
+  ],
+  "pool_file": "pools/slm_factory_android_pool.py",
+  "quants": [
+   "Q4",
+   "Q8",
+   "F16"
+  ],
+  "frameworks": [
+   "mnn"
+  ],
+  "backends": [
+   "gpu"
+  ],
+  "trials": 3,
+  "n_prompt": 256,
+  "n_gen": 256,
+  "max_temp": null,
+  "gate_timeout": 1800,
+  "gate_plateau": null,
+  "rest": 15,
+  "idle_seconds": 40,
+  "pre_idle_seconds": 0.0,
+  "min_energy_seconds": 0.0,
+  "prime_seconds": 0,
+  "timeout": 5400,
+  "min_battery": 5,
+  "llama_threads": 4,
+  "mnn_threads": null,
+  "no_controls": false,
+  "screen": "on",
+  "no_perfetto": true,
+  "results_dir": "results/slm_pool_oneplus8pro_head",
+  "force": false,
+  "plan": false,
+  "smallest_first": true,
+  "recover_energy": false
+ },
+ "max_temp_c": 28.0,
+ "idle_cpu_busy_at_start": 0.024,
+ "screen_on": true,
+ "wireless_adb": true,
+ "binaries": {
+  "llama_cpu": {
+   "framework": "llama.cpp",
+   "target": "llama_cpu",
+   "ref": "head",
+   "commit": "9c2e0e491a822adae1f0b1c831adb4160057d24f",
+   "cmake_args": [
+    "-G",
+    "Ninja",
+    "-DCMAKE_MAKE_PROGRAM=/Users/ksd/Library/Android/sdk/cmake/4.1.2/bin/ninja",
+    "-DCMAKE_TOOLCHAIN_FILE=/Users/ksd/Library/Android/sdk/ndk/30.0.14904198/build/cmake/android.toolchain.cmake",
+    "-DANDROID_ABI=arm64-v8a",
+    "-DANDROID_PLATFORM=android-28",
+    "-DCMAKE_BUILD_TYPE=Release",
+    "-DCMAKE_C_FLAGS=-march=armv8.2-a+dotprod+fp16",
+    "-DCMAKE_CXX_FLAGS=-march=armv8.2-a+dotprod+fp16",
+    "-DGGML_OPENMP=OFF",
+    "-DGGML_LLAMAFILE=OFF",
+    "-DBUILD_SHARED_LIBS=OFF",
+    "-DLLAMA_CURL=OFF",
+    "-DLLAMA_BUILD_TESTS=OFF",
+    "-DLLAMA_BUILD_EXAMPLES=OFF",
+    "-DLLAMA_BUILD_SERVER=OFF"
+   ],
+   "binaries": [
+    "llama-bench",
+    "llama-quantize"
+   ],
+   "built": "2026-10-12T18:19:56.363546"
+  },
+  "llama_gpu": {
+   "framework": "llama.cpp",
+   "target": "llama_gpu",
+   "ref": "head",
+   "commit": "9c2e0e491a822adae1f0b1c831adb4160057d24f",
+   "cmake_args": [
+    "-G",
+    "Ninja",
+    "-DCMAKE_MAKE_PROGRAM=/Users/ksd/Library/Android/sdk/cmake/4.1.2/bin/ninja",
+    "-DCMAKE_TOOLCHAIN_FILE=/Users/ksd/Library/Android/sdk/ndk/30.0.14904198/build/cmake/android.toolchain.cmake",
+    "-DANDROID_ABI=arm64-v8a",
+    "-DANDROID_PLATFORM=android-28",
+    "-DCMAKE_BUILD_TYPE=Release",
+    "-DCMAKE_C_FLAGS=-march=armv8.2-a+dotprod+fp16",
+    "-DCMAKE_CXX_FLAGS=-march=armv8.2-a+dotprod+fp16",
+    "-DGGML_OPENMP=OFF",
+    "-DGGML_LLAMAFILE=OFF",
+    "-DBUILD_SHARED_LIBS=OFF",
+    "-DLLAMA_CURL=OFF",
+    "-DLLAMA_BUILD_TESTS=OFF",
+    "-DLLAMA_BUILD_EXAMPLES=OFF",
+    "-DLLAMA_BUILD_SERVER=OFF",
+    "-DGGML_OPENCL=ON",
+    "-DGGML_OPENCL_USE_ADRENO_KERNELS=ON",
+    "-DGGML_OPENCL_EMBED_KERNELS=ON",
+    "-DOpenCL_INCLUDE_DIR=/Users/ksd/pb_work_8pro/src/OpenCL-Headers-886dc9b7ff48",
+    "-DOpenCL_LIBRARY=/Users/ksd/pb_work_8pro/build/opencl-icd-loader/libOpenCL.so"
+   ],
+   "binaries": [
+    "llama-bench"
+   ],
+   "built": "2026-10-12T18:20:51.317978"
+  },
+  "mnn": {
+   "framework": "mnn",
+   "target": "mnn",
+   "ref": "head",
+   "commit": "a8ec49781e191d7b94e31974210b34010a02ec1e",
+   "cmake_args": [
+    "-G",
+    "Ninja",
+    "-DCMAKE_MAKE_PROGRAM=/Users/ksd/Library/Android/sdk/cmake/4.1.2/bin/ninja",
+    "-DCMAKE_TOOLCHAIN_FILE=/Users/ksd/Library/Android/sdk/ndk/30.0.14904198/build/cmake/android.toolchain.cmake",
+    "-DANDROID_ABI=arm64-v8a",
+    "-DANDROID_PLATFORM=android-28",
+    "-DCMAKE_BUILD_TYPE=Release",
+    "-DANDROID_STL=c++_static",
+    "-DMNN_USE_LOGCAT=false",
+    "-DMNN_BUILD_BENCHMARK=ON",
+    "-DMNN_USE_SSE=OFF",
+    "-DMNN_BUILD_TEST=ON",
+    "-DMNN_BUILD_FOR_ANDROID_COMMAND=true",
+    "-DNATIVE_LIBRARY_OUTPUT=.",
+    "-DNATIVE_INCLUDE_OUTPUT=.",
+    "-DMNN_BUILD_LLM=true",
+    "-DMNN_OPENCL=true",
+    "-DMNN_ARM82=ON"
+   ],
+   "binaries": [
+    "llm_bench"
+   ],
+   "libs": [
+    "libMNN.so",
+    "libMNN_CL.so",
+    "libMNN_Express.so",
+    "libllm.so"
+   ],
+   "built": "2026-10-11T09:57:47.303734"
+  }
+ },
+ "energy_dir": "energy/20261015_030621",
+ "wake_lock": false,
+ "radio_mode": "airplane mode already on (Wi-Fi kept on in it)",
+ "idle_window": [
+  114565.15,
+  114603.27
+ ],
+ "energy_headline_method": null,
+ "energy_methods": []
+}

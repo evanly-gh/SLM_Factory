@@ -1,0 +1,30 @@
+{
+ "config": {
+  "id": "qwen3-4b-instruct-2507__Q4_0__llama.cpp__cpu",
+  "model": "qwen3-4b-instruct-2507",
+  "quant": "Q4_0",
+  "bits": 4,
+  "framework": "llama.cpp",
+  "backend": "cpu",
+  "ref": "pinned"
+ },
+ "model_file": {
+  "name": "qwen3-4b-instruct-2507",
+  "hf_id": "Qwen/Qwen3-4B-Instruct-2507",
+  "framework": "llama.cpp",
+  "quant": "Q4_0",
+  "bits": 4,
+  "ref": "pinned",
+  "path": "gguf/qwen3-4b-instruct-2507-q4_0.gguf",
+  "files": {
+   "qwen3-4b-instruct-2507-q4_0.gguf": 2369545376
+  },
+  "converter": "llama.cpp eadc4184caee convert_hf_to_gguf + llama-quantize"
+ },
+ "started": "2026-10-13T01:39:14.723194",
+ "invocations": {},
+ "windows": [],
+ "status": "failed",
+ "error": "does not fit in RAM: 2.21 GiB of weights in memory on a phone with 3.72 GiB RAM (limit 55%); not run",
+ "finished": "2026-10-13T01:39:14.723277"
+}

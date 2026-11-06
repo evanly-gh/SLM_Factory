@@ -1,0 +1,30 @@
+ggml_opencl: selected platform: 'QUALCOMM Snapdragon(TM)'
+
+ggml_opencl: device: 'QUALCOMM Adreno(TM) 840 (OpenCL 3.0 Adreno(TM) 840)'
+ggml_opencl: OpenCL driver: OpenCL 3.0 QUALCOMM build: 0842.21 Compiler E031.50.19.14
+ggml_opencl: vector subgroup broadcast support: true
+ggml_opencl: device FP16 support: true
+ggml_opencl: mem base addr align: 128
+ggml_opencl: max mem alloc size: 1889 MB
+ggml_opencl: device max workgroup size: 1024
+ggml_opencl: SVM coarse grain buffer support: true
+ggml_opencl: SVM fine grain buffer support: true
+ggml_opencl: SVM fine grain system support: false
+ggml_opencl: SVM atomics support: true
+ggml_opencl: flattening quantized weights representation as struct of arrays (GGML_OPENCL_SOA_Q)
+ggml_opencl: using kernels optimized for Adreno (GGML_OPENCL_USE_ADRENO_KERNELS)
+ggml_opencl: loading OpenCL kernels.............................................................................
+ggml_opencl: default device: 'QUALCOMM Adreno(TM) 840 (OpenCL 3.0 Adreno(TM) 840)'
+PB_MARK llama rep=0 begin=2200953625318004 end=2200955183021129 n_prompt=256 n_gen=0 n_depth=0
+PB_MARK llama rep=1 begin=2200955183168056 end=2200956740218107 n_prompt=256 n_gen=0 n_depth=0
+PB_MARK llama rep=2 begin=2200956740340711 end=2200958297548002 n_prompt=256 n_gen=0 n_depth=0
+PB_MARK llama rep=3 begin=2200958297657325 end=2200959859264460 n_prompt=256 n_gen=0 n_depth=0
+PB_MARK llama rep=4 begin=2200959859449304 end=2200961416455189 n_prompt=256 n_gen=0 n_depth=0
+PB_MARK llama rep=5 begin=2200961416573470 end=2200962975054094 n_prompt=256 n_gen=0 n_depth=0
+PB_MARK llama rep=6 begin=2200962975297844 end=2200964542396333 n_prompt=256 n_gen=0 n_depth=0
+PB_MARK llama rep=7 begin=2200964542689354 end=2200966107345968 n_prompt=256 n_gen=0 n_depth=0
+PB_MARK llama rep=8 begin=2200966107563520 end=2200967669366280 n_prompt=256 n_gen=0 n_depth=0
+PB_MARK llama rep=9 begin=2200967669612634 end=2200969238841904 n_prompt=256 n_gen=0 n_depth=0
+PB_MARK llama rep=10 begin=2200969239083467 end=2200970805606800 n_prompt=256 n_gen=0 n_depth=0
+PB_MARK llama rep=11 begin=2200970805899977 end=2200972375901747 n_prompt=256 n_gen=0 n_depth=0
+PB_MARK llama rep=12 begin=2200972376122737 end=2200973945885080 n_prompt=256 n_gen=0 n_depth=0

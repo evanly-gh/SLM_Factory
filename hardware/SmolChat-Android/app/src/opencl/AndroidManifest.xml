@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  "opencl" flavor only (merged into app/src/main/AndroidManifest.xml).
+  Since targetSdk 31, an app's classloader namespace can only load a vendor
+  public library (listed in /vendor/etc/public.libraries.txt) if it declares
+  it here. libggml-opencl.so's DT_NEEDED libOpenCL.so then resolves to the
+  device's own vendor driver (e.g. /vendor/lib64/libOpenCL.so on Adreno)
+  instead of a bundled Khronos ICD loader, which on Android finds no ICDs.
+  required="false": the app still installs/runs (CPU-only) on devices
+  without it.
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application>
+        <uses-native-library
+            android:name="libOpenCL.so"
+            android:required="false" />
+    </application>
+</manifest>

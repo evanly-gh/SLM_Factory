@@ -1,0 +1,14 @@
+CPU Group: [ 0  1  2  3 ], 300000 - 1804800
+CPU Group: [ 4  5  6 ], 710400 - 2419200
+CPU Group: [ 7 ], 844800 - 2841600
+parsed /proc/cpuinfo Hardware = "Qualcomm Technologies, Inc SM8250"
+(last_midr & (CPUINFO_ARM_MIDR_IMPLEMENTER_MASK | CPUINFO_ARM_MIDR_PART_MASK))=0x 4100d0d0 in _getInfoArm, 1250 
+The device supports: i8sdot:1, fp16:1, i8mm: 0, sve2: 0, sme2: 0, perfCores: 0
+Can't open file:tmp/mnn_cachefile.bin
+Load Cache file error.
+| model                          |  modelSize | backend    | threads | precision  | llm_demo   | speed(tok/s) |
+| ------------------------------ | ---------: | ---------- | ----: | ---------- | ---------- | ------------ |
+| qwen3.5-0.8b-mnn-paper-default-q4-head | 403.75 MiB | OPENCL     |     4 | Low        | prompt=256<br>decode=256 | 205.97 ± 0.63<br>25.30 ± 0.02 |
+decode wall speed (incl. sampling): 23.54 ± 0.04 tok/s
+Update cache to tmp/mnn_cachefile.bin, size = 1049736
+

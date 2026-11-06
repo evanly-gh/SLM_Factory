@@ -1,0 +1,88 @@
+{
+ "config": {
+  "id": "qwen3-1.7b__Q8_0__llama.cpp__cpu",
+  "model": "qwen3-1.7b",
+  "quant": "Q8_0",
+  "bits": 8,
+  "framework": "llama.cpp",
+  "backend": "cpu",
+  "ref": "pinned"
+ },
+ "model_file": {
+  "name": "qwen3-1.7b",
+  "hf_id": "Qwen/Qwen3-1.7B",
+  "framework": "llama.cpp",
+  "quant": "Q8_0",
+  "bits": 8,
+  "ref": "pinned",
+  "path": "gguf/qwen3-1.7b-q8_0.gguf",
+  "files": {
+   "qwen3-1.7b-q8_0.gguf": 2165039360
+  },
+  "converter": "llama.cpp eadc4184caee convert_hf_to_gguf"
+ },
+ "started": "2026-10-13T08:36:34.222215",
+ "invocations": {
+  "prefill": {
+   "exit": 1,
+   "timed_out": false,
+   "seconds": 10.9,
+   "marks": 0,
+   "cpu_busy": 0.041,
+   "gate": {
+    "passed": true,
+    "waited_s": 0.3,
+    "issues": null,
+    "battery_temp_c": 19.0,
+    "cpu_caps_khz": {
+     "policy0": 2001000,
+     "policy4": 1500000
+    },
+    "thermal_status": 0
+   },
+   "state_before": {
+    "epoch_ms": 1791906211808,
+    "battery_temp_c": 19.0,
+    "battery_level": 50,
+    "battery_status": 3,
+    "externally_powered": false,
+    "power_sources": [],
+    "cpu_caps_khz": {
+     "policy0": 2001000,
+     "policy4": 1500000
+    },
+    "cpu_hw_max_khz": {
+     "policy0": 2001000,
+     "policy4": 1500000
+    },
+    "cpu_capped": false,
+    "screen": "Asleep",
+    "thermal_status": 0
+   },
+   "state_after": {
+    "epoch_ms": 1791906224062,
+    "battery_temp_c": 19.0,
+    "battery_level": 50,
+    "battery_status": 3,
+    "externally_powered": false,
+    "power_sources": [],
+    "cpu_caps_khz": {
+     "policy0": 2001000,
+     "policy4": 1500000
+    },
+    "cpu_hw_max_khz": {
+     "policy0": 2001000,
+     "policy4": 1500000
+    },
+    "cpu_capped": false,
+    "screen": "Asleep",
+    "thermal_status": 0
+   },
+   "idle_window": null
+  }
+ },
+ "windows": [],
+ "status": "failed",
+ "error": "crash/error (exit 1): main: error: failed to load model '/data/local/tmp/paper_bench/models/qwen3-1.7b-q8_0.gguf'",
+ "finished": "2026-10-13T08:43:59.063688"
+}

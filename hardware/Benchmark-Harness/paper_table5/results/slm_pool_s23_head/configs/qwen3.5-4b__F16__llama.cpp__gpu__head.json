@@ -1,0 +1,30 @@
+{
+ "config": {
+  "id": "qwen3.5-4b__F16__llama.cpp__gpu__head",
+  "model": "qwen3.5-4b",
+  "quant": "F16",
+  "bits": 16,
+  "framework": "llama.cpp",
+  "backend": "gpu",
+  "ref": "head"
+ },
+ "model_file": {
+  "name": "qwen3.5-4b",
+  "hf_id": "Qwen/Qwen3.5-4B",
+  "framework": "llama.cpp",
+  "quant": "F16",
+  "bits": 16,
+  "ref": "head",
+  "path": "gguf/qwen3.5-4b-f16-head.gguf",
+  "files": {
+   "qwen3.5-4b-f16-head.gguf": 8665620320
+  },
+  "converter": "llama.cpp 46baf1f1fec5 convert_hf_to_gguf"
+ },
+ "started": "2026-10-08T20:27:12.958611",
+ "invocations": {},
+ "windows": [],
+ "status": "failed",
+ "error": "does not fit in RAM: 8.07 GiB of weights in memory on a phone with 6.91 GiB RAM (limit 75%); not run",
+ "finished": "2026-10-08T20:27:12.958611"
+}

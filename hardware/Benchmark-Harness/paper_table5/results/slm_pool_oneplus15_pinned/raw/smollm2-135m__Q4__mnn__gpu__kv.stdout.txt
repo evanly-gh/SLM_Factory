@@ -1,0 +1,12 @@
+Can't open file:/sys/devices/system/cpu/cpufreq/boost/affected_cpus
+CPU Group: [ 0  1  2  3  4  5 ], 384000 - 3628800
+CPU Group: [ 6  7 ], 768000 - 4608000
+(last_midr & (CPUINFO_ARM_MIDR_IMPLEMENTER_MASK | CPUINFO_ARM_MIDR_PART_MASK))=0x 51000020 in _getInfoArm, 1234 
+The device supports: i8sdot:1, fp16:1, i8mm: 1, sve2: 1, sme2: 0
+Can't open file:tmp/mnn_cachefile.bin
+Load Cache file error.
+| model                          |  modelSize | backend    | threads | precision  | llm_demo   | speed(tok/s) |
+| ------------------------------ | ---------: | ---------- | ----: | ---------- | ---------- | ------------ |
+| smollm2-135m-mnn-paper-default-q4 |  80.43 MiB | OPENCL     |     4 | Low        | prompt=256<br>decode=256 | 3666.11 ± 12.20<br>42.46 ± 0.05 |
+Update cache to tmp/mnn_cachefile.bin, size = 3314828
+

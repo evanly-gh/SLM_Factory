@@ -1,0 +1,9 @@
+Can't open file:/sys/devices/system/cpu/cpufreq/schedutil/affected_cpus
+CPU Group: [ 4  5  6  7 ], 400000 - 1500000
+CPU Group: [ 0  1  2  3 ], 900000 - 2001000
+The device supports: i8sdot:0, fp16:0, i8mm: 0, sve2: 0, sme2: 0, perfCores: 0
+| model                          |  modelSize | backend    | threads | precision  | llm_demo   | speed(tok/s) |
+| ------------------------------ | ---------: | ---------- | ----: | ---------- | ---------- | ------------ |
+| qwen3.5-0.8b-mnn-paper-default-q4-head | 403.75 MiB | CPU        |     4 | Low        | prompt=256<br>decode=256 | 9.11 ± 0.02<br>5.84 ± 0.14 |
+decode wall speed (incl. sampling): 5.77 ± 0.14 tok/s
+

@@ -1,0 +1,13 @@
+model,quant,framework,backend,status,error,prefill_tps,prefill_tps_std,prefill_reps,prefill_uj_per_token,prefill_energy_valid,decode_tps,decode_tps_std,decode_reps,decode_uj_per_token,decode_energy_valid,energy_kind,energy_method,warning
+llama3.2-1b,Q4_0,llama.cpp,cpu,ok,,369.89,4.09,365.19 371.89 372.6,,False,56.1,0.55,55.47 56.36 56.48,,False,whole device (net of idle),,
+llama3.2-1b,Q4_0,llama.cpp,gpu,ok,,1073.04,9.37,1068.79 1083.78 1066.56,,False,37.61,0.23,37.36 37.81 37.65,,False,whole device (net of idle),,
+llama3.2-1b,Q4,mnn,cpu,ok,,150.02,1.18,151.32 149.0 149.74,,False,53.49,0.3,53.63 53.7 53.15,,False,whole device (net of idle),,
+llama3.2-1b,Q4,mnn,gpu,ok,,681.77,4.48,684.03 684.67 676.61,,False,18.8,0.37,19.17 18.43 18.81,,False,whole device (net of idle),,
+llama3.2-3b,Q4_0,llama.cpp,cpu,ok,,134.68,1.59,133.28 136.42 134.34,,False,23.86,0.08,23.86 23.78 23.94,,False,whole device (net of idle),,
+llama3.2-3b,Q4_0,llama.cpp,gpu,ok,,413.57,1.29,412.08 414.38 414.26,,False,19.29,0.07,19.35 19.3 19.21,,False,whole device (net of idle),,
+llama3.2-3b,Q4,mnn,cpu,ok,,66.98,22.28,54.22 54.02 92.71,,False,21.53,0.04,21.49 21.54 21.57,,False,whole device (net of idle),,
+llama3.2-3b,Q4,mnn,gpu,ok,,258.26,0.92,257.2 258.88 258.7,,False,11.39,0.0,11.39 11.39 11.38,,False,whole device (net of idle),,
+qwen2.5-1.5b,Q4_0,llama.cpp,cpu,ok,,283.22,1.68,283.77 284.57 281.34,,False,45.25,0.32,44.89 45.34 45.5,,False,whole device (net of idle),,
+qwen2.5-1.5b,Q4_0,llama.cpp,gpu,ok,,747.64,6.56,747.03 741.4 754.48,,False,18.48,0.33,18.1 18.59 18.74,,False,whole device (net of idle),,
+qwen2.5-1.5b,Q4,mnn,cpu,ok,,111.93,0.8,111.05 112.6 112.13,,False,41.32,0.2,41.54 41.28 41.14,,False,whole device (net of idle),,
+qwen2.5-1.5b,Q4,mnn,gpu,ok,,475.81,2.08,473.4 476.93 477.09,,False,11.61,0.21,11.52 11.85 11.46,,False,whole device (net of idle),,

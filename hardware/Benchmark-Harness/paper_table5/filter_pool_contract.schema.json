@@ -1,0 +1,186 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "filter_pool_contract.schema.json",
+  "title": "filter_pool.py output contract, version 1",
+  "description": "The filtered model pool for one phone: every model x bit-width of the pool, whether it is kept under the limits, and the runtime (llama.cpp GGUF / MNN) and backend (CPU / GPU) to use. Written by filter_pool.py (results/filter_<profile>_filtered_pool.json) and returned by filter_pool.filter_pool().",
+  "type": "object",
+  "required": ["contract_version", "generated", "complete", "not_measured", "phone", "gpu", "conversion_failed",
+               "measurement", "limits", "rank_by", "filtered_pool", "entries", "summary"],
+  "additionalProperties": false,
+  "properties": {
+    "contract_version": {"const": 1},
+    "generated": {"type": "string", "description": "local time the contract was written, ISO 8601 (seconds)"},
+    "complete": {"type": ["boolean", "null"],
+                 "description": "true: every configuration the pool asks for was measured or could not be tried; false: some are still missing (session stopped on low battery or a lost connection; rerun the same command); null: unknown (filtered from existing results with --from)"},
+    "not_measured": {"type": "array", "items": {"type": "string", "pattern": "^.+__.+__(llama\\.cpp|mnn)__(cpu|gpu)$"},
+                     "description": "ids <model>__<quant>__<runtime>__<backend> of configurations not measured yet"},
+    "phone": {
+      "type": "object",
+      "required": ["serial", "manufacturer", "model", "soc", "android", "abi64", "llama_march", "opencl_lib",
+                   "label", "profile", "ram_gib"],
+      "additionalProperties": false,
+      "properties": {
+        "serial": {"type": ["string", "null"], "description": "adb serial used (ip:port when wireless)"},
+        "manufacturer": {"type": ["string", "null"]},
+        "model": {"type": ["string", "null"], "description": "ro.product.model, e.g. IN2025"},
+        "soc": {"type": ["string", "null"], "description": "e.g. SM8250"},
+        "android": {"type": ["string", "null"], "description": "Android version, e.g. 13"},
+        "abi64": {"type": ["string", "null"], "description": "64-bit ABI list, e.g. arm64-v8a"},
+        "llama_march": {"type": ["string", "null"], "description": "-march the llama.cpp binaries were built with for this CPU"},
+        "opencl_lib": {"type": ["string", "null"], "description": "the phone's OpenCL driver, null if none"},
+        "label": {"type": ["string", "null"], "description": "human-readable phone name, e.g. OnePlus 8 Pro"},
+        "profile": {"type": ["string", "null"], "description": "devices.json profile id (generated for unknown phones)"},
+        "ram_gib": {"type": ["number", "null"]}
+      }
+    },
+    "gpu": {
+      "type": "object",
+      "description": "per build ref (pinned / head): per runtime, null if its GPU backend runs on this phone, else why not",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {"llama.cpp": {"type": ["string", "null"]}, "mnn": {"type": ["string", "null"]}}
+      }
+    },
+    "conversion_failed": {
+      "type": "object",
+      "description": "{model: {runtime: {quant: why}}} for artifacts that could not be converted (those configurations are 'not tried')",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": {"type": "object", "additionalProperties": {"type": "string"}}
+      }
+    },
+    "measurement": {
+      "type": "object",
+      "required": ["results_dirs", "request", "configs_expected", "configs_measured", "configs_benchmarked",
+                   "energy_methods"],
+      "additionalProperties": false,
+      "properties": {
+        "results_dirs": {"type": "array", "items": {"type": "string"}},
+        "request": {
+          "type": "object", "required": ["prompt_tokens", "answer_tokens"], "additionalProperties": false,
+          "properties": {"prompt_tokens": {"type": "integer", "minimum": 0},
+                         "answer_tokens": {"type": "integer", "minimum": 0}},
+          "description": "request shape the energy per request is computed for"
+        },
+        "configs_expected": {"type": "integer", "minimum": 0},
+        "configs_measured": {"type": "integer", "minimum": 0},
+        "configs_benchmarked": {"type": "integer", "minimum": 0},
+        "energy_methods": {"type": "array", "items": {"type": "string"}}
+      }
+    },
+    "limits": {
+      "type": "object",
+      "required": ["max_peak_memory_mb", "min_prefill_tps", "min_decode_tps", "max_energy_j"],
+      "additionalProperties": false,
+      "description": "the limits applied; null = not checked",
+      "properties": {
+        "max_peak_memory_mb": {"type": ["number", "null"], "minimum": 0},
+        "min_prefill_tps": {"type": ["number", "null"], "minimum": 0},
+        "min_decode_tps": {"type": ["number", "null"], "minimum": 0},
+        "max_energy_j": {"type": ["number", "null"], "minimum": 0}
+      }
+    },
+    "rank_by": {"enum": ["decode", "prefill", "energy"],
+                "description": "how 'best' is chosen among the passing runtime/backend combinations"},
+    "filtered_pool": {
+      "type": "array",
+      "description": "what to deploy: one row per kept model x bit-width, in pool order",
+      "items": {
+        "type": "object",
+        "required": ["model", "hf_id", "bits", "quant", "runtime", "format", "backend"],
+        "additionalProperties": false,
+        "properties": {
+          "model": {"type": "string"},
+          "hf_id": {"type": ["string", "null"]},
+          "bits": {"$ref": "#/$defs/bits"},
+          "quant": {"$ref": "#/$defs/quant"},
+          "runtime": {"$ref": "#/$defs/runtime"},
+          "format": {"$ref": "#/$defs/format"},
+          "backend": {"$ref": "#/$defs/backend"}
+        }
+      }
+    },
+    "entries": {
+      "type": "array",
+      "description": "every model x bit-width of the pool, kept or removed, in pool order",
+      "items": {
+        "type": "object",
+        "required": ["model", "hf_id", "bits", "kept", "best", "alternatives", "tried"],
+        "additionalProperties": false,
+        "properties": {
+          "model": {"type": "string", "description": "short name, as in the pool file"},
+          "hf_id": {"type": ["string", "null"], "description": "Hugging Face repo id"},
+          "bits": {"$ref": "#/$defs/bits"},
+          "kept": {"type": "boolean"},
+          "best": {"oneOf": [{"$ref": "#/$defs/choice"}, {"type": "null"}],
+                   "description": "the combination to use; null when removed"},
+          "alternatives": {"type": "array", "items": {"$ref": "#/$defs/choice"},
+                           "description": "other passing combinations, ranked"},
+          "tried": {"type": "array", "items": {"$ref": "#/$defs/tried"},
+                    "description": "every runtime x backend for this model x bit-width, with the limits it broke"}
+        }
+      }
+    },
+    "summary": {
+      "type": "object",
+      "required": ["entries", "kept", "removed", "models_kept", "backend", "runtime"],
+      "additionalProperties": false,
+      "properties": {
+        "entries": {"type": "integer", "minimum": 0},
+        "kept": {"type": "integer", "minimum": 0},
+        "removed": {"type": "integer", "minimum": 0},
+        "models_kept": {"type": "integer", "minimum": 0},
+        "backend": {"type": "object", "propertyNames": {"$ref": "#/$defs/backend"},
+                    "additionalProperties": {"type": "integer"}},
+        "runtime": {"type": "object", "propertyNames": {"$ref": "#/$defs/runtime"},
+                    "additionalProperties": {"type": "integer"}}
+      }
+    }
+  },
+  "$defs": {
+    "bits": {"enum": [4, 8, 16]},
+    "quant": {"type": "string", "description": "GGUF: Q4_0, Q8_0, F16 (also Q4_K_M); MNN: Q4, Q8, F16"},
+    "runtime": {"enum": ["llama.cpp", "mnn"]},
+    "format": {"enum": ["GGUF", "MNN"]},
+    "backend": {"enum": ["cpu", "gpu"]},
+    "metrics": {
+      "type": "object",
+      "properties": {
+        "peak_memory_mb": {"type": ["number", "null"], "description": "peak process memory incl. GPU buffers, 10^6 bytes"},
+        "prefill_tps": {"type": ["number", "null"], "description": "tokens/s, 256-token prompt"},
+        "decode_tps": {"type": ["number", "null"], "description": "tokens/s, 256 tokens after a 256-token prompt"},
+        "energy_j_per_request": {"type": ["number", "null"], "description": "J, whole device net of idle, for measurement.request"}
+      }
+    },
+    "choice": {
+      "allOf": [{"$ref": "#/$defs/metrics"}],
+      "type": "object",
+      "required": ["quant", "runtime", "format", "backend", "peak_memory_mb", "prefill_tps", "decode_tps",
+                   "energy_j_per_request"],
+      "unevaluatedProperties": false,
+      "properties": {
+        "quant": {"$ref": "#/$defs/quant"},
+        "runtime": {"$ref": "#/$defs/runtime"},
+        "format": {"$ref": "#/$defs/format"},
+        "backend": {"$ref": "#/$defs/backend"}
+      }
+    },
+    "tried": {
+      "allOf": [{"$ref": "#/$defs/metrics"}],
+      "type": "object",
+      "required": ["quant", "runtime", "format", "backend", "passes", "reasons", "peak_memory_mb", "prefill_tps",
+                   "decode_tps", "energy_j_per_request"],
+      "unevaluatedProperties": false,
+      "properties": {
+        "quant": {"$ref": "#/$defs/quant"},
+        "runtime": {"$ref": "#/$defs/runtime"},
+        "format": {"$ref": "#/$defs/format"},
+        "backend": {"$ref": "#/$defs/backend"},
+        "passes": {"type": "boolean"},
+        "reasons": {"type": "array", "items": {"type": "string"},
+                    "description": "empty when it passes; else one per broken limit, or why it was not tried / not measured"}
+      }
+    }
+  }
+}

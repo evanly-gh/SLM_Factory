@@ -1,0 +1,6 @@
+PB_MARK mnn mode=pp rep=0 begin=2358229643331292 end=2358233748769676 prefill_us=4102976 decode_us=0 prompt=256 gen=0
+PB_MARK mnn mode=pp rep=1 begin=2358233748806134 end=2358237856095872 prefill_us=4104879 decode_us=0 prompt=256 gen=0
+PB_MARK mnn mode=pp rep=2 begin=2358237856111653 end=2358241955131391 prefill_us=4096657 decode_us=0 prompt=256 gen=0
+PB_MARK mnn mode=pp rep=3 begin=2358241955151027 end=2358246059654567 prefill_us=4101464 decode_us=0 prompt=256 gen=0
+PB_MARK mnn mode=pp rep=4 begin=2358246059668734 end=2358250154515815 prefill_us=4092239 decode_us=0 prompt=256 gen=0
+PB_MARK mnn mode=pp rep=5 begin=2358250154532690 end=2358254247829199 prefill_us=4090729 decode_us=0 prompt=256 gen=0

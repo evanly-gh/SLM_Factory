@@ -1,0 +1,97 @@
+{
+ "discovery": {
+  "serial": "10.0.0.239:5555",
+  "manufacturer": "OnePlus",
+  "model": "CPH2749",
+  "soc": "SM8850",
+  "android": "16",
+  "sdk": "36",
+  "cpus_online": "0-7",
+  "ncpu": 8,
+  "root": {
+   "su_output": "/system/bin/sh: su: inaccessible or not found",
+   "rooted": false
+  },
+  "powercap": {
+   "zones": [],
+   "usable": false,
+   "needs_su": false
+  },
+  "powerstats": {
+   "services": [
+    "android.hardware.power.IPower/default",
+    "android.hardware.power.stats.IPowerStats/default",
+    "oplusnaspower",
+    "power",
+    "power_monitor",
+    "powerstats",
+    "vendor.oplus.hardware.power.powermonitor.IPowerMonitor/default",
+    "vendor.qti.hardware.power.powermodule.IPowerModule/default"
+   ],
+   "service": "android.hardware.power.stats.IPowerStats/default",
+   "dump_head": "Error with service 'android.hardware.power.stats.IPowerStats/default' while dumping: FAILED_TRANSACTION\n"
+  },
+  "battery_dir": null,
+  "power_supply": [],
+  "battery_files": [],
+  "power_supply_diag": "type: cat: /sys/class/power_supply/battery/type: Permission denied\ncurrent_now: cat: /sys/class/power_supply/battery/current_now: Permission denied\ncharge_counter: cat: /sys/class/power_supply/battery/charge_counter: Permission denied\nvoltage_now: cat: /sys/class/power_supply/battery/voltage_now: Permission denied",
+  "perfetto_version": "Perfetto v49.0 (N/A)",
+  "state": {
+   "epoch_ms": 1791738665074,
+   "battery_temp_c": 23.1,
+   "battery_level": 100,
+   "battery_status": 3,
+   "externally_powered": false,
+   "power_sources": [],
+   "cpu_caps_khz": {
+    "policy0": 1996800,
+    "policy6": 2438400
+   },
+   "cpu_hw_max_khz": {
+    "policy0": 3628800,
+    "policy6": 4608000
+   },
+   "cpu_capped": true,
+   "screen": "Asleep",
+   "thermal_status": 0
+  }
+ },
+ "params": {
+  "cmd": "collect",
+  "serial": "10.0.0.239:5555",
+  "repeats": 4,
+  "window": 45,
+  "rest": 20,
+  "settle": 5.0,
+  "interval": 0.1,
+  "screen": "off",
+  "no_perfetto": false,
+  "allow_powered": false,
+  "allow_busy": false,
+  "out_dir": "/Users/ksd/SLM_Factory_Krishna_Personal/Benchmark-Harness/paper_table5/energy_probe_results"
+ },
+ "columns": [],
+ "start": "2026-10-11T10:11:16.810716",
+ "wake_lock": true,
+ "trace": "trace.pftrace",
+ "end": "2026-10-11T10:25:00.635828",
+ "state_end": {
+  "epoch_ms": 1791739500754,
+  "battery_temp_c": 21.5,
+  "battery_level": 100,
+  "battery_status": 3,
+  "externally_powered": false,
+  "power_sources": [],
+  "cpu_caps_khz": {
+   "policy0": 3628800,
+   "policy6": 4608000
+  },
+  "cpu_hw_max_khz": {
+   "policy0": 3628800,
+   "policy6": 4608000
+  },
+  "cpu_capped": false,
+  "screen": "Awake",
+  "thermal_status": 0
+ }
+}

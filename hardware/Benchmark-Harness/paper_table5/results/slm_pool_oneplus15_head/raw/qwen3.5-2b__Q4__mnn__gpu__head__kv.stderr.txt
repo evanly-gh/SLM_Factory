@@ -1,0 +1,5 @@
+[llm_bench] -kv true is deprecated: use `-pg <pp>,<tg>` instead (`-p A -n B -kv true` == `-pg A,B`).
+PB_MARK mnn mode=kv rep=0 begin=2351760531349072 end=2351766868080528 prefill_us=559664 decode_us=5617838 prompt=256 gen=256
+PB_MARK mnn mode=kv rep=1 begin=2351766868112403 end=2351772886724068 prefill_us=365514 decode_us=5492170 prompt=256 gen=256
+PB_MARK mnn mode=kv rep=2 begin=2351772886772088 end=2351779141870940 prefill_us=375624 decode_us=5662527 prompt=256 gen=256
+PB_MARK mnn mode=kv rep=3 begin=2351779141945471 end=2351785844651302 prefill_us=409708 decode_us=5975451 prompt=256 gen=256

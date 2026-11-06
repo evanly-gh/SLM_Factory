@@ -1,0 +1,10 @@
+CPU Group: [ 0  1  2  3 ], 300000 - 1804800
+CPU Group: [ 4  5  6 ], 710400 - 2419200
+CPU Group: [ 7 ], 844800 - 2841600
+parsed /proc/cpuinfo Hardware = "Qualcomm Technologies, Inc SM8250"
+(last_midr & (CPUINFO_ARM_MIDR_IMPLEMENTER_MASK | CPUINFO_ARM_MIDR_PART_MASK))=0x 4100d0d0 in _getInfoArm, 1234 
+The device supports: i8sdot:1, fp16:1, i8mm: 0, sve2: 0, sme2: 0
+| model                          |  modelSize | backend    | threads | precision  | llm_demo   | speed(tok/s) |
+| ------------------------------ | ---------: | ---------- | ----: | ---------- | ---------- | ------------ |
+| smollm2-360m-mnn-paper-default-q16 | 690.48 MiB | CPU        |     4 | Low        | prompt=256<br>decode=256 | 117.09 ± 1.69<br>14.60 ± 0.33 |
+

@@ -1,0 +1,538 @@
+{
+ "config": {
+  "id": "qwen3.5-0.8b__F16__llama.cpp__cpu__head",
+  "model": "qwen3.5-0.8b",
+  "quant": "F16",
+  "bits": 16,
+  "framework": "llama.cpp",
+  "backend": "cpu",
+  "ref": "head"
+ },
+ "model_file": {
+  "name": "qwen3.5-0.8b",
+  "hf_id": "Qwen/Qwen3.5-0.8B",
+  "framework": "llama.cpp",
+  "quant": "F16",
+  "bits": 16,
+  "ref": "head",
+  "path": "gguf/qwen3.5-0.8b-f16-head.gguf",
+  "files": {
+   "qwen3.5-0.8b-f16-head.gguf": 1557662656
+  },
+  "converter": "llama.cpp 46baf1f1fec5 convert_hf_to_gguf"
+ },
+ "started": "2026-10-08T13:09:17.158307",
+ "invocations": {
+  "prefill": {
+   "exit": 0,
+   "timed_out": false,
+   "seconds": 355.3,
+   "marks": 33,
+   "cpu_busy": 0.551,
+   "gate": {
+    "passed": true,
+    "waited_s": 0.4,
+    "issues": null,
+    "battery_temp_c": 27.7,
+    "cpu_caps_khz": {
+     "policy0": 2016000,
+     "policy3": 2803200,
+     "policy7": 3360000
+    },
+    "thermal_status": 0
+   },
+   "state_before": {
+    "epoch_ms": 1791490170412,
+    "battery_temp_c": 27.5,
+    "battery_level": 93,
+    "battery_status": 3,
+    "externally_powered": false,
+    "power_sources": [],
+    "cpu_caps_khz": {
+     "policy0": 2016000,
+     "policy3": 2803200,
+     "policy7": 3360000
+    },
+    "cpu_hw_max_khz": {
+     "policy0": 2016000,
+     "policy3": 2803200,
+     "policy7": 3360000
+    },
+    "cpu_capped": false,
+    "screen": "Dozing",
+    "thermal_status": 0
+   },
+   "state_after": {
+    "epoch_ms": 1791490526775,
+    "battery_temp_c": 36.6,
+    "battery_level": 89,
+    "battery_status": 3,
+    "externally_powered": false,
+    "power_sources": [],
+    "cpu_caps_khz": {
+     "policy0": 1555200,
+     "policy3": 2188800,
+     "policy7": 2476800
+    },
+    "cpu_hw_max_khz": {
+     "policy0": 2016000,
+     "policy3": 2803200,
+     "policy7": 3360000
+    },
+    "cpu_capped": true,
+    "screen": "Dozing",
+    "thermal_status": 0
+   },
+   "idle_window": [
+    329710.41,
+    329720.51
+   ],
+   "llama_bench": {
+    "build_commit": "9c2e0e4",
+    "backends": "CPU",
+    "n_threads": 4,
+    "flash_attn": -1,
+    "type_k": "f16",
+    "type_v": "f16",
+    "n_batch": 2048,
+    "n_ubatch": 512,
+    "use_mmap": null,
+    "avg_ts": 24.868423,
+    "stddev_ts": 1.442818,
+    "samples_ts": [
+     27.3331,
+     26.9463,
+     26.5786,
+     26.3373,
+     26.1303,
+     25.9687,
+     25.8442,
+     25.7408,
+     25.6208,
+     25.5523,
+     25.4681,
+     25.4011,
+     25.3379,
+     25.2663,
+     25.2296,
+     25.1658,
+     25.1057,
+     25.0551,
+     25.0153,
+     24.9802,
+     24.9364,
+     24.8903,
+     24.8299,
+     24.7971,
+     24.6606,
+     24.021,
+     24.0234,
+     24.0161,
+     23.3316,
+     22.2956,
+     21.4674,
+     21.0159,
+     22.2954
+    ],
+    "model_type": "qwen35 0.8B F16",
+    "model_size": 1546700032
+   },
+   "suspend_ratio": 1.0
+  },
+  "decode": {
+   "exit": 0,
+   "timed_out": false,
+   "seconds": 93.7,
+   "marks": 4,
+   "cpu_busy": 0.506,
+   "gate": {
+    "passed": true,
+    "waited_s": 650.3,
+    "issues": null,
+    "battery_temp_c": 28.0,
+    "cpu_caps_khz": {
+     "policy0": 2016000,
+     "policy3": 2803200,
+     "policy7": 3360000
+    },
+    "thermal_status": 0
+   },
+   "state_before": {
+    "epoch_ms": 1791491204860,
+    "battery_temp_c": 28.0,
+    "battery_level": 88,
+    "battery_status": 3,
+    "externally_powered": false,
+    "power_sources": [],
+    "cpu_caps_khz": {
+     "policy0": 2016000,
+     "policy3": 2803200,
+     "policy7": 3360000
+    },
+    "cpu_hw_max_khz": {
+     "policy0": 2016000,
+     "policy3": 2803200,
+     "policy7": 3360000
+    },
+    "cpu_capped": false,
+    "screen": "Dozing",
+    "thermal_status": 0
+   },
+   "state_after": {
+    "epoch_ms": 1791491299838,
+    "battery_temp_c": 34.1,
+    "battery_level": 87,
+    "battery_status": 3,
+    "externally_powered": false,
+    "power_sources": [],
+    "cpu_caps_khz": {
+     "policy0": 2016000,
+     "policy3": 2803200,
+     "policy7": 3187200
+    },
+    "cpu_hw_max_khz": {
+     "policy0": 2016000,
+     "policy3": 2803200,
+     "policy7": 3360000
+    },
+    "cpu_capped": true,
+    "screen": "Dozing",
+    "thermal_status": 0
+   },
+   "idle_window": [
+    330744.76,
+    330754.86
+   ],
+   "llama_bench": {
+    "build_commit": "9c2e0e4",
+    "backends": "CPU",
+    "n_threads": 4,
+    "flash_attn": -1,
+    "type_k": "f16",
+    "type_v": "f16",
+    "n_batch": 2048,
+    "n_ubatch": 512,
+    "use_mmap": null,
+    "avg_ts": 13.708652,
+    "stddev_ts": 0.43451,
+    "samples_ts": [
+     14.3026,
+     13.7387,
+     13.4915,
+     13.3018
+    ],
+    "model_type": "qwen35 0.8B F16",
+    "model_size": 1546700032
+   },
+   "suspend_ratio": 1.0
+  }
+ },
+ "windows": [
+  {
+   "phase": "prefill",
+   "source": "main",
+   "rep": 1,
+   "a": 329741.726175964,
+   "b": 329751.226557574,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "main",
+   "rep": 2,
+   "a": 329751.226608356,
+   "b": 329760.8584058,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "main",
+   "rep": 3,
+   "a": 329760.858453612,
+   "b": 329770.578514286,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 4,
+   "a": 329770.578564234,
+   "b": 329780.375607928,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 5,
+   "a": 329780.375662459,
+   "b": 329790.233675216,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 6,
+   "a": 329790.233727976,
+   "b": 329800.139234587,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 7,
+   "a": 329800.139287608,
+   "b": 329810.08456974,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 8,
+   "a": 329810.084625156,
+   "b": 329820.076490309,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 9,
+   "a": 329820.076536507,
+   "b": 329830.095222701,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 10,
+   "a": 329830.095275044,
+   "b": 329840.147073947,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 11,
+   "a": 329840.147128999,
+   "b": 329850.225446599,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 12,
+   "a": 329850.225499724,
+   "b": 329860.328948106,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 13,
+   "a": 329860.328997793,
+   "b": 329870.461090081,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 14,
+   "a": 329870.461142998,
+   "b": 329880.607973306,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 15,
+   "a": 329880.608023775,
+   "b": 329890.780569032,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 16,
+   "a": 329890.780621844,
+   "b": 329900.977508299,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 17,
+   "a": 329900.977559392,
+   "b": 329911.195043711,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 18,
+   "a": 329911.195099128,
+   "b": 329921.428826728,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 19,
+   "a": 329921.42887277,
+   "b": 329931.676990058,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 20,
+   "a": 329931.677042245,
+   "b": 329941.943177398,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 21,
+   "a": 329941.943228439,
+   "b": 329952.22836255,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 22,
+   "a": 329952.228415831,
+   "b": 329962.538584421,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 23,
+   "a": 329962.538635671,
+   "b": 329972.862419261,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 24,
+   "a": 329972.862467646,
+   "b": 329983.243413371,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 25,
+   "a": 329983.243467382,
+   "b": 329993.900817951,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 26,
+   "a": 329993.900868524,
+   "b": 330004.557131697,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 27,
+   "a": 330004.557181436,
+   "b": 330015.216697422,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 28,
+   "a": 330015.216750338,
+   "b": 330026.18899247,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 29,
+   "a": 330026.189048876,
+   "b": 330037.671130799,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 30,
+   "a": 330037.67118283,
+   "b": 330049.596263554,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 31,
+   "a": 330049.596320429,
+   "b": 330061.777589071,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 32,
+   "a": 330061.7776598,
+   "b": 330073.259857295,
+   "tokens": 256
+  },
+  {
+   "phase": "decode",
+   "source": "main",
+   "rep": 1,
+   "a": 330783.760803535,
+   "b": 330802.394356705,
+   "tokens": 256
+  },
+  {
+   "phase": "decode",
+   "source": "main",
+   "rep": 2,
+   "a": 330802.395767486,
+   "b": 330821.37064175,
+   "tokens": 256
+  },
+  {
+   "phase": "decode",
+   "source": "main",
+   "rep": 3,
+   "a": 330821.371982427,
+   "b": 330840.617516169,
+   "tokens": 256
+  }
+ ],
+ "prefill": {
+  "tps": 26.62,
+  "tps_std": 0.31,
+  "reps": [
+   26.95,
+   26.58,
+   26.34
+  ],
+  "tokens": [
+   256
+  ]
+ },
+ "decode": {
+  "tps": 13.51,
+  "tps_std": 0.22,
+  "reps": [
+   13.74,
+   13.49,
+   13.3
+  ],
+  "tokens": [
+   256
+  ]
+ },
+ "status": "ok",
+ "finished": "2026-10-08T13:28:34.840814"
+}

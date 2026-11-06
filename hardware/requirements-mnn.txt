@@ -1,0 +1,22 @@
+# Exporter environment (.venv_mnn at the repo root) for MNN's llmexport.py, kept separate from
+# .venv because it needs its own torch/transformers/onnx stack. Created by scripts/setup_mnn.sh
+# or scripts/setup_mnn.ps1; convert_to_mnn.py runs llmexport.py under it.
+#
+# MNN/transformers/llm/export/requirements.txt at the pinned commit, minus the `MNN` pip wheel:
+# convert_to_mnn.py always passes a locally built MNNConvert, and the wheel's converter bindings
+# are the path that crashes with a bus error. numpy stays below 3 for onnxruntime.
+
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch
+transformers
+peft
+onnx
+onnxslim
+onnxruntime
+sentencepiece
+numpy<3
+tqdm
+yaspin
+Pillow
+requests
+datasets

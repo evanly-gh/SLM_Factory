@@ -1,0 +1,10 @@
+Can't open file:/sys/devices/system/cpu/cpufreq/boost/affected_cpus
+CPU Group: [ 0  1  2  3  4  5 ], 384000 - 3628800
+CPU Group: [ 6  7 ], 768000 - 4608000
+(last_midr & (CPUINFO_ARM_MIDR_IMPLEMENTER_MASK | CPUINFO_ARM_MIDR_PART_MASK))=0x 51000020 in _getInfoArm, 1234 
+The device supports: i8sdot:1, fp16:1, i8mm: 1, sve2: 1, sme2: 0
+load_vocab, 202, cost time: 93.192001 ms
+| model                          |  modelSize | backend    | threads | precision  | llm_demo   | speed(tok/s) |
+| ------------------------------ | ---------: | ---------- | ----: | ---------- | ---------- | ------------ |
+| gemma3-270m-mnn-paper-default-q4 | 160.20 MiB | CPU        |     4 | Low        | prompt=256<br>decode=256 | 1278.40 ± 302.13<br>122.24 ± 0.18 |
+

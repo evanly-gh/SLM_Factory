@@ -1,0 +1,9 @@
+Can't open file:/sys/devices/system/cpu/cpufreq/schedutil/affected_cpus
+CPU Group: [ 4  5  6  7 ], 400000 - 1500000
+CPU Group: [ 0  1  2  3 ], 900000 - 2001000
+The device supports: i8sdot:0, fp16:0, i8mm: 0, sve2: 0, sme2: 0
+load_vocab, 202, cost time: 1024.407959 ms
+| model                          |  modelSize | backend    | threads | precision  | llm_demo   | speed(tok/s) |
+| ------------------------------ | ---------: | ---------- | ----: | ---------- | ---------- | ------------ |
+| gemma3-270m-mnn-paper-default-q4 | 160.20 MiB | CPU        |     4 | Low        | prompt=256<br>decode=256 | 39.90 ± 0.11<br>7.81 ± 0.18 |
+

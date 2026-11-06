@@ -1,0 +1,493 @@
+{
+ "config": {
+  "id": "qwen3.5-2b__Q4__mnn__cpu__head",
+  "model": "qwen3.5-2b",
+  "quant": "Q4",
+  "bits": 4,
+  "framework": "mnn",
+  "backend": "cpu",
+  "ref": "head"
+ },
+ "model_file": {
+  "name": "qwen3.5-2b",
+  "hf_id": "Qwen/Qwen3.5-2B",
+  "framework": "mnn",
+  "quant": "Q4",
+  "bits": 4,
+  "ref": "head",
+  "path": "mnn/qwen3.5-2b-mnn-paper-default-q4-head",
+  "files": {
+   "config.json": 523,
+   "export_args.json": 1607,
+   "llm.mnn": 2681616,
+   "llm.mnn.json": 6722554,
+   "llm.mnn.weight": 1059043482,
+   "llm_config.json": 9162,
+   "tokenizer.mtok": 7342051
+  },
+  "recipe": "paper-default",
+  "converter": "llmexport.py @ MNN mnn-a8ec49781e19, MNNConvert C:\\Users\\evanl\\.pb\\tools\\mnnconvert_nolog.cmd"
+ },
+ "started": "2026-10-08T19:58:04.131793",
+ "invocations": {
+  "kv": {
+   "exit": 0,
+   "timed_out": false,
+   "seconds": 41.6,
+   "marks": 4,
+   "cpu_busy": 0.521,
+   "gate": {
+    "passed": true,
+    "waited_s": 0.4,
+    "issues": null,
+    "battery_temp_c": 22.5,
+    "cpu_caps_khz": {
+     "policy0": 2016000,
+     "policy3": 2803200,
+     "policy7": 3360000
+    },
+    "thermal_status": 0
+   },
+   "state_before": {
+    "epoch_ms": 1791514697509,
+    "battery_temp_c": 22.5,
+    "battery_level": 43,
+    "battery_status": 3,
+    "externally_powered": false,
+    "power_sources": [],
+    "cpu_caps_khz": {
+     "policy0": 2016000,
+     "policy3": 2803200,
+     "policy7": 3360000
+    },
+    "cpu_hw_max_khz": {
+     "policy0": 2016000,
+     "policy3": 2803200,
+     "policy7": 3360000
+    },
+    "cpu_capped": false,
+    "screen": "Dozing",
+    "thermal_status": 0
+   },
+   "state_after": {
+    "epoch_ms": 1791514740086,
+    "battery_temp_c": 26.3,
+    "battery_level": 42,
+    "battery_status": 3,
+    "externally_powered": false,
+    "power_sources": [],
+    "cpu_caps_khz": {
+     "policy0": 2016000,
+     "policy3": 2803200,
+     "policy7": 3360000
+    },
+    "cpu_hw_max_khz": {
+     "policy0": 2016000,
+     "policy3": 2803200,
+     "policy7": 3360000
+    },
+    "cpu_capped": false,
+    "screen": "Dozing",
+    "thermal_status": 0
+   },
+   "idle_window": [
+    11950.71,
+    11960.86
+   ],
+   "suspend_ratio": 1.003
+  },
+  "energy_prefill": {
+   "exit": 0,
+   "timed_out": false,
+   "seconds": 31.2,
+   "marks": 14,
+   "cpu_busy": 0.47,
+   "gate": {
+    "passed": true,
+    "waited_s": 0.5,
+    "issues": null,
+    "battery_temp_c": 26.3,
+    "cpu_caps_khz": {
+     "policy0": 2016000,
+     "policy3": 2803200,
+     "policy7": 3360000
+    },
+    "thermal_status": 0
+   },
+   "state_before": {
+    "epoch_ms": 1791514768335,
+    "battery_temp_c": 27.5,
+    "battery_level": 42,
+    "battery_status": 3,
+    "externally_powered": false,
+    "power_sources": [],
+    "cpu_caps_khz": {
+     "policy0": 2016000,
+     "policy3": 2803200,
+     "policy7": 3360000
+    },
+    "cpu_hw_max_khz": {
+     "policy0": 2016000,
+     "policy3": 2803200,
+     "policy7": 3360000
+    },
+    "cpu_capped": false,
+    "screen": "Dozing",
+    "thermal_status": 0
+   },
+   "state_after": {
+    "epoch_ms": 1791514800504,
+    "battery_temp_c": 27.7,
+    "battery_level": 42,
+    "battery_status": 3,
+    "externally_powered": false,
+    "power_sources": [],
+    "cpu_caps_khz": {
+     "policy0": 2016000,
+     "policy3": 2803200,
+     "policy7": 3360000
+    },
+    "cpu_hw_max_khz": {
+     "policy0": 2016000,
+     "policy3": 2803200,
+     "policy7": 3360000
+    },
+    "cpu_capped": false,
+    "screen": "Dozing",
+    "thermal_status": 0
+   },
+   "idle_window": [
+    12021.52,
+    12031.72
+   ]
+  },
+  "energy_decode": {
+   "exit": 0,
+   "timed_out": false,
+   "seconds": 41.8,
+   "marks": 3,
+   "cpu_busy": 0.41,
+   "gate": {
+    "passed": true,
+    "waited_s": 0.4,
+    "issues": null,
+    "battery_temp_c": 27.7,
+    "cpu_caps_khz": {
+     "policy0": 2016000,
+     "policy3": 2803200,
+     "policy7": 3360000
+    },
+    "thermal_status": 0
+   },
+   "state_before": {
+    "epoch_ms": 1791514828835,
+    "battery_temp_c": 28.1,
+    "battery_level": 42,
+    "battery_status": 3,
+    "externally_powered": false,
+    "power_sources": [],
+    "cpu_caps_khz": {
+     "policy0": 2016000,
+     "policy3": 2803200,
+     "policy7": 3360000
+    },
+    "cpu_hw_max_khz": {
+     "policy0": 2016000,
+     "policy3": 2803200,
+     "policy7": 3360000
+    },
+    "cpu_capped": false,
+    "screen": "Dozing",
+    "thermal_status": 0
+   },
+   "state_after": {
+    "epoch_ms": 1791514871586,
+    "battery_temp_c": 29.0,
+    "battery_level": 41,
+    "battery_status": 3,
+    "externally_powered": false,
+    "power_sources": [],
+    "cpu_caps_khz": {
+     "policy0": 2016000,
+     "policy3": 2803200,
+     "policy7": 3360000
+    },
+    "cpu_hw_max_khz": {
+     "policy0": 2016000,
+     "policy3": 2803200,
+     "policy7": 3360000
+    },
+    "cpu_capped": false,
+    "screen": "Dozing",
+    "thermal_status": 0
+   },
+   "idle_window": [
+    12082.01,
+    12092.16
+   ]
+  }
+ },
+ "windows": [
+  {
+   "phase": "prefill",
+   "source": "main",
+   "rep": 1,
+   "a": 11974.326005276,
+   "b": 11976.179501276,
+   "tokens": 256
+  },
+  {
+   "phase": "decode",
+   "source": "main",
+   "rep": 1,
+   "a": 11976.179501276,
+   "b": 11983.542480168,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "main",
+   "rep": 2,
+   "a": 11983.542511887,
+   "b": 11985.453081887,
+   "tokens": 256
+  },
+  {
+   "phase": "decode",
+   "source": "main",
+   "rep": 2,
+   "a": 11985.453081887,
+   "b": 11992.983945894,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "main",
+   "rep": 3,
+   "a": 11992.983979019,
+   "b": 11994.934553019,
+   "tokens": 256
+  },
+  {
+   "phase": "decode",
+   "source": "main",
+   "rep": 3,
+   "a": 11994.934553019,
+   "b": 12002.56109688,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 1,
+   "a": 12037.579468481,
+   "b": 12039.271391481001,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 2,
+   "a": 12039.272880147,
+   "b": 12041.002150147,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 3,
+   "a": 12041.003572386,
+   "b": 12042.754276386,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 4,
+   "a": 12042.755737958,
+   "b": 12044.521981958,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 5,
+   "a": 12044.523427905,
+   "b": 12046.311730905,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 6,
+   "a": 12046.313208061,
+   "b": 12048.100453060999,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 7,
+   "a": 12048.101889571,
+   "b": 12049.894471571,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 8,
+   "a": 12049.895912122,
+   "b": 12051.697619122,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 9,
+   "a": 12051.699110142,
+   "b": 12053.506283142,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 10,
+   "a": 12053.50771436,
+   "b": 12055.317860359999,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 11,
+   "a": 12055.319343474,
+   "b": 12057.133540474,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 12,
+   "a": 12057.134983213,
+   "b": 12058.954906212999,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 13,
+   "a": 12058.956360139,
+   "b": 12060.782023139,
+   "tokens": 256
+  },
+  {
+   "phase": "decode",
+   "source": "energy",
+   "rep": 1,
+   "a": 12106.873897985999,
+   "b": 12114.434418243,
+   "tokens": 256
+  },
+  {
+   "phase": "decode",
+   "source": "energy",
+   "rep": 2,
+   "a": 12116.431603264,
+   "b": 12124.167139437,
+   "tokens": 256
+  }
+ ],
+ "prefill": {
+  "tps": 134.45,
+  "tps_std": 3.46,
+  "reps": [
+   138.12,
+   133.99,
+   131.24
+  ],
+  "tokens": [
+   256
+  ],
+  "uj_per_token": 47138.6,
+  "uj_per_token_gross": 48805.0,
+  "energy_valid": true,
+  "energy_reason": null
+ },
+ "decode": {
+  "tps": 34.11,
+  "tps_std": 0.61,
+  "reps": [
+   34.77,
+   33.99,
+   33.57
+  ],
+  "tokens": [
+   256
+  ],
+  "uj_per_token": 295110.5,
+  "uj_per_token_gross": 302088.4,
+  "energy_valid": true,
+  "energy_reason": null
+ },
+ "status": "ok",
+ "finished": "2026-10-08T20:01:26.588217",
+ "energy": {
+  "perfetto:current": {
+   "prefill": {
+    "uj_per_token": 48805.0,
+    "net_uj_per_token": 47138.6,
+    "avg_power_mw": 6917.2,
+    "idle_power_mw": 236.2,
+    "seconds": 28.9,
+    "tokens": 4096,
+    "windows": 4,
+    "valid": true,
+    "reason": null,
+    "note": "battery HAL current, unit mA"
+   },
+   "decode": {
+    "uj_per_token": 302088.4,
+    "net_uj_per_token": 295110.5,
+    "avg_power_mw": 10225.0,
+    "idle_power_mw": 236.2,
+    "seconds": 37.82,
+    "tokens": 1280,
+    "windows": 5,
+    "valid": true,
+    "reason": null,
+    "note": "battery HAL current, unit mA"
+   }
+  },
+  "perfetto:charge": {
+   "prefill": {
+    "uj_per_token": -36633.8,
+    "net_uj_per_token": 104070.5,
+    "avg_power_mw": -5192.2,
+    "idle_power_mw": -19942.2,
+    "seconds": 28.9,
+    "tokens": 4096,
+    "windows": 4,
+    "valid": false,
+    "reason": "reading changed only 1 time(s) during the phase",
+    "note": "battery HAL charge counter"
+   },
+   "decode": {
+    "uj_per_token": -39951.9,
+    "net_uj_per_token": 549223.1,
+    "avg_power_mw": -1352.3,
+    "idle_power_mw": -19942.2,
+    "seconds": 37.82,
+    "tokens": 1280,
+    "windows": 5,
+    "valid": false,
+    "reason": "reading changed only 1 time(s) during the phase",
+    "note": "battery HAL charge counter"
+   }
+  }
+ },
+ "energy_idle": "per invocation",
+ "energy_session": "2026-10-08T19:57:18.013588",
+ "energy_headline_method": "perfetto:current",
+ "energy_kind": "whole device (net of idle)",
+ "mnn_decode_window": "wall (begin + prefill_us .. end); recomputed 2026-10-09 from raw PB_MARK lines"
+}

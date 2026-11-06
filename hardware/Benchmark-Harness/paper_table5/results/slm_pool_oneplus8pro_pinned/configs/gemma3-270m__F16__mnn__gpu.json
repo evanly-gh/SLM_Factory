@@ -1,0 +1,104 @@
+{
+ "config": {
+  "id": "gemma3-270m__F16__mnn__gpu",
+  "model": "gemma3-270m",
+  "quant": "F16",
+  "bits": 16,
+  "framework": "mnn",
+  "backend": "gpu",
+  "ref": "pinned"
+ },
+ "model_file": {
+  "name": "gemma3-270m",
+  "hf_id": "google/gemma-3-270m-it",
+  "framework": "mnn",
+  "quant": "F16",
+  "bits": 16,
+  "ref": "pinned",
+  "path": "mnn/gemma3-270m-mnn-paper-default-q16",
+  "files": {
+   "config.json": 210,
+   "export_args.json": 1355,
+   "llm.mnn": 374752,
+   "llm.mnn.json": 743716,
+   "llm.mnn.weight": 536531968,
+   "llm_config.json": 1936,
+   "tokenizer.txt": 6346065
+  },
+  "recipe": "paper-default",
+  "converter": "llmexport.py @ MNN mnn-510ac8f15d10, MNNConvert /Users/ksd/SLM_Factory_Krishna_Personal/Benchmark-Harness/paper_table5/third_party/tools/mnnconvert_nolog"
+ },
+ "started": "2026-10-14T19:22:28.134276",
+ "invocations": {
+  "kv": {
+   "exit": 139,
+   "timed_out": false,
+   "seconds": 51.4,
+   "marks": 1,
+   "cpu_busy": 0.158,
+   "gate": {
+    "passed": true,
+    "waited_s": 0.3,
+    "issues": null,
+    "battery_temp_c": 22.7,
+    "cpu_caps_khz": {
+     "policy0": 1804800,
+     "policy4": 2419200,
+     "policy7": 2841600
+    },
+    "thermal_status": 0
+   },
+   "state_before": {
+    "epoch_ms": 1792030959662,
+    "battery_temp_c": 22.7,
+    "battery_level": 76,
+    "battery_status": 2,
+    "externally_powered": true,
+    "power_sources": [
+     "usb"
+    ],
+    "cpu_caps_khz": {
+     "policy0": 1804800,
+     "policy4": 2419200,
+     "policy7": 2841600
+    },
+    "cpu_hw_max_khz": {
+     "policy0": 1804800,
+     "policy4": 2419200,
+     "policy7": 2841600
+    },
+    "cpu_capped": false,
+    "screen": "Awake",
+    "thermal_status": 0
+   },
+   "state_after": {
+    "epoch_ms": 1792031011861,
+    "battery_temp_c": 23.1,
+    "battery_level": 76,
+    "battery_status": 2,
+    "externally_powered": true,
+    "power_sources": [
+     "usb"
+    ],
+    "cpu_caps_khz": {
+     "policy0": 1804800,
+     "policy4": 2419200,
+     "policy7": 2841600
+    },
+    "cpu_hw_max_khz": {
+     "policy0": 1804800,
+     "policy4": 2419200,
+     "policy7": 2841600
+    },
+    "cpu_capped": false,
+    "screen": "Awake",
+    "thermal_status": 0
+   },
+   "idle_window": null
+  }
+ },
+ "windows": [],
+ "status": "failed",
+ "error": "crash/error (exit 139): PB_MARK mnn mode=kv rep=0 begin=86743998812298 end=86787789645771 prefill_us=11659475 decode_us=31462688 prompt=256 gen=256 | Segmentation fault",
+ "finished": "2026-10-14T19:23:46.867678"
+}

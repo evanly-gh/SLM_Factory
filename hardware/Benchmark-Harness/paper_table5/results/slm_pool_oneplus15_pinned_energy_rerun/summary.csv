@@ -1,0 +1,7 @@
+model,quant,framework,backend,status,error,prefill_tps,prefill_tps_std,prefill_reps,prefill_uj_per_token,prefill_energy_valid,decode_tps,decode_tps_std,decode_reps,decode_uj_per_token,decode_energy_valid,energy_kind,energy_method,warning
+gemma3-270m,Q4,mnn,cpu,ok,,1458.96,302.99,1109.1 1633.73 1634.05,1360.9,True,117.26,0.38,117.54 117.41 116.83,19567.7,True,whole device (net of idle),perfetto:current,
+gemma3-270m,Q4,mnn,gpu,ok,,3891.96,10.7,3890.75 3881.91 3903.21,857.8,True,27.34,0.11,27.21 27.39 27.42,44398.4,True,whole device (net of idle),perfetto:current,
+smollm2-135m,Q4_0,llama.cpp,cpu,ok,,1614.05,35.48,1644.91 1621.98 1575.28,1328.5,True,279.45,6.78,281.92 284.65 271.77,11955.1,True,whole device (net of idle),perfetto:current,
+smollm2-135m,Q4_0,llama.cpp,gpu,ok,,3585.96,28.18,3609.02 3594.31 3554.54,1053.4,True,122.8,2.12,124.23 120.37 123.8,32036.0,True,whole device (net of idle),perfetto:current,
+smollm2-135m,Q4,mnn,cpu,ok,,1020.94,11.63,1008.76 1031.92 1022.13,1221.6,True,206.22,1.02,205.11 206.46 207.1,9878.4,True,whole device (net of idle),perfetto:current,
+smollm2-135m,Q4,mnn,gpu,ok,,3673.29,11.5,3660.02 3680.33 3679.54,853.6,True,42.47,0.08,42.42 42.57 42.44,35491.8,True,whole device (net of idle),perfetto:current,

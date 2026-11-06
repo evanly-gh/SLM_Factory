@@ -1,0 +1,22 @@
+start 21600.50 threads 0 seconds 45
+start 21667.42 threads 1 seconds 45
+start 21733.53 threads 8 seconds 45
+end 21758.23
+start 21800.98 threads 0 seconds 45
+end 21841.76
+start 21867.49 threads 1 seconds 45
+end 21909.44
+start 21935.16 threads 8 seconds 45
+end 21978.19
+start 22001.70 threads 0 seconds 45
+end 22039.83
+start 22068.41 threads 1 seconds 45
+end 22108.20
+start 22135.05 threads 8 seconds 45
+end 22165.77
+start 22202.93 threads 0 seconds 45
+end 22231.30
+start 22270.64 threads 1 seconds 45
+end 22292.73
+start 22337.12 threads 8 seconds 45
+end 22369.14

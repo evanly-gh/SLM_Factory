@@ -1,0 +1,7 @@
+model,quant,framework,backend,status,error,prefill_tps,prefill_tps_std,prefill_reps,prefill_uj_per_token,prefill_energy_valid,decode_tps,decode_tps_std,decode_reps,decode_uj_per_token,decode_energy_valid,energy_kind,energy_method,warning
+qwen3-0.6b,Q4_0,llama.cpp,cpu,ok,,202.08,0.0,202.08,,,29.35,0.0,29.35,,,,,
+qwen3-0.6b,Q4_0,llama.cpp,gpu,ok,,35.2,0.0,35.2,,,3.42,0.0,3.42,,,,,
+qwen3-0.6b,Q4,mnn,cpu,ok,,228.32,0.0,228.32,,,45.11,0.0,45.11,,,,,
+qwen3-0.6b,Q4,mnn,gpu,ok,,217.73,0.0,217.73,,,9.36,0.0,9.36,,,,,
+qwen3-0.6b,Q8_0,llama.cpp,cpu,ok,,112.6,0.0,112.6,,,19.21,0.0,19.21,,,,,
+qwen3-0.6b,Q8_0,llama.cpp,gpu,failed,over limit: peak memory not measured,,,,,,,,,,,,,

@@ -1,0 +1,98 @@
+{
+ "config": {
+  "id": "qwen3.5-2b__F16__mnn__gpu__head",
+  "model": "qwen3.5-2b",
+  "quant": "F16",
+  "bits": 16,
+  "framework": "mnn",
+  "backend": "gpu",
+  "ref": "head"
+ },
+ "model_file": {
+  "name": "qwen3.5-2b",
+  "hf_id": "Qwen/Qwen3.5-2B",
+  "framework": "mnn",
+  "quant": "F16",
+  "bits": 16,
+  "ref": "head",
+  "path": "mnn/qwen3.5-2b-mnn-paper-default-q16-head",
+  "files": {
+   "config.json": 502,
+   "export_args.json": 1538,
+   "llm.mnn": 2681616,
+   "llm.mnn.json": 6710856,
+   "llm.mnn.weight": 3763374080,
+   "llm_config.json": 9111,
+   "tokenizer.mtok": 7342048
+  },
+  "recipe": "paper-default",
+  "converter": "llmexport.py @ MNN mnn-a8ec49781e19, MNNConvert /Users/ksd/SLM_Factory_Krishna_Personal/Benchmark-Harness/paper_table5/third_party/tools/mnnconvert_nolog"
+ },
+ "started": "2026-10-14T22:09:14.036658",
+ "invocations": {
+  "kv": {
+   "exit": 139,
+   "timed_out": false,
+   "seconds": 82.6,
+   "marks": 1,
+   "cpu_busy": 0.086,
+   "gate": {
+    "passed": true,
+    "waited_s": 0.4,
+    "issues": null,
+    "battery_temp_c": 24.4,
+    "cpu_caps_khz": {
+     "policy0": 1996800,
+     "policy6": 2438400
+    },
+    "thermal_status": 0
+   },
+   "state_before": {
+    "epoch_ms": 1792040977977,
+    "battery_temp_c": 24.4,
+    "battery_level": 78,
+    "battery_status": 3,
+    "externally_powered": false,
+    "power_sources": [],
+    "cpu_caps_khz": {
+     "policy0": 1996800,
+     "policy6": 2438400
+    },
+    "cpu_hw_max_khz": {
+     "policy0": 3628800,
+     "policy6": 4608000
+    },
+    "cpu_capped": true,
+    "screen": "Asleep",
+    "thermal_status": 0
+   },
+   "state_after": {
+    "epoch_ms": 1792041061381,
+    "battery_temp_c": 24.0,
+    "battery_level": 78,
+    "battery_status": 3,
+    "externally_powered": false,
+    "power_sources": [],
+    "cpu_caps_khz": {
+     "policy0": 1996800,
+     "policy6": 2438400
+    },
+    "cpu_hw_max_khz": {
+     "policy0": 3628800,
+     "policy6": 4608000
+    },
+    "cpu_capped": true,
+    "screen": "Asleep",
+    "thermal_status": 0
+   },
+   "idle_window": [
+    2359442.28,
+    2359452.43
+   ]
+  }
+ },
+ "windows": [],
+ "status": "failed",
+ "error": "crash/error (exit 139): [llm_bench] -kv true is deprecated: use `-pg <pp>,<tg>` instead (`-p A -n B -kv true` == `-pg A,B`). | PB_MARK mnn mode=kv rep=0 begin=2359472474962537 end=2359533027613764 prefill_us=29609856 decode_us=30622202 prompt=256 gen=256 | Segmentation fault",
+ "finished": "2026-10-14T22:11:16.387325"
+}

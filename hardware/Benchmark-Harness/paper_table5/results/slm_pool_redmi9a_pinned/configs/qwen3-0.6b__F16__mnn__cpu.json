@@ -1,0 +1,37 @@
+{
+ "config": {
+  "id": "qwen3-0.6b__F16__mnn__cpu",
+  "model": "qwen3-0.6b",
+  "quant": "F16",
+  "bits": 16,
+  "framework": "mnn",
+  "backend": "cpu",
+  "ref": "pinned"
+ },
+ "model_file": {
+  "name": "qwen3-0.6b",
+  "hf_id": "Qwen/Qwen3-0.6B",
+  "framework": "mnn",
+  "quant": "F16",
+  "bits": 16,
+  "ref": "pinned",
+  "path": "mnn/qwen3-0.6b-mnn-paper-default-q16",
+  "files": {
+   "config.json": 210,
+   "export_args.json": 1340,
+   "llm.mnn": 504504,
+   "llm.mnn.json": 1004859,
+   "llm.mnn.weight": 1192493056,
+   "llm_config.json": 4633,
+   "tokenizer.txt": 3193562
+  },
+  "recipe": "paper-default",
+  "converter": "llmexport.py @ MNN mnn-510ac8f15d10, MNNConvert /Users/ksd/SLM_Factory_Krishna_Personal/Benchmark-Harness/paper_table5/third_party/tools/mnnconvert_nolog"
+ },
+ "started": "2026-10-13T06:00:08.706335",
+ "invocations": {},
+ "windows": [],
+ "status": "failed",
+ "error": "does not fit in RAM: 2.23 GiB of weights in memory on a phone with 3.72 GiB RAM (limit 55%); not run",
+ "finished": "2026-10-13T06:00:08.706422"
+}

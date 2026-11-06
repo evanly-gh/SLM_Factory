@@ -1,0 +1,861 @@
+{
+ "config": {
+  "id": "smollm2-135m__Q4_0__llama.cpp__cpu",
+  "model": "smollm2-135m",
+  "quant": "Q4_0",
+  "bits": 4,
+  "framework": "llama.cpp",
+  "backend": "cpu",
+  "ref": "pinned"
+ },
+ "model_file": {
+  "name": "smollm2-135m",
+  "hf_id": "HuggingFaceTB/SmolLM2-135M-Instruct",
+  "framework": "llama.cpp",
+  "quant": "Q4_0",
+  "bits": 4,
+  "ref": "pinned",
+  "path": "gguf/smollm2-135m-q4_0.gguf",
+  "files": {
+   "smollm2-135m-q4_0.gguf": 91727328
+  },
+  "converter": "llama.cpp eadc4184caee convert_hf_to_gguf + llama-quantize"
+ },
+ "started": "2026-10-12T19:58:46.100075",
+ "invocations": {
+  "prefill": {
+   "exit": 0,
+   "timed_out": false,
+   "seconds": 174.1,
+   "marks": 41,
+   "cpu_busy": 0.375,
+   "gate": {
+    "passed": true,
+    "waited_s": 0.4,
+    "issues": null,
+    "battery_temp_c": 24.5,
+    "cpu_caps_khz": {
+     "policy0": 1996800,
+     "policy6": 2438400
+    },
+    "thermal_status": 0
+   },
+   "state_before": {
+    "epoch_ms": 1791860358238,
+    "battery_temp_c": 24.5,
+    "battery_level": 95,
+    "battery_status": 3,
+    "externally_powered": false,
+    "power_sources": [],
+    "cpu_caps_khz": {
+     "policy0": 2745600,
+     "policy6": 3398400
+    },
+    "cpu_hw_max_khz": {
+     "policy0": 3628800,
+     "policy6": 4608000
+    },
+    "cpu_capped": true,
+    "screen": "Dozing",
+    "thermal_status": 0
+   },
+   "state_after": {
+    "epoch_ms": 1791860532783,
+    "battery_temp_c": 24.0,
+    "battery_level": 95,
+    "battery_status": 3,
+    "externally_powered": false,
+    "power_sources": [],
+    "cpu_caps_khz": {
+     "policy0": 1996800,
+     "policy6": 2438400
+    },
+    "cpu_hw_max_khz": {
+     "policy0": 3628800,
+     "policy6": 4608000
+    },
+    "cpu_capped": true,
+    "screen": "Asleep",
+    "thermal_status": 0
+   },
+   "idle_window": [
+    2178820.93,
+    2178831.06
+   ],
+   "llama_bench": {
+    "build_commit": "eadc418",
+    "backends": "CPU",
+    "n_threads": 4,
+    "flash_attn": false,
+    "type_k": "f16",
+    "type_v": "f16",
+    "n_batch": 2048,
+    "n_ubatch": 512,
+    "use_mmap": true,
+    "avg_ts": 62.57284,
+    "stddev_ts": 1.517233,
+    "samples_ts": [
+     68.3045,
+     63.1802,
+     62.623,
+     61.3627,
+     61.8363,
+     61.2447,
+     63.1172,
+     60.895,
+     61.1861,
+     62.3788,
+     61.956,
+     60.2077,
+     62.379,
+     64.1285,
+     65.3068,
+     64.1931,
+     62.8079,
+     62.7456,
+     61.8357,
+     63.8094,
+     61.4208,
+     60.4351,
+     63.3673,
+     62.8067,
+     62.6229,
+     63.7458,
+     62.8687,
+     61.3623,
+     61.7169,
+     61.0694,
+     63.3043,
+     63.1792,
+     62.4396,
+     60.4353,
+     62.1962,
+     62.0168,
+     60.3773,
+     62.9308,
+     63.2422,
+     64.1283,
+     64.3224
+    ],
+    "model_type": "llama 256M Q4_0",
+    "model_size": 89941248
+   },
+   "suspend_ratio": 1.0
+  },
+  "decode": {
+   "exit": 0,
+   "timed_out": false,
+   "seconds": 41.1,
+   "marks": 33,
+   "cpu_busy": 0.418,
+   "gate": {
+    "passed": true,
+    "waited_s": 0.3,
+    "issues": null,
+    "battery_temp_c": 24.0,
+    "cpu_caps_khz": {
+     "policy0": 1996800,
+     "policy6": 2438400
+    },
+    "thermal_status": 0
+   },
+   "state_before": {
+    "epoch_ms": 1791860562340,
+    "battery_temp_c": 23.9,
+    "battery_level": 95,
+    "battery_status": 3,
+    "externally_powered": false,
+    "power_sources": [],
+    "cpu_caps_khz": {
+     "policy0": 2745600,
+     "policy6": 3398400
+    },
+    "cpu_hw_max_khz": {
+     "policy0": 3628800,
+     "policy6": 4608000
+    },
+    "cpu_capped": true,
+    "screen": "Asleep",
+    "thermal_status": 0
+   },
+   "state_after": {
+    "epoch_ms": 1791860603845,
+    "battery_temp_c": 23.9,
+    "battery_level": 95,
+    "battery_status": 3,
+    "externally_powered": false,
+    "power_sources": [],
+    "cpu_caps_khz": {
+     "policy0": 1996800,
+     "policy6": 2438400
+    },
+    "cpu_hw_max_khz": {
+     "policy0": 3628800,
+     "policy6": 4608000
+    },
+    "cpu_capped": true,
+    "screen": "Asleep",
+    "thermal_status": 0
+   },
+   "idle_window": [
+    2179024.97,
+    2179035.14
+   ],
+   "llama_bench": {
+    "build_commit": "eadc418",
+    "backends": "CPU",
+    "n_threads": 4,
+    "flash_attn": false,
+    "type_k": "f16",
+    "type_v": "f16",
+    "n_batch": 2048,
+    "n_ubatch": 512,
+    "use_mmap": true,
+    "avg_ts": 258.577529,
+    "stddev_ts": 1.219405,
+    "samples_ts": [
+     256.231,
+     253.626,
+     259.227,
+     259.039,
+     258.199,
+     259.774,
+     258.734,
+     258.774,
+     259.714,
+     256.939,
+     258.894,
+     258.97,
+     259.209,
+     259.883,
+     258.574,
+     258.997,
+     258.044,
+     258.468,
+     260.278,
+     258.542,
+     258.711,
+     258.213,
+     258.03,
+     259.175,
+     258.722,
+     259.947,
+     258.841,
+     259.08,
+     258.337,
+     259.811,
+     257.811,
+     258.159,
+     258.106
+    ],
+    "model_type": "llama 256M Q4_0",
+    "model_size": 89941248
+   },
+   "suspend_ratio": 1.0
+  }
+ },
+ "windows": [
+  {
+   "phase": "prefill",
+   "source": "main",
+   "rep": 1,
+   "a": 2178836.838289258,
+   "b": 2178840.890196964,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "main",
+   "rep": 2,
+   "a": 2178840.89024285,
+   "b": 2178844.978201598,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "main",
+   "rep": 3,
+   "a": 2178844.978282796,
+   "b": 2178849.150198055,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 4,
+   "a": 2178849.150239461,
+   "b": 2178853.290203626,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 5,
+   "a": 2178853.290252481,
+   "b": 2178857.470206281,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 6,
+   "a": 2178857.470253208,
+   "b": 2178861.526200655,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 7,
+   "a": 2178861.5262418,
+   "b": 2178865.730197528,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 8,
+   "a": 2178865.730242424,
+   "b": 2178869.914199349,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 9,
+   "a": 2178869.914238256,
+   "b": 2178874.01819966,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 10,
+   "a": 2178874.01823841,
+   "b": 2178878.150204607,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 11,
+   "a": 2178878.150249607,
+   "b": 2178882.402195074,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 12,
+   "a": 2178882.402234709,
+   "b": 2178886.506179343,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 13,
+   "a": 2178886.506218301,
+   "b": 2178890.498203612,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 14,
+   "a": 2178890.498243456,
+   "b": 2178894.418199965,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 15,
+   "a": 2178894.418238142,
+   "b": 2178898.406203349,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 16,
+   "a": 2178898.406243193,
+   "b": 2178902.482166576,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 17,
+   "a": 2178902.482200431,
+   "b": 2178906.562165377,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 18,
+   "a": 2178906.562203398,
+   "b": 2178910.702209073,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 19,
+   "a": 2178910.702248448,
+   "b": 2178914.714195843,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 20,
+   "a": 2178914.714233134,
+   "b": 2178918.882203341,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 21,
+   "a": 2178918.882242403,
+   "b": 2178923.118193808,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 22,
+   "a": 2178923.118233235,
+   "b": 2178927.158168911,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 23,
+   "a": 2178927.158203234,
+   "b": 2178931.234201513,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 24,
+   "a": 2178931.234241878,
+   "b": 2178935.322200366,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 25,
+   "a": 2178935.322240783,
+   "b": 2178939.338194323,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 26,
+   "a": 2178939.338231823,
+   "b": 2178943.410212602,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 27,
+   "a": 2178943.410252446,
+   "b": 2178947.582195049,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 28,
+   "a": 2178947.58223484,
+   "b": 2178951.730205933,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 29,
+   "a": 2178951.730248016,
+   "b": 2178955.922198119,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 30,
+   "a": 2178955.922236504,
+   "b": 2178959.966196034,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 31,
+   "a": 2178959.966234211,
+   "b": 2178964.018198324,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 32,
+   "a": 2178964.018236657,
+   "b": 2178968.118197176,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 33,
+   "a": 2178968.118234624,
+   "b": 2178972.354168373,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 34,
+   "a": 2178972.354206341,
+   "b": 2178976.470214204,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 35,
+   "a": 2178976.470250871,
+   "b": 2178980.598165192,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 36,
+   "a": 2178980.598196599,
+   "b": 2178984.838200191,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 37,
+   "a": 2178984.838238212,
+   "b": 2178988.906197585,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 38,
+   "a": 2178988.906237116,
+   "b": 2178992.954170448,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 39,
+   "a": 2178992.954207271,
+   "b": 2178996.946205811,
+   "tokens": 256
+  },
+  {
+   "phase": "prefill",
+   "source": "energy",
+   "rep": 40,
+   "a": 2178996.946244717,
+   "b": 2179000.926197737,
+   "tokens": 256
+  },
+  {
+   "phase": "decode",
+   "source": "main",
+   "rep": 1,
+   "a": 2179038.184983712,
+   "b": 2179039.194346003,
+   "tokens": 256
+  },
+  {
+   "phase": "decode",
+   "source": "main",
+   "rep": 2,
+   "a": 2179039.194807097,
+   "b": 2179040.182357097,
+   "tokens": 256
+  },
+  {
+   "phase": "decode",
+   "source": "main",
+   "rep": 3,
+   "a": 2179040.182815795,
+   "b": 2179041.171082253,
+   "tokens": 256
+  },
+  {
+   "phase": "decode",
+   "source": "energy",
+   "rep": 4,
+   "a": 2179041.171526367,
+   "b": 2179042.163008815,
+   "tokens": 256
+  },
+  {
+   "phase": "decode",
+   "source": "energy",
+   "rep": 5,
+   "a": 2179042.163450377,
+   "b": 2179043.148924283,
+   "tokens": 256
+  },
+  {
+   "phase": "decode",
+   "source": "energy",
+   "rep": 6,
+   "a": 2179043.149361419,
+   "b": 2179044.138795949,
+   "tokens": 256
+  },
+  {
+   "phase": "decode",
+   "source": "energy",
+   "rep": 7,
+   "a": 2179044.139233189,
+   "b": 2179045.128513449,
+   "tokens": 256
+  },
+  {
+   "phase": "decode",
+   "source": "energy",
+   "rep": 8,
+   "a": 2179045.128951835,
+   "b": 2179046.114653761,
+   "tokens": 256
+  },
+  {
+   "phase": "decode",
+   "source": "energy",
+   "rep": 9,
+   "a": 2179046.115088917,
+   "b": 2179047.111433136,
+   "tokens": 256
+  },
+  {
+   "phase": "decode",
+   "source": "energy",
+   "rep": 10,
+   "a": 2179047.11187048,
+   "b": 2179048.100691781,
+   "tokens": 256
+  },
+  {
+   "phase": "decode",
+   "source": "energy",
+   "rep": 11,
+   "a": 2179048.101125531,
+   "b": 2179049.089656625,
+   "tokens": 256
+  },
+  {
+   "phase": "decode",
+   "source": "energy",
+   "rep": 12,
+   "a": 2179049.090104541,
+   "b": 2179050.077725791,
+   "tokens": 256
+  },
+  {
+   "phase": "decode",
+   "source": "energy",
+   "rep": 13,
+   "a": 2179050.078183083,
+   "b": 2179051.063242822,
+   "tokens": 256
+  },
+  {
+   "phase": "decode",
+   "source": "energy",
+   "rep": 14,
+   "a": 2179051.063675843,
+   "b": 2179052.053722978,
+   "tokens": 256
+  },
+  {
+   "phase": "decode",
+   "source": "energy",
+   "rep": 15,
+   "a": 2179052.054166936,
+   "b": 2179053.042594904,
+   "tokens": 256
+  },
+  {
+   "phase": "decode",
+   "source": "energy",
+   "rep": 16,
+   "a": 2179053.043037144,
+   "b": 2179054.035115217,
+   "tokens": 256
+  },
+  {
+   "phase": "decode",
+   "source": "energy",
+   "rep": 17,
+   "a": 2179054.035554539,
+   "b": 2179055.026005372,
+   "tokens": 256
+  },
+  {
+   "phase": "decode",
+   "source": "energy",
+   "rep": 18,
+   "a": 2179055.026462977,
+   "b": 2179056.010027716,
+   "tokens": 256
+  },
+  {
+   "phase": "decode",
+   "source": "energy",
+   "rep": 19,
+   "a": 2179056.010477924,
+   "b": 2179057.000646726,
+   "tokens": 256
+  },
+  {
+   "phase": "decode",
+   "source": "energy",
+   "rep": 20,
+   "a": 2179057.001082403,
+   "b": 2179057.990603861,
+   "tokens": 256
+  },
+  {
+   "phase": "decode",
+   "source": "energy",
+   "rep": 21,
+   "a": 2179057.991039173,
+   "b": 2179058.982467506,
+   "tokens": 256
+  },
+  {
+   "phase": "decode",
+   "source": "energy",
+   "rep": 22,
+   "a": 2179058.982911933,
+   "b": 2179059.975043808,
+   "tokens": 256
+  },
+  {
+   "phase": "decode",
+   "source": "energy",
+   "rep": 23,
+   "a": 2179059.97548235,
+   "b": 2179060.963232766,
+   "tokens": 256
+  },
+  {
+   "phase": "decode",
+   "source": "energy",
+   "rep": 24,
+   "a": 2179060.963666308,
+   "b": 2179061.95314438,
+   "tokens": 256
+  },
+  {
+   "phase": "decode",
+   "source": "energy",
+   "rep": 25,
+   "a": 2179061.953585526,
+   "b": 2179062.938403234,
+   "tokens": 256
+  },
+  {
+   "phase": "decode",
+   "source": "energy",
+   "rep": 26,
+   "a": 2179062.938836203,
+   "b": 2179063.927860109,
+   "tokens": 256
+  },
+  {
+   "phase": "decode",
+   "source": "energy",
+   "rep": 27,
+   "a": 2179063.92829464,
+   "b": 2179064.91640615,
+   "tokens": 256
+  },
+  {
+   "phase": "decode",
+   "source": "energy",
+   "rep": 28,
+   "a": 2179064.916845421,
+   "b": 2179065.907799535,
+   "tokens": 256
+  },
+  {
+   "phase": "decode",
+   "source": "energy",
+   "rep": 29,
+   "a": 2179065.90823891,
+   "b": 2179066.893571774,
+   "tokens": 256
+  },
+  {
+   "phase": "decode",
+   "source": "energy",
+   "rep": 30,
+   "a": 2179066.894006826,
+   "b": 2179067.886981774,
+   "tokens": 256
+  },
+  {
+   "phase": "decode",
+   "source": "energy",
+   "rep": 31,
+   "a": 2179067.887418857,
+   "b": 2179068.879057607,
+   "tokens": 256
+  },
+  {
+   "phase": "decode",
+   "source": "energy",
+   "rep": 32,
+   "a": 2179068.879490836,
+   "b": 2179069.871332867,
+   "tokens": 256
+  }
+ ],
+ "prefill": {
+  "tps": 62.39,
+  "tps_std": 0.93,
+  "reps": [
+   63.18,
+   62.62,
+   61.36
+  ],
+  "tokens": [
+   256
+  ]
+ },
+ "decode": {
+  "tps": 257.3,
+  "tps_std": 3.18,
+  "reps": [
+   253.63,
+   259.23,
+   259.04
+  ],
+  "tokens": [
+   256
+  ]
+ },
+ "status": "ok",
+ "finished": "2026-10-12T20:03:38.850531"
+}

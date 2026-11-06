@@ -1,0 +1,4 @@
+- Users can now enter multi-line queries without 'accidentally' sending the query to the LLM
+- Fix chat template parsing
+- Save system prompts and re-use them across chat sessions
+- Enable auto-scroll for chat messages

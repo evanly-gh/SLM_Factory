@@ -1,0 +1,8 @@
+# Optional: Monsoon HVPM power-meter readings (Power-Monitor/monsoon_single_reading.py), taken by
+# run_autobench.py and run_mnn_autobench.py when a meter is attached. Without it those readings are
+# recorded as unavailable and the benchmarks still run. Needs libusb and the meter's USB driver.
+# Install it together with requirements.txt so the resolver keeps numpy at llama.cpp's 1.26 pin:
+#
+#   python -m pip install -r requirements.txt -r requirements-monsoon.txt
+
+monsoon

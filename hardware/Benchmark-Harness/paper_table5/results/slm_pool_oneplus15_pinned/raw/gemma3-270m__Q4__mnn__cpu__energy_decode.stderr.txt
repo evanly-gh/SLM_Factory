@@ -1,0 +1,12 @@
+PB_MARK mnn mode=kv rep=0 begin=2180670059613175 end=2180672486880413 prefill_us=238894 decode_us=2075023 prompt=256 gen=256
+PB_MARK mnn mode=kv rep=1 begin=2180672486909788 end=2180674898094787 prefill_us=231910 decode_us=2065995 prompt=256 gen=256
+PB_MARK mnn mode=kv rep=2 begin=2180674898113485 end=2180677323349734 prefill_us=231351 decode_us=2080464 prompt=256 gen=256
+PB_MARK mnn mode=kv rep=3 begin=2180677323365359 end=2180679670519525 prefill_us=157337 decode_us=2076313 prompt=256 gen=256
+PB_MARK mnn mode=kv rep=4 begin=2180679670533588 end=2180682087652857 prefill_us=230750 decode_us=2072850 prompt=256 gen=256
+PB_MARK mnn mode=kv rep=5 begin=2180682087668847 end=2180684526991711 prefill_us=231971 decode_us=2093837 prompt=256 gen=256
+PB_MARK mnn mode=kv rep=6 begin=2180684527006034 end=2180686858448012 prefill_us=157679 decode_us=2060357 prompt=256 gen=256
+PB_MARK mnn mode=kv rep=7 begin=2180686858460564 end=2180689268196501 prefill_us=230677 decode_us=2065734 prompt=256 gen=256
+PB_MARK mnn mode=kv rep=8 begin=2180689268212542 end=2180691676861083 prefill_us=231799 decode_us=2063313 prompt=256 gen=256
+PB_MARK mnn mode=kv rep=9 begin=2180691676877125 end=2180694007702957 prefill_us=160931 decode_us=2056527 prompt=256 gen=256
+PB_MARK mnn mode=kv rep=10 begin=2180694007717853 end=2180696433063529 prefill_us=234385 decode_us=2077444 prompt=256 gen=256
+PB_MARK mnn mode=kv rep=11 begin=2180696433079102 end=2180698789989153 prefill_us=159727 decode_us=2083709 prompt=256 gen=256

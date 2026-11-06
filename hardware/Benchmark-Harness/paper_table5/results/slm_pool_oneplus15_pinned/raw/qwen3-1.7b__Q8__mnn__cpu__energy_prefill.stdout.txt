@@ -1,0 +1,10 @@
+Can't open file:/sys/devices/system/cpu/cpufreq/boost/affected_cpus
+CPU Group: [ 0  1  2  3  4  5 ], 384000 - 3628800
+CPU Group: [ 6  7 ], 768000 - 4608000
+(last_midr & (CPUINFO_ARM_MIDR_IMPLEMENTER_MASK | CPUINFO_ARM_MIDR_PART_MASK))=0x 51000020 in _getInfoArm, 1234 
+The device supports: i8sdot:1, fp16:1, i8mm: 1, sve2: 1, sme2: 0
+| model                          |  modelSize | backend    | threads | precision  | test          |        t/s |
+| ------------------------------ | ---------: | ---------- | ----: | ---------- | ------------- | ---------: |
+| qwen3-1.7b-mnn-paper-default-q8 |   1.80 GiB | CPU        |     4 | Low        | pp256         | 145.11 ± 38.03 |
+| qwen3-1.7b-mnn-paper-default-q8 |   1.80 GiB | CPU        |     4 | Low        | pp0+tg0       |  nan ± nan |
+

@@ -1,0 +1,4 @@
+PB_MARK mnn mode=kv rep=0 begin=40343118123782 end=40376052330748 prefill_us=3761936 decode_us=28725389 prompt=256 gen=256
+PB_MARK mnn mode=kv rep=1 begin=40376052424863 end=40404474234071 prefill_us=156994 decode_us=27832167 prompt=256 gen=256
+PB_MARK mnn mode=kv rep=2 begin=40404474304019 end=40433000784268 prefill_us=158217 decode_us=27926786 prompt=256 gen=256
+PB_MARK mnn mode=kv rep=3 begin=40433000852445 end=40462018079830 prefill_us=158277 decode_us=28406576 prompt=256 gen=256

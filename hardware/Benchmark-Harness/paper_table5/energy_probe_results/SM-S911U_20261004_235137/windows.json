@@ -1,0 +1,122 @@
+[
+ {
+  "workload": "idle",
+  "rep": 0,
+  "t0": 22682.76,
+  "t1": 22728.15,
+  "cpu_busy": 0.063,
+  "battery_temp_c": 24.5,
+  "externally_powered": false,
+  "battery_level": 38
+ },
+ {
+  "workload": "cpu1",
+  "rep": 0,
+  "t0": 22748.6,
+  "t1": 22794.01,
+  "cpu_busy": 0.168,
+  "battery_temp_c": 24.5,
+  "externally_powered": false,
+  "battery_level": 38
+ },
+ {
+  "workload": "cpu_all",
+  "rep": 0,
+  "t0": 22814.57,
+  "t1": 22859.93,
+  "cpu_busy": 0.997,
+  "battery_temp_c": 26.9,
+  "externally_powered": false,
+  "battery_level": 38
+ },
+ {
+  "workload": "idle",
+  "rep": 1,
+  "t0": 22880.39,
+  "t1": 22925.79,
+  "cpu_busy": 0.059,
+  "battery_temp_c": 30.7,
+  "externally_powered": false,
+  "battery_level": 37
+ },
+ {
+  "workload": "cpu1",
+  "rep": 1,
+  "t0": 22946.33,
+  "t1": 22991.72,
+  "cpu_busy": 0.167,
+  "battery_temp_c": 28.2,
+  "externally_powered": false,
+  "battery_level": 37
+ },
+ {
+  "workload": "cpu_all",
+  "rep": 1,
+  "t0": 23012.19,
+  "t1": 23057.52,
+  "cpu_busy": 0.997,
+  "battery_temp_c": 29.8,
+  "externally_powered": false,
+  "battery_level": 36
+ },
+ {
+  "workload": "idle",
+  "rep": 2,
+  "t0": 23078.02,
+  "t1": 23123.43,
+  "cpu_busy": 0.06,
+  "battery_temp_c": 32.5,
+  "externally_powered": false,
+  "battery_level": 35
+ },
+ {
+  "workload": "cpu1",
+  "rep": 2,
+  "t0": 23143.98,
+  "t1": 23189.36,
+  "cpu_busy": 0.168,
+  "battery_temp_c": 30.4,
+  "externally_powered": false,
+  "battery_level": 35
+ },
+ {
+  "workload": "cpu_all",
+  "rep": 2,
+  "t0": 23209.82,
+  "t1": 23255.22,
+  "cpu_busy": 0.997,
+  "battery_temp_c": 31.2,
+  "externally_powered": false,
+  "battery_level": 35
+ },
+ {
+  "workload": "idle",
+  "rep": 3,
+  "t0": 23275.8,
+  "t1": 23321.16,
+  "cpu_busy": 0.06,
+  "battery_temp_c": 34.1,
+  "externally_powered": false,
+  "battery_level": 34
+ },
+ {
+  "workload": "cpu1",
+  "rep": 3,
+  "t0": 23341.72,
+  "t1": 23387.01,
+  "cpu_busy": 0.169,
+  "battery_temp_c": 31.2,
+  "externally_powered": false,
+  "battery_level": 34
+ },
+ {
+  "workload": "cpu_all",
+  "rep": 3,
+  "t0": 23407.57,
+  "t1": 23452.94,
+  "cpu_busy": 0.996,
+  "battery_temp_c": 32.4,
+  "externally_powered": false,
+  "battery_level": 33
+ }
+]

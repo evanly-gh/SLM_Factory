@@ -1,0 +1,15 @@
+PB_MARK mnn mode=pp rep=0 begin=1847852825688209 end=1847862109616643 prefill_us=9182302 decode_us=99460 prompt=256 gen=1
+PB_MARK mnn mode=pp rep=1 begin=1847862109656382 end=1847871244069191 prefill_us=9041444 decode_us=90683 prompt=256 gen=1
+PB_MARK mnn mode=pp rep=2 begin=1847871244095129 end=1847880338811219 prefill_us=8995918 decode_us=95813 prompt=256 gen=1
+PB_MARK mnn mode=pp rep=3 begin=1847880338844865 end=1847889846300069 prefill_us=9405328 decode_us=98946 prompt=256 gen=1
+PB_MARK mnn mode=pp rep=4 begin=1847889846328299 end=1847898905822514 prefill_us=8960348 decode_us=96422 prompt=256 gen=1
+PB_MARK mnn mode=pp rep=5 begin=1847898905842462 end=1847907845022667 prefill_us=8845047 decode_us=91586 prompt=256 gen=1
+PB_MARK mnn mode=pp rep=6 begin=1847907845049438 end=1847912116113967 prefill_us=4243073 decode_us=25539 prompt=256 gen=1
+PB_MARK mnn mode=pp rep=7 begin=1847912116127717 end=1847913950184279 prefill_us=1810584 decode_us=21235 prompt=256 gen=1
+PB_MARK mnn mode=pp rep=8 begin=1847913950198550 end=1847915691354226 prefill_us=1719957 decode_us=18924 prompt=256 gen=1
+PB_MARK mnn mode=pp rep=9 begin=1847915691365945 end=1847917412791621 prefill_us=1699859 decode_us=19237 prompt=256 gen=1
+PB_MARK mnn mode=pp rep=10 begin=1847917412802611 end=1847919130990735 prefill_us=1696962 decode_us=18777 prompt=256 gen=1
+PB_MARK mnn mode=pp rep=11 begin=1847919131001621 end=1847920866272818 prefill_us=1713974 decode_us=19036 prompt=256 gen=1
+PB_MARK mnn mode=pp rep=12 begin=1847920866285787 end=1847921893009536 prefill_us=1005321 decode_us=19085 prompt=256 gen=1
+PB_MARK mnn mode=pp rep=13 begin=1847921893020370 end=1847922920503390 prefill_us=1005904 decode_us=19243 prompt=256 gen=1
+PB_MARK mnn mode=pp rep=14 begin=1847922920513807 end=1847924660819952 prefill_us=1718529 decode_us=19479 prompt=256 gen=1

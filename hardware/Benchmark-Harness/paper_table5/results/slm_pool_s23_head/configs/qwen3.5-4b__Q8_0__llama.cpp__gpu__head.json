@@ -1,0 +1,88 @@
+{
+ "config": {
+  "id": "qwen3.5-4b__Q8_0__llama.cpp__gpu__head",
+  "model": "qwen3.5-4b",
+  "quant": "Q8_0",
+  "bits": 8,
+  "framework": "llama.cpp",
+  "backend": "gpu",
+  "ref": "head"
+ },
+ "model_file": {
+  "name": "qwen3.5-4b",
+  "hf_id": "Qwen/Qwen3.5-4B",
+  "framework": "llama.cpp",
+  "quant": "Q8_0",
+  "bits": 8,
+  "ref": "head",
+  "path": "gguf/qwen3.5-4b-q8_0-head.gguf",
+  "files": {
+   "qwen3.5-4b-q8_0-head.gguf": 4610580320
+  },
+  "converter": "llama.cpp 46baf1f1fec5 convert_hf_to_gguf"
+ },
+ "started": "2026-10-08T21:01:24.705915",
+ "invocations": {
+  "prefill": {
+   "exit": -9,
+   "timed_out": false,
+   "seconds": 12.7,
+   "marks": 0,
+   "cpu_busy": 0.728,
+   "gate": {
+    "passed": true,
+    "waited_s": 651.3,
+    "issues": null,
+    "battery_temp_c": 28.0,
+    "cpu_caps_khz": {
+     "policy0": 2016000,
+     "policy3": 2803200,
+     "policy7": 3360000
+    },
+    "thermal_status": 0
+   },
+   "state_before": {
+    "epoch_ms": 1791519149019,
+    "battery_temp_c": 28.0,
+    "battery_level": 24,
+    "battery_status": 3,
+    "externally_powered": false,
+    "power_sources": [],
+    "cpu_caps_khz": {
+     "policy0": 2016000,
+     "policy3": 2803200,
+     "policy7": 3360000
+    },
+    "cpu_hw_max_khz": {
+     "policy0": 2016000,
+     "policy3": 2803200,
+     "policy7": 3360000
+    },
+    "cpu_capped": false,
+    "screen": "Dozing",
+    "thermal_status": 0
+   },
+   "state_after": {
+    "epoch_ms": 1791519177124,
+    "battery_temp_c": null,
+    "battery_level": null,
+    "battery_status": null,
+    "externally_powered": false,
+    "power_sources": [],
+    "cpu_caps_khz": {},
+    "cpu_hw_max_khz": {},
+    "cpu_capped": false,
+    "screen": null,
+    "thermal_status": null
+   },
+   "idle_window": [
+    16402.03,
+    16412.21
+   ]
+  }
+ },
+ "windows": [],
+ "status": "failed",
+ "error": "does not fit in RAM: 723 MB of the benchmark process was swapped out (stopped at > 512 MB)",
+ "finished": "2026-10-08T21:13:12.125178"
+}
