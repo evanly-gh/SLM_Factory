@@ -152,6 +152,9 @@ training/                   LoRA trainer, CUDA worker isolation, quantize, hpara
 eval/                       Harness, scorers (classification/NER/function_call/diff/
                             code_execution/generation), LLM-judge client
 hardware_eval/              On-device measurement, quantize, quant-accuracy eval (either backend)
+hardware/                   Phone-side work: model conversion (GGUF/MNN), SmolChat-Android +
+                            vendored llama.cpp, benchmark harnesses, power monitor, and the
+                            per-phone results (hardware/docs/RESULTS.md). See hardware/README.md
 scripts/                    GPU/vLLM setup, dataset download, SLURM supervision
 tests/                      200+ pytest tests + tests/pipeline/ SLURM launchers
 docs/                       PIPELINE.md (spec), PAPER.md (analysis+critique),

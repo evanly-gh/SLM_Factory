@@ -2,6 +2,8 @@
 
 This repository contains the work that I've done for integrating SLM Inference on various mobile devices across various inference engines (llama.cpp, MNN), gathering metrics, and storing results. This is a work in progress.
 
+> This folder is the `hardware/` part of SLM Factory (merged from `Krishna-Deshpande1/SLM_Factory`). Paths and "repo root" below mean this `hardware/` folder: run the commands from here.
+
 ## Repository layout
 
 | Path | What it is |
