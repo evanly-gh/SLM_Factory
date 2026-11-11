@@ -19,6 +19,8 @@ Model selection strategy is configurable via config.config.MODEL_SELECTION_STRAT
   - "largest_first"       — probe largest for feasibility, then start smallest
   - "interpolation"       — 3-probe scaling curve, pick closest to RAM target
   - "orchestrator_choice" — LLM picks based on task context
+  - "single_model"        — one variant for the whole run (the tier-strategy ablation's one-shot pick)
+  - "size_sweep"          — every feasible variant in turn (the exhaustive-sweep ablation)
 """
 import functools
 from collections.abc import Mapping

@@ -54,8 +54,9 @@ def _calibrate_stop_threshold(state: AgentState, task: str) -> None:
     """Park the accuracy target on the Qwen-3.6 baseline, measured later in eval_setup.
 
     There is ONE automatic calibration method: the goal is the separately-hosted Qwen-3.6
-    reference model's own zero-shot score on THIS run's frozen E, floored at 0.8 (see
-    agent/threshold.py). E does not exist yet at task-analysis time, so the goal is parked
+    reference model's own five-shot score on THIS run's frozen E (zero-shot when five
+    demonstrations do not fit the context; agent/teacher_fitness.py), floored at 0.8 and capped
+    at 0.99 (see agent/threshold.py). E does not exist yet at task-analysis time, so the goal is parked
     PENDING here and eval_setup_node measures it right after building E — and RAISES, breaking
     the loop, if the endpoint is unreachable.
 
@@ -88,7 +89,7 @@ def _calibrate_stop_threshold(state: AgentState, task: str) -> None:
         "threshold": None,
         "floor": floor,
         "reason": (
-            "goal = Qwen-3.6 zero-shot score on E, floored at "
+            "goal = Qwen-3.6 five-shot score on E, floored at "
             f"{floor:.2f}; measured in eval_setup after E is built"
         ),
         "pending": True,

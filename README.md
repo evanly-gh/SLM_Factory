@@ -16,22 +16,32 @@ The pipeline is a **LangGraph state machine** (`agent/graph.py`) over one `Agent
 checkpointed to SQLite so a multi-day Slurm job can be requeued and resumed. Every edge passes through a
 global guard that can stop the run on wall-clock or step budget.
 
-**Before the graph:** the device is resolved (`data/devices.csv`, `agent/nodes/cold_start/hardware_research.py`).
-The model pool (`config/android_pool.py`: SmolLM2, Gemma 3, Qwen3 and Qwen3.5, 135M to 4B, Q4_K_M / Q8_0) is then
-filtered on known quantities, such as weight size against RAM and storage. Optionally, a phone-measured
-filtered pool replaces it (`config/filtered_pool.py`, `config/filtered_pools/*.json`), produced by
-`hardware/Benchmark-Harness/paper_table5/filter_pool.py` from real on-device measurements.
+**Before the graph:** `tests/pipeline/run.py` resolves the target device from the task text
+(`agent/nodes/cold_start/hardware_research.py`, backed by `data/devices.csv`).
 
-**Cold-start stages:** `task_analysis` → `eval_setup` (a frozen held-out eval set with a closed label space,
-contamination firewalls, and per-row difficulty) → `model_selection` (default `smallest_first`; also
-`single_model`, `size_sweep`, `orchestrator_choice`, `interpolation`, `largest_first`).
+**Cold-start stages:**
+- `task_analysis` resolves the task from the registry (`SLM_BENCHMARK_TASK`). It filters the model pool
+  (`config/android_pool.py`: SmolLM2 135M/360M, Gemma 3 270M, Qwen3 0.6B/1.7B/4B, Qwen3.5 0.8B/2B/4B, each
+  at Q4_K_M and Q8_0) on the device's memory and storage, and parks the accuracy goal until it can be
+  measured.
+- `eval_setup` builds the frozen held-out eval set, pins a closed label space, labels each row's
+  difficulty, and measures the teacher on that set to set the goal.
+- `model_selection` picks the first variant: default `smallest_first`; also `largest_first`, `interpolation`,
+  `orchestrator_choice`, `single_model` and `size_sweep`; set with `SLM_MODEL_SELECTION_STRATEGY`.
+
+**Phone-measured pool:** when `config/filtered_pool.json` exists, or `SLM_FILTERED_POOL` points at a
+contract such as `config/filtered_pools/*.json`, only the variants measured to fit the phone are allowed.
+Each one is built for the runtime (llama.cpp or MNN) that won on the phone (`config/filtered_pool.py`).
+The contracts are produced by `hardware/Benchmark-Harness/paper_table5/filter_pool.py`.
 
 **The loop:**
 ```
 curate → train → evaluate → iterate ↺   (with rollback, escalate and downward_probe branches)
 ```
-- **curate**: build one dataset version through a data rebuild (resample, mine more gold rows, or
-  synthesize with the local teacher). Every version passes task-specific quality controls and verifiers.
+- **curate**: grow the curriculum by one dataset version (`agent/data_rebuild.py`). The curriculum is
+  cumulative, and a rebuild only adds rows: either `mine_new_real` (more real rows from sourced or
+  newly found datasets) or `surgical_synthesis` (teacher-generated rows aimed at the model's failure
+  categories). New rows pass task-specific quality controls and verifiers.
 - **train**: one LoRA run, always from the base model, with five tunable hyperparameters and a
   completion-only loss (`training/lora_trainer.py`, isolated in a CUDA worker).
 - **evaluate**: score the candidate on the frozen eval set from a real quantized artifact. The zero-shot
@@ -41,7 +51,9 @@ curate → train → evaluate → iterate ↺   (with rollback, escalate and dow
 - **rollback / escalate / downward_probe**: undo a regression; move up a tier, keeping the best score;
   after convergence, look for a smaller variant that still meets the goal.
 
-The accuracy goal is the local teacher's five-shot score, floored at 0.80 and capped at 0.99. The teacher
+The accuracy goal is the local teacher's five-shot score on the eval set, floored at 0.80 and capped at
+0.99 (`agent/threshold.py`). If five demonstrations don't fit the context, zero-shot is used, as for
+CLINC150. `SLM_STOP_THRESHOLD` pins the goal manually. The teacher
 (`Qwen3.6-35B-A3B`, served locally by vLLM) is also the synthesis model. The orchestrator defaults to
 `claude-sonnet-5`.
 
@@ -87,7 +99,7 @@ bash scripts/setup_gpu_env.sh         # .venv_gpu: training + evaluation stack
 bash scripts/build_llamacpp_cuda.sh   # llama.cpp with CUDA, for GGUF builds and inference
 bash scripts/setup_vllm_env.sh        # .venv_vllm: the local teacher server
 bash scripts/setup_metric_envs.sh     # .venv_errant (GEC) and .venv_metrics (BERTScore)
-bash scripts/setup_mnn_env.sh         # .venv_mnn: optional MNN backend (--quant-backend mnn)
+bash scripts/setup_mnn_env.sh         # .venv_mnn: optional MNN backend (SLM_QUANT_BACKEND=mnn or run.py --quant-backend mnn)
 cp .env.example .env                  # ANTHROPIC_API_KEY, endpoints, SLM_* settings
 python scripts/download_datasets.py   # rebuild the bc5cdr and dialogsum bundles in data/local/
                                       # (other tasks' loaders fetch their data on first use)
