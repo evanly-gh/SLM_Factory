@@ -18,8 +18,9 @@ TWO RUBRICS, ONE CLIENT
     surface — is rubric-independent, and it is the part that is hard to get right. So a rubric is a
     value (`JudgeRubric`) rather than a subclass or a second module:
 
-      * `NUMERIC_RUBRIC` is the original 0-1 semantic-similarity rubric that `dialogsum` scores
-        through. Its constants are unchanged and its cache keys are byte-identical to the ones
+      * `NUMERIC_RUBRIC` is the original 0-1 semantic-similarity rubric, used by
+        `eval/scorers/generation.score_with_judge` (dialogsum scored through it until it moved to
+        ROUGE-L; no current task is judged). Its constants are unchanged and its cache keys are byte-identical to the ones
         written before this parameterization existed, so existing caches stay valid.
       * `eval/scorers/toolbench.py` supplied ToolEval's own Solved/Unsolved rubric until the
         toolbench task was removed (2026-11-11); the parameterization stays so a new rubric needs

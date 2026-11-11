@@ -1,6 +1,13 @@
-"""Free-form generation: prompt building, answer extraction, and judge scoring.
+"""LLM-as-a-judge scoring for free-form tasks: prompt building, answer extraction, judge scoring.
 
-This module used to serve three `task_type` channels — `generation`, `math_reasoning` and
+This module and `eval/judge_client.py` together are the pipeline's LLM-as-a-judge capability. A task
+whose output has no checkable answer (open-ended text judged for quality) sets `needs_judge=True` and
+names `build_prompts` / `extract_predictions` / `score_with_judge` from here in its `TaskSpec`. The
+local teacher then scores each answer 0-1 against the reference. None of the ten paper tasks uses it:
+all of them have exact or reference-based metrics. `split_reasoning` and
+`resolve_generation_instruction` below are also used by the live tasks (CoT stripping, row instructions).
+
+History: this module used to serve three `task_type` channels — `generation`, `math_reasoning` and
 `code_generation` — and branched on `eval_set.task_type` inside `build_prompts`,
 `extract_predictions` and `score`. A task got whichever branch its channel happened to land in,
 and the `else` was the LLM judge, so anything routed here without a matching branch was silently

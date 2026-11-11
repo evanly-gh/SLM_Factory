@@ -69,6 +69,13 @@ The task registry is `tasks/__init__.py`, with one module per task:
 
 An eleventh task, the `address_bench` conversational address gate, lives on the `address-bench` branch.
 
+**Capabilities not used in the paper runs** (all ten tasks have them switched off, but they work if a
+task turns them on):
+- **LLM-as-a-judge for free-form tasks** (`needs_judge`, optionally `judge_overlap`). The local teacher
+  scores each answer 0–1 against the reference (`eval/scorers/generation.py` + `eval/judge_client.py`).
+- **Chain-of-thought annotation** (`cot_annotation`). The teacher adds reasoning to training rows, and
+  the reasoning is stripped before scoring.
+
 ## Results (main runs, 2× L40S each)
 
 Best student and its fine-tuning gain on the ten tasks, from the paper's main table:
