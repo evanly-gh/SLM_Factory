@@ -6,6 +6,7 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 DOCS = HERE.parent.parent / "docs"
+DOCS.mkdir(exist_ok=True)  # hardware/docs/ is gitignored, so a fresh clone does not have it
 PARAMS_B = {"smollm2-135m": 0.135, "gemma3-270m": 0.268, "smollm2-360m": 0.362, "qwen3-0.6b": 0.596,
             "qwen3.5-0.8b": 0.773, "qwen3-1.7b": 1.72, "qwen3.5-2b": 1.9, "qwen3-4b-instruct-2507": 4.02,
             "qwen3.5-4b": 4.2}

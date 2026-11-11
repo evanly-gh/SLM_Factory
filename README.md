@@ -89,7 +89,8 @@ bash scripts/setup_vllm_env.sh        # .venv_vllm: the local teacher server
 bash scripts/setup_metric_envs.sh     # .venv_errant (GEC) and .venv_metrics (BERTScore)
 bash scripts/setup_mnn_env.sh         # .venv_mnn: optional MNN backend (--quant-backend mnn)
 cp .env.example .env                  # ANTHROPIC_API_KEY, endpoints, SLM_* settings
-python scripts/download_datasets.py   # rebuild the gitignored data/local/ bundles
+python scripts/download_datasets.py   # rebuild the bc5cdr and dialogsum bundles in data/local/
+                                      # (other tasks' loaders fetch their data on first use)
 ```
 
 ## Running
@@ -103,7 +104,7 @@ sbatch tests/pipeline/run_ner_bc5cdr_ablation_scarce_l40s.slurm        # 100 rea
 sbatch tests/pipeline/run_ner_bc5cdr_m07_oneplus8pro_l40s.slurm        # phone-in-the-loop pool
 ```
 
-All launchers share `tests/pipeline/_l40s_task_body.sh`, which calls `tests/pipeline/run.py`. Settings are
+All task launchers share `tests/pipeline/_l40s_task_body.sh`, which calls `tests/pipeline/run.py`. Settings are
 `SLM_`-prefixed environment variables (`SLM_BENCHMARK_TASK`, `SLM_MODEL_SELECTION_STRATEGY`,
 `SLM_FILTERED_POOL`, `SLM_STOP_THRESHOLD`, ...); see `.env.example` and `config/config.py`.
 
@@ -113,6 +114,8 @@ All launchers share `tests/pipeline/_l40s_task_body.sh`, which calls `tests/pipe
 - `scripts/rescore_unseen.py`, via `tests/pipeline/rescore_unseen_l40s.slurm`, rescores the final models on
   rows the search never saw.
 - `scripts/probe_api_*.py` produce the frontier-model baselines.
+- These write into the local-only `docs/SLMF_Results/`. `plot_run_analysis.py` needs `analyze_runs.py`
+  to have run first, and `scripts/plot_results.py` needs the local `docs/SLMF_Results/RESULTS.md`.
 
 ## Repository layout
 
