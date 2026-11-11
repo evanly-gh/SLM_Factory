@@ -387,6 +387,9 @@ PROBE_SCRIPTS = {
     # Can MNN's 4-bit export match Q4_K_M (2026-09-28)? One job per recipe — llama.cpp, MNN default,
     # MNN --hqq, MNN --hqq with 32-weight blocks — over the same weights and rows. No agent loop.
     "verify_mnn_hqq_sweep.slurm",
+    # Rescore each main run's final model on rows the search never saw (2026-11-04, paper Table 5).
+    # One GPU, an 8h array, no agent loop: it loads the run's best adapter and scores it.
+    "rescore_unseen_l40s.slurm",
 }
 
 # Bounded verification runs. These DO run the full agent loop, so they are not probes, but they are
@@ -406,6 +409,64 @@ CONTINUATION_SCRIPTS = {
     # re-anchored the terminal LangGraph thread and the budget was raised to 6000 and recorded in
     # the manifest's `budget_raise_history`.
     "run_ner_bc5cdr_ablation_sizesweep_continue_l40s.slurm",
+}
+
+
+# RESULTS VARIANTS (registered 2026-11-11; the launchers date from 2026-11-03/08). Full results runs
+# of a task under a different SETTING rather than an ablated mechanism, so they keep their own job
+# names (which name their run dirs in logs/runs/) and a wall sized to the run instead of the week:
+#   * `_calibrated`: the default teacher-calibrated goal for the two tasks whose main run pins the
+#     goal at 0.99 (paper Table 3 default-goal rows);
+#   * the phone-in-the-loop runs: the same task on a phone-measured filtered pool (paper Fig 9).
+# Like an ablation arm, each must differ from its baseline only by the lines declared here.
+VARIANT_SCRIPTS = {
+    "run_clinc150_calibrated_l40s.slurm": {
+        "baseline": "run_clinc150_l40s.slurm",
+        "added": ("export SLM_VERIFY_SYNTH=shadow", "export SLM_TEACHER_SYNTH_BYPASS=1"),
+        "removed": (),
+    },
+    "run_sms_spam_calibrated_l40s.slurm": {
+        "baseline": "run_sms_spam_l40s.slurm",
+        "added": ("export SLM_VERIFY_SYNTH=shadow", "export SLM_TEACHER_SYNTH_BYPASS=1"),
+        "removed": (),
+    },
+    "run_ner_bc5cdr_m07_oneplus8pro_l40s.slurm": {
+        "baseline": "run_ner_bc5cdr_l40s.slurm",
+        "added": (
+            "export SLM_FILTERED_POOL=/mmfs1/gscratch/intelligentsystems/evanly/SLM_Factory/config/"
+            "filtered_pools/oneplus8pro_m07.json",
+            'export TASK="Fine tune a small model for biomedical named entity recognition on PubMed '
+            "abstracts, extracting Chemical and Disease entity spans (BC5CDR dataset style), "
+            'targeting deployment on my OnePlus 8 Pro with 12GB RAM and 256GB storage"',
+        ),
+        "removed": (
+            'export TASK="Fine tune a small model for biomedical named entity recognition on PubMed '
+            "abstracts, extracting Chemical and Disease entity spans (BC5CDR dataset style), "
+            'targeting deployment on my Samsung Galaxy S24 Ultra with 12GB RAM and 256GB storage"',
+        ),
+    },
+    "run_dialogsum_h09_galaxys23_l40s.slurm": {
+        "baseline": "run_dialogsum_l40s.slurm",
+        "added": (
+            "SLM_FILTERED_POOL=/mmfs1/gscratch/intelligentsystems/evanly/SLM_Factory/config/"
+            "filtered_pools/galaxys23_h09.json",
+            'if [ ! -s "$SLM_FILTERED_POOL" ]; then',
+            'echo "FATAL: $SLM_FILTERED_POOL missing; get it from the hardware side (filter_pool.py) '
+            'first" >&2',
+            "exit 1",
+            "fi",
+            "export SLM_FILTERED_POOL",
+            'export TASK="Fine tune a small model to summarize spoken conversations in one to three '
+            "sentences (DialogSum chat and meeting transcripts, scored against three human reference "
+            'summaries), targeting deployment on my Samsung Galaxy S23 with 8GB RAM and 256GB storage"',
+        ),
+        "removed": (
+            'export TASK="Fine tune a small model to summarize spoken conversations in one to three '
+            "sentences (DialogSum chat and meeting transcripts, scored against three human reference "
+            'summaries), targeting deployment on my Samsung Galaxy S24 Ultra with 12GB RAM and 256GB '
+            'storage"',
+        ),
+    },
 }
 
 
@@ -525,7 +586,7 @@ def test_l40s_benchmark_scripts_cover_exactly_the_registry():
     # shape. Subtracting an explicit registry keeps the real guarantee intact: a launcher that
     # nobody has accounted for still fails, because it appears in neither set.
     on_disk = ({p.name for p in PIPELINE_DIR.glob("run_*_l40s.slurm")}
-               - set(ABLATION_SCRIPTS) - CONTINUATION_SCRIPTS)
+               - set(ABLATION_SCRIPTS) - CONTINUATION_SCRIPTS - set(VARIANT_SCRIPTS))
     assert on_disk == set(L40S_BENCHMARK_SCRIPTS)
     assert set(L40S_BENCHMARK_SCRIPTS.values()) == set(tasks.TASKS)
 
@@ -592,6 +653,24 @@ def test_each_ablation_differs_from_its_baseline_by_one_declared_knob():
             f"{list(entry['removed'])!r}. A setting silently missing from an arm is the same "
             f"problem as an extra one."
         )
+
+
+def test_each_results_variant_differs_from_its_baseline_only_where_declared():
+    """Same guarantee as for ablation arms: a variant changes the declared lines and nothing else."""
+    import tasks
+
+    for filename, entry in sorted(VARIANT_SCRIPTS.items()):
+        assert entry["baseline"] in L40S_BENCHMARK_SCRIPTS, filename
+        baseline = _effective_lines(
+            (PIPELINE_DIR / entry["baseline"]).read_text(encoding="utf-8")
+        )
+        source = (PIPELINE_DIR / filename).read_text(encoding="utf-8")
+        arm = _effective_lines(source)
+        assert [line for line in arm if line not in baseline] == list(entry["added"]), filename
+        assert [line for line in baseline if line not in arm] == list(entry["removed"]), filename
+        match = re.search(r"export SLM_BENCHMARK_TASK=(\S+)", source)
+        assert match is not None and match.group(1) in tasks.TASKS, filename
+        assert match.group(1) == L40S_BENCHMARK_SCRIPTS[entry["baseline"]], filename
 
 
 def test_every_ablation_names_a_real_task_and_an_existing_baseline():
@@ -1102,7 +1181,8 @@ def test_every_slurm_script_runs_on_a_sanctioned_l40s_allocation():
     )
     accounted = (set(L40S_TASK_SCRIPTS) | set(CSE_BENCHMARK_SCRIPTS)
                  | set(CKPT_BENCHMARK_SCRIPTS) | set(ABLATION_SCRIPTS)
-                 | PROBE_SCRIPTS | VERIFICATION_SCRIPTS | CONTINUATION_SCRIPTS)
+                 | PROBE_SCRIPTS | VERIFICATION_SCRIPTS | CONTINUATION_SCRIPTS
+                 | set(VARIANT_SCRIPTS))
     assert {p.name for p in scripts} == accounted
     for path in scripts:
         source = path.read_text(encoding="utf-8")
@@ -1208,6 +1288,15 @@ def test_every_slurm_script_runs_on_a_sanctioned_l40s_allocation():
             assert "/logs/slurm/" in directives["output"], path.name
             continue
         assert directives["gres"] == "gpu:l40s:2", path.name
+        if path.name in VARIANT_SCRIPTS:
+            # A results run with a known envelope: requeue-able like its baseline, but sized to the
+            # run (1-7 days) so it is schedulable ahead of a maintenance reservation.
+            hours = _wall_clock_hours(directives["time"])
+            assert 24 <= hours <= 168, f"{path.name} requests {directives['time']}"
+            assert "--requeue" in source, path.name
+            assert "#SBATCH --signal=B:USR1@7200" in source, path.name
+            assert "/logs/slurm/" in directives["output"], path.name
+            continue
         if path.name in VERIFICATION_SCRIPTS:
             # A verification run is time-boxed and NOT requeued, on purpose: it exists to answer one
             # question cheaply, and a requeue would silently restart the very failure it was launched
