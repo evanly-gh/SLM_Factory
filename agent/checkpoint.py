@@ -379,8 +379,16 @@ def load_run_manifest(
             "run manifest force_model drift: "
             f"{payload.get('force_model', '')!r} != {expected_force_model!r}"
         )
-    expected_thread = stable_thread_id(payload["run_dir"])
-    if payload["thread_id"] != expected_thread:
+    # The id was derived from the run dir's resolved path at creation, which the manifest stores
+    # verbatim, so hash that string as stored. Also accept the id of where it resolves today: a run
+    # dir moved into a purpose folder with a symlink left at its old path (see logs/README.md) keeps
+    # its identity and stays resumable.
+    stored_run_dir = str(payload["run_dir"])
+    accepted_threads = {
+        f"slm-{hashlib.sha256(stored_run_dir.encode()).hexdigest()[:24]}",
+        stable_thread_id(stored_run_dir),
+    }
+    if payload["thread_id"] not in accepted_threads:
         raise CheckpointCompatibilityError(
             "run manifest thread_id does not match its stable run directory"
         )

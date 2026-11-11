@@ -412,7 +412,8 @@ if _IS_RESUME:
         expected_compatibility=_COMPATIBILITY,
         expected_effective_config=_EFFECTIVE_CONFIG,
     )
-    if os.path.abspath(CHECKPOINT_PATH) != os.path.abspath(
+    # realpath on both sides: a run dir may have been moved behind a symlink at its old path.
+    if os.path.realpath(CHECKPOINT_PATH) != os.path.realpath(
         _RUN_MANIFEST["checkpoint_path"]
     ):
         raise CheckpointError(
@@ -767,7 +768,7 @@ else:
     restored_curation_log = initial_state.get("curation_log_path")
     if (
         restored_curation_log
-        and os.path.abspath(restored_curation_log) != CUR_LOG_PATH
+        and os.path.realpath(restored_curation_log) != os.path.realpath(CUR_LOG_PATH)
     ):
         raise CheckpointCompatibilityError(
             "resume curation_log_path drift: "
