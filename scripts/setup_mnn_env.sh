@@ -9,7 +9,8 @@
 #   bash scripts/setup_mnn_env.sh
 #   bash scripts/setup_mnn_env.sh --force
 #
-# RUNS ON A LOGIN NODE, and needs the CUDA TOOLKIT but not a GPU — nvcc compiles the sm_89 kernels
+# Run it inside a Slurm job (e.g. `salloc -c 8 --mem=32G ...`), not on a login node. It needs the
+# CUDA TOOLKIT but not a GPU — nvcc compiles the sm_89 kernels
 # without a device present. The exporter traces the model on CPU, which is why `.venv_mnn` gets a
 # CPU torch wheel: buying a CUDA one would reserve GPU memory the training stack wants, the same
 # reasoning `scripts/setup_metric_envs.sh` gives for `.venv_metrics`.
@@ -76,7 +77,7 @@ FORCE=0
 # depends on lives. `training/quantize_mnn.py::default_mnn_root` derives the same path, so the two
 # agree without either hardcoding the other's answer.
 MNN_ROOT="${SLM_MNN_ROOT:-$(dirname "$PROJ")/MNN}"
-BUILD_JOBS="${SLM_MNN_BUILD_JOBS:-32}"
+BUILD_JOBS="${SLM_MNN_BUILD_JOBS:-${SLURM_CPUS_PER_TASK:-1}}"   # never size from nproc on a shared node
 
 # IMPORTANT: do NOT pipe `module load` — `module` is a shell function, and piping runs it in a
 # SUBSHELL so its PATH changes are lost. Load cmake BEFORE gcc: the cmake module depends on

@@ -123,7 +123,8 @@ class AgentState(TypedDict):
     last_intervention: str            # "data_rebuild" | "hyperparameter" | "rollback"
     last_hypothesis: str              # LLM-generated causal reasoning for the next intervention
     llm_iterate_decision: Optional[dict]  # full LLM decision JSON from iterate_node
-    next_action: str                  # "train" | "curate" | "rollback" | "escalate" | "terminate"
+    next_action: str                  # "train" | "curate" | "escalate" | "downward_probe" | "terminate"
+                                      # (rollback is routed by should_rollback, not next_action)
 
     # Baseline tracking: one entry per model tried, records zero-shot vs best fine-tuned
     model_baselines: list[dict]       # [{selector,model_id,quant,baseline_f1,best_finetuned_f1}, ...]

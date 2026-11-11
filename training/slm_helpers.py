@@ -1,8 +1,10 @@
 # training/slm_helpers.py
 """
-Agent-facing interface for training and inference.
-Called by the agent via the bash tool.
-Equivalent to the paper's tinker_helpers.py.
+Training and inference helpers the pipeline calls directly (Python, not via a tool).
+
+`train` runs one LoRA configuration (agent/nodes/train.py, escalate, downward_probe);
+`infer*` / `infer_batch_gguf` / `infer_batch_mnn` generate with an HF adapter, a GGUF file
+(llama-cpp-python) or an MNN model for eval/harness.py; the `mnn_*` functions load and run MNN.
 """
 import os
 import time

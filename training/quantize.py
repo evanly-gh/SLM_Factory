@@ -1,12 +1,15 @@
 # training/quantize.py
 """
-INT4 quantization and hardware profiling for Android-deployable models.
+GGUF quantization with llama.cpp (Q4_K_M / Q8_0) and the validated-artifact cache.
 
-Phase 1: theoretical estimates from ANDROID_POOL benchmarks.
-Phase 2: actual W4A16 quantization via llama.cpp + measured hardware profiles.
-
-Design doc §6.5: 'Phase 2 replaces theoretical estimates with actual quantization
-and measured values via Qualcomm AI Hub or physical device.'
+`quantize_from_model_spec` converts a merged/HF checkpoint to a quantized GGUF and raises on
+failure; `quantize_checkpoint` returns a `QuantizationResult` that records a failure instead of
+raising.
+`validate_and_record_gguf` / `validated_gguf_cache_hit` / `invalidate_gguf_cache` manage the
+`.validation.json` sidecar that makes `artifacts/gguf/<model>/<hash>/` a reusable cache.
+`theoretical_hardware_profile` (name kept for compatibility) reports the pool's on-disk size plus
+any recorded measurement; it no longer models throughput or RAM.
+The MNN counterpart is training/quantize_mnn.py; training/quant_backend.py picks between them.
 """
 import hashlib
 import json

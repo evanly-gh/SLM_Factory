@@ -1930,7 +1930,8 @@ def iterate_node(state: AgentState) -> AgentState:
     The orchestrator receives the bounded trajectory and aggregate reports directly.
     This implements the paper's EXPAND(v_parent, G, F) reasoning step (§2.2 Eq. 2).
 
-    Falls back to score-band rules if the LLM call fails.
+    There is no rule-based fallback: if the orchestrator's decision cannot be obtained or is
+    invalid, the node raises OrchestratorDecisionError.
     """
     selected = state.get("selected_model")
     model_id = selected.label if selected is not None else "?"  # log prefix incl. quant

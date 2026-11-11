@@ -1,6 +1,7 @@
 # agent/nodes/cold_start/hardware_filter.py
 """
-Staged hardware filter — runs pre-graph after hardware_research.
+Staged hardware filter. Called from task_analysis_node (the first graph node), using the
+device constraints that hardware_research resolved before the graph started.
 
 Stage 1: inequality filter (storage, memory, throughput) — free.
 Stage 2: on-device eval stub (latency, power, thermal) — iterates largest→smallest,

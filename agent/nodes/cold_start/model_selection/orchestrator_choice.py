@@ -6,7 +6,7 @@ Let the orchestrator LLM choose the starting model directly, using the task
 type, task plan, feasible set, and hardware constraints as context. No probing
 overhead — the LLM selects based on published benchmarks and model notes.
 
-Falls back deterministically to the lowest-peak-RAM feasible variant.
+Falls back deterministically to the smallest feasible variant by on-disk size (`size_mb`).
 """
 import json
 import logging

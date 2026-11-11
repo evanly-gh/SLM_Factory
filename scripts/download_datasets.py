@@ -16,8 +16,8 @@ bundle is required to have zero case/whitespace-normalized ``text`` overlap.
 
 Every bundle declares the registry TASK it supplies rows for, and the manifest carries that name.
 ``data.loaders.web_acquire.load_local_dataset`` matches on it, so a bundle whose ``task`` is not a
-registry key is unreachable — which is why the catalog below holds only datasets that feed one of
-the eight live tasks. The APPS, MBPP, emotion and go_emotions bundles were removed on 2026-08-18
+registry key is unreachable — which is why the catalog below holds only datasets that feed a
+registered task (today: bc5cdr for ner_bc5cdr, and dialogsum). The APPS, MBPP, emotion and go_emotions bundles were removed on 2026-08-18
 along with the code-execution scorer and the classification channel they belonged to: nothing in
 the suite could consume them, and `required_fields_for_task` has no answer for a task that does not
 exist. The gsm8k bundle went the same way with the gsm8k task on 2026-11-11.

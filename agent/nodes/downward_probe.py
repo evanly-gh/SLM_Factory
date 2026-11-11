@@ -3,11 +3,10 @@
 Node 9: active downward re-exploration (B161 change 8).
 
 When the loop converges (goal met), find the SMALLEST feasible model that still clears the
-goal, to minimize on-device resource use. The orchestrator first analyzes the trajectory
-(tiers tried, steps taken, margin above the goal) and decides whether a lower tier is worth
-attempting; if so, it re-trains + re-evaluates progressively smaller tiers (each tier at most
-once, tracked in downward_tiers_tried) and ADOPTS the smallest that clears the goal — else it
-keeps the converged model. Always terminates.
+goal, to minimize on-device resource use. It re-trains + re-evaluates progressively smaller
+tiers (each tier at most once, tracked in downward_tiers_tried); within a lower tier the
+orchestrator picks which variant to try (`_llm_choose_model`). It ADOPTS the smallest variant
+that clears the goal, else keeps the converged model. Always terminates.
 """
 import copy
 import logging
