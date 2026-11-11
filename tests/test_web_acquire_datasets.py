@@ -14,11 +14,8 @@ from data.loaders import web_acquire
     [
         ("BC5CDR", "bc5cdr"),
         ("Biomedical NER (BC5CDR chemical-disease)", "bc5cdr"),
-        ("GSM8K", "gsm8k"),
-        ("grade-school math benchmark: GSM8K main", "gsm8k"),
         ("SAMSum", "samsum"),
         ("abstractive dialogue summarization — SAMSum dataset", "samsum"),
-        ("RouterBench", "routerbench"),
     ],
 )
 def test_exact_and_composite_benchmark_aliases(benchmark, expected):
@@ -60,29 +57,6 @@ def test_stage0_bc5cdr_loader_preserves_ner_schema(monkeypatch):
         ("tner/bc5cdr", None, "test[:1]"),
     ]
     assert meta["source_records"][1]["split"] == "test"
-
-
-def test_stage0_gsm8k_loader_preserves_gold_cot(monkeypatch):
-    def fake_load_dataset(hf_id, config=None, split=None, **_kwargs):
-        assert (hf_id, config) == ("openai/gsm8k", "main")
-        final = "7" if str(split).startswith("train") else "8"
-        return [{"question": f"Compute {final}", "answer": f"Reasoning {final}.\n#### {final}"}]
-
-    monkeypatch.setattr("datasets.load_dataset", fake_load_dataset)
-
-    train, test = web_acquire.load_benchmark_dataset(
-        {"benchmark": "grade-school math (GSM8K)", "task": "gsm8k"},
-        max_train=2,
-        max_test=1,
-    )
-
-    assert train[0] == {
-        "text": "Compute 7",
-        "answer": "7",
-        "cot_reasoning": "Reasoning 7.",
-        "label": "math_reasoning",
-    }
-    assert test[0]["answer"] == "8"
 
 
 def test_stage0_samsum_loader_uses_accessible_mirror(monkeypatch):
@@ -144,11 +118,10 @@ def _write_local_bundle(root, name, task, train, test, schema_version=1):
     bundle.mkdir()
     source_id = {
         "bc5cdr": "tner/bc5cdr",
-        "gsm8k": "openai/gsm8k",
         "samsum": "knkarthick/samsum",
         "emotion": "dair-ai/emotion",
     }[name]
-    config = {"gsm8k": "main"}.get(name)
+    config = None
     manifest = {
         "schema_version": schema_version,
         "name": name,
@@ -193,13 +166,6 @@ def _write_local_bundle(root, name, task, train, test, schema_version=1):
             "Biomedical NER (BC5CDR)",
             {"text": "Aspirin helps", "entities": [{"text": "Aspirin", "type": "Chemical"}]},
             {"text": "Fever persists", "entities": [{"text": "Fever", "type": "Disease"}]},
-        ),
-        (
-            "gsm8k",
-            "gsm8k",
-            "grade-school math GSM8K",
-            {"text": "1+1?", "answer": "2", "cot_reasoning": "Add.", "label": "gsm8k"},
-            {"text": "2+2?", "answer": "4", "cot_reasoning": "Add.", "label": "gsm8k"},
         ),
         (
             "samsum",
@@ -669,7 +635,7 @@ def _mine_from_a_discovered_source(monkeypatch, train):
         task_plan={"task_name": "routing", "benchmark": "unknown",
                    "labels": sorted(ROUTER_LABELS)},
         description="route or answer locally",
-        task="routerbench",
+        task="sms_spam",
         existing_rows=[{"text": "seed", "label": "local"}],
         eval_rows=[],
         eval_source_ban=[],
@@ -687,9 +653,9 @@ def test_asking_for_no_rows_is_a_no_op_rather_than_a_crash():
     name that is read before any argument is — a task spec resolved from a local that was never
     bound, say — surfaces here and nowhere cheaper."""
     rows, report = web_acquire.mine_additional_real_rows(
-        task_plan={"task_name": "routing", "benchmark": "routerbench"},
+        task_plan={"task_name": "routing", "benchmark": "sms_spam"},
         description="route or answer locally",
-        task="routerbench",
+        task="sms_spam",
         existing_rows=[{"text": "seed", "label": "local"}],
         eval_rows=[],
         eval_source_ban=[],
@@ -703,7 +669,7 @@ def test_asking_for_no_rows_is_a_no_op_rather_than_a_crash():
 
 
 def test_a_mined_source_keeps_its_good_rows_and_drops_the_foreign_ones(monkeypatch):
-    """RouterBench is a two-class task, and rows labelled `cloud` cannot be scored against a frozen
+    """RouterBench (removed) was a two-class task, and rows labelled `cloud` cannot be scored against a frozen
     eval set that has no such class — so they are dropped, and the drop is logged with a count per
     rejected label because a silent one is indistinguishable from a source that simply had few rows.
 

@@ -433,10 +433,10 @@ def test_discovery_passes_the_pinned_label_space_so_a_foreign_class_cannot_enter
 
     eval_set = EvalSet(
         all=[{"text": "a", "label": "local"}, {"text": "b", "label": "route"}],
-        task="routerbench",
+        task="sms_spam",
     )
     state = {
-        "task": "routerbench",
+        "task": "sms_spam",
         "train_examples": [],
         "task_label_space": {"labels": ["local", "route"]},
         "eval_set": eval_set,

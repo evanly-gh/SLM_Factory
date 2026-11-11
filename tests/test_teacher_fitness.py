@@ -44,7 +44,7 @@ from agent.teacher_fitness import (
 from data.eval_set import EvalSet
 from tasks import get_task
 
-SPEC = get_task("routerbench")
+SPEC = get_task("sms_spam")
 
 # Deliberately disjoint text markers. Every assertion below about which rows reached a prompt is a
 # substring test, so a train row and an eval row must never be confusable.
@@ -300,8 +300,8 @@ def test_only_the_k_shot_prompt_is_measured_because_that_is_what_synthesis_sends
     zero-shot score it will never be asked to reproduce is authorised on the wrong evidence. That
     reading was already fixed; what this pins is that the second, zero-shot pass is no longer TAKEN
     either. It survived as commentary after nothing consumed it, doubling the cost of a
-    measurement that now also sets the run's accuracy goal. The B320 comparison it provided lives
-    in `scripts/probe_teacher_fewshot.py`, which exists for exactly that.
+    measurement that now also sets the run's accuracy goal. The B320 comparison it provided lived
+    in `scripts/probe_teacher_fewshot.py` (removed 2026-11-11; recoverable from git history).
     """
     def _teacher(prompt, *args, **kwargs):
         # Deliberately incompetent WITH demonstrations, perfect without them.

@@ -1,8 +1,9 @@
-"""Figures for docs/RESULTS.md, one per numeric table.
+"""Figures for docs/SLMF_Results/RESULTS.md, one per numeric table.
 
-Every number is parsed from the tables in `docs/RESULTS.md` itself (located by a unique anchor
-string), so the figures follow the document: edit a table, rerun this script. PNGs are written to
-`docs/img/results/`.
+Every number is parsed from the tables in `docs/SLMF_Results/RESULTS.md` itself (located by a unique
+anchor string), so the figures follow the document: edit a table, rerun this script. PNGs are
+written to `docs/img/results/`, where the existing 38 figures live (RESULTS.md links them as
+`img/results/<name>.png`).
 
 Palette: the dataviz reference palette, in its validated categorical order (blue / orange / aqua /
 yellow) and an ordinal blue ramp for quantization precision. Roles are fixed across figures:
@@ -24,7 +25,7 @@ import numpy as np  # noqa: E402
 from matplotlib.colors import LinearSegmentedColormap  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
-DOC = ROOT / "docs" / "RESULTS.md"
+DOC = ROOT / "docs" / "SLMF_Results" / "RESULTS.md"
 FIGS = ROOT / "docs" / "img" / "results"
 LINES = DOC.read_text().splitlines()
 

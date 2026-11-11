@@ -176,7 +176,7 @@ def test_sqlite_serializer_round_trips_an_eval_set():
     checkpoint. It has drifted from `EvalSet` before, reading three fields the dataclass no longer
     has and raising AttributeError on every write.
     """
-    eval_set = EvalSet(all=[{"text": "held out", "label": "local"}], task="routerbench")
+    eval_set = EvalSet(all=[{"text": "held out", "label": "local"}], task="sms_spam")
     serializer = SafeCheckpointSerializer()
 
     decoded = serializer.loads_typed(serializer.dumps_typed({"eval_set": eval_set}))

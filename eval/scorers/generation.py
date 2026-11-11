@@ -1,4 +1,4 @@
-"""Free-form generation: prompt building, answer extraction, and two scoring rules.
+"""Free-form generation: prompt building, answer extraction, and judge scoring.
 
 This module used to serve three `task_type` channels — `generation`, `math_reasoning` and
 `code_generation` — and branched on `eval_set.task_type` inside `build_prompts`,
@@ -6,10 +6,10 @@ This module used to serve three `task_type` channels — `generation`, `math_rea
 and the `else` was the LLM judge, so anything routed here without a matching branch was silently
 judged rather than checked.
 
-There are now two named scoring functions and no branch. A task names the one it uses in its
-`TaskSpec`: `score_exact_match` for a task with a checkable answer (gsm8k), `score_with_judge` for
-one whose quality is a judgement (dialogsum). The `code_generation` channel and its execution
-sandbox were deleted on 2026-08-18 — APPS/MBPP are not in the benchmark suite.
+There is now one named scoring function and no branch: a task whose quality is a judgement names
+`score_with_judge` in its `TaskSpec`. The numeric exact-match scorer went with the gsm8k task
+(removed 2026-11-11). The `code_generation` channel and its execution sandbox were deleted on
+2026-08-18 — APPS/MBPP are not in the benchmark suite.
 """
 import re
 
@@ -104,36 +104,6 @@ def extract_predictions(raw_outputs: list[str], eval_set: EvalSet) -> list[str]:
     return [split_reasoning(raw)[1] for raw in raw_outputs]
 
 
-def _final_answer(value: str) -> str:
-    """Extract a normalized final numeric answer for math exact match."""
-    if value is None:
-        return ""
-    text = value.strip()
-    match = re.search(
-        r"(?:####|answer\s*(?:is|:)?)\s*\$?"
-        r"(-?[\d,]+(?:\.\d+)?)",
-        text,
-        re.IGNORECASE,
-    )
-    if match:
-        answer = match.group(1)
-    else:
-        numbers = re.findall(r"-?\d[\d,]*(?:\.\d+)?", text)
-        if not numbers:
-            return text.lower()
-        answer = numbers[-1]
-    answer = answer.replace(",", "").lstrip("$")
-    if re.fullmatch(r"-?\d+\.0+", answer):
-        answer = answer.split(".")[0]
-    return answer
-
-
-def _exact_match(gold: str, prediction: str) -> float:
-    gold_answer = _final_answer(gold)
-    predicted_answer = _final_answer(prediction)
-    return 1.0 if gold_answer != "" and gold_answer == predicted_answer else 0.0
-
-
 def _result(eval_set, predictions, scores, metric_name: str, format_flags) -> dict:
     failures = [
         {**example, "predicted": prediction, "judge_score": value}
@@ -154,22 +124,6 @@ def _result(eval_set, predictions, scores, metric_name: str, format_flags) -> di
     }
 
 
-def score_exact_match(eval_set: EvalSet, predictions: list[str]) -> dict:
-    """Score against a checkable gold answer. Used by tasks with one right answer."""
-    scores = [
-        _exact_match(example.get("answer", ""), prediction)
-        for example, prediction in zip(eval_set.all, predictions)
-    ]
-    # Format = a final numeric answer was extractable. This is a real distinction on gsm8k: a model
-    # that reasons correctly and never states a parseable number is a FORMAT failure, and the fix is
-    # the prompt or the answer marker, not more training data.
-    flags = [
-        1.0 if re.fullmatch(r"-?\d+(?:\.\d+)?", _final_answer(str(prediction or ""))) else 0.0
-        for prediction in predictions
-    ]
-    return _result(eval_set, predictions, scores, "exact_match", flags)
-
-
 def score_with_judge(eval_set: EvalSet, predictions: list[str]) -> dict:
     """Score with the local LLM judge. Used by tasks whose quality is a judgement."""
     triples = [
@@ -185,16 +139,6 @@ def score_with_judge(eval_set: EvalSet, predictions: list[str]) -> dict:
     # something to judge. It is reported anyway so every task's log line has the same two numbers.
     flags = [1.0 if str(prediction or "").strip() else 0.0 for prediction in predictions]
     return _result(eval_set, predictions, scores, "judge_mean_0_1", flags)
-
-
-def exact_match_failure_category_of(failure: dict) -> str:
-    """Why an exact-match row failed, in a category the orchestrator can act on."""
-    predicted = _final_answer(str(failure.get("predicted") or ""))
-    if not str(failure.get("predicted") or "").strip():
-        return "empty_output"
-    if not predicted or not re.fullmatch(r"-?\d+(?:\.\d+)?", predicted):
-        return "no_numeric_answer"
-    return "wrong_value"
 
 
 def judge_failure_category_of(failure: dict) -> str:

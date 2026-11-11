@@ -274,7 +274,7 @@ SYNTH_MAX_MODEL_LEN = int(os.environ.get("SLM_SYNTH_MAX_MODEL_LEN", "8192"))
 SYNTH_API_KEY = os.environ.get("SLM_SYNTH_API_KEY", "EMPTY")
 
 # API mode redirects the three teacher constants at their source rather than making every consumer
-# branch. `data/synth_client`, `agent/teacher_fitness`, `eval/endpoint_eval` and `data/curriculum`
+# branch. `data/synth_client`, `agent/teacher_fitness` and `data/curriculum`
 # all resolve the teacher from these names, so one substitution here moves all of them at once.
 # The context bound is the API model's, not a served-at figure we chose: DeepSeek V4 serves 1M, so
 # the demonstration-fitting guards in `agent/teacher_fitness` stop discarding shots that fit fine.

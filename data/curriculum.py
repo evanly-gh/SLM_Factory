@@ -402,9 +402,9 @@ def _new_example_prompt(anchor: dict, task_description: str, demos: list[dict] |
     """Prompt to generate ONE new, correct example in the anchor's exact schema.
 
     Generation-family only, which is every task with `closed_label_space=False`: calendar_json,
-    xlam_bfcl, toolbench, gsm8k, dialogsum AND ner_bc5cdr. The other path (`_synthesize_new_gold`)
-    never asks the teacher for a label — it copies the anchor's — so an out-of-vocabulary label is
-    impossible there by construction and no label list needs stating.
+    xlam_bfcl, dialogsum, ner_bc5cdr, multiconer, topv2, gec_bea19 AND goemotions. The other path
+    (`_synthesize_new_gold`) never asks the teacher for a label — it copies the anchor's — so an
+    out-of-vocabulary label is impossible there by construction and no label list needs stating.
 
     That other path used to be described here as "the classification/NER path", which was wrong and
     actively misleading: `ner_bc5cdr` declares `closed_label_space=False` and is dispatched to THIS
@@ -529,7 +529,7 @@ def _gold_field(spec) -> str:
     """The row key holding the gold answer for this task.
 
     Read off the spec's `required_fields`, which is `(input, gold)` for every task in the registry:
-    `("text", "answer")` for xlam/gsm8k/calendar/dialogsum, `("text", "entities")` for BC5CDR,
+    `("text", "answer")` for xlam/calendar/dialogsum, `("text", "entities")` for BC5CDR,
     `("text", "label")` for the classification tasks.
 
     WHY THIS IS NOT JUST `row["answer"]`

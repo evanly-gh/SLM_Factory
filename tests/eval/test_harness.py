@@ -5,7 +5,7 @@ from eval.harness import run_eval
 from data.eval_set import EvalSet
 
 
-def _make_eval_set(task="routerbench"):
+def _make_eval_set(task="sms_spam"):
     """A REAL eval set, not a mock.
 
     The harness reads every decision off `tasks.get_task(eval_set.task)`, and a spec holds direct
@@ -30,7 +30,7 @@ def test_scoring_mode_selects_between_the_two_scorers_a_task_declares():
     from eval.harness import SCORING_MODES, resolve_scorer
     from tasks import get_task
 
-    spec = get_task("routerbench")
+    spec = get_task("sms_spam")
     assert SCORING_MODES == ("select", "report")
     assert resolve_scorer(spec, "select") == (spec.score, spec.metric_name)
     assert resolve_scorer(spec, "report") == (spec.report_score, spec.report_metric_name)
@@ -65,7 +65,7 @@ def test_report_scoring_grades_with_the_report_scorer_and_names_its_metric(mock_
         }
 
     stub = dataclasses.replace(
-        get_task("routerbench"), report_score=report_score,
+        get_task("sms_spam"), report_score=report_score,
         report_metric_name="pretend_auprc",
     )
     with patch("tasks.get_task", return_value=stub):
@@ -91,10 +91,10 @@ def test_run_eval_uses_infer_batch_when_no_gguf(mock_infer, monkeypatch):
         "model-id",
         max_workers=20,
         max_new_tokens=50,
-        task="routerbench",
+        task="sms_spam",
     )
     assert result.f1 == 1.0
-    # The metric is the TASK's, not a channel default: RouterBench is binary and reports a
+    # The metric is the TASK's, not a channel default: SMS spam is binary and reports a
     # minority-class F1, which used to be returned under the label `macro_f1`.
     assert result.metric == "minority_f1"
 
@@ -111,7 +111,7 @@ def test_run_eval_uses_infer_batch_gguf_when_gguf_path_set(mock_gguf, monkeypatc
             {"text": "b", "label": "route"},
             {"text": "c", "label": "route"},
         ],
-        task="routerbench",
+        task="sms_spam",
     )
 
     result = run_eval(
@@ -126,7 +126,7 @@ def test_run_eval_uses_infer_batch_gguf_when_gguf_path_set(mock_gguf, monkeypatc
         # The task must reach the GGUF path, or it sizes its scoring concurrency from an unresolvable
         # spec and silently degrades to one context — the old sequential behaviour, for the one caller
         # that matters. The bf16 branch always passed it; this branch did not.
-        task="routerbench",
+        task="sms_spam",
     )
     assert result.f1 == pytest.approx(2 / 3)
 
@@ -149,7 +149,7 @@ def test_run_eval_routes_an_mnn_artifact_to_the_mnn_engine(mock_gguf, mock_mnn, 
             {"text": "b", "label": "route"},
             {"text": "c", "label": "route"},
         ],
-        task="routerbench",
+        task="sms_spam",
     )
 
     result = run_eval(
@@ -164,7 +164,7 @@ def test_run_eval_routes_an_mnn_artifact_to_the_mnn_engine(mock_gguf, mock_mnn, 
         "/artifacts/mnn/model-mnn-q4",
         max_new_tokens=50,
         base_model="model-id",
-        task="routerbench",
+        task="sms_spam",
     )
     mock_gguf.assert_not_called()
     assert result.f1 == pytest.approx(2 / 3)

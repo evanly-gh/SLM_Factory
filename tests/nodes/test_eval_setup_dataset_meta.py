@@ -209,7 +209,7 @@ def test_named_benchmark_path_refuses_a_mismatched_run_task(monkeypatch):
     )
 
     with pytest.raises(ValueError, match="does not match the run's task"):
-        eval_setup._load_named_benchmark("clinc150", {"task": "routerbench"}, {})
+        eval_setup._load_named_benchmark("clinc150", {"task": "sms_spam"}, {})
 
 
 def test_eval_restriction_text_does_not_claim_unimplemented_repo_ban():

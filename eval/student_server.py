@@ -34,7 +34,8 @@ PROMPT AND SAMPLING PARITY IS THE WHOLE CORRECTNESS ARGUMENT
     That argument covers the BF16/adapter path only. It deliberately does NOT cover `SLM_QUANT_EVAL=1`,
     where the in-process path scores a Q4_K_M GGUF through llama.cpp's own chat template — a different
     artifact under a different template, which is a measurement change and not this module's business.
-    `scripts/compare_eval_backends.py` exists to measure agreement before anyone trusts a swap.
+    `scripts/compare_eval_backends.py` measured agreement before anyone trusted a swap; it was
+    removed on 2026-11-11 (recoverable from git history) and should be restored before relying on one.
 
 OFF BY DEFAULT
     `SLM_EVAL_BACKEND` defaults to `auto`, which means "whatever the run does today". Nothing here

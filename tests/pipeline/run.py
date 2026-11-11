@@ -571,7 +571,7 @@ if config.SYNTH_API_MODE:
         "The LLM self-check over generated rows is DISABLED (the exact programmatic verifiers "
         "still run).")
     log("  ⚠ synthetic rows from this run are labelled synth:deepseek — their provenance is a "
-        "model we do not own. Judged eval scores (dialogsum, toolbench) are NOT comparable to "
+        "model we do not own. Judged eval scores (tasks with needs_judge) are NOT comparable to "
         "runs judged by the local Qwen3.6.")
 if config.CHEAP_MODE:
     log("CHEAP MODE ON: Haiku for Anthropic orchestration; local Qwen3.6 judge unchanged; "

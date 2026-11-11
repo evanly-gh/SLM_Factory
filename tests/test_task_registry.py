@@ -28,18 +28,15 @@ from tasks.spec import CATEGORIES, EVAL_SAMPLING, FAMILIES, TaskSpec
 # The suite, as documented in `tasks/__init__.py`. Written out rather than derived from the
 # registry, so deleting a task fails here instead of silently shrinking every other assertion.
 EXPECTED_TASKS = {
-    "gsm8k",
+    # gsm8k, toolbench, routerbench and proactive_listening were removed 2026-11-11 (not in the
+    # paper's ten-task suite).
     "dialogsum",
     "sms_spam",
     "xlam_bfcl",
     "calendar_json",
-    # Added 2026-08-24: ToolBench / ToolEval pass rate, reimplementing arXiv:2512.15943.
-    "toolbench",
     "ner_bc5cdr",
-    "routerbench",
-    "proactive_listening",
     "clinc150",
-    # The on-device SFT suite, added 2026-09-06. Each one covers a capability the ten above did
+    # The on-device SFT suite, added 2026-09-06. Each one covers a capability the tasks above did
     # not: nested structured prediction under a published low-resource protocol, a fine-grained
     # label space, and pure text-to-text generation scored on edits.
     "topv2",
@@ -424,7 +421,6 @@ def test_required_fields_are_the_fields_the_scorer_reads():
     of the generation-family bug where rows passed a `(text, label)` gate and were then filtered on
     a `"prompt"` key they never carried (B299)."""
     targets = {
-        "gsm8k": "answer",
         # `references`, not `answer`. The scorer grades against ALL THREE of DialogSum's human
         # test summaries, and requiring only `answer` would let a source that flattens them —
         # knkarthick/dialogsum's test.csv is 1,500 rows with one `summary` column — load cleanly
@@ -444,14 +440,8 @@ def test_required_fields_are_the_fields_the_scorer_reads():
         # `labels` is the list the scorer grades; `label` is its serialization, which is what the
         # model is trained to emit.
         "goemotions": "labels",
-        "routerbench": "label",
-        "proactive_listening": "label",
+        "sms_spam": "label",
         "clinc150": "label",
-        # `query`, not `answer`. ToolEval's pass rate is reference-free — it asks a judge whether
-        # the model's own final answer addresses the query — and the ToolBench test queries ship
-        # with no gold path at all. `query` is the field the scorer grades against, and requiring
-        # `answer` instead would reject every eval row this task has.
-        "toolbench": "query",
     }
     for name, target in targets.items():
         spec = get_task(name)
@@ -461,25 +451,25 @@ def test_required_fields_are_the_fields_the_scorer_reads():
         )
 
 
-def test_the_judged_tasks_say_so_and_are_the_only_ones():
+def test_no_registered_task_is_judged():
     """`needs_judge` exists so a judge outage fails loudly instead of scoring zero and sending the
     loop chasing a phantom regression.
 
-    ONE task scores through the judge, and it is the one where the judge is not a proxy for a
-    metric but IS the metric: `toolbench`'s ToolEval pass rate is DEFINED as a majority vote of
-    judged assessments, and its test queries ship with no reference solution at all.
+    NO registered task scores through the judge today. The last one, `toolbench` (whose ToolEval
+    pass rate is DEFINED as a majority vote of judged assessments), was removed on 2026-11-11; the
+    judge machinery stays as a general capability.
 
-    `dialogsum` used to be the second, on the reasoning that a summary has no exact gold so
+    `dialogsum` used to be judged too, on the reasoning that a summary has no exact gold so
     similarity must be judged. That was wrong about the data. DialogSum's test split ships THREE
     human summaries per dialogue, so multi-reference ROUGE has a real gold to score against — and
     unlike a judge it is comparable to the published baselines and to the human ceiling, is
     deterministic, and costs nothing per eval. It moved off the judge on 2026-09-06.
 
-    Every other task is scored by computation, and adding a second judged task should have to
-    argue for itself here.
+    Every task is scored by computation, and adding a judged task should have to argue for itself
+    here.
     """
     judged = {name for name, spec in TASKS.items() if spec.needs_judge}
-    assert judged == {"toolbench"}
+    assert judged == set()
     for name, spec in TASKS.items():
         # Overlapping the judge with the next generation batch is only meaningful when there is
         # a judge to overlap.
@@ -488,11 +478,10 @@ def test_the_judged_tasks_say_so_and_are_the_only_ones():
 
 
 def test_metric_names_say_what_the_number_is():
-    """RouterBench and CLINC150 were both `classification` and both reported `macro_f1`, but
-    RouterBench's headline has always been a minority-class F1. The task now names which."""
+    """Classification tasks used to all report `macro_f1`, but a binary task with a rare positive
+    class (SMS spam) has a minority-class F1 headline. The task now names which."""
     assert get_task("clinc150").metric_name == "macro_f1"
-    assert get_task("routerbench").metric_name == "minority_f1"
-    assert get_task("proactive_listening").metric_name == "minority_f1"
+    assert get_task("sms_spam").metric_name == "minority_f1"
     for name, spec in TASKS.items():
         assert spec.metric_name.strip(), name
 

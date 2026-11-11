@@ -223,6 +223,10 @@ def test_label_difficulty_zeroshot_gradient():
     assert b["hard"] == ["neither"]
 
 
+# Rows x dialogsum's 512-token reserve must exceed MAX_DIFFICULTY_PROBE_TOKENS (1,000,000).
+_UNAFFORDABLE_ROWS = 2_000
+
+
 def test_an_unaffordable_difficulty_probe_falls_back_to_the_heuristic():
     """The zero-shot gradient is two FULL generative evals before the run selects a model.
 
@@ -234,10 +238,13 @@ def test_an_unaffordable_difficulty_probe_falls_back_to_the_heuristic():
 
     `correctness_fn` is injected here and must NOT be called: the point is that the expensive path is
     not entered at all, not that it returns quickly.
+
+    toolbench was removed on 2026-11-11, so the case is reproduced on `dialogsum` (512 output
+    tokens) with enough rows to cross the same ceiling.
     """
     from agent.nodes.test_agent import MAX_DIFFICULTY_PROBE_TOKENS
 
-    es = _FakeEvalSet([f"row {i}" for i in range(760)])
+    es = _FakeEvalSet([f"row {i}" for i in range(_UNAFFORDABLE_ROWS)])
     models = [type("M", (), {"model_id": "big"})(), type("M", (), {"model_id": "small"})()]
     called: list[str] = []
 
@@ -247,11 +254,13 @@ def test_an_unaffordable_difficulty_probe_falls_back_to_the_heuristic():
 
     logs: list[str] = []
     os.environ["SLM_DIFFICULTY"] = "zeroshot"
-    buckets = label_difficulty(es, models, "toolbench", log=logs.append, correctness_fn=cf)
+    buckets = label_difficulty(es, models, "dialogsum", log=logs.append, correctness_fn=cf)
 
     assert called == [], "the expensive gradient ran on a task it should have been skipped for"
     assert set(buckets) == {"easy", "medium", "hard"}
-    assert sum(len(v) for v in buckets.values()) == 760, "every row must still get a bucket"
+    assert sum(len(v) for v in buckets.values()) == _UNAFFORDABLE_ROWS, (
+        "every row must still get a bucket"
+    )
     joined = " ".join(logs)
     assert "SKIPPING" in joined
     # The log must quantify the cost, or the next reader cannot tell a skip from a bug.
@@ -277,17 +286,17 @@ def test_an_affordable_task_still_runs_the_zeroshot_gradient():
 
 def test_zeroshot_force_overrides_the_affordability_guard():
     """An escape hatch that does not work is worse than none, so it is asserted."""
-    es = _FakeEvalSet([f"row {i}" for i in range(760)])
+    es = _FakeEvalSet([f"row {i}" for i in range(_UNAFFORDABLE_ROWS)])
     models = [type("M", (), {"model_id": "big"})(), type("M", (), {"model_id": "small"})()]
     called: list[str] = []
 
     def cf(model_id):
         called.append(model_id)
-        return {f"row {i}": True for i in range(760)}
+        return {f"row {i}": True for i in range(_UNAFFORDABLE_ROWS)}
 
     os.environ["SLM_DIFFICULTY"] = "zeroshot-force"
     try:
-        label_difficulty(es, models, "toolbench", log=lambda *_: None, correctness_fn=cf)
+        label_difficulty(es, models, "dialogsum", log=lambda *_: None, correctness_fn=cf)
     finally:
         os.environ["SLM_DIFFICULTY"] = "zeroshot"
     assert sorted(called) == ["big", "small"]

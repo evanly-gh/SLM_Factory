@@ -5,10 +5,8 @@ frozen E, floored at 0.8. task_analysis parks the goal PENDING (E does not exist
 completes it once E is built, from the measurement `_measure_teacher` has ALREADY taken for the
 synthesis gate rather than from a second pass of its own.
 
-These tests pin the floor/cap math, the standalone `measure_endpoint_baseline` helper (still used
-by `scripts/probe_teacher_fewshot.py`, no longer by the pipeline), the reuse of the single
-measurement, what the calibration record has to remember about how it was taken, the
-unmeasurable-teacher HARD FAILURE (there is no fallback — the run raises and stops), and the
+These tests pin the floor/cap math, the reuse of the single measurement, what the calibration
+record has to remember about how it was taken, the unmeasurable-teacher HARD FAILURE (there is no fallback — the run raises and stops), and the
 park/complete handoff.
 
 The `qwen_baseline` / `pending_qwen_baseline` source strings and the `measured_qwen` field keep
@@ -59,107 +57,11 @@ def test_non_numeric_measured_falls_back_to_floor():
     assert threshold == pytest.approx(0.8)
 
 
-# --- measurement path (mocked endpoint) ----------------------------------------
+# --- shared fixture -------------------------------------------------------------
 
 def _classification_eval_set():
     rows = [{"text": "win a free prize now", "label": "spam"}]
     return EvalSet(all=rows, task="clinc150")
-
-
-def test_measure_endpoint_baseline_scores_with_injected_generate_fn():
-    from eval.endpoint_eval import measure_endpoint_baseline
-    from eval.harness import EvalResult
-
-    # A reference that always answers "spam" scores the single spam row perfectly.
-    def fake_generate(prompt, temperature=0.0, max_tokens=50):
-        return "spam"
-
-    result = measure_endpoint_baseline(
-        _classification_eval_set(), generate_fn=fake_generate, log=lambda *a: None
-    )
-    assert isinstance(result, EvalResult)
-    assert result.f1 == pytest.approx(1.0)
-    assert result.metric == "macro_f1"
-
-
-def test_measure_endpoint_baseline_returns_none_when_endpoint_unreachable(monkeypatch):
-    import data.synth_client as synth
-    from eval.endpoint_eval import measure_endpoint_baseline
-
-    monkeypatch.setattr(synth, "get_generate_fn", lambda *a, **k: None)
-    result = measure_endpoint_baseline(
-        _classification_eval_set(), generate_fn=None, log=lambda *a: None
-    )
-    assert result is None
-
-
-def test_measure_endpoint_baseline_survives_a_failing_row():
-    """ONE bad row scores as an empty output rather than aborting a whole baseline.
-
-    The stub must fail on exactly one row, not all of them: a generate_fn that fails on everything is
-    a different situation with a different correct answer, covered below (B313).
-    """
-    from eval.endpoint_eval import measure_endpoint_baseline
-
-    # A dedicated multi-row set: on the single-row shared fixture "one bad row" IS every row, which is
-    # the situation the companion test covers.
-    many = EvalSet(
-        all=[{"text": f"utterance {i}", "label": "spam"} for i in range(20)], task="clinc150",
-    )
-    calls = {"n": 0}
-
-    def boom_once(prompt, temperature=0.0, max_tokens=50):
-        calls["n"] += 1
-        if calls["n"] == 1:
-            raise RuntimeError("endpoint blip")
-        return "spam"
-
-    result = measure_endpoint_baseline(many, generate_fn=boom_once, log=lambda *a: None)
-    assert result is not None
-    assert 0.0 <= result.f1 <= 1.0
-
-
-def test_a_baseline_whose_every_row_failed_is_refused_rather_than_scored_zero():
-    """A score built from nothing but failures describes the harness, not the model.
-
-    On run 38661753 the task NAME was passed into the `generate_fn` positional slot, so all 1,000 eval
-    rows raised `'str' object is not callable`. The baseline reported 0.0000, and
-    `threshold_from_endpoint_baseline` floored the accuracy goal at 0.80 while stating that the teacher
-    had scored zero — a claim about a measurement that never happened. Refusing is the only honest
-    outcome, because 0.0 from a broken harness and 0.0 from an incapable teacher are indistinguishable
-    in the report (B313).
-    """
-    import pytest
-
-    from eval.endpoint_eval import BaselineGenerationError, measure_endpoint_baseline
-
-    def always_broken(prompt, temperature=0.0, max_tokens=50):
-        raise RuntimeError("endpoint died")
-
-    with pytest.raises(BaselineGenerationError) as excinfo:
-        measure_endpoint_baseline(
-            _classification_eval_set(), generate_fn=always_broken, log=lambda *a: None
-        )
-    # The message must name the failure rate and the underlying error, or the next reader is left
-    # guessing at exactly the point the old behaviour left them guessing.
-    assert "endpoint died" in str(excinfo.value)
-    assert "100%" in str(excinfo.value)
-
-
-def test_the_task_name_in_the_generate_fn_slot_is_rejected_immediately():
-    """The specific mistake that caused B313, caught before a single call is made.
-
-    `generate_fn` is the second POSITIONAL parameter, so a caller that believes it is passing a task
-    lands a string there and every row fails identically. `run_eval` dropped its own task argument in
-    the same refactor, which is why four call sites made this mistake at once.
-    """
-    import pytest
-
-    from eval.endpoint_eval import measure_endpoint_baseline
-
-    with pytest.raises(TypeError) as excinfo:
-        measure_endpoint_baseline(_classification_eval_set(), "clinc150", log=lambda *a: None)
-    assert "callable generate_fn" in str(excinfo.value)
 
 
 # --- task_analysis parks the goal PENDING --------------------------------------
@@ -244,12 +146,12 @@ def test_the_goal_reuses_the_fitness_measurement_and_takes_no_second_pass(monkey
     in the pipeline ever sends. Calibration must now read the recorded verdict and call nothing.
     """
     import agent.nodes.cold_start.eval_setup as eval_setup
-    import eval.endpoint_eval as endpoint_eval
 
     def boom(*a, **k):
         raise AssertionError("calibration must not take a second teacher measurement")
 
-    monkeypatch.setattr(endpoint_eval, "measure_endpoint_baseline", boom)
+    # The standalone `eval/endpoint_eval.measure_endpoint_baseline` was removed on 2026-11-11; this
+    # still guards against a second-pass helper reappearing on eval_setup.
     monkeypatch.setattr(eval_setup, "measure_endpoint_baseline", boom, raising=False)
 
     state = _pending_state()

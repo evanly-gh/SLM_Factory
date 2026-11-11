@@ -46,7 +46,20 @@ from data.curriculum import (
 )
 from tasks import get_task
 
-ROUTER_DEFINITIONS = dict(get_task("routerbench").label_definitions)
+# A two-class label space whose label WORDS mislead (B267). Written out here because the routerbench
+# task these definitions came from was removed on 2026-11-11; the tests only need a closed label
+# space with definitions, not the task itself.
+ROUTER_DEFINITIONS = {
+    "local": (
+        "the request is simple enough that a SMALL on-device model can answer it correctly "
+        "— judge difficulty for a small model, NOT whether the topic is 'local' in the "
+        "everyday sense of nearby/location-based"
+    ),
+    "route": (
+        "the request is hard enough that it should be escalated to a LARGER cloud model "
+        "— judge difficulty, NOT whether the topic involves routing or networking"
+    ),
+}
 
 # The brief as the pipeline builds it: the orchestrator's prose, rendered by the one function that
 # every synthesis and verification prompt gets its task description from. Written out here rather
@@ -61,7 +74,8 @@ ROUTER_BRIEF = {
     "failure_modes": ["answering the request instead of classifying it"],
     "source": "orchestrator",
 }
-TASK_BRIEF = brief_context_block(ROUTER_BRIEF, get_task("routerbench"))
+# The spec only matters when no brief is supplied; any closed-label task stands in.
+TASK_BRIEF = brief_context_block(ROUTER_BRIEF, get_task("sms_spam"))
 
 
 def _verdict(valid, reason="because"):

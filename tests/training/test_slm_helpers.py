@@ -845,7 +845,7 @@ def test_infer_batch_rejects_mixed_overlength_prompts_before_padded_generation(
 
 @pytest.mark.parametrize(
     "task",
-    ["ner_bc5cdr", "gsm8k", "dialogsum", "xlam_bfcl"],
+    ["ner_bc5cdr", "dialogsum", "xlam_bfcl"],
 )
 def test_default_long_task_prompt_budget_fits_or_fails_actionably(
     monkeypatch,
@@ -918,7 +918,6 @@ def test_infer_and_single_item_batch_have_identical_prompt_and_output():
         ("clinc150", 33, [32, 1]),
         ("ner_bc5cdr", 17, [16, 1]),
         ("dialogsum", 17, [16, 1]),
-        ("gsm8k", 17, [16, 1]),
     ],
 )
 def test_infer_batch_uses_task_aware_defaults(

@@ -29,7 +29,7 @@ WHY THIS EXISTS
 
 USAGE
     python scripts/preflight_tasks.py                # every registered task
-    python scripts/preflight_tasks.py --task ner_bc5cdr proactive_listening
+    python scripts/preflight_tasks.py --task ner_bc5cdr clinc150
 """
 from __future__ import annotations
 

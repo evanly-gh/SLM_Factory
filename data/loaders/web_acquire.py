@@ -1,7 +1,7 @@
 # data/loaders/web_acquire.py
 """
-General autonomous data acquisition from the web via Exa, driven by the orchestrator's
-task plan (agent/task_planner.py). Works for ANY task — no per-task hardcoding.
+General autonomous data acquisition from the web via Exa, driven by a task plan dict
+(benchmark, task, topics). Works for ANY task — no per-task hardcoding.
 
 For classification: one search per class label; each retrieved document is labeled with
 that class. For NER/generation: searches the plan's topic queries and returns documents
@@ -64,19 +64,11 @@ def survey_baseline(exa, description, log=print) -> str:
 # Exa-scraping webpage/repo metadata. Falls back to Exa for unknown benchmarks.
 # ---------------------------------------------------------------------------
 _BENCHMARK_ALIASES = {
-    "gsm8k": "gsm8k",
-    "gradeschoolmath8k": "gsm8k",
     # NER benchmarks: load real token+BIO-tag data and convert to entity spans.
     "bc5cdr": "bc5cdr", "bc5cdrner": "bc5cdr",
     "biocreativevchemicaldiseaserelation": "bc5cdr",
     "conll": "conll", "conll2003": "conll", "conll03": "conll",
     "samsum": "samsum", "samsumdialoguesummarization": "samsum",
-    # RouterBench. Without this entry Stage-0 had no alias for the benchmark the task is ABOUT, so
-    # `load_dataset("withmartian/routerbench")` failed (the repo ships only pickles), mining fell
-    # through to agentic discovery, and a completely different corpus was substituted 21 times in
-    # one run — with its labels invented by an LLM (B259). Routes to the real pickle loader.
-    "routerbench": "routerbench", "withmartianrouterbench": "routerbench",
-    "routerbench0shot": "routerbench",
 }
 
 # The planner often emits a composite benchmark label ("HumanEval / MBPP", "Biomedical
@@ -84,8 +76,6 @@ _BENCHMARK_ALIASES = {
 # safe to recognize inside a normalized composite name.
 _COMPOSITE_BENCHMARK_MARKERS = {
     "bc5cdr": "bc5cdr",
-    "routerbench": "routerbench",
-    "gsm8k": "gsm8k",
     "samsum": "samsum",
 }
 
@@ -290,32 +280,6 @@ def load_benchmark_dataset(plan: dict, log=print, max_train: int = 300, max_test
         return None
     name = plan.get("benchmark")
 
-    # RouterBench cannot go through `load_dataset` at all — the repo ships only
-    # `routerbench_{0shot,5shot,raw}.pkl` and `datasets` has no pickle reader (B254). It needs its
-    # dedicated loader, which fetches via hf_hub_download + pandas and derives the routing label
-    # from a real per-model correctness column. Handled before the load_dataset block below.
-    if key == "routerbench":
-        try:
-            from data.loaders.routerbench import HF_ID as _RB_ID, load_routerbench
-
-            train, test = load_routerbench(
-                max_train=max_train, max_test=max_test, log=log
-            )
-        except Exception as e:  # noqa: BLE001 - fall through to discovery, as other loaders do
-            log(f"      [acquire] routerbench loader failed: {e}; falling back to Exa")
-            return None
-        _set_benchmark_meta(
-            meta, name, _RB_ID, None,
-            {"train": "hash-split 80%", "test": "hash-split 20%"},
-            detail="per-model correctness column → local/route routing decision",
-        )
-        train, test = _clean_stage0_splits(train, test, name, log=log, meta=meta)
-        if not train or not test:
-            return None
-        log(f"      [acquire] loaded REAL benchmark {name!r}: "
-            f"train={len(train)} test={len(test)}")
-        return train, test
-
     # NER benchmarks are token/BIO-tagged, not question/answer — handle separately.
     if key in ("bc5cdr", "conll"):
         ner = _load_ner_benchmark(key, max_train, max_test, log=log)
@@ -333,29 +297,7 @@ def load_benchmark_dataset(plan: dict, log=print, max_train: int = 300, max_test
 
     try:
         from datasets import load_dataset
-        if key == "gsm8k":
-            def conv(ds):
-                out = []
-                for ex in ds:
-                    question = str(ex.get("question") or "").strip()
-                    raw = str(ex.get("answer") or "")
-                    if not question or not raw:
-                        continue
-                    if "####" in raw:
-                        cot, _, final = raw.rpartition("####")
-                    else:
-                        cot, final = "", raw
-                    out.append({
-                        "text": question, "answer": final.strip(),
-                        "cot_reasoning": cot.strip(), "label": "math_reasoning",
-                    })
-                return out
-            source_id, config = "openai/gsm8k", "main"
-            splits = {"train": "train", "test": "test"}
-            train = conv(load_dataset(source_id, config, split=f"train[:{max_train}]"))
-            test = conv(load_dataset(source_id, config, split=f"test[:{max_test}]"))
-            _set_benchmark_meta(meta, name, source_id, config, splits, detail="gold CoT preserved")
-        elif key == "samsum":
+        if key == "samsum":
             def conv(ds):
                 out = []
                 for ex in ds:
@@ -1067,7 +1009,6 @@ def _materialize_from_mapping(hf_id, cfg, splits, mapping, task, max_train, max_
 
 _KNOWN_DISCOVERED_BENCHMARKS = {
     "bc5cdr": ("bc5cdr", "NER", "BC5CDR"),
-    "gsm8k": ("gsm8k", "math_reasoning", "GSM8K"),
     "samsum": ("samsum", "generation", "SAMSum"),
 }
 

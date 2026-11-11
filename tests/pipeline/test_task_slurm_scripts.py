@@ -17,25 +17,21 @@ PIPELINE_DIR = Path(__file__).parent
 # two legacy autonomous scripts (`run_math_l40s.slurm`, `run_ner_l40s.slurm`) went with the
 # channels on 2026-08-18: math and NER are now curated tasks with their own launchers.
 L40S_BENCHMARK_SCRIPTS = {
+    # gsm8k, routerbench, proactive_listening and toolbench were removed 2026-11-11 (not in the
+    # paper's ten-task suite), together with their launchers.
     "run_clinc150_l40s.slurm": "clinc150",
-    "run_routerbench_l40s.slurm": "routerbench",
     "run_dialogsum_l40s.slurm": "dialogsum",
-    "run_gsm8k_l40s.slurm": "gsm8k",
     "run_xlam_bfcl_l40s.slurm": "xlam_bfcl",
-    # Added 2026-08-15: LlamaPIE when-to-respond (arXiv:2505.04066), vendored bundle, no live fetch.
-    "run_proactive_listening_l40s.slurm": "proactive_listening",
-    # Added 2026-08-13 alongside the registry entries. These exist on BOTH accounts because the
-    # shared CSE queue was priority-starved (28th of 53 pending, projected start 35h out) while
-    # the dedicated quota had 5 free GPUs; running on whichever frees first is the point.
+    # Added 2026-08-13 alongside the registry entries. These used to exist on BOTH accounts (the
+    # shared CSE queue was priority-starved while the dedicated quota had free GPUs); their CSE
+    # twins were removed 2026-11-11.
     "run_calendar_json_l40s.slurm": "calendar_json",
     "run_ner_bc5cdr_l40s.slurm": "ner_bc5cdr",
     # Re-added 2026-08-23. An sms_spam loader existed before the 2026-08-18 registry rebuild and
     # was deleted with the `task_type` channel; the new one is a rewrite that deduplicates before
     # splitting and stratifies the holdout (the old one did neither — B44).
     "run_sms_spam_l40s.slurm": "sms_spam",
-    # Added 2026-08-24: ToolBench / ToolEval pass rate, reimplementing arXiv:2512.15943.
-    "run_toolbench_l40s.slurm": "toolbench",
-    # The on-device SFT suite, added 2026-09-06. Each covers a capability the eight above did not:
+    # The on-device SFT suite, added 2026-09-06. Each covers a capability the tasks above did not:
     # nested structured prediction under a published low-resource protocol, a 33-class label space,
     # and pure text-to-text generation scored on edits rather than on strings.
     "run_topv2_l40s.slurm": "topv2",
@@ -60,32 +56,15 @@ L40S_TASK_SCRIPTS = tuple(L40S_BENCHMARK_SCRIPTS)
 # DELIBERATELY LIMITED TO CHEAP TASKS. `PreemptMode=REQUEUE` returns a preempted job to the queue
 # rather than killing it, but `GraceTime=0` and `KillWait=10s` leave ~10 seconds — not enough to
 # checkpoint a training step — so a preempted run resumes from its last COMMITTED checkpoint and
-# loses what was in flight. These three train in minutes, so that costs minutes. `toolbench` trains
-# for ~93 minutes a step and is NOT in this family for that reason.
+# loses what was in flight.
+#
+# ONLY ONE REMAINS (2026-11-11). The other ckpt twins never produced a kept run and were removed.
+# `run_goemotions_ckpt.slurm` stays because, despite being added on 2026-09-06 as a smoke-test
+# launcher for the on-device SFT suite, it produced the goemotions result of record (39708679).
+# The `-ckpt` job name is what keeps it apart from the `_l40s` family in logs/slurm/, and it is
+# asserted below.
 CKPT_BENCHMARK_SCRIPTS = {
-    "run_sms_spam_ckpt.slurm": "sms_spam",
-    "run_clinc150_ckpt.slurm": "clinc150",
-    "run_ner_bc5cdr_ckpt.slurm": "ner_bc5cdr",
-    # THE ON-DEVICE SFT SUITE, added 2026-09-06 as SMOKE-TEST launchers rather than as members of
-    # the cheap-task rule above.
-    #
-    # The rule this family was founded on — only tasks that train in minutes, so a preemption
-    # costs minutes — is a rule about RESULTS runs, and `toolbench` is still excluded by it at ~93
-    # minutes a training step. These five are here for a different reason: their first-ever
-    # executions had to be shaken out, and `gpu-l40s` could not start a seven-day job until after
-    # the Sept 8-9 maintenance window, so a first run there would have surfaced its first bug two
-    # days later. The first two smoke tests found two real scorer bugs (39707195 ERRANT
-    # tokenization; 39707196 prose harvested as a 20-label prediction), which settled the
-    # argument. For a smoke test preemption barely matters — the question is answered in the first
-    # iteration.
-    #
-    # Results still come from the `_l40s` family. The `-ckpt` job name is what keeps the two apart
-    # in logs/slurm/, and it is asserted below.
-    "run_topv2_ckpt.slurm": "topv2",
-    "run_multiconer_ckpt.slurm": "multiconer",
-    "run_gec_bea19_ckpt.slurm": "gec_bea19",
     "run_goemotions_ckpt.slurm": "goemotions",
-    "run_dialogsum_ckpt.slurm": "dialogsum",
 }
 
 # The overnight-campaign scripts on the shared CSE account (2026-08-13). Same pipeline body and
@@ -94,33 +73,14 @@ CKPT_BENCHMARK_SCRIPTS = {
 # failure. They are a SEPARATE family from the `_l40s` scripts on purpose: a 24h preemptible-ish
 # regime produces numbers that are not directly comparable with the weeklong dedicated runs, and
 # keeping the filenames distinct keeps that visible.
-CSE_BENCHMARK_SCRIPTS = {
-    "run_xlam_bfcl_cse.slurm": "xlam_bfcl",
-    "run_calendar_json_cse.slurm": "calendar_json",
-    "run_ner_bc5cdr_cse.slurm": "ner_bc5cdr",
-    "run_routerbench_cse.slurm": "routerbench",
-    "run_proactive_listening_cse.slurm": "proactive_listening",
-    # Added 2026-08-23. clinc150 was the only classification task that could run on one quota, so
-    # it queued behind the intelligentsystems account while its peers could take whichever freed
-    # first — which is the entire reason this family exists.
-    "run_clinc150_cse.slurm": "clinc150",
-    "run_sms_spam_cse.slurm": "sms_spam",
-    # Added 2026-08-24. This task's eval is the suite's most expensive (765 long generations plus
-    # ~2,295 judge calls per pass), so the 24h box matters more here than elsewhere — the judge
-    # cache surviving a requeue is what makes it workable.
-    "run_toolbench_cse.slurm": "toolbench",
-    # The on-device SFT suite's CSE twins, added 2026-09-06, for the reason this whole family
-    # exists: the dedicated quota is 10 GPUs for the group and is routinely saturated, so a task
-    # that can only run on one account is a task that does not run.
-    # Added 2026-09-06 alongside the DialogSum rework: the task changed metric, source and
-    # scoring path, so its single launcher was rewritten and finally given the twin every other
-    # curated task has.
-    "run_dialogsum_cse.slurm": "dialogsum",
-    "run_topv2_cse.slurm": "topv2",
-    "run_multiconer_cse.slurm": "multiconer",
-    "run_gec_bea19_cse.slurm": "gec_bea19",
-    "run_goemotions_cse.slurm": "goemotions",
-}
+#
+# EMPTY since 2026-11-11. Every per-task CSE twin was removed: the four pre-suite ones
+# (calendar_json, clinc150, ner_bc5cdr, xlam_bfcl) were superseded by their `_l40s` runs, the six
+# suite ones never produced a kept run, and the routerbench/proactive_listening/toolbench twins went
+# with their tasks. The only `run_*_cse.slurm` files left are the three NER ablation arms, which are
+# accounted for in ABLATION_SCRIPTS. The dict is kept so the glob invariant below still fails on an
+# unaccounted CSE launcher.
+CSE_BENCHMARK_SCRIPTS: dict[str, str] = {}
 
 # The ABLATION family (2026-09-03). Full-length results runs on the dedicated account, each one a
 # byte-for-byte copy of a baseline launcher with ONE variable changed, so the pair answers a single
@@ -137,9 +97,9 @@ CSE_BENCHMARK_SCRIPTS = {
 # move the bar, and the `unset` lines defend against sbatch exporting the submitting shell's
 # environment (which is how runs 38832588, 39294409 and 39361648 all became configurations nobody
 # had written down).
-# THE ACCOUNT SPLIT IS A COMPUTE DECISION, NOT A SCIENTIFIC ONE. The xLAM arm runs on the
-# dedicated account; the three NER arms run on CSE because the dedicated quota is 10 GPUs for the
-# whole group and four concurrent arms would need seven of them. CSE caps the wall at 24h, so
+# THE ACCOUNT SPLIT IS A COMPUTE DECISION, NOT A SCIENTIFIC ONE. The three NER arms run on CSE
+# because the dedicated quota is 10 GPUs for the whole group and four concurrent arms would need
+# seven of them. CSE caps the wall at 24h, so
 # those three cross it on the USR1 checkpoint-and-requeue contract exactly as the `_cse` family
 # does. Each arm is still compared against its `_l40s` baseline, which is correct: the `_cse` and
 # `_l40s` launchers for a task are identical in every executable line (the only differences are
@@ -152,13 +112,8 @@ ABLATION_SCRIPTS = {
         "added": ("export SLM_ABLATION_RESET_DATA_ON_ESCALATION=1",),
         "removed": (),
     },
-    # Ablation 2a/2b: does the teacher model change the quality of the synthetic data? The two
-    # swap the same pair of teachers in opposite directions.
-    "run_xlam_bfcl_ablation_qwen_teacher_l40s.slurm": {
-        "baseline": "run_xlam_bfcl_l40s.slurm",
-        "added": ("unset SLM_SYNTH_API_MODE", "export SLM_STOP_THRESHOLD=0.87"),
-        "removed": (),
-    },
+    # Ablation 2: does the teacher model change the quality of the synthetic data? (Its xLAM
+    # counterpart, the qwen-teacher arm, never started and was removed 2026-11-11.)
     "run_ner_bc5cdr_ablation_deepseek_teacher_cse.slurm": {
         "baseline": "run_ner_bc5cdr_l40s.slurm",
         "added": (
@@ -417,36 +372,13 @@ ABLATION_SCRIPTS.update({
 # rules by `test_every_slurm_script_runs_on_a_sanctioned_l40s_allocation`, because an unaccounted
 # script on an unsanctioned queue is exactly what that test is for.
 PROBE_SCRIPTS = {
-    # Teacher zero-/few-shot measurement incl. the Min et al. corrupt-label ablation (2026-08-17).
-    "run_teacher_fewshot_probe.slurm",
-    # Sub-billion candidates (gemma-3-270m, SmolLM2-360M/135M) measured zero-shot, fine-tuned and
-    # Q4_K_M on ner_bc5cdr and xlam_bfcl (2026-08-23). Two accounts for the same reason the
-    # benchmark launchers have two: whichever quota frees first. These are the only scripts in the
-    # tree that ask for ONE GPU — they run no teacher, so the second would sit idle.
-    "run_small_model_probe.slurm",
-    "run_small_model_probe_cse.slurm",
-    # Quantization-only pass over checkpoints an earlier probe already trained. Separate from the
-    # probe itself because it is resumable by design: retraining six models to recover one column
-    # would cost hours, and the checkpoints are on disk.
-    "run_small_model_quant_pass.slurm",
-    # The on-device SFT suite's harness audit (2026-09-08). Added because the five suite runs
-    # cannot execute at all right now — they die at their first orchestrator decision on an
-    # Anthropic credit-balance error — while the questions that gate restarting them (is the
-    # baseline scored correctly, is it truncation-limited, does each bespoke harness work on a
-    # real model) need no orchestrator. `scripts/probe_small_models.py` makes zero Claude calls.
-    "run_suite_harness_probe.slurm",
-    # The synthesis half of the same audit (2026-09-08). Two of the six failure modes live inside
-    # the synthesis path, which needs the local teacher but no orchestrator, so it can be measured
-    # while the agent runs are blocked. TWO GPUs, because the vLLM teacher needs one of its own.
-    "run_synthesis_audit_probe.slurm",
-    # Does the vLLM eval backend score the same as the in-process path (2026-08-27)? A probe rather
-    # than a verification run: it runs no agent loop and no teacher, just the two inference backends
-    # over identical rows, so it asks for ONE GPU — a like-for-like comparison of two engines wants
-    # them on the same card anyway. See eval/student_server.py.
-    "verify_eval_backend.slurm",
+    # The Aug-Sep 2026 probes (teacher few-shot, small-model, quant pass, suite harness, synthesis
+    # audit, eval-backend comparison) and their scripts were removed 2026-11-11; the MNN probes
+    # below back RESULTS.md Part IV and stay.
+    #
     # Does the MNN quantization backend score the same as llama.cpp on the same weights
-    # (2026-09-17)? The same shape as the line above and a probe for the same reasons: no agent
-    # loop, no teacher, no orchestrator call, two backends over identical rows. ONE GPU, which is
+    # (2026-09-17)? A probe: no agent loop, no teacher, no orchestrator call, two backends over
+    # identical rows. ONE GPU, which is
     # all either arm needs — the GGUF arm offloads its layers to it and the MNN arm now runs its
     # CUDA backend on it. See training/quant_backend.py.
     "verify_mnn_backend.slurm",
@@ -481,16 +413,8 @@ CONTINUATION_SCRIPTS = {
 
 
 VERIFICATION_SCRIPTS = {
-    "run_xlam_bfcl_single_verify.slurm",
-    "run_xlam_bfcl_single_verify_cse.slurm",
-    # Added 2026-08-24 for the `toolbench` bring-up. A PAIR on purpose: same task, same bounds, same
-    # overrides, one model changed, so anything that differs between them is model capability rather
-    # than harness behaviour. SmolLM2-360M is the pool's best sub-billion structured-output model and
-    # is the run expected to score; gemma-3-270m-it is measured near the floor on function calling
-    # and is the negative control that says whether a floor score looks like a floor score or like a
-    # broken harness.
-    "run_toolbench_smollm2_verify.slurm",
-    "run_toolbench_gemma_verify.slurm",
+    # The xlam single-verify pair and the four toolbench verify launchers were removed 2026-11-11.
+    #
     # The MNN quantization backend inside the full loop (2026-09-17). A verification run rather
     # than a probe because it DOES run the agent loop — that is the whole point, since the routing
     # it checks (baseline, per-iteration build, cache, reaper, escalation) only exists there — and
@@ -498,12 +422,6 @@ VERIFICATION_SCRIPTS = {
     # results run's budget. Accuracy is not the deliverable; `verify_mnn_backend.slurm` measures
     # that against llama.cpp on fixed weights.
     "run_clinc150_mnn_verify.slurm",
-    # CSE twins, for the same reason the benchmark launchers have two accounts: whichever quota
-    # frees first. The dedicated account is capped at 10 GPUs shared across the whole group and was
-    # fully consumed by other users when these runs were launched, so a run that can only ever sit on
-    # one account is a run that does not happen.
-    "run_toolbench_smollm2_verify_cse.slurm",
-    "run_toolbench_gemma_verify_cse.slurm",
 }
 
 
@@ -1168,7 +1086,7 @@ def test_every_slurm_script_runs_on_a_sanctioned_l40s_allocation():
     a different wall clock produces numbers that must not be POOLED with dedicated ones. The remedy is
     labelling, not prohibition — the job name carries `-ckpt`, which is asserted below, so the two
     families stay distinguishable in `logs/slurm/`. And it is limited to tasks that train in minutes,
-    so a preemption costs minutes; `toolbench` at ~93 minutes a training step stays off it.
+    so a preemption costs minutes (`toolbench`, at ~93 minutes a training step, was kept off it).
 
     What still must not reappear is a configuration nobody has accounted for: a different GPU type, an
     unpinned `--gres`, or a script missing from the registries above.

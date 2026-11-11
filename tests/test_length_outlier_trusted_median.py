@@ -15,12 +15,13 @@ MINED_LENGTH = 75
 
 
 def _filter_length_outliers(rows):
-    """The step as RouterBench declares it: keyed on `text`, the field its rows actually carry.
+    """The step as the classification tasks declare it (RouterBench did too): keyed on `text`, the
+    field their rows actually carry.
 
     The key is stated by the task rather than guessed. Guessing is what made this step a silent
     no-op for gsm8k and dialogsum, whose rows have no `"prompt"` field (B299).
     """
-    return length_outliers(key="text")(rows, QCContext(task_name="routerbench"))
+    return length_outliers(key="text")(rows, QCContext(task_name="clinc150"))
 
 
 def _real(n_chars, i=0):
@@ -89,8 +90,10 @@ def test_end_to_end_through_quality_controls():
         {"text": f"y{i}" + "y" * MINED_LENGTH, "label": "local", "_provenance": "mined_real"}
         for i in range(100)
     ]
+    # clinc150 declares exactly the QC steps RouterBench did (removed 2026-11-11): require_fields,
+    # label_space, balance_labels(3), length_outliers(text), dedup_surface(text).
     kept = apply_quality_controls(
-        real + mined, "routerbench", allowed_labels={"local", "route"}
+        real + mined, "clinc150", allowed_labels={"local", "route"}
     )
     survived_long = [r for r in kept if len(r["text"]) >= 1800]
     assert survived_long, "long real rows must survive QC on a contaminated dataset"

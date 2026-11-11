@@ -53,33 +53,6 @@ def _calendar_row(text, answer=None):
                               "arguments": {"summary": "Dentist"}}])}
 
 
-TOOLBENCH_TOOLS = [{
-    "name": "get_weather_for_weather_api",
-    "parameters": {"properties": {"city": "string"}, "required": ["city"], "optional": []},
-}]
-
-
-def _toolbench_path(city="Paris", answer="It is 18 degrees and clear."):
-    """A complete ToolBench solution path: one API call, then Finish->give_answer."""
-    return (
-        "Thought: I should look up the weather for that city.\n"
-        "Action: get_weather_for_weather_api\n"
-        'Action Input: {"city": "%s"}\n'
-        "Thought: I have the weather and can answer now.\n"
-        "Action: Finish\n"
-        'Action Input: {"return_type": "give_answer", "final_answer": "%s"}' % (city, answer)
-    )
-
-
-def _toolbench_row(text, answer=None):
-    return {
-        "text": text,
-        "query": text,
-        "tools": TOOLBENCH_TOOLS,
-        "answer": _toolbench_path() if answer is None else answer,
-    }
-
-
 def _ner_row(text, entities=None):
     return {"text": text,
             "entities": entities if entities is not None
@@ -90,8 +63,6 @@ def _ner_row(text, entities=None):
 # batch is genuinely distinct — otherwise `dedup_surface` would remove the control rows and the
 # probe below could not tell which step fired.
 ROW_BUILDERS = {
-    "gsm8k": lambda i: {"text": f"Ann has {i} pears and buys {i + 2} more. How many?",
-                        "answer": f"Add them.\n#### {2 * i + 2}"},
     # `references` alongside `answer`: it is the field the scorer grades against, and the task's
     # `require_fields` step checks for it since the 2026-09-06 rework.
     "dialogsum": lambda i: {"text": f"#Person1#: topic {i}? #Person2#: yes, about item {i}.",
@@ -99,13 +70,8 @@ ROW_BUILDERS = {
                             "references": [f"Two people discuss topic {i}."]},
     "xlam_bfcl": lambda i: _xlam_row(f"what is the weather in city number {i}?"),
     "calendar_json": lambda i: _calendar_row(f"add a dentist visit on the {i}th of March"),
-    "toolbench": lambda i: _toolbench_row(
-        f"I am travelling to city number {i} and want the forecast before I pack."
-    ),
     "ner_bc5cdr": lambda i: _ner_row(f"Compound{i} induced condition{i} in the cohort.",
                                      [{"text": f"Compound{i}", "type": "Chemical"}]),
-    "routerbench": lambda i: {"text": f"question number {i} about arithmetic",
-                              "label": "local" if i % 2 else "route"},
     # Alternating rather than 87/13, because `balance_labels(max_ratio=8)` is exercised by the
     # imbalance tests below rather than by the healthy fixture.
     "sms_spam": lambda i: {"text": f"message number {i} about the weekend plan",
@@ -119,8 +85,6 @@ ROW_BUILDERS = {
         "label": "addressed" if i % 2 else "not_addressed",
         "bucket": "P1" if i % 2 else "N1",
     },
-    "proactive_listening": lambda i: {"text": f"speaker A pauses after clause {i} here",
-                                      "label": "wait" if i % 2 else "interrupt"},
     "clinc150": lambda i: {"text": f"utterance number {i} about money",
                            "label": "transfer" if i % 2 else "balance"},
     # The on-device SFT suite. Each builder emits the task's own schema, and each row is distinct
@@ -143,16 +107,12 @@ ROW_BUILDERS = {
 
 # The closed vocabulary each task's frozen eval set would pin, and None where there is no class.
 ALLOWED_LABELS = {
-    "gsm8k": None,
     "dialogsum": None,
     "xlam_bfcl": None,
     "calendar_json": None,
-    "toolbench": None,
     "ner_bc5cdr": None,
-    "routerbench": {"local", "route"},
     "sms_spam": {"ham", "spam"},
     "address_bench": {"addressed", "not_addressed"},
-    "proactive_listening": {"interrupt", "wait"},
     "clinc150": {"transfer", "balance"},
     # None for all four. `topv2`, `multiconer` and `gec_bea19` have no `label` field at all, and
     # `goemotions` is MULTI-label — its `label` values are comma-joined combinations, not classes,
@@ -293,13 +253,13 @@ def test_a_length_step_pointed_at_a_field_the_rows_lack_reports_that_it_skipped(
     logs: list[str] = []
     rows = [{"text": "short"}, {"text": HUGE}]
     step = length_outliers(key="prompt")
-    kept = step(rows, QCContext(task_name="gsm8k", log=logs.append))
+    kept = step(rows, QCContext(task_name="dialogsum", log=logs.append))
 
     assert kept == rows, "the step cannot filter on a key no row carries"
     joined = " ".join(logs)
     assert "SKIPPED" in joined
     assert "'prompt'" in joined
-    assert "gsm8k" in joined
+    assert "dialogsum" in joined
     assert "quality_controls against its row schema" in joined
 
 
@@ -354,39 +314,7 @@ def test_a_gold_answer_that_is_already_a_list_is_accepted(task):
     assert step(rows, QCContext(task_name=task)) == rows
 
 
-@pytest.mark.parametrize("gold,reason", [
-    ("Thought: I will just tell them.\nAction: get_weather_for_weather_api\n"
-     'Action Input: {"city": "Paris"}', "path never calls Finish"),
-    ("Thought: this is impossible.\nAction: Finish\n"
-     'Action Input: {"return_type": "give_up_and_restart"}', "path gave up"),
-    ("Thought: here you go.\nAction: Finish\n"
-     'Action Input: {"return_type": "give_answer", "final_answer": ""}', "empty final answer"),
-    ("I looked up the weather and it is 18 degrees.", "prose with no Action at all"),
-])
-def test_a_toolbench_row_whose_gold_is_not_a_complete_path_is_dropped(gold, reason):
-    """`complete_toolbench_path` is this task's analogue of `valid_json_answer`.
-
-    A target that stops before `Finish` teaches the model to stop before `Finish`, which the scorer
-    then counts as `no_finish_call` — so the curriculum would be training the exact failure the
-    metric punishes. One that ends in `give_up_and_restart` teaches giving up. Both are decidable by
-    computation, which is why this runs before any teacher call.
-    """
-    rows = _healthy("toolbench")
-    kept, logs = _run("toolbench", [*rows, _toolbench_row("a normal length request", answer=gold)])
-
-    assert len(kept) == len(rows), f"kept a row whose gold {reason}"
-    assert any("toolbench-path" in line for line in logs)
-
-
-def test_a_complete_toolbench_path_survives_the_path_check():
-    """The control for the four rejections above: the shape the loader produces must pass."""
-    from data.quality_controls import complete_toolbench_path
-
-    rows = [_toolbench_row("what is the weather in Paris?")]
-    assert complete_toolbench_path()(rows, QCContext(task_name="toolbench")) == rows
-
-
-@pytest.mark.parametrize("task", ["routerbench", "proactive_listening", "clinc150"])
+@pytest.mark.parametrize("task", ["sms_spam", "clinc150"])
 def test_a_row_labelled_outside_the_frozen_vocabulary_is_dropped(task):
     """A row whose label cannot appear in the eval set can never be scored against it, so it is pure
     training noise. This is where mined sources carrying raw integer class ids get removed
@@ -406,18 +334,15 @@ def test_the_label_space_step_is_a_no_op_without_a_pinned_vocabulary():
     from data.quality_controls import label_space
 
     rows = [{"label": "anything"}]
-    assert label_space()(rows, QCContext(task_name="routerbench", allowed_labels=None)) == rows
+    assert label_space()(rows, QCContext(task_name="sms_spam", allowed_labels=None)) == rows
 
 
-@pytest.mark.parametrize("task", ["routerbench", "clinc150"])
+@pytest.mark.parametrize("task", ["clinc150"])
 def test_a_class_far_over_the_balance_cap_is_trimmed(task):
-    """Declared by these two and deliberately NOT by proactive_listening."""
+    """Declared at 3:1 by clinc150 (sms_spam declares a looser 8:1 on purpose)."""
     rows = [
-        *[{**ROW_BUILDERS[task](i), "label": "local" if task == "routerbench" else "transfer"}
-          for i in range(40)],
-        *[{**ROW_BUILDERS[task](100 + i),
-           "label": "route" if task == "routerbench" else "balance"}
-          for i in range(2)],
+        *[{**ROW_BUILDERS[task](i), "label": "transfer"} for i in range(40)],
+        *[{**ROW_BUILDERS[task](100 + i), "label": "balance"} for i in range(2)],
     ]
     kept, logs = _run(task, rows)
     counts = {}
@@ -427,26 +352,7 @@ def test_a_class_far_over_the_balance_cap_is_trimmed(task):
     assert any("label-balance" in line for line in logs)
 
 
-def test_proactive_listening_is_deliberately_not_label_balanced():
-    """`wait` is the overwhelming majority BY CONSTRUCTION — most pauses are not interruption
-    points — so a 3:1 cap would train the model on a base rate the eval set does not have. The
-    minority-class F1 is what keeps a majority-always model from scoring well.
-
-    Asserted because "this task chose not to balance" and "this task fell through a branch" used to
-    look identical, and that ambiguity is the whole of B299.
-    """
-    rows = [
-        *[{"text": f"long pause number {i} in the transcript", "label": "wait"}
-          for i in range(40)],
-        *[{"text": f"hesitation {i}", "label": "interrupt"} for i in range(2)],
-    ]
-    kept, _logs = _run("proactive_listening", rows)
-    waits = sum(1 for row in kept if row["label"] == "wait")
-    assert waits > 3 * 2, "proactive_listening was label-balanced; its base rate is the signal"
-
-
-@pytest.mark.parametrize("task", ["gsm8k", "xlam_bfcl", "routerbench",
-                                  "proactive_listening", "clinc150"])
+@pytest.mark.parametrize("task", ["xlam_bfcl", "sms_spam", "clinc150"])
 def test_near_duplicate_rows_are_removed_where_the_task_asked_for_it(task):
     rows = _healthy(task)
     twin = dict(rows[0])
@@ -456,7 +362,7 @@ def test_near_duplicate_rows_are_removed_where_the_task_asked_for_it(task):
 
 
 @pytest.mark.parametrize(
-    "task", ["dialogsum", "calendar_json", "toolbench", "topv2", "gec_bea19"])
+    "task", ["dialogsum", "calendar_json", "topv2", "gec_bea19"])
 def test_the_tasks_that_keep_near_duplicates_do_so_deliberately(task):
     """Each for a stated reason about its own corpus, not about a channel.
 
@@ -464,11 +370,6 @@ def test_the_tasks_that_keep_near_duplicates_do_so_deliberately(task):
     calendar utterances are short and highly templated ("remind me to X at Y") — so a Jaccard filter
     removes legitimately distinct rows that differ only in the entity, which is the part the model
     has to learn to extract.
-
-    ToolBench is the strongest case. Its rows are ~8,000 characters of shared API schema, and two
-    rows for the same tool differ by one action inside that — so any threshold low enough to catch
-    a genuine near-duplicate also catches distinct trajectories. The loader removes the duplicates
-    structurally instead, by keeping only complete paths.
 
     TOPv2 and GEC joined the list on 2026-09-06 for the same shape of reason. Assistant commands
     are formulaic — "set an alarm for 6am" and "set an alarm for 7am" are near-identical in
@@ -517,15 +418,16 @@ def test_the_length_bound_is_anchored_on_the_task_own_real_rows():
     short ones, so the long generated rows are removed rather than becoming the new normal.
     """
     trusted = [
-        {"text": f"short real row {i}", "answer": "#### 1", "_provenance": "train_anchor"}
+        {"text": f"short real row {i}", "answer": "a", "references": ["a"],
+         "_provenance": "train_anchor"}
         for i in range(10)
     ]
     verbose = [
         {"text": f"rambling teacher row {i} " + " ".join(f"filler{i}_{j}" for j in range(200)),
-         "answer": "#### 1", "_provenance": "synthetic"}
+         "answer": "a", "references": ["a"], "_provenance": "synthetic"}
         for i in range(10)
     ]
-    kept, _logs = _run("gsm8k", [*trusted, *verbose])
+    kept, _logs = _run("dialogsum", [*trusted, *verbose])
 
     assert len(kept) == 10
     assert all(row["_provenance"] == "train_anchor" for row in kept)
@@ -542,7 +444,7 @@ def test_the_median_falls_back_to_the_whole_batch_when_nothing_is_trusted():
 
     rows = [{"text": "short", "_provenance": "synthetic"} for _ in range(10)]
     rows.append({"text": HUGE, "_provenance": "synthetic"})
-    kept = length_outliers(key="text")(rows, QCContext(task_name="gsm8k"))
+    kept = length_outliers(key="text")(rows, QCContext(task_name="dialogsum"))
     assert len(kept) == 10
 
 
@@ -553,12 +455,12 @@ def test_the_median_falls_back_to_the_whole_batch_when_nothing_is_trusted():
 
 def test_an_empty_dataset_passes_through_untouched():
     """Reached when a loader returns nothing; a crash here would hide the real cause upstream."""
-    assert apply_quality_controls([], "gsm8k") == []
+    assert apply_quality_controls([], "dialogsum") == []
 
 
 def test_the_report_stays_silent_when_a_step_removes_nothing():
     """A per-step line on every clean pass would bury the removals that matter."""
-    ctx = QCContext(task_name="gsm8k", log=lambda _m: pytest.fail("reported a no-op removal"))
+    ctx = QCContext(task_name="dialogsum", log=lambda _m: pytest.fail("reported a no-op removal"))
     ctx.report("length-outlier", 10, 10, "nothing to say")
 
 
@@ -577,14 +479,14 @@ def test_steps_run_in_the_order_the_task_declared_them():
             return rows
         return step
 
-    spec = get_task("gsm8k")
+    spec = get_task("dialogsum")
     monkey = dataclasses.replace(spec, quality_controls=(make("a"), make("b"), make("c")))
-    original = tasks.TASKS["gsm8k"]
-    tasks.TASKS["gsm8k"] = monkey
+    original = tasks.TASKS["dialogsum"]
+    tasks.TASKS["dialogsum"] = monkey
     try:
-        apply_quality_controls([{"text": "t", "answer": "a"}], "gsm8k")
+        apply_quality_controls([{"text": "t", "answer": "a"}], "dialogsum")
     finally:
-        tasks.TASKS["gsm8k"] = original
+        tasks.TASKS["dialogsum"] = original
     assert order == ["a", "b", "c"]
 
 

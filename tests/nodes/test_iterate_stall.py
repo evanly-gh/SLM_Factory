@@ -61,7 +61,7 @@ def _state(cni, score=0.30, threshold=0.90, phase=None, scores=None, eval_histor
         "turn_budget": 1000,
         "stop_threshold": threshold,
         "initial_stop_threshold": threshold,
-        "task": "gsm8k",
+        "task": "gec_bea19",
         "last_eval": None,
         "hw_gating_enabled": False,
         "consecutive_no_improvement": cni,

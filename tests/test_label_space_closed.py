@@ -37,7 +37,7 @@ ROUTER = {"local", "route"}
 HALLUCINATED = {"cloud": 688, "on_device": 269, "router": 110, "remote": 99}
 
 
-def _eval_set(labels, task="routerbench"):
+def _eval_set(labels, task="sms_spam"):
     return SimpleNamespace(
         all=[{"text": f"row {i}", "label": label} for i, label in enumerate(labels)],
         task=task,
@@ -52,11 +52,11 @@ def _eval_set(labels, task="routerbench"):
 def test_the_space_is_read_from_the_eval_set():
     """The eval set is what the score is computed against, so it is the only defensible authority on
     what counts as a class. A space derived from the training pool would grow as the pool did."""
-    assert label_space_from_eval_set(_eval_set(["local", "route", "route"]), "routerbench") == ROUTER
+    assert label_space_from_eval_set(_eval_set(["local", "route", "route"]), "sms_spam") == ROUTER
 
 
 @pytest.mark.parametrize(
-    "task", ["ner_bc5cdr", "dialogsum", "xlam_bfcl", "calendar_json", "gsm8k"],
+    "task", ["ner_bc5cdr", "dialogsum", "xlam_bfcl", "calendar_json"],
 )
 def test_a_task_with_no_closed_label_space_has_no_vocabulary_to_police(task):
     """For these, `label` is a constant tag rather than a class to predict. Policing it would drop
@@ -67,7 +67,7 @@ def test_a_task_with_no_closed_label_space_has_no_vocabulary_to_police(task):
 def test_an_empty_eval_set_yields_no_space_rather_than_an_empty_one():
     """An empty set must read as "unknown", never as "nothing is allowed" — the latter would reject
     the entire curriculum."""
-    assert label_space_from_eval_set(_eval_set([]), "routerbench") is None
+    assert label_space_from_eval_set(_eval_set([]), "sms_spam") is None
 
 
 def test_the_space_is_exactly_the_classes_present_and_no_more():
@@ -180,8 +180,9 @@ def test_quality_control_removes_a_row_outside_the_pinned_vocabulary():
         for i in range(10)
     ] + [{"text": "mined row with an invented class", "label": "cloud"}]
     logs: list[str] = []
+    # clinc150 declares the same QC steps the (removed) routerbench task did.
     kept = apply_quality_controls(
-        rows, "routerbench", allowed_labels=ROUTER, log=logs.append,
+        rows, "clinc150", allowed_labels=ROUTER, log=logs.append,
     )
 
     assert "cloud" not in {row["label"] for row in kept}
@@ -197,25 +198,14 @@ def test_the_closed_space_reaches_quality_control_from_the_frozen_eval_set():
 
     eval_set = EvalSet(
         all=[{"text": "a", "label": "local"}, {"text": "b", "label": "route"}],
-        task="routerbench",
+        task="sms_spam",
     )
-    assert get_task("routerbench").qc_context_labels(eval_set) == ROUTER
+    assert get_task("sms_spam").qc_context_labels(eval_set) == ROUTER
 
 
 # --------------------------------------------------------------------------
 # What the labels MEAN (B267) — the over-rejection this caused
 # --------------------------------------------------------------------------
-
-
-def test_routerbench_definitions_point_the_teacher_at_difficulty_not_at_the_word():
-    """`local` means "a small on-device model answers this correctly", but the teacher read it as
-    "a local-information query" and rejected a grade-school math problem with *"the utterance is a
-    math problem, not a local query"* — 70% of generated rows discarded for the wrong reason. The
-    teacher was not being strict; it was answering a different question than the task asks."""
-    definitions = label_definitions_for("routerbench")
-    assert set(definitions) == ROUTER
-    assert "difficulty" in definitions["route"].lower()
-    assert "NOT" in definitions["local"]
 
 
 def test_definitions_live_on_the_task_spec_rather_than_a_side_table():
@@ -224,8 +214,8 @@ def test_definitions_live_on_the_task_spec_rather_than_a_side_table():
     out of sync."""
     from tasks import get_task
 
-    assert label_definitions_for("routerbench") == dict(
-        get_task("routerbench").label_definitions
+    assert label_definitions_for("sms_spam") == dict(
+        get_task("sms_spam").label_definitions
     )
     import data.label_space as label_space_module
 

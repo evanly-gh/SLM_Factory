@@ -333,7 +333,7 @@ def test_training_max_sequence_length_honors_an_explicit_override(monkeypatch):
 
     monkeypatch.setenv("SLM_MAX_SEQ_LENGTH", "1024")
 
-    assert lora_trainer._configured_max_seq_length("gsm8k") == 1024
+    assert lora_trainer._configured_max_seq_length("dialogsum") == 1024
 
 
 def test_training_rejects_target_truncation_before_sft():

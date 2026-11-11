@@ -106,39 +106,6 @@ def _pinned_label_space(state: AgentState) -> set[str] | None:
 MIN_CURRICULUM_ROWS = int(os.environ.get("SLM_MIN_CURRICULUM_ROWS", "500"))
 
 
-def _populated_difficulty_buckets(state: AgentState, model_id: str) -> set[str] | None:
-    """Which difficulty buckets actually contain eval rows, or None if unknown.
-
-    A bucket can be structurally empty. The buckets come from a two-model capability gradient
-    (`test_agent.label_difficulty`): `easy` = both the smallest and largest model pass, `medium` =
-    only the largest passes, `hard` = neither. On a format-bound task neither model can produce the
-    output contract zero-shot, so nothing separates them and `medium` is empty for the whole run —
-    which is what happened on BC5CDR, where the orchestrator was nonetheless handed `medium=0.25`
-    and spent a quarter of its curriculum budget on rows that do not exist (B275).
-    """
-    difficulty = state.get("eval_difficulty")
-    if not isinstance(difficulty, dict) or not difficulty:
-        return None
-    populated = {
-        bucket
-        for bucket in ("easy", "medium", "hard")
-        if difficulty.get(bucket)
-    }
-    if not populated:
-        return None
-    empty = [b for b in ("easy", "medium", "hard") if b not in populated]
-    if empty:
-        _log(
-            model_id,
-            f"  Difficulty buckets present: "
-            + ", ".join(f"{b}={len(difficulty.get(b) or [])}" for b in populated)
-            + f" — EMPTY: {', '.join(empty)}. Their curriculum weight is redistributed to the "
-            f"populated buckets, because weighting a bucket with no eval rows spends budget on "
-            f"nothing.",
-        )
-    return populated
-
-
 def _enforce_curriculum_floor(dataset: list[dict], *, model_id: str, target_rows: int) -> None:
     """Fail loudly when real data cannot supply a viable curriculum.
 

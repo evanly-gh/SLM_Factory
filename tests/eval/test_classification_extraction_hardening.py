@@ -23,7 +23,7 @@ from eval.scorers.classification import (
 )
 
 
-def _eval_set(labels=("local", "route"), task="routerbench"):
+def _eval_set(labels=("local", "route"), task="sms_spam"):
     rows = [{"text": f"row {i}", "label": lab} for i, lab in enumerate(labels)]
     return EvalSet(all=rows, task=task)
 
@@ -125,7 +125,7 @@ def test_binary_scores_minority_class_and_refuses_to_reward_collapse():
     labels = ["route"] * 60 + ["local"] * 40
     es = EvalSet(
         all=[{"text": f"r{i}", "label": lab} for i, lab in enumerate(labels)],
-        task="routerbench",
+        task="sms_spam",
     )
     assert score_minority_f1(es, labels)["f1"] == 1.0
     # Always answering the majority class earns nothing, though it is 60% "accurate".
@@ -136,6 +136,6 @@ def test_extraction_failures_count_against_the_score():
     labels = ["route"] * 60 + ["local"] * 40
     es = EvalSet(
         all=[{"text": f"r{i}", "label": lab} for i, lab in enumerate(labels)],
-        task="routerbench",
+        task="sms_spam",
     )
     assert score_minority_f1(es, ["__EXTRACTION_FAILED__"] * 100)["f1"] == 0.0

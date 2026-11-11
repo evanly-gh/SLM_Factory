@@ -18,8 +18,9 @@ WHY THIS IS A TEST AND NOT JUST A PROBE
     English came in at 3.01, which cost a 400 from the endpoint and 45 of 60 rows on the 2026-09-08
     synthesis audit.
 
-    `scripts/probe_token_headroom.py` is the full version — 1,000 rows against two tokenizers, and
-    the source of the numbers quoted below. This is the cheap always-on guard.
+    `scripts/probe_token_headroom.py` was the full version — 1,000 rows against two tokenizers, and
+    the source of the numbers quoted below (removed 2026-11-11; recoverable from git history). This
+    is the cheap always-on guard.
 """
 from __future__ import annotations
 

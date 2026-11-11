@@ -20,7 +20,7 @@ registry key is unreachable — which is why the catalog below holds only datase
 the eight live tasks. The APPS, MBPP, emotion and go_emotions bundles were removed on 2026-08-18
 along with the code-execution scorer and the classification channel they belonged to: nothing in
 the suite could consume them, and `required_fields_for_task` has no answer for a task that does not
-exist.
+exist. The gsm8k bundle went the same way with the gsm8k task on 2026-11-11.
 """
 
 import argparse
@@ -97,16 +97,6 @@ _DATASETS = [
                 tags_col="tags",
             ),
         ],
-    },
-    {
-        "name": "gsm8k",
-        "task": "gsm8k",
-        "converter": "gsm8k",
-        "row_schema": {
-            "required": ["text", "answer", "cot_reasoning", "label"],
-            "optional": ["_instruction"],
-        },
-        "sources": [_hf_source("openai/gsm8k", config="main")],
     },
     {
         "name": "dialogsum",
@@ -206,23 +196,12 @@ def _convert_bc5cdr(ds, source: dict | None = None) -> tuple[list[dict], list[st
     return out, sorted(labels_seen)
 
 
-def _convert_gsm8k(ds) -> tuple[list[dict], list[str]]:
-    """Shape raw GSM8K through the live loader's own converter.
-
-    Reproducing the `####` split here is how the bundle and the loader came to disagree: the
-    bundle wrote `label="math_reasoning"` and no `_instruction`, so a run served from the offline
-    copy silently fell back to the "Answer the following question:" default while a run served
-    from the loader got GSM8K's real instruction (the B250 failure mode).
-    """
-    from data.loaders.gsm8k import convert_gsm8k_rows
-    from tasks.gsm8k import INSTRUCTION
-
-    rows = convert_gsm8k_rows(ds, INSTRUCTION)
-    return rows, sorted({str(row["label"]) for row in rows})
-
-
 def _convert_dialogsum(ds) -> tuple[list[dict], list[str]]:
-    """Shape the raw release through the live loader's own converter, for the same reason as GSM8K.
+    """Shape the raw release through the live loader's own converter.
+
+    Reproducing the conversion here is how a bundle and its loader come to disagree (the old GSM8K
+    bundle lost its `_instruction` that way, the B250 failure mode), so the loader's converter is
+    reused rather than copied.
 
     No label vocabulary: summarization has no classes, so the second element is empty rather than
     a synthetic `"generation"` placeholder like the removed SAMSum bundle carried.
@@ -237,8 +216,6 @@ def _convert(ds, spec: dict, source: dict | None = None) -> tuple[list[dict], li
     converter = spec["converter"]
     if converter == "bc5cdr":
         return _convert_bc5cdr(ds, source)
-    if converter == "gsm8k":
-        return _convert_gsm8k(ds)
     if converter == "dialogsum":
         return _convert_dialogsum(ds)
     raise ValueError(f"unknown converter {converter!r}")

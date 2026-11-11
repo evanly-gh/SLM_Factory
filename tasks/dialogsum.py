@@ -16,8 +16,8 @@ property of the data rather than a preference:
 
   3. THE JUDGE IS NO LONGER THE HEADLINE. A judge score is comparable to no published number, is
      non-deterministic, and costs money on every eval in a loop that evaluates dozens of times.
-     `needs_judge` and `judge_overlap` are now False, and `toolbench` is the only judged task —
-     which is right, because ToolEval's pass rate is DEFINED as a judged vote.
+     `needs_judge` and `judge_overlap` are now False. No registered task is judged today (the last
+     one, `toolbench`, was removed 2026-11-11); the judge machinery remains as a general capability.
 
   4. THE CEILING IS RECORDED. One annotator scored against the other two reaches ROUGE-1 53.35 /
      ROUGE-2 26.72 / ROUGE-L 50.84. The best fine-tuned models sit near 47 ROUGE-1 and
@@ -116,7 +116,7 @@ SPEC = TaskSpec(
     max_seq_length=2048,
     eval_batch_size=16,
     failure_category=scorer.failure_category_of,
-    # No longer judged. The judge machinery is untouched and still serves `toolbench`; what
+    # No longer judged. The judge machinery is untouched and remains a general capability; what
     # changed is that a summary's quality is now measured against three human references rather
     # than by asking a model its opinion.
     needs_judge=False,

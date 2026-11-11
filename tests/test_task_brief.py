@@ -140,7 +140,7 @@ def test_the_prompt_states_how_this_task_is_actually_graded(monkeypatch):
     """The teacher is generating rows that will be scored, so it needs the grading rule — and it
     differs per task, which is the distinction the shared table could not express."""
     captured = _stub_anthropic(monkeypatch)
-    build_task_brief(get_task("routerbench"), [{"text": "q", "label": "local"}],
+    build_task_brief(get_task("sms_spam"), [{"text": "q", "label": "local"}],
                      log=lambda _m: None)
 
     prompt = captured["messages"][0]["content"]
@@ -167,7 +167,7 @@ def test_a_verbose_brief_is_clipped(monkeypatch):
         "output_contract": "c" * 5000,
         "failure_modes": [f"mode {i}" for i in range(40)],
     }))
-    brief = build_task_brief(get_task("gsm8k"), [{"text": "q", "answer": "#### 1"}],
+    brief = build_task_brief(get_task("gec_bea19"), [{"text": "q", "answer": "#### 1"}],
                             log=lambda _m: None)
 
     assert len(brief["summary"]) == SUMMARY_MAX_CHARS
@@ -181,7 +181,7 @@ def test_whitespace_is_collapsed_so_the_brief_is_one_block_of_prose(monkeypatch)
         "output_contract": "d   e",
         "failure_modes": ["  f  ", "", "   "],
     }))
-    brief = build_task_brief(get_task("gsm8k"), [{"text": "q", "answer": "#### 1"}],
+    brief = build_task_brief(get_task("gec_bea19"), [{"text": "q", "answer": "#### 1"}],
                             log=lambda _m: None)
     assert brief["summary"] == "a b c"
     assert brief["output_contract"] == "d e"
@@ -214,7 +214,7 @@ def test_a_brief_with_no_failure_modes_says_so_rather_than_printing_nothing():
     logs: list[str] = []
     log_task_brief(
         {"summary": "s", "output_contract": "c", "failure_modes": [], "source": "orchestrator"},
-        get_task("gsm8k"), log=logs.append,
+        get_task("gec_bea19"), log=logs.append,
     )
     assert any("failure modes: none stated" in line for line in logs)
 
@@ -227,7 +227,7 @@ def test_a_brief_with_no_failure_modes_says_so_rather_than_printing_nothing():
 def test_an_unreachable_orchestrator_does_not_stop_a_runnable_run(monkeypatch):
     _stub_anthropic(monkeypatch, error=RuntimeError("no route to host"))
     logs: list[str] = []
-    brief = build_task_brief(get_task("gsm8k"), [{"text": "q", "answer": "#### 1"}],
+    brief = build_task_brief(get_task("gec_bea19"), [{"text": "q", "answer": "#### 1"}],
                             log=logs.append)
 
     assert brief["source"] == "fallback"
@@ -236,7 +236,7 @@ def test_an_unreachable_orchestrator_does_not_stop_a_runnable_run(monkeypatch):
 
 def test_an_unparseable_reply_falls_back(monkeypatch):
     _stub_anthropic(monkeypatch, reply="I would rather not answer in JSON.")
-    brief = build_task_brief(get_task("gsm8k"), [{"text": "q", "answer": "#### 1"}],
+    brief = build_task_brief(get_task("gec_bea19"), [{"text": "q", "answer": "#### 1"}],
                             log=lambda _m: None)
     assert brief["source"] == "fallback"
 
@@ -246,7 +246,7 @@ def test_a_reply_missing_the_contract_falls_back(monkeypatch):
     assumes the conventions were stated when they were not — which is B269 with extra steps."""
     _stub_anthropic(monkeypatch, reply=json.dumps({"summary": "s", "output_contract": ""}))
     logs: list[str] = []
-    brief = build_task_brief(get_task("gsm8k"), [{"text": "q", "answer": "#### 1"}],
+    brief = build_task_brief(get_task("gec_bea19"), [{"text": "q", "answer": "#### 1"}],
                             log=logs.append)
 
     assert brief["source"] == "fallback"
@@ -416,14 +416,9 @@ def test_every_task_can_render_a_brief_sample_without_raising():
                           "tools": [{"name": "calendar.events.insert", "parameters": {}}]},
         "xlam_bfcl": {"text": "weather in Paris?", "answer": "[]",
                       "tools": [{"name": "get_weather", "parameters": {}}]},
-        "toolbench": {"text": "q", "query": "q", "answer": "Thought: t\nAction: Finish",
-                      "tools": [{"name": "a", "parameters": {}}]},
-        "gsm8k": {"text": "2+2?", "answer": "#### 4"},
         "dialogsum": {"text": "#Person1#: hi", "answer": "A greeting."},
         "clinc150": {"text": "move money", "label": "transfer"},
         "sms_spam": {"text": "WINNER", "label": "spam"},
-        "routerbench": {"text": "2+2", "label": "local"},
-        "proactive_listening": {"text": "A: um...", "label": "interrupt"},
     }
     from agent.task_brief import _sample_block
 

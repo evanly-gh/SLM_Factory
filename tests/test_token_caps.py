@@ -118,7 +118,7 @@ def test_no_generation_call_site_carries_its_own_numeric_cap():
     literal_cap = re.compile(r"generate_fn\([^)]*,\s*[\d.]+\s*,\s*\d+\s*\)")
     offenders = []
     for relative in ("data/curriculum.py", "data/synth_client.py", "agent/teacher_fitness.py",
-                     "eval/endpoint_eval.py", "agent/task_brief.py"):
+                     "agent/task_brief.py"):
         for number, line in enumerate(
             open(os.path.join(root, relative), encoding="utf-8").read().splitlines(), start=1
         ):

@@ -2,8 +2,9 @@
 
 WHY THESE FIVE NEED THEIR OWN CASES
 
-    The stall/convergence/escalation routing is well covered, but every existing case pins
-    `task: "gsm8k"`. That was harmless while the suite's tasks all scored on comparable scales.
+    The stall/convergence/escalation routing is well covered, but every existing case pinned
+    `task: "gsm8k"` (since removed). That was harmless while the suite's tasks all scored on
+    comparable scales.
     These five do not: their selection metrics are `exact_match`, `micro_f1`, `errant_f05`,
     `ekman_macro_f1` and `rouge_l`, and the accuracy goal is
     `min(0.99, max(qwen_measured, 0.80))` — a floor that, as of 2026-09-09, sits ABOVE the best

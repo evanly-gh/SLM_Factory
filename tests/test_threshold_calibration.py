@@ -2,13 +2,12 @@
 
 CURRENT BEHAVIOR: there is ONE automatic accuracy target — the separately-hosted Qwen-3.6
 reference model's own zero-shot score on the run's frozen eval set E, floored at 0.8 and
-measured in eval_setup (see test_qwen_baseline_goal.py and agent/threshold.py). The planner
-no longer proposes a `stop_threshold` or a `threshold_headroom`, and the old published-SOTA
-registry / measured-anchor / headroom machinery has been removed.
+measured in eval_setup (see test_qwen_baseline_goal.py and agent/threshold.py). The old
+published-SOTA registry / measured-anchor / headroom machinery has been removed, and so has the
+autonomous task planner (agent/task_planner.py, 2026-11-11) whose prompt tests used to live here.
 
-These tests pin what the planner must NOT do (invent a number), that a stray proposed
-threshold is dropped, that the deferred goal parks out of reach, and the still-live
-data_rebuild mutual-exclusivity contract in the iterate prompt.
+These tests pin that the deferred goal parks out of reach, and the still-live data_rebuild
+mutual-exclusivity contract in the iterate prompt.
 """
 import os
 
@@ -30,33 +29,6 @@ def test_pending_threshold_cannot_be_satisfied_by_any_score():
     has measured the Qwen baseline it needs."""
     assert UNREACHABLE_PENDING_THRESHOLD > THRESHOLD_CEILING
     assert UNREACHABLE_PENDING_THRESHOLD > 1.0 - 1e-9
-
-
-# --- the planner no longer proposes a number -----------------------------------
-
-def test_planner_prompt_no_longer_asks_for_a_recalled_sota_number():
-    from agent.task_planner import _PLANNER_PROMPT
-
-    assert "you do NOT set a number" in _PLANNER_PROMPT
-    assert "Do NOT invent a SOTA figure" in _PLANNER_PROMPT
-    # The old instruction and both schema fields must be gone.
-    assert "PRIMARY RULE: anchor it to the PUBLISHED STATE-OF-THE-ART" not in _PLANNER_PROMPT
-    assert '"stop_threshold"' not in _PLANNER_PROMPT
-    assert "threshold_headroom" not in _PLANNER_PROMPT
-
-
-def test_planner_drops_any_proposed_threshold_or_headroom():
-    """Even if a model emits stop_threshold/threshold_headroom anyway, plan_task must not
-    honor them — the accuracy goal is the system-measured Qwen baseline."""
-    import agent.task_planner as planner
-
-    plan = {"task_type": "NER", "stop_threshold": 0.99, "threshold_headroom": 0.07}
-    # Exercise the same normalization plan_task applies after JSON extraction.
-    plan.pop("stop_threshold", None)
-    plan.pop("threshold_headroom", None)
-    assert "stop_threshold" not in plan
-    assert "threshold_headroom" not in plan
-    assert hasattr(planner, "plan_task")
 
 
 # --- the target is written once, and the union rule is explicit ----------------

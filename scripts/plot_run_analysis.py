@@ -1,8 +1,8 @@
-"""Figures and derived tables for docs/analysis/{COST,EXPLORATION,ESCALATION}.md.
+"""Figures and derived tables for docs/SLMF_Results/{COST,EXPLORATION,ESCALATION}.md.
 
-Reads `docs/analysis/data/run_metrics.json` (written by `scripts/analyze_runs.py`) and writes
-PNGs to `docs/analysis/figures/` plus `docs/analysis/data/summary.json`, which holds every number
-the three docs quote, so a doc table can be regenerated rather than retyped.
+Reads `docs/SLMF_Results/data/run_metrics.json` (written by `scripts/analyze_runs.py`) and writes
+PNGs to `docs/SLMF_Results/figures/` plus `docs/SLMF_Results/data/summary.json`, which holds
+every number the three docs quote, so a doc table can be regenerated rather than retyped.
 
 Palette: the dataviz reference palette, validated with its `validate_palette.js` — categorical
 blue / orange / aqua for ladder / single-model / size-sweep (all-pairs PASS, aqua below 3:1 so it
@@ -22,8 +22,8 @@ from matplotlib.lines import Line2D  # noqa: E402
 from matplotlib.patches import Patch  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
-DATA = ROOT / "docs" / "analysis" / "data"
-FIGS = ROOT / "docs" / "analysis" / "figures"
+DATA = ROOT / "docs" / "SLMF_Results" / "data"
+FIGS = ROOT / "docs" / "SLMF_Results" / "figures"
 
 SURFACE = "#fcfcfb"
 INK = "#0b0b0b"

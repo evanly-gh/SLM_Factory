@@ -33,38 +33,6 @@ def test_bc5cdr_converter_builds_exact_entity_spans():
     assert labels == ["Chemical", "Disease"]
 
 
-def test_gsm8k_converter_preserves_gold_reasoning_and_final_answer():
-    """Shaped by the LIVE loader's own converter, not a copy of it.
-
-    The bundle used to reproduce the `####` split itself, and the two drifted: the bundle wrote
-    `label="math_reasoning"` and no `_instruction`, so a run served from the offline copy silently
-    fell back to the "Answer the following question:" default while a run served from the loader
-    got GSM8K's real instruction — the B250 failure mode.
-    """
-    from tasks.gsm8k import INSTRUCTION
-
-    rows, labels = download_datasets._convert(
-        [
-            {
-                "question": "How many widgets remain?",
-                "answer": "Ten minus three is seven.\n#### 7",
-            }
-        ],
-        _spec("gsm8k"),
-    )
-
-    assert rows == [
-        {
-            "text": "How many widgets remain?",
-            "answer": "7",
-            "cot_reasoning": "Ten minus three is seven.",
-            "label": "gsm8k",
-            "_instruction": INSTRUCTION,
-        }
-    ]
-    assert labels == ["gsm8k"]
-
-
 def test_dialogsum_converter_preserves_the_three_references():
     """The bundle must carry all three test summaries, or it silently reduces the metric.
 
@@ -106,14 +74,14 @@ def test_dialogsum_converter_preserves_the_three_references():
 
 
 def test_manifest_records_schema_counts_provenance_and_eval_ban():
-    spec = _spec("gsm8k")
+    spec = _spec("bc5cdr")
     source = spec["sources"][0]
     manifest = download_datasets._build_manifest(
         spec,
         source,
-        train_rows=[{"text": "train", "answer": "1", "label": "gsm8k"}],
-        test_rows=[{"text": "test", "answer": "2", "label": "gsm8k"}],
-        labels=["gsm8k"],
+        train_rows=[{"text": "train", "entities": []}],
+        test_rows=[{"text": "test", "entities": []}],
+        labels=["Chemical"],
         removed_train_overlap=0,
         source_revision="abc123",
         content_hashes={"train.jsonl": "a" * 64, "test.jsonl": "b" * 64},
@@ -123,9 +91,9 @@ def test_manifest_records_schema_counts_provenance_and_eval_ban():
     # The manifest names the REGISTRY TASK the bundle supplies rows for. It used to name an
     # abstract `task_type`, which several bundles shared, so `load_local_dataset` could not tell
     # which task a bundle was actually for.
-    assert manifest["task"] == "gsm8k"
-    assert manifest["hf_id"] == "openai/gsm8k"
-    assert manifest["config"] == "main"
+    assert manifest["task"] == "ner_bc5cdr"
+    assert manifest["hf_id"] == "tner/bc5cdr"
+    assert manifest["config"] is None
     assert manifest["source_revision"] == "abc123"
     assert manifest["source_splits"] == {"train": "train", "test": "test"}
     assert manifest["counts"] == {"train": 1, "test": 1, "total": 2}
@@ -225,13 +193,13 @@ def test_write_bundle_creates_hashed_jsonl_and_manifest(tmp_path):
 
 
 def test_cached_hf_revision_reads_hub_ref_without_network(tmp_path, monkeypatch):
-    ref = tmp_path / "datasets--openai--gsm8k" / "refs" / "main"
+    ref = tmp_path / "datasets--tner--bc5cdr" / "refs" / "main"
     ref.parent.mkdir(parents=True)
     ref.write_text("740312add88f781978c0658806c59bc2815b9866\n")
     monkeypatch.setenv("HF_HUB_CACHE", str(tmp_path))
 
     assert (
-        download_datasets._cached_hf_revision("openai/gsm8k")
+        download_datasets._cached_hf_revision("tner/bc5cdr")
         == "740312add88f781978c0658806c59bc2815b9866"
     )
 
@@ -245,9 +213,8 @@ def test_only_cli_downloads_selected_bundles(tmp_path, monkeypatch):
     monkeypatch.setattr(download_datasets, "_download_dataset", fake_download)
     monkeypatch.setenv("SLM_LOCAL_DATASET_DIR", str(tmp_path))
 
-    assert download_datasets.main(["--only", "gsm8k", "bc5cdr", "dialogsum"]) == 0
+    assert download_datasets.main(["--only", "bc5cdr", "dialogsum"]) == 0
     assert downloaded == [
-        ("gsm8k", tmp_path),
         ("bc5cdr", tmp_path),
         ("dialogsum", tmp_path),
     ]
@@ -280,9 +247,8 @@ def test_list_cli_reports_supported_task_aware_catalog(tmp_path, monkeypatch, ca
     # and go_emotions bundles went with the channels they belonged to.
     from tasks import TASKS
 
-    assert set(by_name) == {"bc5cdr", "gsm8k", "dialogsum"}
+    assert set(by_name) == {"bc5cdr", "dialogsum"}
     assert by_name["bc5cdr"]["task"] == "ner_bc5cdr"
-    assert by_name["gsm8k"]["task"] == "gsm8k"
     assert by_name["dialogsum"]["task"] == "dialogsum"
     assert all(item["task"] in TASKS for item in listed)
     assert by_name["dialogsum"]["installed"] is False

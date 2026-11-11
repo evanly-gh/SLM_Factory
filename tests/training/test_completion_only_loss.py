@@ -81,15 +81,6 @@ TASK_CASES = [
         "A short summary.",
     ),
     (
-        "gsm8k",
-        {
-            "prompt": "What is 2 + 2?",
-            "answer": "4",
-            "cot_reasoning": "Add the two values.",
-        },
-        "<reasoning>\nAdd the two values.",
-    ),
-    (
         "xlam_bfcl",
         {
             "text": "What is the weather in Paris?",

@@ -5,8 +5,8 @@ WHY NOT THE LLM JUDGE, WHICH THIS TASK USED TO USE
     number, so it cannot be read against DialogSum's baselines or its human ceiling. It is
     non-deterministic, so a re-run moves it. And it costs money on every eval, in a loop that
     evaluates dozens of times per run. ROUGE against three references is comparable, repeatable
-    and free. The judge remains available as an occasional spot-check and is still the DEFINED
-    metric for `toolbench`, whose pass rate is a judged vote by construction.
+    and free. The judge remains available as an occasional spot-check and as a general
+    capability for any task whose metric is a judged vote by construction.
 
 WHY THREE REFERENCES CHANGE THE MEASUREMENT
     A summary has many correct forms, so single-reference ROUGE is partly a lottery about whose

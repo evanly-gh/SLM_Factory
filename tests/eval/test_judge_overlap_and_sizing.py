@@ -43,7 +43,7 @@ def test_explicit_max_seq_length_overrides_every_task(monkeypatch):
 
     monkeypatch.setenv("SLM_MAX_SEQ_LENGTH", "3000")
     assert task_max_seq_length("clinc150") == 3000
-    assert task_max_seq_length("gsm8k") == 3000
+    assert task_max_seq_length("dialogsum") == 3000
 
 
 def test_training_and_eval_agree_on_context(monkeypatch):

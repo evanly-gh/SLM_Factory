@@ -502,8 +502,8 @@ def measure_teacher_fitness(
     # became indefensible once the same verdict started setting the run's accuracy goal too.
     #
     # The diagnostic it used to provide (B320: demonstrations making a teacher LOOK worse is the
-    # signature of a prompt-assembly defect, not an incapable model) is still reachable on demand
-    # through `scripts/probe_teacher_fewshot.py`, which exists for exactly that comparison.
+    # signature of a prompt-assembly defect, not an incapable model) lived in
+    # `scripts/probe_teacher_fewshot.py`, removed 2026-11-11 and recoverable from git history.
     try:
         result = _measure(prefix)
     except Exception as error:  # noqa: BLE001 — an unmeasurable teacher is refused, not fatal

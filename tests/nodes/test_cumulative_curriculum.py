@@ -583,17 +583,22 @@ def test_the_firewall_compares_prompt_as_well_as_text():
 # --------------------------------------------------------------------------
 
 
-def test_a_cot_task_annotates_its_rows_and_preserves_gold_reasoning():
-    """GSM8K ships gold chains-of-thought in its `####` split, so annotation must PRESERVE an
-    existing `cot_reasoning` rather than regenerate it: regenerating was both wasteful — one teacher
+def test_a_cot_task_annotates_its_rows_and_preserves_gold_reasoning(monkeypatch):
+    """A source that ships gold chains-of-thought (GSM8K's `####` split did) must have them
+    PRESERVED by annotation rather than regenerated: regenerating was both wasteful — one teacher
     call per row — and quality-reducing, replacing a gold chain with a weaker teacher one (B141).
 
     Driven through `curate._annotate_generation_cot` rather than `data.curriculum.annotate_cot`
     because the two have disagreed before: the call site once passed a `task=` keyword the callee
     never accepted, so every gsm8k rebuild raised TypeError the moment the CoT teacher was
     reachable. A test of the callee alone would not have seen it.
+
+    No registered task declares `cot_annotation=True` since gsm8k was removed (2026-11-11), so the
+    task's opt-in is forced here to keep the call path itself under test.
     """
     import agent.nodes.curate as curate
+
+    monkeypatch.setattr(curate, "_cot_applies", lambda _task: True)
 
     rows = [
         {"text": "Ann has 3 pears, buys 2. How many?", "answer": "#### 5",
@@ -601,7 +606,7 @@ def test_a_cot_task_annotates_its_rows_and_preserves_gold_reasoning():
         {"text": "Bob runs 4 miles for 5 days. How far?", "answer": "#### 20"},
     ]
     annotated = curate._annotate_generation_cot(
-        rows, {"task": "gsm8k", "task_brief": None}, model_id="probe",
+        rows, {"task": "gec_bea19", "task_brief": None}, model_id="probe",
     )
 
     assert annotated[0]["cot_reasoning"] == "gold: three plus two"
@@ -746,7 +751,7 @@ def test_an_anchor_pool_for_a_closed_label_space_is_that_class_own_rows():
     from agent.nodes.curate import _anchor_pool
 
     train = _rows(3, prefix="a", label="local") + _rows(2, prefix="b", label="route")
-    pool = _anchor_pool(_state("routerbench"), "route", train)
+    pool = _anchor_pool(_state("sms_spam"), "route", train)
     assert {row["label"] for row in pool} == {"route"}
 
 

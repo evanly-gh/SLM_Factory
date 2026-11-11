@@ -497,9 +497,9 @@ def test_rewording_a_rubric_invalidates_the_cache_even_at_the_same_version(tmp_p
 def test_a_second_rubric_reuses_the_machinery_without_colliding(tmp_path):
     """Two rubrics, one client: distinct cache keys, and each parses its own reply shape.
 
-    This is the property `eval/scorers/toolbench.py` depends on — it judges with ToolEval's
-    Solved/Unsolved rubric against the same endpoint, cache file and concurrency window that
-    `dialogsum` uses for numeric similarity.
+    This is the property `eval/scorers/toolbench.py` relied on (until the toolbench task was removed
+    on 2026-11-11) — it judged with ToolEval's Solved/Unsolved rubric against the same endpoint,
+    cache file and concurrency window that `dialogsum` used for numeric similarity.
     """
     from eval.judge_client import JudgeRubric, LocalJudgeClient
 

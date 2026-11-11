@@ -113,8 +113,8 @@ def test_a_state_carrying_an_eval_set_round_trips_through_the_json_codec():
     imports its way into that failure — it needs a state with a real eval set on it, which is what
     this builds.
     """
-    eval_set = EvalSet(all=[{"text": "held out", "label": "local"}], task="routerbench")
-    encoded = encode_state(_state(task="routerbench", eval_set=eval_set))
+    eval_set = EvalSet(all=[{"text": "held out", "label": "local"}], task="sms_spam")
+    encoded = encode_state(_state(task="sms_spam", eval_set=eval_set))
     assert json.loads(json.dumps(encoded)) == encoded, "the encoded state must be plain JSON"
 
     decoded = decode_state(encoded)

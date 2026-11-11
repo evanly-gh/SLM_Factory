@@ -21,7 +21,9 @@ TWO RUBRICS, ONE CLIENT
       * `NUMERIC_RUBRIC` is the original 0-1 semantic-similarity rubric that `dialogsum` scores
         through. Its constants are unchanged and its cache keys are byte-identical to the ones
         written before this parameterization existed, so existing caches stay valid.
-      * `eval/scorers/toolbench.py` supplies ToolEval's own Solved/Unsolved rubric.
+      * `eval/scorers/toolbench.py` supplied ToolEval's own Solved/Unsolved rubric until the
+        toolbench task was removed (2026-11-11); the parameterization stays so a new rubric needs
+        no machinery changes.
 
     A rubric owns four things and nothing else: the system prompt, how a payload becomes the user
     message, how a reply becomes a float, and the sampling parameters. Adding a third must not

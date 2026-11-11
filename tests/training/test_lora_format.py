@@ -112,21 +112,6 @@ def test_qwen_training_fails_if_chat_template_is_missing(tmp_path):
         )
 
 
-def test_math_examples_include_answer(tmp_path):
-    """A math task's training text must contain the answer."""
-    import json
-
-    ds_path = tmp_path / "ds.jsonl"
-    ds_path.write_text(json.dumps({"prompt": "1+1=?", "answer": "2"}) + "\n")
-
-    trained_texts = _run_training_and_capture(ds_path, "gsm8k")
-
-    assert trained_texts, "Dataset.from_list was never called — format routing broken"
-    assert any("2" in str(t) for t in trained_texts), (
-        f"gsm8k training text should contain the answer '2'; got: {trained_texts}"
-    )
-
-
 def test_training_chat_template_explicitly_disables_thinking(tmp_path):
     import json
 

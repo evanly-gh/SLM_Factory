@@ -50,9 +50,12 @@ CLINC_ROWS = [
     {"text": "why did my card get declined", "label": "card_declined"},
     {"text": "how much is left on my account", "label": "balance"},
 ]
-ROUTER_ROWS = [
-    {"text": "what is 2 + 2", "label": "local"},
-    {"text": "summarise this ten-page filing", "label": "route"},
+# A closed label space WITH written definitions (sms_spam declares them because `ham` is corpus
+# jargon). RouterBench's `local`/`route` was the original case; that task was removed 2026-11-11.
+SMS_ROWS = [
+    {"text": "hey are we still on for dinner at 7", "label": "ham"},
+    {"text": "WINNER!! You have won a free entry to our prize draw. Txt CLAIM to 81010",
+     "label": "spam"},
 ]
 NER_ROWS = [
     {
@@ -99,12 +102,12 @@ def test_a_listed_class_is_declared_valid_by_definition():
 
 
 def test_the_definitions_are_shown_beside_the_classes_that_have_them():
-    """RouterBench is the case the gloss exists for: `local` means "a small on-device model can
-    answer this correctly", and read as an English word it means the opposite of what the class is
+    """RouterBench was the case the gloss exists for: `local` meant "a small on-device model can
+    answer this correctly", and read as an English word it meant the opposite of what the class was
     for. Naming the class without its meaning is what produced verdicts like "the utterance is a
-    math problem, not a local query"."""
-    spec = get_task("routerbench")
-    block = _task_context_block(spec, ROUTER_ROWS)
+    math problem, not a local query". SMS spam's `ham` is the same hazard in the current suite."""
+    spec = get_task("sms_spam")
+    block = _task_context_block(spec, SMS_ROWS)
 
     for label, definition in spec.label_definitions.items():
         assert label in block
@@ -129,7 +132,7 @@ def test_a_closed_label_space_with_no_definitions_says_that_it_has_none():
 def test_a_task_with_definitions_does_not_claim_to_be_missing_them():
     """The counterpart assertion, so the note above means something. A block that carried it
     unconditionally would tell the teacher to ignore glosses it had just been given."""
-    block = _task_context_block(get_task("routerbench"), ROUTER_ROWS).lower()
+    block = _task_context_block(get_task("sms_spam"), SMS_ROWS).lower()
 
     assert "no written definitions" not in block
 
@@ -153,7 +156,7 @@ def test_the_definitions_supply_the_class_list_when_no_rows_are_given():
     """`curate` always has anchors, but the block is also built for a spec on its own (reporting, a
     resumed state with no rows to hand). Falling back to the declared classes keeps it useful there
     instead of emitting nothing."""
-    spec = get_task("routerbench")
+    spec = get_task("sms_spam")
 
     block = _task_context_block(spec, [])
 
@@ -184,14 +187,15 @@ def test_the_entity_types_are_declared_exhaustive():
     assert "only ones" in block
 
 
-@pytest.mark.parametrize("task", ("gsm8k",))
+@pytest.mark.parametrize("task", ("xlam_bfcl",))
 def test_an_open_ended_task_with_neither_vocabulary_yields_nothing(task):
     """Empty string, not an empty heading.
 
     A heading with nothing under it reads as a section the teacher was supposed to be given and is
-    worse than silence — and for this task there is genuinely nothing to enumerate: the answer is a
-    number the question determines. Claiming a label space here would be the B267 mistake
-    manufactured rather than merely inherited.
+    worse than silence — and for this task there is genuinely nothing to enumerate at the TASK
+    level: the callable surface is per row, carried by `_row_context_block` instead. Claiming a
+    label space here would be the B267 mistake manufactured rather than merely inherited. (gsm8k was
+    the original case; it was removed 2026-11-11.)
 
     `dialogsum` used to be the second case and is no longer. The 2026-09-06 rework gave it real
     task-level conventions that appear on no single row — the transcript's `#Person1#` speaker
@@ -309,8 +313,9 @@ def test_synthesize_examples_supplies_the_task_context_to_the_label_verifier():
 def test_synthesize_examples_supplies_the_task_context_to_the_answer_verifier():
     """Same wiring on the generation family, which is the one path where the teacher invents BOTH
     halves of the row and therefore has the least constraint on it from anywhere else."""
-    anchors = [{"text": "Janet has 3 apples and buys 4 more.", "answer": "7"}]
-    spec = get_task("gsm8k")
+    # gec_bea19: open-ended and no exact verifier, so a generated row reaches the teacher pass.
+    anchors = [{"text": "I has went home .", "answer": "I went home ."}]
+    spec = get_task("gec_bea19")
     captured: dict = {}
 
     def fake_verify(rows, **kwargs):
@@ -318,10 +323,10 @@ def test_synthesize_examples_supplies_the_task_context_to_the_answer_verifier():
         return rows
 
     def generate(_prompt, **_kwargs):
-        return json.dumps({"text": "Ravi has 5 pears and eats 2.", "answer": "3"})
+        return json.dumps({"text": "She go to school .", "answer": "She goes to school ."})
 
     with patch("data.curriculum.verify_generated_answers", side_effect=fake_verify):
-        synthesize_examples(anchors, task="gsm8k", n=2, generate_fn=generate)
+        synthesize_examples(anchors, task="gec_bea19", n=2, generate_fn=generate)
 
     assert captured["task_context"] == _task_context_block(spec, anchors)
 
@@ -339,18 +344,10 @@ def test_synthesize_examples_supplies_the_task_context_to_the_answer_verifier():
 # from the same code under test is how a test ends up asserting nothing.
 TASK_FIXTURES = {
     "clinc150": (CLINC_ROWS, ("transfer", "card_declined", "balance")),
-    "routerbench": (ROUTER_ROWS, ("local", "route")),
     # `ham` is the reason this task declares label_definitions at all: it is corpus jargon, not
     # English, so the vocabulary reaching the verifier prompt is what stops the teacher reading it
     # as the food and rejecting good rows — the RouterBench `local` failure (B267) in a new costume.
-    "sms_spam": (
-        [
-            {"text": "hey are we still on for dinner at 7", "label": "ham"},
-            {"text": "WINNER!! You have won a free entry to our prize draw. Txt CLAIM to 81010",
-             "label": "spam"},
-        ],
-        ("ham", "spam"),
-    ),
+    "sms_spam": (SMS_ROWS, ("ham", "spam")),
     # Both labels are opaque without the gate's definition — `not_addressed` especially, which a
     # teacher left to guess reads as "nobody was addressed" rather than "addressed to a person".
     "address_bench": (
@@ -363,13 +360,6 @@ TASK_FIXTURES = {
              "label": "not_addressed"},
         ],
         ("addressed", "not_addressed"),
-    ),
-    "proactive_listening": (
-        [
-            {"text": "so anyway, as I was saying about the report", "label": "wait"},
-            {"text": "wait, what did you just say the deadline was", "label": "interrupt"},
-        ],
-        ("wait", "interrupt"),
     ),
     # Span vocabulary rather than a class list: BC5CDR carries its gold in `entities`. The `answer`
     # names only the span TEXTS, so the two type names can only have reached the prompt through the
@@ -405,35 +395,6 @@ TASK_FIXTURES = {
         }],
         ("calendar.events.insert", "reference_instant"),
     ),
-    # ToolBench's callable surface is per row too, and it is the case that most needs the block:
-    # the row declares a handful of APIs drawn from ~16,000, so a teacher judging without the list
-    # in front of it will reject a correct call for naming an endpoint it does not recognise —
-    # which is B314 exactly, on a namespace where nobody's prior is reliable.
-    "toolbench": (
-        [{
-            "text": "You are AutoGPT... I want the forecast for Lisbon before I pack.",
-            "query": "I want the forecast for Lisbon before I pack.",
-            "answer": (
-                "Thought: I should look up the forecast.\n"
-                "Action: get_forecast_for_weather_api\n"
-                'Action Input: {"city": "Lisbon"}\n'
-                "Thought: I can answer now.\nAction: Finish\n"
-                'Action Input: {"return_type": "give_answer", "final_answer": "Warm and clear."}'
-            ),
-            "tools": [{
-                "name": "get_forecast_for_weather_api",
-                "parameters": {
-                    "properties": {"city": "string", "units": "string"},
-                    "required": ["city"],
-                    "optional": ["units"],
-                },
-            }],
-        }],
-        ("get_forecast_for_weather_api", "units"),
-    ),
-    # No closed vocabulary of any kind: the answer is a number the question determines, or free
-    # prose. The requirement for these two is the opposite one — see the assertion below.
-    "gsm8k": ([{"text": "Janet has 3 apples and buys 4 more.", "answer": "7"}], ()),
     # No longer vocabulary-free. The 2026-09-06 rework gave this task two conventions that appear
     # on no single row and that a teacher will otherwise invent: the transcript's `#Person1#`
     # speaker labels, and summaries being SHORT relative to the conversation. Left unstated, a
@@ -501,7 +462,7 @@ def test_the_fixture_table_covers_the_whole_registry():
     than silently inheriting no coverage, which is the shape of failure the task registry exists to
     prevent (a task inheriting whatever an `else` branch did)."""
     assert sorted(TASK_FIXTURES) == sorted(task_names())
-    assert len(TASK_FIXTURES) == 15
+    assert len(TASK_FIXTURES) == 11
 
 
 def _verifier_prompt_for(task: str, rows: list[dict]) -> str:
@@ -598,7 +559,7 @@ def test_a_task_with_datetime_conventions_states_them_to_the_verifier():
 def test_a_task_with_no_conventions_adds_nothing():
     """`verifier_notes=""` is an explicit choice and must cost nothing — an empty section would be
     prompt noise the teacher tries to obey."""
-    assert _task_context_block(get_task("gsm8k"), []) == ""
+    assert _task_context_block(get_task("xlam_bfcl"), []) == ""
 
 
 def test_conventions_and_the_label_space_coexist():

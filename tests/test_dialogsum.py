@@ -35,14 +35,14 @@ def _eval_set(rows: list[dict]):
 
 def test_the_task_no_longer_uses_the_llm_judge():
     """The judge is comparable to no published number, non-deterministic, and costs money every
-    eval. `toolbench` remains the only judged task, which is correct: ToolEval's pass rate is
-    DEFINED as a judged vote."""
+    eval. No registered task is judged since `toolbench` (whose ToolEval pass rate is DEFINED as a
+    judged vote) was removed on 2026-11-11."""
     from tasks import TASKS, get_task
 
     spec = get_task("dialogsum")
     assert spec.needs_judge is False
     assert spec.judge_overlap is False
-    assert {name for name, s in TASKS.items() if s.needs_judge} == {"toolbench"}
+    assert {name for name, s in TASKS.items() if s.needs_judge} == set()
 
 
 def test_samsum_is_not_reachable_from_this_task_any_more():

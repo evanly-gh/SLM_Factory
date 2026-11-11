@@ -2,7 +2,7 @@
 
 Reads only what each run already wrote — `run.log`, `timing-events.jsonl`, `cost-events.jsonl`,
 `scores.json` — plus `sacct` for the GPU allocation, and writes one JSON file:
-`docs/analysis/data/run_metrics.json`. `scripts/plot_run_analysis.py` draws the figures from it.
+`docs/SLMF_Results/data/run_metrics.json`. `scripts/plot_run_analysis.py` draws the figures from it.
 
 HOW TIME AND MONEY ARE ATTRIBUTED TO A MODEL TIER.
   * Every `[evaluate][<model> [<quant>]] Score:` line in run.log is one train->eval iteration, and
@@ -33,7 +33,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 RUNS = ROOT / "logs" / "runs"
-OUT = ROOT / "docs" / "analysis" / "data" / "run_metrics.json"
+OUT = ROOT / "docs" / "SLMF_Results" / "data" / "run_metrics.json"
 
 # Reference cloud price for one L40S GPU-hour — the median on-demand rate across ~32 providers
 # (getdeploying.com / gpucostcompare.com, October 2026). Low/high bound the sensitivity band:

@@ -79,7 +79,7 @@ INVENTORY: tuple[Cap, ...] = (
         "was 120: the same fail-open truncation, 40 tokens tighter."),
     Cap("data/curriculum.py:1106", "one new synthesized utterance", "global ceiling", SAFE,
         "was 200 (~800 chars). This path serves the CLOSED-LABEL tasks only (clinc150, sms_spam, "
-        "routerbench, proactive_listening), whose utterances are one sentence, so 200 was ample — "
+        "address_bench), whose utterances are one sentence, so 200 was ample — "
         "ner_bc5cdr does NOT route here despite the old comment saying so. Still replaced, because "
         "'ample for the tasks that happen to use it today' is exactly the reasoning that produced "
         "the 512."),
@@ -100,7 +100,7 @@ INVENTORY: tuple[Cap, ...] = (
         "judging its own guess (B269)."),
     # --- evaluation: the student's reserve, which CANNOT be globally raised ------------------
     Cap("tasks/*.py:max_new_tokens", "student's eval output reserve, per task",
-        "50 (proactive) - 1536 (toolbench)", BOUNDED,
+        "16 (address_bench) - 512 (dialogsum, ner_bc5cdr, multiconer, topv2)", BOUNDED,
         "deliberately NOT routed through the global ceiling. The reserve and the prompt share one "
         "window — input budget is `max_seq_length - max_new_tokens`, and eval_output_token_reserve "
         "RAISES when a reserve leaves no prompt room — so raising it does not uncap the model, it "
@@ -110,11 +110,6 @@ INVENTORY: tuple[Cap, ...] = (
         "TaskSpec.max_new_tokens", SAFE,
         "validates the reserve against the task's own context and raises rather than silently "
         "clamping, which is what makes the coupling above safe to rely on."),
-    Cap("eval/scorers/toolbench.py:_judge_verdict_budget", "one ToolEval judge verdict",
-        "global ceiling", SAFE,
-        "was 192. This is the highest-volume call in a toolbench run (7,209 measured in one run) and "
-        "a cut-off verdict was counted judge_unsure, quietly moving the metric. Generation stops at "
-        "EOS, so the larger ceiling costs nothing."),
     Cap("eval/judge_client.py:207", "numeric judge rubric output", "JudgeRubric.max_tokens (8)",
         BOUNDED,
         "declared on the rubric rather than at the call site, so it is a property of the rubric's "
@@ -125,35 +120,19 @@ INVENTORY: tuple[Cap, ...] = (
         "eval_output_token_reserve(spec)", SAFE,
         "cannot be outgrown: the same per-task reserve the student is judged under, which is what "
         "makes the two numbers comparable at all."),
-    Cap("eval/endpoint_eval.py:110", "reference model's baseline answers",
-        "eval_output_token_reserve(spec)", SAFE,
-        "as above. A row the reserve cannot hold is one the student could not have answered either, "
-        "so the two fail identically rather than the baseline being flattered."),
     Cap("training/quantize.py:155", "smoke-test generation after quantizing", "16 tokens", SAFE,
         "checks only that the quantized model emits anything at all; the content is never read."),
     # --- orchestrator and loaders ----------------------------------------------------------
     Cap("agent/nodes/iterate.py:_ITERATE_MAX_TOKENS", "orchestrator decision JSON", "env-tunable",
         BOUNDED, "the schema is small and fixed, and a truncation fails plan validation loudly and "
         "falls back to a deterministic plan rather than proceeding on half a decision."),
-    Cap("data/loaders/toolbench.py:127", "prompt and target length", "per-task char budget", SAFE,
-        "REFUSES an oversized row instead of truncating it, because cutting a ToolBench prompt "
-        "removes the tail of the API list — the names the model is meant to call. Both consumers "
-        "raise loudly rather than score a truncated prompt. This is the pattern the rest should "
-        "follow: refuse, do not truncate, whenever the tail carries meaning."),
     Cap("data/loaders/web_acquire.py:1872", "window sent for NER auto-annotation",
         "env SLM_NER_ANNOTATION_WINDOW_CHARS", BOUNDED,
         "entities outside the window are simply not annotated, so a row comes out incomplete rather "
         "than wrong, and the substring verifier still passes it — which is why it is worth watching."),
-    Cap("data/loaders/proactive_listening.py:92", "dialogue context kept per row", "1200 chars",
-        SAFE, "keeps the TAIL, which is the part the label depends on, and records on the row that "
-        "it did so."),
     # --- cosmetic --------------------------------------------------------------------------
     Cap("data/curriculum.py:603", "rendered row in a log line", "explicit limit + marker", COSMETIC,
         "appends '… [truncated, N chars total]' so the reader is told the line was shortened."),
-    Cap("scripts/diag_adapter_effect.py:72", "output length in the adapter-effect diagnostic",
-        "64 tokens", COSMETIC,
-        "a hand-run diagnostic asking only whether the adapter changed the output at all; it scores "
-        "nothing and feeds no decision."),
     Cap("*:str(exc)[:120..500]", "exception text in logs and telemetry", "120-500 chars", COSMETIC,
         "a long message loses its tail in the log while the exception object itself is untouched, so "
         "control flow cannot change. The cost is purely diagnostic, and it has bitten once: "

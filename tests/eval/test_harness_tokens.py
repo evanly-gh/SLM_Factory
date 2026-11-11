@@ -18,15 +18,15 @@ def _eval_set(task):
 def test_a_short_answer_task_asks_for_few_tokens(mock_infer, monkeypatch):
     monkeypatch.delenv("SLM_CUDA_ISOLATION", raising=False)
     mock_infer.return_value = ["local"]
-    run_eval(_eval_set("routerbench"), "/w", "m")
+    run_eval(_eval_set("sms_spam"), "/w", "m")
     assert mock_infer.call_args.kwargs["max_new_tokens"] == 50
 
 
 @patch("eval.harness.infer_batch")
-def test_a_chain_of_thought_task_asks_for_room_to_reason(mock_infer, monkeypatch):
+def test_a_long_answer_task_asks_for_room_to_answer(mock_infer, monkeypatch):
     monkeypatch.delenv("SLM_CUDA_ISOLATION", raising=False)
-    mock_infer.return_value = ["42"]
-    run_eval(_eval_set("gsm8k"), "/w", "m")
+    mock_infer.return_value = ["[]"]
+    run_eval(_eval_set("ner_bc5cdr"), "/w", "m")
     assert mock_infer.call_args.kwargs["max_new_tokens"] == 512
 
 

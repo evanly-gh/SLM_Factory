@@ -1320,7 +1320,8 @@ def _newest_run_dir() -> Path | None:
     runs = proj / "logs" / "runs"
     if not runs.is_dir():
         return None
-    candidates = [d for d in runs.iterdir() if d.is_dir()]
+    # Only real run dirs (they hold a run.log); logs/runs also has purpose folders (main_table/, ...).
+    candidates = [d for d in runs.iterdir() if (d / "run.log").is_file()]
     if not candidates:
         return None
     return max(candidates, key=lambda d: d.stat().st_mtime)

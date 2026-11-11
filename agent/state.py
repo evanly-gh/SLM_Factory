@@ -157,8 +157,8 @@ class AgentState(TypedDict):
     _pending_training_outputs: Optional[dict]  # label -> TrainingOutput
     _pending_configs: Optional[dict]       # label -> config dict
 
-    # --- Data-size targets chosen by the orchestrator (task_planner), clamped to config
-    # floors/ceiling. curate/eval_setup read these instead of a fixed per-type constant.
+    # --- Data-size targets chosen by the orchestrator (formerly agent/task_planner, now removed),
+    # clamped to config floors/ceiling. curate/eval_setup read these instead of a fixed per-type constant.
     # Curriculum and eval sizes are per-task caps on the spec (`initial_train_cap`, `select_cap`), not
     # run state: the loader returns as many rows as it has up to those, and the curriculum then grows
     # by rebuild. The old `curriculum_size_target`/`eval_size_target` pair was recomputed per model

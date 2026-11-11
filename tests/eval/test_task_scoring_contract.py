@@ -71,22 +71,6 @@ def _xlam_answer(city="Paris"):
     return json.dumps([{"name": "get_weather", "arguments": {"city": city}}])
 
 
-TOOLBENCH_TOOLS = [{
-    "name": "get_weather_for_weather_api",
-    "parameters": {"properties": {"city": "string"}, "required": ["city"], "optional": []},
-}]
-
-
-def _toolbench_path(city="Paris", final="It is 18 degrees and clear in Paris."):
-    """A complete ToolBench solution path: one declared API call, then Finish->give_answer."""
-    return (
-        "Thought: I should look up the weather for that city.\n"
-        f"Action: get_weather_for_weather_api\nAction Input: {{\"city\": \"{city}\"}}\n"
-        "Thought: I have what I need and can answer now.\n"
-        f'Action: Finish\nAction Input: {{"return_type": "give_answer", "final_answer": "{final}"}}'
-    )
-
-
 # One fixture per task: rows in that task's OWN shape, the raw output a perfect model would emit,
 # a raw output the extractor cannot read at all, and one it can read but which is wrong.
 #
@@ -94,18 +78,6 @@ def _toolbench_path(city="Paris", final="It is 18 degrees and clear in Paris."):
 # schema. A generated row would share a shape across tasks and hide exactly the mismatch this file
 # is looking for.
 FIXTURES: dict[str, dict] = {
-    "gsm8k": {
-        "rows": [
-            {"text": "Janet has 3 apples and buys 15 more. How many?",
-             "answer": "She adds them.\n#### 18"},
-            {"text": "Tom runs 4 miles a day for 5 days. How far?",
-             "answer": "Multiply.\n#### 20"},
-        ],
-        "perfect": ["Adding gives\n#### 18", "Multiplying gives\n#### 20"],
-        "unreadable": ["The result cannot be determined from what was provided.",
-                       "No answer is possible here."],
-        "wrong_but_readable": ["#### 999", "#### 999"],
-    },
     # THREE references per row, which is the whole premise of this task and the reason it was
     # reworked off the LLM judge on 2026-09-06. `perfect` matches the SECOND reference of each
     # row, not the first, so the fixture actually exercises max-over-references: against
@@ -229,41 +201,6 @@ FIXTURES: dict[str, dict] = {
         "unreadable": ["I'm sorry, I can't help with that.", "no function applies here"],
         "wrong_but_readable": [_xlam_answer("Berlin"), _xlam_answer("Berlin")],
     },
-    # ToolBench's `wrong_but_readable` is a well-formed, in-budget path ending in
-    # Finish->give_answer whose stated answer is about something else, so no exact rule can reject
-    # it — it reaches the judge, which is the point. `unreadable` is prose containing no Action at
-    # all. The stub judge below passes only an answer matching the row's expected one.
-    #
-    # These rows carry an `answer` even though real ToolEval eval rows do not: pass rate is
-    # reference-free and the test queries ship with no gold path. What is written here is a TRAIN
-    # row's shape, which is the union — because this file also drives `build_training_turn`, and a
-    # row with no gold cannot become a training turn by design. The scorer ignores `answer`
-    # entirely, so its presence changes nothing it asserts.
-    "toolbench": {
-        "rows": [
-            {"text": "You are AutoGPT... \nwhat is the weather in Paris?\nBegin!\n",
-             "query": "what is the weather in Paris?",
-             "answer": _toolbench_path("Paris", "It is 18 degrees and clear in Paris."),
-             "tools": TOOLBENCH_TOOLS,
-             "_subset": "G1_instruction",
-             "_expected": "It is 18 degrees and clear in Paris."},
-            {"text": "You are AutoGPT... \nwhat is the weather in Oslo?\nBegin!\n",
-             "query": "what is the weather in Oslo?",
-             "answer": _toolbench_path("Oslo", "It is 2 degrees and snowing in Oslo."),
-             "tools": TOOLBENCH_TOOLS,
-             "_subset": "G2_category",
-             "_expected": "It is 2 degrees and snowing in Oslo."},
-        ],
-        "perfect": [
-            _toolbench_path("Paris", "It is 18 degrees and clear in Paris."),
-            _toolbench_path("Oslo", "It is 2 degrees and snowing in Oslo."),
-        ],
-        "unreadable": ["I'm sorry, I can't help with that.", "no tool applies here"],
-        "wrong_but_readable": [
-            _toolbench_path("Paris", "The capital of France is Paris."),
-            _toolbench_path("Oslo", "The capital of France is Paris."),
-        ],
-    },
     "calendar_json": {
         "rows": [
             {"text": ("Convert the request into a calendar.events.insert call.\n"
@@ -302,17 +239,6 @@ FIXTURES: dict[str, dict] = {
                        "There are no entities."],
         "wrong_but_readable": [json.dumps([{"text": "Warfarin", "type": "Chemical"}])] * 2,
     },
-    "routerbench": {
-        "rows": [
-            {"text": "What is 2 + 2?", "label": "local"},
-            {"text": "Summarise this 200-page antitrust filing.", "label": "route"},
-            {"text": "Spell 'cat'.", "label": "local"},
-            {"text": "Prove the Riemann hypothesis.", "label": "route"},
-        ],
-        "perfect": ["local", "route", "local", "route"],
-        "unreadable": [CHATTY] * 4,
-        "wrong_but_readable": ["route", "local", "route", "local"],
-    },
     # Two of each class, so `minority_f1` is well defined and the all-majority prediction the
     # `wrong_but_readable` row exercises can actually score 0 rather than being undefined.
     "sms_spam": {
@@ -348,17 +274,6 @@ FIXTURES: dict[str, dict] = {
         "unreadable": [CHATTY] * 4,
         "wrong_but_readable": ["not_addressed", "addressed", "not_addressed", "addressed"],
     },
-    "proactive_listening": {
-        "rows": [
-            {"text": "A: I need the code... um...", "label": "interrupt"},
-            {"text": "A: So anyway, as I was saying,", "label": "wait"},
-            {"text": "A: Her number was, hold on,", "label": "interrupt"},
-            {"text": "A: And then we drove home.", "label": "wait"},
-        ],
-        "perfect": ["interrupt", "wait", "interrupt", "wait"],
-        "unreadable": [CHATTY] * 4,
-        "wrong_but_readable": ["wait", "interrupt", "wait", "interrupt"],
-    },
     "clinc150": {
         "rows": [
             {"text": "move money to savings", "label": "transfer"},
@@ -384,11 +299,10 @@ def _no_live_judge(monkeypatch):
     tests assert the CHAIN composes and that format is reported apart from content, never that
     the judge is calibrated.
 
-    Two rubrics need stubbing because two tasks are judged. `dialogsum` reaches its judge through
-    `eval.scorers.generation`'s module-level name; `toolbench` constructs one inside `score` from
-    `eval.judge_client`, so that is where its stub goes.
+    No registered task is judged today (toolbench, the last, was removed 2026-11-11), but the
+    generation scorer's module-level judge name is still stubbed so a judged spec could never reach
+    a live endpoint from this file.
     """
-    import eval.judge_client as judge_client
     import eval.scorers.generation as generation
 
     class _Judge:
@@ -402,28 +316,7 @@ def _no_live_judge(monkeypatch):
                 for _text, gold, prediction in triples
             ]
 
-    # ToolEval's rubric is asked "does this answer solve this query"; the stub answers it by
-    # looking up what the fixture declared the right answer to be for that query.
-    expected_by_query = {
-        row["query"]: row["_expected"] for row in FIXTURES["toolbench"]["rows"]
-    }
-
-    class _ToolEvalJudge:
-        @classmethod
-        def from_config(cls, rubric=None):
-            return cls()
-
-        def score_payloads(self, payloads):
-            return [
-                1.0
-                if str(payload["answer"]).strip()
-                == expected_by_query.get(str(payload["query"]), object())
-                else 0.0
-                for payload in payloads
-            ]
-
     monkeypatch.setattr(generation, "LocalJudgeClient", _Judge)
-    monkeypatch.setattr(judge_client, "LocalJudgeClient", _ToolEvalJudge)
 
 
 def _eval_set(task: str) -> EvalSet:
@@ -639,39 +532,6 @@ def test_eval_result_reports_format_and_no_longer_carries_execution_diagnostics(
     assert not hasattr(result, "execution_diagnostics")
 
 
-@pytest.mark.parametrize("task", TASK_IDS)
-def test_the_endpoint_baseline_scores_through_the_same_spec(task, monkeypatch):
-    """The reference model's zero-shot number becomes the accuracy goal, so it has to be measured
-    by the identical scorer. These were two separate dispatch chains kept in sync by hand."""
-    from eval.endpoint_eval import measure_endpoint_baseline
-
-    outputs = iter(FIXTURES[task]["perfect"])
-
-    def generate(_prompt, temperature=0.0, max_tokens=0):
-        return next(outputs)
-
-    result = measure_endpoint_baseline(
-        _eval_set(task), generate_fn=generate, max_workers=1, log=lambda _m: None,
-    )
-    assert result is not None
-    assert result.f1 == pytest.approx(1.0)
-    assert result.metric == get_task(task).metric_name
-
-
-def test_the_endpoint_baseline_returns_none_when_the_endpoint_is_unreachable(monkeypatch):
-    """None, not zero. A zero is indistinguishable from a reference model that cannot do the task,
-    and the accuracy goal is derived from this number."""
-    import data.synth_client as synth_client
-    from eval.endpoint_eval import measure_endpoint_baseline
-
-    monkeypatch.setattr(synth_client, "get_generate_fn", lambda **_kwargs: None)
-    logs: list[str] = []
-    assert measure_endpoint_baseline(
-        _eval_set("clinc150"), log=logs.append,
-    ) is None
-    assert any("unavailable" in line for line in logs)
-
-
 # --------------------------------------------------------------------------
 # Train/serve prompt parity, per task
 # --------------------------------------------------------------------------
@@ -781,9 +641,9 @@ def test_build_eval_set_shuffles_a_task_with_no_classes():
     from data.eval_set import build_eval_set
 
     rows = [{"text": f"t{i}", "answer": str(i)} for i in range(20)]
-    built = build_eval_set(rows, task="gsm8k", target=5)
+    built = build_eval_set(rows, task="xlam_bfcl", target=5)
     assert len(built.all) == 5
-    assert built.task == "gsm8k"
+    assert built.task == "xlam_bfcl"
 
 
 def test_the_token_reserve_comes_from_the_spec_and_an_override_is_validated():
@@ -810,16 +670,16 @@ def test_an_override_that_leaves_no_prompt_budget_is_rejected(monkeypatch):
 
 def test_scorers_are_not_selected_by_counting_labels():
     """`score_minority_f1` used to be chosen implicitly — `>2 classes` chose macro, otherwise
-    minority — and the returned `metric` string said `macro_f1` either way. So RouterBench reported
-    a minority-class F1 under a macro-F1 label for its whole history."""
+    minority — and the returned `metric` string said `macro_f1` either way. So RouterBench (removed
+    2026-11-11) reported a minority-class F1 under a macro-F1 label for its whole history."""
     from eval.scorers.classification import score_macro_f1, score_minority_f1
 
-    eval_set = _eval_set("routerbench")
-    predictions = FIXTURES["routerbench"]["perfect"]
+    eval_set = _eval_set("sms_spam")
+    predictions = FIXTURES["sms_spam"]["perfect"]
     assert score_macro_f1(eval_set, predictions)["metric"] == "macro_f1"
     assert score_minority_f1(eval_set, predictions)["metric"] == "minority_f1"
     # The task names one of them, and it is the one the harness uses.
-    assert get_task("routerbench").score is score_minority_f1
+    assert get_task("sms_spam").score is score_minority_f1
     assert get_task("clinc150").score is score_macro_f1
 
 
@@ -840,7 +700,7 @@ def test_reasoning_is_recorded_on_failures_rather_than_judged():
 
     result = {"failures": [{"text": "q", "predicted": "18"}]}
     _attach_reasoning_to_failures(
-        result, _eval_set("gsm8k"),
+        result, _eval_set("dialogsum"),
         ["<reasoning>three plus fifteen</reasoning>\n18"], ["18"],
     )
     assert "three plus fifteen" in result["failures"][0]["reasoning"]
@@ -925,11 +785,11 @@ def test_a_spec_declaring_label_definitions_without_a_label_space_is_rejected():
 def test_the_spec_helper_returns_the_frozen_label_vocabulary():
     """`qc_context_labels` is what hands quality control the closed vocabulary, read from the
     FROZEN eval set rather than from whatever rows the run happens to hold."""
-    assert get_task("routerbench").qc_context_labels(_eval_set("routerbench")) == {
-        "local", "route",
+    assert get_task("sms_spam").qc_context_labels(_eval_set("sms_spam")) == {
+        "ham", "spam",
     }
     # No closed space means no vocabulary to police, not an empty one.
-    assert get_task("gsm8k").qc_context_labels(_eval_set("gsm8k")) is None
-    assert get_task("routerbench").qc_context_labels(
+    assert get_task("dialogsum").qc_context_labels(_eval_set("dialogsum")) is None
+    assert get_task("sms_spam").qc_context_labels(
         SimpleNamespace(all=[])
     ) is None

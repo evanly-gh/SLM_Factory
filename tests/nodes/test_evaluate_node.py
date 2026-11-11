@@ -313,7 +313,10 @@ def test_quantized_zero_shot_baseline_uses_selected_deployment_quant(
 
 
 @patch("agent.nodes.evaluate.run_eval")
-def test_a_judged_baseline_reraises_local_judge_infrastructure_error(mock_eval):
+def test_a_judged_baseline_reraises_local_judge_infrastructure_error(mock_eval, monkeypatch):
+    import dataclasses
+
+    import tasks
     from agent.nodes.evaluate import evaluate_node
     from eval.judge_client import JudgeInfrastructureError
 
@@ -321,12 +324,14 @@ def test_a_judged_baseline_reraises_local_judge_infrastructure_error(mock_eval):
     # A judge-scored task: `needs_judge` is on the spec, so a judge outage fails loudly on the
     # tasks that call the judge instead of scoring them zero.
     #
-    # `toolbench` rather than `dialogsum`, which moved off the judge on 2026-09-06 and onto
-    # multi-reference ROUGE. ToolBench is now the only judged task, and it is the right one to
-    # exercise this on: its ToolEval pass rate is DEFINED as a majority vote of judged
-    # assessments, so for it the judge is not a proxy for a metric — it IS the metric, and an
-    # outage genuinely cannot be scored around.
-    state["task"] = "toolbench"
+    # No registered task is judged any more: `dialogsum` moved to multi-reference ROUGE on
+    # 2026-09-06 and `toolbench`, the last judged task, was removed on 2026-11-11. The judge path
+    # is still a general capability, so a judged spec is stood in for the test.
+    monkeypatch.setitem(
+        tasks.TASKS, "dialogsum",
+        dataclasses.replace(tasks.TASKS["dialogsum"], needs_judge=True),
+    )
+    state["task"] = "dialogsum"
     state["iteration"] = 1
     mock_eval.side_effect = [
         JudgeInfrastructureError("local judge unavailable"),

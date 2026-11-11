@@ -303,15 +303,14 @@ def test_the_ner_task_names_the_span_verifier():
 
 
 @pytest.mark.parametrize(
-    "task", ["gsm8k", "routerbench", "proactive_listening", "clinc150"]
+    "task", ["sms_spam", "clinc150"]
 )
 def test_no_verifier_where_none_is_honest(task):
     """`None` is the correct answer here, not a stub, and the field has no default so the weakness
     is visible at the point the decision was made.
 
-    Deciding whether a generated word problem's stated answer is correct requires solving it, which
-    is the task itself; and a classification row inherits a real anchor's label, so there is no
-    answer to verify — only the phrasing, which is what the teacher pass checks.
+    A classification row inherits a real anchor's label, so there is no answer to verify — only the
+    phrasing, which is what the teacher pass checks.
 
     `dialogsum` WAS on this list until 2026-09-08, on the reasoning that summarization quality is
     not decidable by computation. That reasoning was right about QUALITY and wrong as a conclusion:
@@ -322,54 +321,10 @@ def test_no_verifier_where_none_is_honest(task):
     data. See `verify_summarization_row`.
 
     The distinction worth keeping is between "no answer to verify" — genuinely the case for the
-    four tasks above — and "the interesting property is not decidable", which does not imply that
-    nothing about the row is.
+    classification tasks above — and "the interesting property is not decidable", which does not
+    imply that nothing about the row is.
     """
     assert get_task(task).synth_verifier is None
-
-
-TOOLBENCH_TOOLS = [{
-    "name": "get_forecast_for_weather_api",
-    "parameters": {"properties": {"city": "string"}, "required": ["city"], "optional": []},
-}]
-
-
-def _tb_row(answer):
-    return {"text": "forecast for Lisbon?", "query": "forecast for Lisbon?",
-            "answer": answer, "tools": TOOLBENCH_TOOLS}
-
-
-def _tb_path(action="get_forecast_for_weather_api", args='{"city": "Lisbon"}',
-             return_type="give_answer", final="Warm and clear."):
-    return (
-        f"Thought: I will look it up.\nAction: {action}\nAction Input: {args}\n"
-        f"Thought: I can answer.\nAction: Finish\n"
-        f'Action Input: {{"return_type": "{return_type}", "final_answer": "{final}"}}'
-    )
-
-
-def test_the_toolbench_task_names_the_path_verifier():
-    """Behaviourally: the verifier must reject an invented API even though the path is perfectly
-    well-formed text.
-
-    This is the check that earns its keep on this task. The callable surface is per row and drawn
-    from ~16,000 real endpoints, so a teacher asked to invent a solution path will produce a
-    plausible-sounding endpoint that does not exist far more often than it will produce malformed
-    JSON — and the scorer counts that as `undeclared_api`, so the row would be unwinnable.
-    """
-    verifier = get_task("toolbench").synth_verifier
-    assert verifier is not None
-    assert verifier(_tb_row(_tb_path())) is True
-    assert verifier(_tb_row(_tb_path(action="get_forecast_for_made_up_api"))) is False
-    # Complete and declared, but the path gave up rather than answering.
-    assert verifier(_tb_row(_tb_path(return_type="give_up_and_restart"))) is False
-    # An argument the schema does not have.
-    assert verifier(_tb_row(_tb_path(args='{"town": "Lisbon"}'))) is False
-    # Truncated: no terminating Finish at all.
-    assert verifier(_tb_row(
-        "Thought: looking.\nAction: get_forecast_for_weather_api\n"
-        'Action Input: {"city": "Lisbon"}'
-    )) is False
 
 
 def test_exactly_the_format_bound_tasks_have_an_exact_verifier():
@@ -388,7 +343,7 @@ def test_exactly_the_format_bound_tasks_have_an_exact_verifier():
     """
     verified = {name for name, spec in TASKS.items() if spec.synth_verifier is not None}
     assert verified == {
-        "xlam_bfcl", "calendar_json", "ner_bc5cdr", "toolbench", "multiconer", "topv2",
+        "xlam_bfcl", "calendar_json", "ner_bc5cdr", "multiconer", "topv2",
         # Added 2026-09-08. Correctness here is a judgement, but the LABEL SPACE is a fixed list
         # of 28 names the scorer compares exactly — and run 39708679 put 32 invented labels into
         # training because nothing checked it.

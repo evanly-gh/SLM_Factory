@@ -25,8 +25,8 @@ WHY THIS REPLACED THE OLD `dialogsum_samsum` LOADER (2026-09-06)
 
     3. THE JUDGE IS OUT AS THE HEADLINE. An LLM judge score is comparable to no published number,
        is non-deterministic, and costs money on every eval. ROUGE against three references plus
-       BERTScore is comparable, free and repeatable. The judge machinery still exists for
-       `toolbench`, whose pass rate is DEFINED as a judged vote.
+       BERTScore is comparable, free and repeatable. The judge machinery still exists as a
+       general capability for tasks whose metric is DEFINED as a judged vote.
 """
 from __future__ import annotations
 
