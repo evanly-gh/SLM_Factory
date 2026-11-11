@@ -179,9 +179,11 @@ def price(provider: str, model: str, usage: dict, *, batch_discount: bool) -> fl
     from agent.cost import estimate_cost_usd
 
     try:
+        # DeepSeek's prompt_tokens INCLUDE the cached ones; bill those once, at the cache rate.
+        cached = usage.get("cached", 0) if provider == "deepseek" else 0
         cost = estimate_cost_usd(
             provider, model,
-            input_tokens=usage.get("input", 0),
+            input_tokens=max(0, usage.get("input", 0) - cached),
             output_tokens=usage.get("output", 0),
             cache_read_tokens=usage.get("cached", 0),
         )

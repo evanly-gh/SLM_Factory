@@ -1,0 +1,214 @@
+{
+ "contract_version": 1,
+ "generated": "2026-11-05T00:00:00",
+ "complete": true,
+ "not_measured": [],
+ "provenance": "Derived on the cluster from hardware/docs/SCENARIOS.md section H09 (the 25 configurations of the Galaxy S23 profile that meet every H09 limit), keeping per model x bit-width the configuration with the fastest decode, ties to lower energy - filter_pool.py's own rule (rank_by decode). The phone's raw memory measurements are not in this checkout, so filter_pool.py --from could not be rerun here. Validated by deriving M07 the same way: identical to config/filtered_pools/oneplus8pro_m07.json (14 variants, same runtimes and backends). Replace with filter_pool.py's own output when available.",
+ "phone": {
+  "manufacturer": "samsung",
+  "model": "SM-S911U",
+  "soc": "SM8550",
+  "android": "16",
+  "label": "Galaxy S23",
+  "profile": "galaxy_s23",
+  "ram_gib": 6.91
+ },
+ "measurement": {
+  "source": "hardware/docs/SCENARIOS.md#h09",
+  "request": {
+   "prompt_tokens": 175,
+   "answer_tokens": 40,
+   "cached_prefix_tokens": 30
+  },
+  "configs_expected": 104,
+  "configs_meeting_limits": 25
+ },
+ "limits": {
+  "max_peak_memory_mb": 1024.0,
+  "min_prefill_tps": 350.0,
+  "min_decode_tps": 5.0,
+  "max_energy_j": 90.0
+ },
+ "rank_by": "decode",
+ "summary": {
+  "entries": 27,
+  "kept": 11,
+  "removed": 16,
+  "models_kept": 5,
+  "backend": {
+   "cpu": 10,
+   "gpu": 1
+  },
+  "runtime": {
+   "llama.cpp": 2,
+   "mnn": 9
+  }
+ },
+ "filtered_pool": [
+  {
+   "model": "smollm2-135m",
+   "hf_id": "HuggingFaceTB/SmolLM2-135M-Instruct",
+   "bits": 4,
+   "quant": "Q4",
+   "runtime": "mnn",
+   "format": "MNN",
+   "backend": "cpu",
+   "measured": {
+    "peak_memory_mb": 162.0,
+    "prefill_tps": 1518.0,
+    "decode_tps": 224.0,
+    "energy_j": 2.42
+   }
+  },
+  {
+   "model": "smollm2-135m",
+   "hf_id": "HuggingFaceTB/SmolLM2-135M-Instruct",
+   "bits": 8,
+   "quant": "Q8",
+   "runtime": "mnn",
+   "format": "MNN",
+   "backend": "cpu",
+   "measured": {
+    "peak_memory_mb": 230.0,
+    "prefill_tps": 1509.0,
+    "decode_tps": 175.0,
+    "energy_j": 2.91
+   }
+  },
+  {
+   "model": "smollm2-135m",
+   "hf_id": "HuggingFaceTB/SmolLM2-135M-Instruct",
+   "bits": 16,
+   "quant": "F16",
+   "runtime": "mnn",
+   "format": "MNN",
+   "backend": "cpu",
+   "measured": {
+    "peak_memory_mb": 340.0,
+    "prefill_tps": 976.0,
+    "decode_tps": 112.0,
+    "energy_j": 4.15
+   }
+  },
+  {
+   "model": "gemma3-270m",
+   "hf_id": "google/gemma-3-270m-it",
+   "bits": 4,
+   "quant": "Q4_0",
+   "runtime": "llama.cpp",
+   "format": "GGUF",
+   "backend": "cpu",
+   "measured": {
+    "peak_memory_mb": 534.0,
+    "prefill_tps": 799.0,
+    "decode_tps": 133.0,
+    "energy_j": 4.24
+   }
+  },
+  {
+   "model": "gemma3-270m",
+   "hf_id": "google/gemma-3-270m-it",
+   "bits": 8,
+   "quant": "Q8_0",
+   "runtime": "llama.cpp",
+   "format": "GGUF",
+   "backend": "cpu",
+   "measured": {
+    "peak_memory_mb": 634.0,
+    "prefill_tps": 790.0,
+    "decode_tps": 118.0,
+    "energy_j": 4.82
+   }
+  },
+  {
+   "model": "smollm2-360m",
+   "hf_id": "HuggingFaceTB/SmolLM2-360M-Instruct",
+   "bits": 4,
+   "quant": "Q4",
+   "runtime": "mnn",
+   "format": "MNN",
+   "backend": "cpu",
+   "measured": {
+    "peak_memory_mb": 323.0,
+    "prefill_tps": 554.0,
+    "decode_tps": 115.0,
+    "energy_j": 5.2
+   }
+  },
+  {
+   "model": "smollm2-360m",
+   "hf_id": "HuggingFaceTB/SmolLM2-360M-Instruct",
+   "bits": 8,
+   "quant": "Q8",
+   "runtime": "mnn",
+   "format": "MNN",
+   "backend": "cpu",
+   "measured": {
+    "peak_memory_mb": 499.0,
+    "prefill_tps": 553.0,
+    "decode_tps": 79.9,
+    "energy_j": 6.6
+   }
+  },
+  {
+   "model": "smollm2-360m",
+   "hf_id": "HuggingFaceTB/SmolLM2-360M-Instruct",
+   "bits": 16,
+   "quant": "F16",
+   "runtime": "mnn",
+   "format": "MNN",
+   "backend": "cpu",
+   "measured": {
+    "peak_memory_mb": 826.0,
+    "prefill_tps": 405.0,
+    "decode_tps": 40.8,
+    "energy_j": 10.8
+   }
+  },
+  {
+   "model": "qwen3-0.6b",
+   "hf_id": "Qwen/Qwen3-0.6B",
+   "bits": 4,
+   "quant": "Q4",
+   "runtime": "mnn",
+   "format": "MNN",
+   "backend": "cpu",
+   "measured": {
+    "peak_memory_mb": 548.0,
+    "prefill_tps": 371.0,
+    "decode_tps": 72.7,
+    "energy_j": 7.96
+   }
+  },
+  {
+   "model": "qwen3-0.6b",
+   "hf_id": "Qwen/Qwen3-0.6B",
+   "bits": 8,
+   "quant": "Q8",
+   "runtime": "mnn",
+   "format": "MNN",
+   "backend": "cpu",
+   "measured": {
+    "peak_memory_mb": 856.0,
+    "prefill_tps": 368.0,
+    "decode_tps": 49.8,
+    "energy_j": 10.4
+   }
+  },
+  {
+   "model": "qwen3.5-0.8b",
+   "hf_id": "Qwen/Qwen3.5-0.8B",
+   "bits": 4,
+   "quant": "Q4",
+   "runtime": "mnn",
+   "format": "MNN",
+   "backend": "gpu",
+   "measured": {
+    "peak_memory_mb": 712.0,
+    "prefill_tps": 454.0,
+    "decode_tps": 46.1,
+    "energy_j": 5.67
+   }
+  }
+ ]
+}

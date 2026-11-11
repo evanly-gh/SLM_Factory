@@ -388,8 +388,8 @@ def escalate_node(state: AgentState) -> AgentState:
     # curriculum you already have, and it could not answer that question.
     #
     # `hyperparameter` is the value chosen because curate already treats it as "dataset held fixed";
-    # the train node carries the best-known config forward unchanged, so this is a retrain of the
-    # SAME data with the SAME settings on the NEW model. Synthesis is still fully available from
+    # escalation clears the search graph, so the train node starts the new tier from the default
+    # hyperparameters: this is a retrain of the SAME data with default settings on the NEW model. Synthesis is still fully available from
     # iteration 2 onward, chosen deliberately by the orchestrator against a clean baseline.
     state["last_intervention"] = "hyperparameter"
     state["last_hypothesis"] = (

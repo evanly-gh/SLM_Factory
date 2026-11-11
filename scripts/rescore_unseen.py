@@ -108,6 +108,10 @@ def main(argv=None) -> int:
                          "sampling noise of a selection-sized score, so the selection score can be "
                          "placed against it. With --control-base the base model scores every chunk too")
     ap.add_argument("--max-chunks", type=int, default=5)
+    ap.add_argument("--external-rows", default=None,
+                    help="JSONL of rows from ANOTHER dataset, each with a `set` index: score each set "
+                         "(factory, and base with --control-base) instead of the task's own unseen "
+                         "rows. Rows are given as-is; dedup against the task's data is the caller's job")
     args = ap.parse_args(argv)
 
     best = best_model(args.run_dir)
@@ -218,14 +222,26 @@ def main(argv=None) -> int:
         report["replay_selection"] = score(selection, "replay on selection rows")
     rng = random.Random(args.seed)
 
-    if args.chunk_rows:
+    if args.chunk_rows or args.external_rows:
         import statistics
-        pool = list(unseen)
-        rng.shuffle(pool)
-        size = args.chunk_rows
-        if len(pool) < 2 * size:  # too few rows for two full chunks: halves (noise scaled below)
-            size = len(pool) // 2
-        chunks = [pool[i * size:(i + 1) * size] for i in range(min(args.max_chunks, len(pool) // size))]
+        if args.external_rows:
+            ext = [json.loads(line) for line in open(args.external_rows) if line.strip()]
+            by_set = {}
+            for r in ext:
+                by_set.setdefault(r["set"], []).append({k: v for k, v in r.items()
+                                                        if k not in ("set", "source")})
+            chunks = [by_set[k] for k in sorted(by_set)]
+            size = len(chunks[0])
+            report["external_rows"] = args.external_rows
+            log(f"external rows: {len(chunks)} set(s) from {args.external_rows}")
+        else:
+            pool = list(unseen)
+            rng.shuffle(pool)
+            size = args.chunk_rows
+            if len(pool) < 2 * size:  # too few rows for two full chunks: halves (noise scaled below)
+                size = len(pool) // 2
+            chunks = [pool[i * size:(i + 1) * size]
+                      for i in range(min(args.max_chunks, len(pool) // size))]
         base_art = None
         if args.control_base and quant:
             base_art = _build_quant_artifact_for_eval(best["model_id"], best["model_id"], quant,
@@ -268,15 +284,18 @@ def main(argv=None) -> int:
         samples[name] = sample
         report[name] = score(sample, f"{name} sample (seed {args.seed})")
 
-    if args.control_base and "unseen" in samples:
+    if args.control_base and samples:
         base_art = None
         if quant:
             base_art = _build_quant_artifact_for_eval(best["model_id"], best["model_id"], quant,
                                                       f"{best['model_id']} [{quant}] base")
         report["base_selection"] = score(selection, "UNTRAINED base on selection rows",
                                          weights=best["model_id"], art=base_art)
-        report["base_unseen"] = score(samples["unseen"], "UNTRAINED base on unseen sample",
-                                      weights=best["model_id"], art=base_art)
+        # Every scored pool gets the base model on the SAME rows, so fine-tuned vs base is paired
+        # even where the pool itself is not distribution-matched (unused training-split rows).
+        for name, sample in samples.items():
+            report[f"base_{name}"] = score(sample, f"UNTRAINED base on {name} sample",
+                                           weights=best["model_id"], art=base_art)
 
     os.makedirs(os.path.dirname(os.path.abspath(args.out)), exist_ok=True)
     with open(args.out, "w") as fh:

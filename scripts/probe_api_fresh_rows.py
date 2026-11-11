@@ -84,20 +84,52 @@ def main(argv=None) -> int:
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--concurrency", type=int, default=4)
     ap.add_argument("--out", default=None)
+    ap.add_argument("--shots", type=int, default=0, choices=[0, 5],
+                    help="5: prepend the teacher's five demonstrations, exactly as "
+                         "scripts/probe_api_fewshot.py does on the held-out set")
+    ap.add_argument("--rows-file", default=None,
+                    help="score the sets in this JSONL (rows with a `set` index; another dataset) "
+                         "instead of rebuilding the task's own fresh chunks")
     args = ap.parse_args(argv)
 
     run = os.path.basename(os.path.normpath(args.run_dir))
-    factory_path = f"logs/reports/unseen/{args.task}__{run}_chunks.json"
-    factory = json.load(open(factory_path))
-    spec, chunks = fresh_chunks(args.task, args.run_dir, args.chunk_rows, args.max_chunks, args.seed)
-    fs = factory["chunk_summary"]
-    if [len(c) for c in chunks] != [c["factory"]["n"] for c in factory["chunks"]]:
-        raise SystemExit(f"chunk sizes {[len(c) for c in chunks]} differ from {factory_path}; "
-                         "the rows would not be the factory's rows — stopping")
-    _log(f"{args.task}: {len(chunks)} chunk(s) of {len(chunks[0])} rows, matching {factory_path}")
+    if args.rows_file:
+        from tasks import get_task
+        spec = get_task(args.task)
+        by_set = {}
+        for line in open(args.rows_file):
+            if line.strip():
+                r = json.loads(line)
+                by_set.setdefault(r["set"], []).append(
+                    {k: v for k, v in r.items() if k not in ("set", "source")})
+        chunks = [by_set[k] for k in sorted(by_set)]
+        fs = {"factory_scores": None, "factory_mean": float("nan"), "selection_score": None}
+        _log(f"{args.task}: {len(chunks)} external set(s) from {args.rows_file}")
+    else:
+        factory_path = f"logs/reports/unseen/{args.task}__{run}_chunks.json"
+        factory = json.load(open(factory_path))
+        spec, chunks = fresh_chunks(args.task, args.run_dir, args.chunk_rows, args.max_chunks, args.seed)
+        fs = factory["chunk_summary"]
+        if [len(c) for c in chunks] != [c["factory"]["n"] for c in factory["chunks"]]:
+            raise SystemExit(f"chunk sizes {[len(c) for c in chunks]} differ from {factory_path}; "
+                             "the rows would not be the factory's rows — stopping")
+        _log(f"{args.task}: {len(chunks)} chunk(s) of {len(chunks[0])} rows, matching {factory_path}")
 
     rows = [r for c in chunks for r in c]
     prompts = [str(p) for p in spec.build_prompts(EvalSet(all=rows, task=args.task))]
+    prefix = ""
+    if args.shots:
+        from agent.teacher_fitness import (_QUESTION_HEADER, _demo_block, _training_context,
+                                           fit_demonstrations)
+        from tasks import get_task
+        full = get_task(args.task)
+        train, _ = full.load(max_train=full.initial_train_cap, max_test=1, log=lambda *a: None)
+        pool = [r for r in train if isinstance(r, dict)]
+        demos = fit_demonstrations(pool, args.shots, budget_chars=10**9)
+        prefix = (_demo_block(demos, spec, _training_context(pool, spec)) + "\n\n"
+                  + _QUESTION_HEADER + "\n")
+        prompts = [prefix + p for p in prompts]
+        _log(f"  {len(demos)}-shot prefix, {len(prefix):,} chars")
     out = {"task": args.task, "run_dir": args.run_dir, "chunk_rows": len(chunks[0]),
            "n_chunks": len(chunks), "factory_scores": fs["factory_scores"],
            "factory_mean": fs["factory_mean"], "factory_selection": fs["selection_score"],
@@ -105,12 +137,19 @@ def main(argv=None) -> int:
     total = 0.0
     for which in args.models:
         started = time.monotonic()
-        if which == "anthropic":
+        if which == "anthropic" and prefix:
+            from scripts.probe_api_fewshot import run_anthropic_cached
+            raw, usage = run_anthropic_cached(spec, prefix, prompts)
+            model_id, provider, discounted = ANTHROPIC_MODEL, "anthropic", True
+        elif which == "anthropic":
             raw, usage = run_anthropic(spec, prompts)
             model_id, provider, discounted = ANTHROPIC_MODEL, "anthropic", True
         else:
             raw, usage = run_deepseek(spec, prompts, args.concurrency)
             model_id, provider, discounted = DEEPSEEK_MODEL, "deepseek", False
+        path = args.out or f"logs/reports/unseen/{args.task}__{run}_frontier.json"
+        with open(path.replace(".json", f"__{which}_raw.json"), "w") as fh:  # before scoring
+            json.dump({"usage": usage, "outputs": raw}, fh)
         scores, valid, i = [], [], 0
         for c in chunks:
             es = EvalSet(all=c, task=args.task)
@@ -119,14 +158,16 @@ def main(argv=None) -> int:
             valid.append(scored.get("format_valid"))
             i += len(c)
         usd = price(provider, model_id, usage, batch_discount=discounted)
+        if usage.get("cache_write"):  # 1.25x base input, at the batch discount
+            usd += price(provider, model_id, {"input": usage["cache_write"] * 1.25},
+                         batch_discount=discounted)
         total += 0.0 if usd != usd else usd
         out["models"][model_id] = {"scores": scores, "mean": round(statistics.mean(scores), 6),
                                    "format_valid": valid, "usd": usd,
                                    "seconds": round(time.monotonic() - started, 1),
                                    **{f"tok_{k}": v for k, v in usage.items()}}
         _log(f"  {model_id}: chunks {scores} mean {statistics.mean(scores):.4f} "
-             f"(factory mean {fs['factory_mean']:.4f}) ${usd:.2f}, {usage.get('errors', 0)} error(s)")
-        path = args.out or f"logs/reports/unseen/{args.task}__{run}_frontier.json"
+             f"(factory mean {fs['factory_mean']}) ${usd:.2f}, {usage.get('errors', 0)} error(s)")
         with open(path, "w") as fh:
             json.dump(out, fh, indent=1)
     _log(f"wrote {path} — total ${total:.2f}")
