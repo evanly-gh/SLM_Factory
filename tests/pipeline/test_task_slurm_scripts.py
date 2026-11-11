@@ -38,10 +38,7 @@ L40S_BENCHMARK_SCRIPTS = {
     "run_multiconer_l40s.slurm": "multiconer",
     "run_gec_bea19_l40s.slurm": "gec_bea19",
     "run_goemotions_l40s.slurm": "goemotions",
-    # Added 2026-10-06: the address gate from bubble-agent-pipeline's address-bench, on a vendored
-    # corpus with no HuggingFace mirror. Scored with a recall-weighted F2 rather than a symmetric
-    # F1, because a gate that misses an addressed turn is worse than one that wakes up for nothing.
-    "run_address_bench_l40s.slurm": "address_bench",
+    # address_bench (added 2026-10-06) and its launcher live on the `address-bench` branch.
 }
 
 L40S_TASK_SCRIPTS = tuple(L40S_BENCHMARK_SCRIPTS)

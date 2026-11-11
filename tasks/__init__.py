@@ -6,7 +6,7 @@ Tasks in three categories:
                          goemotions
     format_bound         xlam_bfcl             calendar_json            ner_bc5cdr
                          topv2                 multiconer
-    out_of_distribution  clinc150              address_bench
+    out_of_distribution  clinc150
 
 Adding another means writing one module here and registering it below. Nothing else in the
 pipeline dispatches on task identity, so there is no second place to remember — which is the
@@ -18,7 +18,6 @@ from __future__ import annotations
 from tasks.spec import MiningSource, TaskSpec, spec_field_names
 
 from tasks import (
-    address_bench,
     calendar_json,
     clinc150,
     dialogsum,
@@ -42,7 +41,6 @@ _MODULES = (
     multiconer,
     gec_bea19,
     goemotions,
-    address_bench,
 )
 
 TASKS: dict[str, TaskSpec] = {}

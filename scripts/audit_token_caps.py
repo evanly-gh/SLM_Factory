@@ -78,8 +78,8 @@ INVENTORY: tuple[Cap, ...] = (
     Cap("data/curriculum.py:965", "teacher's label-verification verdict", "global ceiling", SAFE,
         "was 120: the same fail-open truncation, 40 tokens tighter."),
     Cap("data/curriculum.py:1106", "one new synthesized utterance", "global ceiling", SAFE,
-        "was 200 (~800 chars). This path serves the CLOSED-LABEL tasks only (clinc150, sms_spam, "
-        "address_bench), whose utterances are one sentence, so 200 was ample — "
+        "was 200 (~800 chars). This path serves the CLOSED-LABEL tasks only (clinc150, sms_spam), "
+        "whose utterances are one sentence, so 200 was ample — "
         "ner_bc5cdr does NOT route here despite the old comment saying so. Still replaced, because "
         "'ample for the tasks that happen to use it today' is exactly the reasoning that produced "
         "the 512."),
@@ -100,7 +100,7 @@ INVENTORY: tuple[Cap, ...] = (
         "judging its own guess (B269)."),
     # --- evaluation: the student's reserve, which CANNOT be globally raised ------------------
     Cap("tasks/*.py:max_new_tokens", "student's eval output reserve, per task",
-        "16 (address_bench) - 512 (dialogsum, ner_bc5cdr, multiconer, topv2)", BOUNDED,
+        "50 (clinc150, sms_spam) - 512 (dialogsum, ner_bc5cdr, multiconer, topv2)", BOUNDED,
         "deliberately NOT routed through the global ceiling. The reserve and the prompt share one "
         "window — input budget is `max_seq_length - max_new_tokens`, and eval_output_token_reserve "
         "RAISES when a reserve leaves no prompt room — so raising it does not uncap the model, it "
