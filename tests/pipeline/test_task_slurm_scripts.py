@@ -1041,9 +1041,12 @@ def test_all_task_scripts_and_shared_body_have_valid_bash_syntax():
 
 
 def test_pipeline_docs_explain_continuous_requeue_guard_semantics():
-    source = (PIPELINE_DIR.parents[1] / "docs" / "PIPELINE.md").read_text(
-        encoding="utf-8"
-    )
+    doc = PIPELINE_DIR.parents[1] / "docs" / "PIPELINE.md"
+    if not doc.is_file():
+        import pytest
+
+        pytest.skip("docs/ is local-only (gitignored); PIPELINE.md is not in this checkout")
+    source = doc.read_text(encoding="utf-8")
 
     assert "checkpoint/requeue-enabled weeklong jobs" in source
     assert "SLM_MAX_WALLCLOCK_S=0" in source
