@@ -348,6 +348,19 @@ TASK_FIXTURES = {
     # English, so the vocabulary reaching the verifier prompt is what stops the teacher reading it
     # as the food and rejecting good rows — the RouterBench `local` failure in a new costume.
     "sms_spam": (SMS_ROWS, ("ham", "spam")),
+    # Both labels are opaque without the gate's definition — `not_addressed` especially, which a
+    # teacher left to guess reads as "nobody was addressed" rather than "addressed to a person".
+    "address_bench": (
+        [
+            {"text": 'Conversation so far:\n(nothing yet)\n\n'
+                     'Latest line, User: "Glasses, set a timer for ten minutes."',
+             "label": "addressed"},
+            {"text": 'Conversation so far:\nSpeaker2: where are we meeting\n\n'
+                     'Latest line, User: "the usual place, I already told Sam"',
+             "label": "not_addressed"},
+        ],
+        ("addressed", "not_addressed"),
+    ),
     # Span vocabulary rather than a class list: BC5CDR carries its gold in `entities`. The `answer`
     # names only the span TEXTS, so the two type names can only have reached the prompt through the
     # task-context block.
@@ -449,7 +462,7 @@ def test_the_fixture_table_covers_the_whole_registry():
     than silently inheriting no coverage, which is the shape of failure the task registry exists to
     prevent (a task inheriting whatever an `else` branch did)."""
     assert sorted(TASK_FIXTURES) == sorted(task_names())
-    assert len(TASK_FIXTURES) == 10
+    assert len(TASK_FIXTURES) == 11
 
 
 def _verifier_prompt_for(task: str, rows: list[dict]) -> str:

@@ -65,7 +65,11 @@ The task registry is `tasks/__init__.py`, with one module per task:
 |---|---|
 | in-distribution | `dialogsum`, `sms_spam`, `gec_bea19`, `goemotions` |
 | format-bound | `xlam_bfcl`, `calendar_json`, `ner_bc5cdr`, `topv2`, `multiconer` |
-| out-of-distribution | `clinc150` |
+| out-of-distribution | `clinc150`, `address_bench` |
+
+This branch adds `address_bench`, a conversational address gate (is a transcript line addressed to
+the assistant?), scored by F2 on the `addressed` class. Run 41497353 converged on Qwen3.5-0.8B Q4_K_M
+at F2 0.908 (recall 0.962, precision 0.742).
 
 **Capabilities not used in the paper runs** (all ten tasks have them switched off, but they work if a
 task turns them on):
