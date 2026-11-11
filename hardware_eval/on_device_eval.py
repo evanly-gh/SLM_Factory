@@ -9,7 +9,8 @@ This module unifies what used to be three disconnected pieces:
   - hardware_eval/run_autobench.py   (real SmolChat/logcat metrics, CLI-only)
 
 The metric-gathering logic from run_autobench now lives here as an importable
-engine; run_autobench.py is a thin CLI wrapper around it.
+engine. (Its thin CLI wrapper, hardware_eval/run_autobench.py, was removed 2026-11-11;
+the phone benchmarking CLI is hardware/Benchmark-Harness/run_autobench.py.)
 
 Backends (choose via env SLM_HW_BACKEND, default "unmeasured"):
   - "unmeasured"   : returns all-None metrics. No hardware, and NO estimates. This is
