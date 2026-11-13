@@ -1,7 +1,6 @@
 {
  "started": "2026-10-26T18:06:47.205539",
  "device": {
-  "serial": "10.0.0.239:5555",
   "manufacturer": "OnePlus",
   "model": "CPH2749",
   "device": "OP611FL1",
@@ -82,7 +81,6 @@
   }
  },
  "params": {
-  "serial": "10.0.0.239:5555",
   "ref": "pinned",
   "models": [
    "qwen3-0.6b"

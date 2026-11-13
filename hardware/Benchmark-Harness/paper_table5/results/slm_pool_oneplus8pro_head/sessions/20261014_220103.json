@@ -1,7 +1,6 @@
 {
  "started": "2026-10-14T22:01:03.197612",
  "device": {
-  "serial": "10.0.0.36:5555",
   "manufacturer": "OnePlus",
   "model": "IN2025",
   "device": "OnePlus8Pro",
@@ -75,7 +74,6 @@
   "battery_files": []
  },
  "params": {
-  "serial": "10.0.0.36:5555",
   "ref": "head",
   "models": [
    "qwen3.5-0.8b",

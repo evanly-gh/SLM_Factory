@@ -4,7 +4,6 @@
  "complete": true,
  "not_measured": [],
  "phone": {
-  "serial": "10.125.50.235:5555",
   "manufacturer": "OnePlus",
   "model": "IN2025",
   "soc": "SM8250",

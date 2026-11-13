@@ -1,7 +1,6 @@
 {
  "started": "2026-10-07T02:22:34.206544",
  "device": {
-  "serial": "10.18.65.248:33569",
   "manufacturer": "samsung",
   "model": "SM-S911U",
   "device": "dm1q",
@@ -76,7 +75,6 @@
   "battery_files": []
  },
  "params": {
-  "serial": "10.18.65.248:33569",
   "ref": "pinned",
   "models": [
    "llama3.2-1b",

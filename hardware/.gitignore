@@ -91,3 +91,5 @@ Benchmark-Harness/tools/bin/
 *.png
 *.txt
 *.json
+# Output of run_model_sweep.sh (regenerable; the old sweep was removed 2026-11-12).
+Benchmark-Harness/sweep_results/

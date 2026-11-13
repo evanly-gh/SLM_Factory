@@ -1,7 +1,6 @@
 {
  "started": "2026-10-12T20:19:31.079660",
  "device": {
-  "serial": "10.0.0.239:5555",
   "manufacturer": "OnePlus",
   "model": "CPH2749",
   "device": "OP611FL1",
@@ -73,7 +72,6 @@
   "battery_files": []
  },
  "params": {
-  "serial": "10.0.0.239:5555",
   "ref": "pinned",
   "models": [
    "qwen3-0.6b",

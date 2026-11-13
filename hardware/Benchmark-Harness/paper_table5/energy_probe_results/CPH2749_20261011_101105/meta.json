@@ -1,6 +1,5 @@
 {
  "discovery": {
-  "serial": "10.0.0.239:5555",
   "manufacturer": "OnePlus",
   "model": "CPH2749",
   "soc": "SM8850",
@@ -58,7 +57,6 @@
  },
  "params": {
   "cmd": "collect",
-  "serial": "10.0.0.239:5555",
   "repeats": 4,
   "window": 45,
   "rest": 20,

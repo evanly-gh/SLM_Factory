@@ -1,7 +1,6 @@
 {
  "started": "2026-10-15T03:06:22.074422",
  "device": {
-  "serial": "10.0.0.49:5555",
   "manufacturer": "Xiaomi",
   "model": "M2006C3LG",
   "device": "dandelion",
@@ -73,7 +72,6 @@
   ]
  },
  "params": {
-  "serial": "10.0.0.49:5555",
   "ref": "head",
   "models": [
    "qwen3.5-0.8b",

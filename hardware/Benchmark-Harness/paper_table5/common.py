@@ -92,10 +92,16 @@ def match_profile(info: dict) -> dict:
             "paper_column": None, "max_temp_c": 28.0, "generated": True}
 
 
+def recorded_serial(serial: str) -> str:
+    """The adb serial as it goes into a results file. A wireless `ip:port` serial is the phone's
+    address on the local network, which says nothing about the measurement, so it is not recorded."""
+    return "wireless-adb" if re.fullmatch(r"\d{1,3}(?:\.\d{1,3}){3}:\d+", serial) else serial
+
+
 def device_info(adb) -> dict:
     prop = lambda k: adb.sh(f"getprop {k}").strip()  # noqa: E731
     info = {
-        "serial": adb.serial,
+        "serial": recorded_serial(adb.serial),
         "manufacturer": prop("ro.product.manufacturer"),
         "model": prop("ro.product.model"),
         "device": prop("ro.product.device"),

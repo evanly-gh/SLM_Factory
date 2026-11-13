@@ -42,7 +42,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parent))
 import bench_common  # noqa: E402
-from common import PanelOff, ScreenKeeper, WakeHolder, is_wireless_serial  # noqa: E402
+from common import PanelOff, ScreenKeeper, WakeHolder, is_wireless_serial, recorded_serial  # noqa: E402
 from devenv import Adb, list_devices  # noqa: E402
 
 DEV_DIR = "/data/local/tmp/energy_probe"
@@ -83,7 +83,7 @@ duration_ms: 86400000
 def discover(adb: Adb) -> dict:
     prop = lambda k: adb.sh(f"getprop {k}").strip()  # noqa: E731
     info = {
-        "serial": adb.serial,
+        "serial": recorded_serial(adb.serial),
         "manufacturer": prop("ro.product.manufacturer"),
         "model": prop("ro.product.model"),
         "soc": prop("ro.soc.model") or prop("ro.board.platform"),
