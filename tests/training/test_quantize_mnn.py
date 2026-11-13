@@ -17,6 +17,26 @@ import pytest
 import training.quantize_mnn as mnn
 
 
+@pytest.fixture(autouse=True)
+def _stub_toolchain(monkeypatch, tmp_path_factory):
+    """A toolchain that exists, so validation can record its identity without a real MNN build.
+
+    Validation calls `resolve_toolchain().versions()`, so without this every validation test would
+    need `scripts/setup_mnn_env.sh` to have been run. The discovery tests below override these.
+    """
+    root = tmp_path_factory.mktemp("mnn_stub")
+    llmexport = root / "llmexport.py"
+    llmexport.write_text("# exporter")
+    for name in ("MNNConvert", "python"):
+        tool = root / name
+        tool.write_text("#!/bin/sh\n")
+        tool.chmod(0o755)
+    monkeypatch.setenv("SLM_MNN_ROOT", str(root))
+    monkeypatch.setenv("SLM_MNN_LLMEXPORT", str(llmexport))
+    monkeypatch.setenv("SLM_MNN_CONVERT_BIN", str(root / "MNNConvert"))
+    monkeypatch.setenv("SLM_MNN_PYTHON", str(root / "python"))
+
+
 def _write_artifact(
     directory, quant_bit=4, lm_quant_bit=None, weight=b"weights", graph=b"graph"
 ):

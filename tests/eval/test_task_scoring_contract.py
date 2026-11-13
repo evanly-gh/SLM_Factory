@@ -268,6 +268,32 @@ FIXTURES: dict[str, dict] = {
 TASK_IDS = sorted(FIXTURES)
 
 
+def _errant_available() -> bool:
+    from eval.scorers import gec
+
+    try:
+        gec.errant_bin("errant_parallel")
+        return True
+    except gec.ErrantUnavailable:
+        return False
+
+
+# Scoring gec_bea19 runs the real ERRANT CLI (a stub would test nothing), so its scored cases are
+# skipped until `scripts/setup_metric_envs.sh` has built `.venv_errant`, as in test_gec_bea19.py.
+SCORED_TASK_IDS = [
+    pytest.param(
+        task,
+        marks=pytest.mark.skipif(
+            not _errant_available(),
+            reason="ERRANT venv not built; run bash scripts/setup_metric_envs.sh",
+        ),
+    )
+    if task == "gec_bea19"
+    else task
+    for task in TASK_IDS
+]
+
+
 @pytest.fixture(autouse=True)
 def _no_live_judge(monkeypatch):
     """The judge is a hosted model. It is replaced with a scorer that reads the gold, so a judged
@@ -330,7 +356,7 @@ def test_prompts_are_built_one_per_row_and_contain_the_row(task):
         assert row["text"] in prompt, f"{task} prompt does not carry the row's own text"
 
 
-@pytest.mark.parametrize("task", TASK_IDS)
+@pytest.mark.parametrize("task", SCORED_TASK_IDS)
 def test_a_perfect_answer_round_trips_to_a_full_score(task):
     """The end-to-end property: the output a correct model emits, fed back through this task's own
     extractor and scorer, scores 1.0. A task whose three callables do not compose fails here."""
@@ -340,7 +366,7 @@ def test_a_perfect_answer_round_trips_to_a_full_score(task):
     assert result["failures"] == []
 
 
-@pytest.mark.parametrize("task", TASK_IDS)
+@pytest.mark.parametrize("task", SCORED_TASK_IDS)
 def test_the_result_reports_both_a_content_score_and_a_format_score(task):
     """`format_valid` at the TOP LEVEL and inside `per_class`. Both, because `EvalResult` reads the
     top level while the per-class block is what reaches the report and the orchestrator."""
@@ -355,7 +381,7 @@ def test_the_result_reports_both_a_content_score_and_a_format_score(task):
     )
 
 
-@pytest.mark.parametrize("task", TASK_IDS)
+@pytest.mark.parametrize("task", SCORED_TASK_IDS)
 def test_an_unreadable_prediction_lowers_the_format_score(task):
     """Output the extractor cannot read at all is not a prediction, and saying so is the whole
     point of the second number."""
@@ -364,7 +390,7 @@ def test_an_unreadable_prediction_lowers_the_format_score(task):
     assert result["f1"] == pytest.approx(0.0)
 
 
-@pytest.mark.parametrize("task", TASK_IDS)
+@pytest.mark.parametrize("task", SCORED_TASK_IDS)
 def test_a_readable_but_wrong_prediction_does_not_lower_the_format_score(task):
     """The distinction that makes the pair of numbers diagnostic. A model that answers in the right
     shape and picks the wrong content has a DATA problem; collapsing it into the format number
@@ -375,7 +401,7 @@ def test_a_readable_but_wrong_prediction_does_not_lower_the_format_score(task):
     assert result["failures"], f"{task} recorded no failure for a wrong answer"
 
 
-@pytest.mark.parametrize("task", TASK_IDS)
+@pytest.mark.parametrize("task", SCORED_TASK_IDS)
 def test_failures_carry_the_row_and_the_prediction(task):
     """Surgical synthesis and the per-difficulty report both read failure records; one without the
     row's own text cannot be attributed to a difficulty bucket or anchored on."""
@@ -390,7 +416,7 @@ def test_failures_carry_the_row_and_the_prediction(task):
 # --------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("task", TASK_IDS)
+@pytest.mark.parametrize("task", SCORED_TASK_IDS)
 def test_every_failure_gets_a_category_from_the_task_taxonomy(task):
     """Every open-ended failure used to be reported as the constant confusion pair
     `gold_verifier -> incorrect`, whose count is the failure count the orchestrator already had —
@@ -406,7 +432,7 @@ def test_every_failure_gets_a_category_from_the_task_taxonomy(task):
             assert category != "gold_verifier", f"{task} still reports the gold_verifier constant"
 
 
-@pytest.mark.parametrize("task", TASK_IDS)
+@pytest.mark.parametrize("task", SCORED_TASK_IDS)
 def test_unreadable_and_wrong_are_different_categories(task):
     """They call for different interventions — a prompt/template fix versus more data — so a
     taxonomy that gives them the same name tells the orchestrator nothing it can act on."""
@@ -463,7 +489,7 @@ def test_function_call_distinguishes_unparseable_output_from_an_empty_call_list(
 # --------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("task", TASK_IDS)
+@pytest.mark.parametrize("task", SCORED_TASK_IDS)
 def test_run_eval_takes_the_task_from_the_eval_set_and_returns_both_numbers(task, monkeypatch):
     """`run_eval` no longer takes a task argument: the eval set is the thing that knows which rows
     these are, so the two can no longer be passed inconsistently.
