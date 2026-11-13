@@ -26,7 +26,7 @@ from dataclasses import dataclass, field
 
 # Row provenances that define the task's true length distribution: real rows from the benchmark's
 # own train split. Mined and synthesized rows do not — a teacher that rambles would otherwise raise
-# the median and license its own outliers (B260).
+# the median and license its own outliers.
 TRUSTED_LENGTH_PROVENANCE = frozenset({"train_anchor", "resample"})
 
 
@@ -89,8 +89,8 @@ def label_space(strict: bool = True) -> QCStep:
     """Drop rows whose label is outside the task's closed vocabulary.
 
     A row whose label cannot appear in the eval set can never be scored against it, so it is pure
-    training noise. This is where mined sources carrying raw integer class ids get removed
-    (B222/B229). No-op when the task has no closed vocabulary.
+    training noise. This is where mined sources carrying raw integer class ids get removed.
+    No-op when the task has no closed vocabulary.
     """
 
     def step(rows: list[dict], ctx: QCContext) -> list[dict]:
@@ -140,7 +140,7 @@ def length_outliers(key: str = "text", max_ratio: float = 3.0) -> QCStep:
     """Drop rows whose `key` is longer than `max_ratio` × the trusted median.
 
     The median is computed over TRUSTED rows only — the task's own real training data — so a
-    verbose teacher cannot raise the bar and license its own outliers (B260). The `key` is stated
+    verbose teacher cannot raise the bar and license its own outliers. The `key` is stated
     by the task; guessing it is what made this a no-op for gsm8k and dialogsum.
     """
 

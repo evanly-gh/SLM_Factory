@@ -1,5 +1,5 @@
 #!/bin/bash
-# Rebuild llama-cpp-python with CUDA so GGUF accuracy eval runs on the GPU (B161). The
+# Rebuild llama-cpp-python with CUDA so GGUF accuracy eval runs on the GPU. The
 # quantized GGUF's ACCURACY is identical CPU vs GPU (same weights); GPU is just ~10-50x
 # faster, which makes the 800-example eval tractable inside the loop. Without this, GGUF eval
 # still works but on CPU (slow) — training/slm_helpers.py falls back automatically.
@@ -48,7 +48,7 @@ echo "[build] CUDACXX=$CUDACXX  CUDA_HOME=$CUDA_HOME"
 # GGML_NATIVE=OFF: build a PORTABLE CPU backend instead of `-march=native`. The GGUF eval
 # offloads all layers to CUDA (SLM_GGUF_GPU_LAYERS=-1), so CPU SIMD is irrelevant here, and
 # `-march=native` makes gcc-12 emit AVX512-BF16 (`vdpbf16ps`) that the node's old system
-# assembler rejects with "no such instruction", failing the whole build (B199).
+# assembler rejects with "no such instruction", failing the whole build.
 export CMAKE_ARGS="-DGGML_CUDA=on -DCMAKE_CUDA_COMPILER=$CUDACXX -DGGML_NATIVE=OFF"
 export FORCE_CMAKE=1
 export TMPDIR="$SLM_TMP_DIR"

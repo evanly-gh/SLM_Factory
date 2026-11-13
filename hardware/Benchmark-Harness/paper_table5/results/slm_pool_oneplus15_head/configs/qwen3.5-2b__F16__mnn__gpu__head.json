@@ -26,7 +26,7 @@
    "tokenizer.mtok": 7342048
   },
   "recipe": "paper-default",
-  "converter": "llmexport.py @ MNN mnn-a8ec49781e19, MNNConvert /Users/ksd/SLM_Factory_Krishna_Personal/Benchmark-Harness/paper_table5/third_party/tools/mnnconvert_nolog"
+  "converter": "llmexport.py @ MNN mnn-a8ec49781e19, MNNConvert <repo>/Benchmark-Harness/paper_table5/third_party/tools/mnnconvert_nolog"
  },
  "started": "2026-10-14T22:09:14.036658",
  "invocations": {

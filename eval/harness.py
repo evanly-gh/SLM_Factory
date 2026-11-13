@@ -68,7 +68,7 @@ class EvalResult:
     # in-vocabulary label, a final number — so a low score means two very different things depending
     # on this number: a content problem the data can fix, or a format problem the prompt or the chat
     # template can. Reported for all tasks rather than only function-calling, because the run that
-    # made this necessary (B290) was diagnosed entirely from the gap between the two.
+    # made this necessary was diagnosed entirely from the gap between the two.
     format_valid: float = 1.0
 
 
@@ -86,7 +86,7 @@ def _attach_reasoning_to_failures(result, eval_set, raw_outputs, predictions) ->
 
     Keyed by eval-row index, which is stable — the scorers preserve row order and `predictions`
     is positional. Failures are matched on the row's own text, so this is a no-op for scorers
-    that emit no reasoning (B251).
+    that emit no reasoning.
     """
     failures = (result or {}).get("failures") or []
     if not failures:
@@ -123,7 +123,7 @@ def _gold_for_display(row: dict):
     A REFERENCE-FREE task has no gold at all, and that is not a defect to paper over. ToolEval's pass
     rate asks a judge whether the model's answer addresses the QUERY; the ToolBench test queries ship
     without a reference solution, so `answer` is legitimately empty on every eval row. Printing a bare
-    blank there reproduces the B263 failure for a different reason — the reader cannot tell "no
+    blank there reproduces that same ambiguity for a different reason — the reader cannot tell "no
     reference exists" from "the gold went missing" — so the query the row is judged against is shown
     instead, labelled as what it is.
     """
@@ -313,7 +313,7 @@ def _infer_overlapping_judge(prompts, eval_set, infer) -> list[str]:
     Generation runs on the pipeline GPU and the judge on the synthesis GPU, but the two were
     strictly sequential: all 800 predictions were produced, and only then were all 800 judged.
     Measured overlap between the two devices across run 38303490 was 0.0%, with the judge alone
-    accounting for 22% of wall time (B258).
+    accounting for 22% of wall time.
 
     The judge is not called differently here — a background thread simply asks
     ``LocalJudgeClient`` to score the chunk, which populates its process-wide and on-disk caches.
@@ -450,8 +450,8 @@ def _run_eval_local(
                 # `eval_batch_size`. Omitting it left `task=""`, which that function degrades to a
                 # concurrency of 1 — correct as a safety net for out-of-loop callers, and silently the
                 # old sequential behaviour for the one caller that matters. The bf16 branch below
-                # already passed it; only this branch was missed, which is the same one-sided update
-                # that produced B313.
+                # already passed it; only this branch was missed, which is the same kind of one-sided
+                # update that has caused bugs before.
                 task=spec.name,
             )
         return infer_batch(

@@ -323,7 +323,7 @@ def test_api_mode_enables_the_proxy_and_local_mode_disables_it(api_mode, recordi
     """The single most breakable thing in this change, and it fails in BOTH directions.
 
     Compute nodes export HTTP(S)_PROXY for internet access. Applying it to a loopback request
-    makes Squid return a 5xx error page (the B161 crash), so the local client must ignore the
+    makes Squid return a 5xx error page (which once crashed a run), so the local client must ignore the
     environment; NOT applying it to api.deepseek.com means the request never leaves the node, so
     the API client must honour it.
     """

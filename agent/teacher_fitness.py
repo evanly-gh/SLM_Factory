@@ -15,7 +15,7 @@ WHY FIVE-SHOT
     Because that is how synthesis prompts the teacher. A zero-shot number on a format-bound task
     mostly reports whether the teacher guessed our output contract: BC5CDR measures 0.1131
     zero-shot and 0.7190 with five demonstrations — a 6.4x difference that says nothing changed
-    about the teacher's competence, only about what it had been told (B276). Gating synthesis on a
+    about the teacher's competence, only about what it had been told. Gating synthesis on a
     prompt shape synthesis never uses is authorising on the wrong evidence; calibrating the run's
     accuracy goal against it sets the bar in the wrong place for the same reason.
 
@@ -91,7 +91,7 @@ FITNESS_SHOTS = int(os.environ.get("SLM_SYNTH_SHOTS", "5"))
 FITNESS_EVAL_ROWS = int(os.environ.get("SLM_TEACHER_FITNESS_ROWS", "0"))
 
 # Above this share of failed generations the measurement is discarded rather than scored — see the
-# B313 note at the guard itself. Kept numerically identical to the
+# note at the guard itself. Kept numerically identical to the
 # `eval.endpoint_eval.MAX_GENERATION_FAILURE_RATE` this replaces, so the protection the accuracy
 # goal used to have is the protection it still has.
 MAX_GENERATION_FAILURE_RATE = 0.25
@@ -232,7 +232,7 @@ def _training_context(rows: list[dict], spec):
 # against 0.8368. Demonstrations making a model WORSE is the signature of exactly this ambiguity, and
 # calendar_json shows why it bites hardest there — every block carries its own
 # "Current date and time", so six different reference instants arrive with nothing marking which one
-# governs the answer. The gate then read the depressed number and refused synthetic data (B320).
+# governs the answer. The gate then read the depressed number and refused synthetic data.
 _DEMO_HEADER = "### Solved example {n} of {total}"
 _QUESTION_HEADER = (
     "### Now answer THIS request only\n"
@@ -261,7 +261,7 @@ def _prefix_fits(prefix: str, spec, longest_prompt_chars: int, *, log=print) -> 
         The damage was not the wasted calls. `measure_teacher_fitness` takes the BEST of its 0-shot
         and k-shot measurements, so a k-shot pass where every request failed returned
         `format_valid=0.0000` and score 0.0000 — and the code then logged "demonstrations made this
-        teacher WORSE on this task", which is the B320 diagnosis for a prompt-assembly defect. It was
+        teacher WORSE on this task", which is the signature of a prompt-assembly defect. It was
         not wrong about that, but the real cause was that the prompt did not fit, and nothing said so.
 
         So the check happens before the calls, and the log says which of the two it is.
@@ -276,7 +276,7 @@ def _prefix_fits(prefix: str, spec, longest_prompt_chars: int, *, log=print) -> 
     The bound is the TEACHER's served context, not the task's. Using `spec.max_seq_length` here was
     wrong and routerbench is the proof: its five-shot prefix is ~2,240 tokens against a 974-token
     student budget, and it fits the teacher's 8,192 perfectly well. Bounding a teacher prompt by the
-    student's window would have disabled demonstrations on exactly the tasks B276 says need them.
+    student's window would have disabled demonstrations on exactly the format-bound tasks that need them.
     """
     from eval.harness import eval_output_token_reserve
 
@@ -293,14 +293,14 @@ def _prefix_fits(prefix: str, spec, longest_prompt_chars: int, *, log=print) -> 
         f"the longest {longest_prompt_chars}-char prompt inside a {budget_tokens}-token input budget "
         f"(room for {max(allowed_chars, 0)} chars of demonstrations), so the k-shot measurement is "
         f"SKIPPED and the gate uses the zero-shot number. This is a prompt-SIZE limit on a task with "
-        f"large rows, NOT evidence that demonstrations hurt (B320) — and synthesis prompts the same "
+        f"large rows, NOT evidence that demonstrations hurt — and synthesis prompts the same "
         f"way, so RAISE SLM_SYNTH_MAX_MODEL_LEN for this task (and lower SLM_SYNTH_MAX_NUM_SEQS to "
         f"pay for the KV cache) until five demonstrations fit.\n"
         f"      [teacher] Do NOT respond by lowering SLM_SYNTH_SHOTS. That has been tried twice on "
         f"toolbench and failed both times: at 0 shots the verifier kept 0 rows of 1,019 attempts, and "
         f"at the 1-2 shots that DID fit an 8,192 context it kept 0 of 133 (runs 38832586, 38985393). A "
         f"format-bound task cannot be synthesized from a prompt that does not show the format enough "
-        f"times (B276), so fewer shots trades a size error for a silent total loss of yield."
+        f"times, so fewer shots trades a size error for a silent total loss of yield."
     )
     return False
 
@@ -314,7 +314,7 @@ def fit_demonstrations(pool: list[dict], shots: int, budget_chars: int, rng=None
         tokens against a teacher served at 8,192 and every request 400s. The reflex fix — drop to
         zero-shot — is worse than it looks: zero-shot synthesis on that task generated 636, 326 and
         57 candidate rows across three rebuilds and the programmatic verifier kept **zero** of them,
-        every time. A format-bound task cannot be synthesized without showing the format (B276).
+        every time. A format-bound task cannot be synthesized without showing the format.
 
         The rows are not uniformly large, though: toolbench's shortest complete paths are ~809
         tokens, so five SHORT demonstrations are ~4,000 and fit with room to spare. Choosing which
@@ -457,12 +457,12 @@ def measure_teacher_fitness(
             n_demos = 0
     elif shots:
         log("      [teacher] no train rows to draw demonstrations from — measuring zero-shot, "
-            "which understates a format-bound task (B276)")
+            "which understates a format-bound task")
 
     # The shots actually SENT, not the shots requested. They differ whenever a task's rows are too
     # large for the full block to fit, and recording the request would describe a prompt that was
     # never issued — which is the difference between "this teacher is weak" and "this task's rows
-    # do not leave room for demonstrations" (B276/B320).
+    # do not leave room for demonstrations".
     used_shots = n_demos
     verdict["shots"] = used_shots
     log(f"      [teacher] measuring {model or 'teacher'} on the FULL eval set: "
@@ -501,7 +501,7 @@ def measure_teacher_fitness(
     # commentary — it doubled the cost of the measurement to print a line nothing consumed — and it
     # became indefensible once the same verdict started setting the run's accuracy goal too.
     #
-    # The diagnostic it used to provide (B320: demonstrations making a teacher LOOK worse is the
+    # The diagnostic it used to provide (demonstrations making a teacher LOOK worse is the
     # signature of a prompt-assembly defect, not an incapable model) lived in
     # `scripts/probe_teacher_fewshot.py`, removed 2026-11-11 and recoverable from git history.
     try:
@@ -512,7 +512,7 @@ def measure_teacher_fitness(
         verdict["reason"] = f"{type(error).__name__}: {error}"
         return _apply_operator_overrides(verdict, spec, log=log)
 
-    # TOO MANY FAILED ROWS MEANS THERE IS NO MEASUREMENT (B313).
+    # TOO MANY FAILED ROWS MEANS THERE IS NO MEASUREMENT.
     #
     # A failed generation scores as an empty prediction, so an endpoint that errors on every row
     # produces a clean-looking 0.0000 that is indistinguishable from a genuinely incapable teacher.
@@ -557,7 +557,7 @@ def measure_teacher_fitness(
     # FORMAT VALIDITY BESIDE THE SCORE, ALWAYS. They fail differently and are fixed differently: a
     # low score with format_valid near 1.0 is a capability limit, while a low format_valid is a
     # prompt or output-contract problem that caps the score no matter how capable the model is.
-    # Reporting only the first is what let B290 read as "fine-tuning does not help this task".
+    # Reporting only the first is what once let a template bug read as "fine-tuning does not help this task".
     log(f"      [teacher]   {used_shots}-shot on {len(base_prompts)} row(s): "
         f"{verdict['metric']}={score:.4f}  format_valid={format_valid:.4f}")
     if format_valid < 0.95:

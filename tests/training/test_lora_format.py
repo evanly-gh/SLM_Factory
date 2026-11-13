@@ -28,7 +28,7 @@ class _TokenizerDouble:
     ):
         # A real tokenizer with no chat_template raises rather than inventing a format. The double used
         # to render regardless, which let `test_qwen_training_fails_if_chat_template_is_missing` reach
-        # the renderer at all — so once B290's alignment guard started rendering, the double answered
+        # the renderer at all — so once the prefix-alignment guard started rendering, the double answered
         # for a tokenizer that in reality could not.
         if self.chat_template is None:
             raise ValueError("cannot use apply_chat_template because this tokenizer has no template")

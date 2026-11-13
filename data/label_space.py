@@ -1,6 +1,6 @@
 """The task's label vocabulary, pinned once and never extended.
 
-WHY THIS EXISTS (B259)
+WHY THIS EXISTS
     RouterBench is a two-class task: `local` and `route`. Its runs trained on rows labelled
     `cloud`, `on_device`, `router` and `remote` as well — classes that do not exist in the task.
     They arrived because acquisition asks an LLM to map a mined dataset's columns onto our schema

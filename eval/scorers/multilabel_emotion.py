@@ -44,7 +44,7 @@ EMOTION_PROMPT = (
 
 
 def build_prompt(text: str) -> str:
-    """The ONE prompt. Imported by the training turn builder so the two cannot drift (B250)."""
+    """The ONE prompt. Imported by the training turn builder so the two cannot drift."""
     return EMOTION_PROMPT.format(labels=", ".join(EMOTIONS), text=text)
 
 
@@ -59,7 +59,7 @@ def extract_predictions(raw_outputs: list[str], eval_set: EvalSet) -> list[list[
     commas and nothing else, and this accepts a reply in that shape or records a format failure.
     In order: (1) the whole reply is a list of labels, (2) the text AFTER a colon is, (3) failure.
 
-    WHAT THIS DELIBERATELY DOES NOT DO is harvest label words out of prose — which is B271, and
+    WHAT THIS DELIBERATELY DOES NOT DO is harvest label words out of prose — a known classification-scorer failure, and
     this scorer committed it in multi-label form. Observed on run 39707196, the base model replied
 
         "The comment expresses a mix of emotions, including admiration, amusement, anger,

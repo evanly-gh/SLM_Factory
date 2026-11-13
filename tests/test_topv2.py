@@ -228,7 +228,7 @@ def test_the_failure_taxonomy_separates_intent_slot_and_span_errors():
     """Each category wants a different fix, which is the only reason to have a taxonomy.
 
     An intent error is a classification problem over a small label set; a span error is a copying
-    problem. Reporting both as "wrong parse" is the B296 shape.
+    problem. Reporting both as "wrong parse" gives the orchestrator nothing to act on.
     """
     gold = "[IN:CREATE_REMINDER remind [SL:PERSON_REMINDED me ] ]"
     eval_set = _eval_set([_row("remind me", gold)] * 3)

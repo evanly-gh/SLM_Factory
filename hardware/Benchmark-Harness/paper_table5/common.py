@@ -59,7 +59,7 @@ PAPER_MODELS = {
     "llama3.2-3b": "unsloth/Llama-3.2-3B-Instruct",
 }
 
-# Phase 2: the model pool (docs/superpowers/specs/2026-10-02-pool-sweep-design.md). min_ref "head": the
+# Phase 2: the model pool (the SLM Factory's on-device pool, config/android_pool.py). min_ref "head": the
 # architecture postdates the pinned versions (Qwen3.5, early 2026), so convert and run with --ref head.
 POOL_MODELS = {
     "gemma3-270m": ("google/gemma-3-270m-it", "pinned"),
@@ -92,10 +92,53 @@ def match_profile(info: dict) -> dict:
             "paper_column": None, "max_temp_c": 28.0, "generated": True}
 
 
-def recorded_serial(serial: str) -> str:
-    """The adb serial as it goes into a results file. A wireless `ip:port` serial is the phone's
-    address on the local network, which says nothing about the measurement, so it is not recorded."""
-    return "wireless-adb" if re.fullmatch(r"\d{1,3}(?:\.\d{1,3}){3}:\d+", serial) else serial
+def recorded_serial(serial: str | None) -> str | None:
+    """The adb serial as it goes into a results file: only the transport, "wireless-adb" or "usb-adb".
+    A wireless serial is the phone's `ip:port` address on the local network or its Wireless debugging mDNS
+    name (adb-<hardware serial>-<id>._adb-tls-connect._tcp), and a USB serial is the phone's hardware serial
+    number; neither says anything about the measurement. Emulator serials are kept."""
+    if not serial or serial in ("usb-adb", "wireless-adb") or serial.startswith("emulator-"):
+        return serial
+    return "wireless-adb" if is_wireless_serial(serial) else "usb-adb"
+
+
+def _dir_pattern(root: Path) -> re.Pattern | None:
+    """Matches `root` written with either separator (and, on Windows, any case), as a whole path prefix."""
+    forms = {str(root), str(root).replace("\\", "/"), root.as_posix()}
+    forms = sorted({f.rstrip("/\\") for f in forms if len(f.rstrip("/\\")) > 3}, key=len, reverse=True)
+    if not forms:
+        return None
+    alts = "|".join(r"[\\/]+".join(re.escape(part) for part in re.split(r"[\\/]+", f)) for f in forms)
+    return re.compile(rf"(?:{alts})(?![\w.-])", re.IGNORECASE if os.name == "nt" else 0)
+
+
+REPO_ROOT = HERE.parents[2]  # paper_table5 -> Benchmark-Harness -> hardware -> repository
+_PORTABLE = [(p, tag) for root, tag in ((REPO_ROOT, "<repo>"), (Path.home(), "<home>"),
+                                        (Path.home().resolve(), "<home>"))
+             if (p := _dir_pattern(root))]
+
+
+def portable_path(value):
+    """A local path, or a string containing paths (a command line), as it goes into a results file: the
+    repository root becomes <repo> and the user's home directory <home>, so recorded files name no personal
+    directories. Only for the persisted copy; code that opens the path keeps the real one. None stays None."""
+    if value is None:
+        return None
+    s = str(value)
+    for pat, tag in _PORTABLE:
+        s = pat.sub(lambda _m, t=tag: t, s)  # a function: the tag must not be read as a regex template
+    return s
+
+
+def portable_record(obj):
+    """`obj` (dicts, lists, strings, paths) with portable_path applied to every string, as a new object."""
+    if isinstance(obj, (str, Path)):
+        return portable_path(obj)
+    if isinstance(obj, dict):
+        return {k: portable_record(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [portable_record(v) for v in obj]
+    return obj
 
 
 def device_info(adb) -> dict:

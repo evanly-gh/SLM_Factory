@@ -97,7 +97,7 @@ INVENTORY: tuple[Cap, ...] = (
         "prompt_char_budget(0.10) each", SAFE,
         "was a flat 400 chars. These pairs teach the verifier the task's conventions, and on a "
         "long-row task the convention being demonstrated fell off the end, leaving the verifier "
-        "judging its own guess (B269)."),
+        "judging its own guess."),
     # --- evaluation: the student's reserve, which CANNOT be globally raised ------------------
     Cap("tasks/*.py:max_new_tokens", "student's eval output reserve, per task",
         "50 (clinc150, sms_spam) - 512 (dialogsum, ner_bc5cdr, multiconer, topv2)", BOUNDED,

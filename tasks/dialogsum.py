@@ -139,7 +139,7 @@ SPEC = TaskSpec(
     # decidable and were going uncaught: fabricated extra "human references" (the count came out
     # {1: 877, 2: 127, 3: 157} for rows with one author), 76 rows whose trained target
     # `references[0]` disagreed with their stated `answer`, and 18 whose "summary" carried a
-    # transcript turn label — the B250 continuation failure, in generated training data.
+    # transcript turn label — the continuation failure, in generated training data.
     #
     # It still cannot check faithfulness, so the teacher pass still runs.
     synth_verifier=_verify,

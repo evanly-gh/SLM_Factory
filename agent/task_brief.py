@@ -10,7 +10,7 @@ WHY THIS EXISTS
         which omits every convention that makes a calendar row correct — the 60-minute default, ISO
         8601, resolving relative dates against the request's own reference instant. A verifier asked
         to judge against that description was judging its own guess, and calendar synthesis scored
-        0.2176 (B269).
+        0.2176.
       * It was one line. A teacher asked "is this answer correct?" with one line of context and no
         worked example is being tested on inferring the contract, which is exactly what Min et al.
         (arXiv:2202.12837) identify as the thing demonstrations supply.

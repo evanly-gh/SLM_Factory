@@ -81,7 +81,7 @@ export SLM_BENCHMARK_TASK=topv2
 # NOT by lowering SLM_SYNTH_SHOTS, which the same message warns against: on toolbench that was
 # tried twice and the programmatic verifier kept 0 rows of 1,019 attempts at 0 shots and 0 of 133
 # at the 1-2 shots that did fit (runs 38832586, 38985393). A format-bound task cannot be
-# synthesized from a prompt that does not show the format enough times (B276).
+# synthesized from a prompt that does not show the format enough times.
 export SLM_SYNTH_MAX_MODEL_LEN=16384
 export SLM_SYNTH_MAX_NUM_SEQS=32
 export SLM_VERIFY_SYNTH=shadow

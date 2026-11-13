@@ -4,7 +4,7 @@ WHY THIS FILE EXISTS
     `surgical_synthesis` used to be offered on every task at every score, and the only evidence
     anyone had about the teacher was its ZERO-SHOT number from `measure_endpoint_baseline` — which
     on a format-bound task mostly reports whether it guessed the output contract (BC5CDR: 0.1131
-    zero-shot, 0.7190 five-shot, B276) and was never consulted before spending the budget anyway.
+    zero-shot, 0.7190 five-shot) and was never consulted before spending the budget anyway.
     `agent/teacher_fitness.py` measures the teacher the way synthesis actually prompts it and
     refuses synthetic data for the whole run when it cannot clear `MIN_ACCURACY`.
 
@@ -238,7 +238,7 @@ def test_a_demonstration_shows_the_gold_answer_in_the_task_s_own_training_shape(
     """A demonstration is a prompt/answer PAIR built by the task's own `build_training_turn`, so
     the teacher sees exactly the shape fine-tuning would show the student. Showing the inputs
     without the answers would demonstrate nothing about the output contract, which is the whole
-    reason the measurement is five-shot rather than zero-shot (B276).
+    reason the measurement is five-shot rather than zero-shot.
     """
     from tasks._builders import TrainingContext
 
@@ -272,7 +272,7 @@ def test_each_demonstration_is_fenced_and_the_real_question_is_marked():
     0.8350 five-shot against 0.8680 zero-shot and calendar_json 0.7350 against 0.8368, both with
     format_valid at ~1.0 — so not a contract problem, an addressing one. calendar_json shows the
     mechanism plainly: every block carries its own "Current date and time", so six reference instants
-    arrive with nothing saying which governs the answer (B320).
+    arrive with nothing saying which governs the answer.
     """
     prompts: list[str] = []
     measure_teacher_fitness(
@@ -300,7 +300,7 @@ def test_only_the_k_shot_prompt_is_measured_because_that_is_what_synthesis_sends
     zero-shot score it will never be asked to reproduce is authorised on the wrong evidence. That
     reading was already fixed; what this pins is that the second, zero-shot pass is no longer TAKEN
     either. It survived as commentary after nothing consumed it, doubling the cost of a
-    measurement that now also sets the run's accuracy goal. The B320 comparison it provided lived
+    measurement that now also sets the run's accuracy goal. The zero-/few-shot comparison it provided lived
     in `scripts/probe_teacher_fewshot.py` (removed 2026-11-11; recoverable from git history).
     """
     def _teacher(prompt, *args, **kwargs):
@@ -332,7 +332,7 @@ def test_the_verdict_reports_format_validity_beside_the_score():
 
     A low score at format_valid 1.0 is a capability ceiling; a low format_valid is a broken output
     contract that bounds the score no matter how capable the model is. Reporting only the first is
-    what let B290 read as "fine-tuning does not help this task" for two whole runs — and this
+    what let a template bug read as "fine-tuning does not help this task" for two whole runs — and this
     number now sets the accuracy goal as well as the synthesis gate, so a goal depressed by a
     formatting failure has to be visible as one.
     """
@@ -356,7 +356,7 @@ def test_the_verdict_names_the_teacher_it_measured():
 
 
 def test_a_teacher_that_fails_most_rows_is_unmeasured_rather_than_scored_zero():
-    """B313: an endpoint that errors on every row produces a clean-looking 0.0000.
+    """An endpoint that errors on every row produces a clean-looking 0.0000.
 
     A failed generation scores as an empty prediction, so a broken harness is indistinguishable
     from an incapable teacher — and on run 38661753 all 1,000 rows failed, the baseline read
@@ -401,8 +401,8 @@ def test_a_few_failed_rows_still_produce_a_measurement():
 
 
 def test_no_train_rows_measures_zero_shot_and_says_so():
-    """Honest rather than silent: a zero-shot number understates a format-bound task by up to 6.4x
-    (B276), so a verdict measured without demonstrations has to be readable as one."""
+    """Honest rather than silent: a zero-shot number understates a format-bound task by up to 6.4x,
+    so a verdict measured without demonstrations has to be readable as one."""
     logs: list[str] = []
     verdict = measure_teacher_fitness(
         SPEC, _eval_set(), [], generate_fn=_perfect_teacher(), log=logs.append,
@@ -482,7 +482,7 @@ def test_a_demonstration_block_too_large_for_the_context_is_skipped():
     teacher served at 8,192 — and the failure was actively misleading rather than merely wasteful:
     every request returned an empty string, the k-shot pass scored `format_valid=0.0000`, and because
     the gate takes the BEST of its measurements the code logged "demonstrations made this teacher
-    WORSE on this task". That is the B320 wording for a prompt-assembly defect, and it pointed at the
+    WORSE on this task". That is the wording for a prompt-assembly defect, and it pointed at the
     model instead of at the prompt size.
 
     So an over-large prefix is dropped BEFORE the calls, and the k-shot pass simply does not happen.
@@ -502,8 +502,8 @@ def test_a_demonstration_block_too_large_for_the_context_is_skipped():
     assert _prefix_fits("x" * (room + 1), SPEC, longest_prompt, log=logs.append) is False
     joined = " ".join(logs)
     assert "SKIPPED" in joined
-    # The log must name the real cause, or the next reader repeats the B320 misdiagnosis.
-    assert "NOT evidence" in joined and "B320" in joined
+    # The log must name the real cause, or the next reader repeats the misdiagnosis.
+    assert "NOT evidence that demonstrations hurt" in joined
     # And it must say what to do, because synthesis hits the identical wall.
     assert "SLM_SYNTH_SHOTS" in joined
 

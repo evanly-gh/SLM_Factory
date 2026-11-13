@@ -2,16 +2,36 @@
 
 The `(weights_ref, quant)` cache key is unique per iteration, so the GGUF cache can
 never hit — measured 0/138 (NER) and 2/66 (math). Every 2.6 GB file was written, read
-once and kept forever, costing 193 GB across three runs. See
-docs/superpowers/specs/2026-07-25-checkpoint-artifact-retention-design.md.
+once and kept forever, costing 193 GB across three runs.
 """
 import os
+
+import pytest
 
 os.environ.setdefault("ANTHROPIC_API_KEY", "test-key")
 os.environ.setdefault("EXA_API_KEY", "test-key")
 
 from agent.nodes.evaluate import _reap_quant_artifacts  # noqa: E402
+from config.android_pool import ModelSpec  # noqa: E402
 from training.quantize import gguf_validation_sidecar_path  # noqa: E402
+
+
+@pytest.fixture(autouse=True)
+def _llama_cpp_backend(monkeypatch):
+    """These artifacts are GGUF files, so pin the backend the reaper resolves to llama.cpp.
+
+    The reaper resolves the backend per variant from `state["selected_model"]` (the filtered
+    pool's runtime when one is in force, else SLM_QUANT_BACKEND), so neither may leak in from
+    the environment or the checked-in default contract.
+    """
+    monkeypatch.setenv("SLM_FILTERED_POOL", "off")
+    monkeypatch.delenv("SLM_QUANT_BACKEND", raising=False)
+
+
+def _state(**extra):
+    """The reaper reads the selected variant to pick which backend's cache to invalidate."""
+    model = ModelSpec(model_id="test/Model-1B", size_mb=700, tier=1, quant="Q4_K_M")
+    return {"selected_model": model, **extra}
 
 
 def _mk_gguf(root, name):
@@ -28,7 +48,7 @@ def _mk_gguf(root, name):
 def test_new_best_gguf_is_retained_and_others_reaped(tmp_path):
     winner = _mk_gguf(tmp_path, "aaaa")
     loser = _mk_gguf(tmp_path, "bbbb")
-    state = {}
+    state = _state()
 
     _reap_quant_artifacts(state, [winner, loser], keep_path=winner)
 
@@ -44,7 +64,7 @@ def test_new_best_gguf_is_retained_and_others_reaped(tmp_path):
 def test_no_new_best_reaps_everything_built_this_iteration(tmp_path):
     a = _mk_gguf(tmp_path, "aaaa")
     b = _mk_gguf(tmp_path, "bbbb")
-    state = {}
+    state = _state()
 
     _reap_quant_artifacts(state, [a, b], keep_path=None)
 
@@ -57,7 +77,7 @@ def test_previously_retained_gguf_is_never_reaped(tmp_path):
     """Earlier new-bests stay on disk — the policy keeps every score-improving model."""
     old_best = _mk_gguf(tmp_path, "aaaa")
     new_best = _mk_gguf(tmp_path, "bbbb")
-    state = {"retained_gguf_paths": [old_best]}
+    state = _state(retained_gguf_paths=[old_best])
 
     _reap_quant_artifacts(state, [old_best, new_best], keep_path=new_best)
 
@@ -69,21 +89,21 @@ def test_previously_retained_gguf_is_never_reaped(tmp_path):
 def test_reaping_removes_the_now_empty_directory(tmp_path):
     loser = _mk_gguf(tmp_path, "bbbb")
 
-    _reap_quant_artifacts({}, [loser], keep_path=None)
+    _reap_quant_artifacts(_state(), [loser], keep_path=None)
 
     assert not os.path.isdir(os.path.dirname(loser))
 
 
 def test_reap_ignores_none_entries_and_missing_files(tmp_path):
     """The artifact path is None whenever quantized eval is off; that must not raise."""
-    state = {}
+    state = _state()
     _reap_quant_artifacts(state, [None, os.path.join(str(tmp_path), "gone", "x.gguf")], keep_path=None)
     assert state["retained_gguf_paths"] == []
 
 
 def test_retained_paths_are_deduplicated_across_iterations(tmp_path):
     best = _mk_gguf(tmp_path, "aaaa")
-    state = {}
+    state = _state()
 
     _reap_quant_artifacts(state, [best], keep_path=best)
     _reap_quant_artifacts(state, [best], keep_path=best)

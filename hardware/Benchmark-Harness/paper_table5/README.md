@@ -209,8 +209,10 @@ The factory keeps only the listed model × bit-width variants and builds each fo
 
 ## Reports
 
-These scripts turn the results in `results/` into Markdown under `hardware/docs/`. That folder is local only: it
-is git-ignored, and `req_data.py` creates it.
+These scripts turn the results in `results/` into Markdown under `hardware/docs/`. That folder is not distributed:
+it is git-ignored, and the scripts create it on first run. They also read `models/manifest.json` for model storage
+sizes, which `prepare_models.py` writes when you prepare the models locally (it is not distributed either); without
+it they stop with a message saying so.
 - `results_all_md.py` → `RESULTS.md` and `figures/`, all four phones in the paper's Table 5 layout. It builds on
   `results_md.py`, the original Galaxy S23-only version, whose loaders `filter_pool.py` also uses. Both scripts
   write `RESULTS.md`, so run `results_all_md.py` last.
@@ -218,7 +220,7 @@ is git-ignored, and `req_data.py` creates it.
 - `requirements_md.py` → `REQUIREMENTS.md`.
 - `baseline.py` → `BASELINE_COMPARISON*.md`, the no-measurement LLM-picker baseline, using the prompts in `baseline/`.
 
-Some of the inputs these scripts use were never committed: the per-folder `memory/` peak-memory data,
+Some of the measurement outputs these scripts use were produced locally and are not distributed: the per-folder `memory/` peak-memory data,
 `results/oneplus15_supplement.json`, and the raw files of the `slm_pool_*_energy_*` reruns, of which only
 `summary.csv` is in git. The scripts skip what is missing, so on a fresh clone their output differs from
 the reports that were generated on the measuring machine.

@@ -11,7 +11,7 @@ WHY THIS FILE EXISTS
 
     Rung 1 did not exist before 2026-08-19. `acquire` went straight to paid web discovery, which
     then found mirrors of the very corpus sitting in the local cache and rejected them, while
-    ~57,000 unused xLAM rows stayed unreachable (B297).
+    ~57,000 unused xLAM rows stayed unreachable.
 
     The distinction the retirement logic protects is subtle and was previously reported
     identically: "mining added nothing this round" and "mining has nothing left to add, ever" are
@@ -96,7 +96,7 @@ def test_mining_is_available_while_any_source_has_rows_left():
 
 def test_mining_is_available_with_every_source_exhausted_but_discovery_untried():
     """A discovery round that has not been tried might find something; refusing before trying is
-    how B297's unreachable rows stayed unreachable."""
+    how ~57,000 xLAM rows stayed unreachable."""
     assert mining_available_for_state({
         "source_progress": {"a": {"exhausted": True}},
         "failed_discovery_rounds": 0,
@@ -253,7 +253,7 @@ def test_the_source_position_advances_so_the_next_rebuild_resumes_where_this_one
 
 
 def test_web_research_is_not_reached_while_a_known_source_still_yields(monkeypatch):
-    """Rung 2 costs money. Reaching it while rung 1 works is the B297 waste."""
+    """Rung 2 costs money. Reaching it while rung 1 works is pure waste."""
     discovered = {"called": False}
 
     def discovery(*_args, **_kwargs):
@@ -417,8 +417,8 @@ def _spec_without_paid_discovery():
 
 
 def test_discovery_passes_the_pinned_label_space_so_a_foreign_class_cannot_enter(monkeypatch):
-    """The closed label space is what stops a repeat of the four hallucinated RouterBench classes
-    (B259): any mapped row whose label falls outside the frozen vocabulary is dropped per row."""
+    """The closed label space is what stops a repeat of the four hallucinated RouterBench classes:
+    any mapped row whose label falls outside the frozen vocabulary is dropped per row."""
     import agent.nodes.curate as curate
     from data.eval_set import EvalSet
 
@@ -448,7 +448,7 @@ def test_discovery_passes_the_pinned_label_space_so_a_foreign_class_cannot_enter
 
 
 # --------------------------------------------------------------------------
-# A discovered dataset is an asset, not a one-off delivery (B315)
+# A discovered dataset is an asset, not a one-off delivery
 # --------------------------------------------------------------------------
 # Rung 2 costs money. Before 2026-08-19 `_discover_new_source` returned rows and recorded nothing, so a
 # corpus found by paid web research was drained of whatever it happened to return in one pass and then

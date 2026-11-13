@@ -110,7 +110,7 @@ def _llm_choose_model(
         "task-specific sourced evidence; compare only like-for-like named metrics."
     )
 
-    # Offline capability descriptions plus the named-metric comparability contract (B161).
+    # Offline capability descriptions plus the named-metric comparability contract.
     from config.model_capabilities import capability_sections
     cap_doc = capability_sections([m.model_id for m in candidates])
 
@@ -322,7 +322,7 @@ def escalate_node(state: AgentState) -> AgentState:
         _log(mlabel, f"  Dataset carried forward: {state.get('current_dataset_path')}")
 
     # Record this model's completed run BEFORE resetting, so the end-of-run summary can
-    # show the FULL trajectory across every tier, not just the final model (Q15/B147).
+    # show the FULL trajectory across every tier, not just the final model.
     # Default to None, never 0.0: a missing or failed baseline must render as "n/a" in
     # the Model Improvement Report rather than as a real zero-shot score of zero, which
     # would credit fine-tuning with the entire final F1 as its improvement.
@@ -348,13 +348,13 @@ def escalate_node(state: AgentState) -> AgentState:
         "scores": list(state.get("scores") or []),
         # Full per-iteration DAG for THIS model, so the end-of-run summary can show the
         # traversal of every model tested — not just the final one (the DAG resets on
-        # escalation). (B161 reporting request.)
+        # escalation).
         "dag": list(state.get("dag") or []),
     })
     state["escalation_history"] = history
 
     # Free the previous model's VRAM/cache — we've moved on from it for good, so it must
-    # not sit resident competing with the next (usually larger) model (B142).
+    # not sit resident competing with the next (usually larger) model.
     try:
         from training.slm_helpers import clear_inference_cache
         clear_inference_cache()

@@ -47,7 +47,7 @@ _THRESHOLD_FIELDS = frozenset({"new_threshold", "reason"})
 # 1536 was survivable only while the hypothesis was silently truncated to 240 chars. Once that
 # cap was lifted, the very first iterate call of slm-clinc150-cse-38179864 hit 1536 exactly, the
 # reask hit it again, and the orchestrator's chosen `data_rebuild` was discarded in favour of the
-# score-band fallback's `hyperparameter` (B240).
+# score-band fallback's `hyperparameter`.
 # 4096 was too small for the WRONG reason: the decision JSON is ~520 tokens, but max_tokens
 # bounds THINKING PLUS answer, and a measured iterate call spent 1923 tokens thinking before
 # writing 520 of JSON. The prompt's length instruction cannot help — the model neither sees nor
@@ -63,7 +63,7 @@ _ITERATE_MAX_TOKENS = int(__import__("os").environ.get("SLM_ITERATE_MAX_TOKENS",
 # contexts, so a longer, better-reasoned one is genuinely more useful than a short one.
 #
 # This exists so a pathological response cannot blow up the context, not to shape normal output.
-# If the truncation warning ever fires, raise this rather than accept the loss (B238/B240).
+# If the truncation warning ever fires, raise this rather than accept the loss.
 HYPOTHESIS_MAX_CHARS = int(__import__("os").environ.get("SLM_HYPOTHESIS_MAX_CHARS", "4000"))
 # Stated to the model in the prompt. A soft target it can exceed when it has more to say — the
 # point is to stop it writing 1500 tokens of prose and running out of output budget mid-JSON.
@@ -210,7 +210,7 @@ def _reask_json_only(
     sanitized_error = _sanitize_reask_error(validation_error, state)
     # A length failure needs the OPPOSITE instruction from a format failure. Without this the
     # reask just repeats "return valid JSON", the model writes another over-long answer, and it
-    # fails identically — both attempts burned that way in slm-clinc150-cse-38179864 (B240).
+    # fails identically — both attempts burned that way in slm-clinc150-cse-38179864.
     too_long = "stop_reason=max_tokens" in str(validation_error)
     remedy = (
         "Your previous answer RAN OUT OF OUTPUT SPACE and was cut off mid-object. Send the "
@@ -478,7 +478,7 @@ def _validate_decision_json(
         # gradient_accumulation_steps, effective_batch_size, batch_size — and writing those back
         # into the decision made this validator reject its own output on the second pass
         # (`iterate_node` re-validates as defense in depth), killing every hyperparameter
-        # decision with an error naming six fields the orchestrator never proposed (B244).
+        # decision with an error naming six fields the orchestrator never proposed.
         #
         # Nothing needs them here: `train._build_config` calls normalize_hyperparams itself at
         # the point of use, so the derived shape is rebuilt where it is actually consumed. Keeping
@@ -571,7 +571,7 @@ def _parse_decision_json(
     task: str = "classification",
     state=None,
 ) -> dict:
-    """Robustly parse the orchestrator's decision JSON (B143 fix for JSONDecodeError).
+    """Robustly parse the orchestrator's decision JSON (guards against JSONDecodeError).
 
     Tolerates content-block lists, code fences, and prose wrapped around the JSON object.
     ALWAYS raises ValueError (never a bare JSONDecodeError) with a readable message so the
@@ -988,7 +988,7 @@ def _llm_iterate(state: AgentState) -> dict:
     window = scores[-STAGNATION_WINDOW:] if len(scores) >= STAGNATION_WINDOW else scores
     recent_gain = round(_stagnation_gain(window), 4) if window else 0.0
 
-    # Test-data agent report (B161): per-difficulty accuracy + targeted diagnosis, the primary
+    # Test-data agent report: per-difficulty accuracy + targeted diagnosis, the primary
     # signal for what to fix (replaces failure-taxonomy). Feed it into the decision prompt.
     report = state.get("test_report") or {}
     _bd = report.get("by_difficulty") or {}
@@ -999,7 +999,7 @@ def _llm_iterate(state: AgentState) -> dict:
     # Memo about the attempt that was just rolled back. The per-difficulty block above describes
     # the RESTORED best checkpoint (the live weights); this describes the thing that failed, so
     # the orchestrator knows what not to repeat. Without it a rollback is invisible in the prompt
-    # and the same intervention gets proposed again (B231).
+    # and the same intervention gets proposed again.
     _failed = state.get("last_failed_attempt") or {}
     if _failed:
         _fbd = _failed.get("by_difficulty") or {}
@@ -1040,7 +1040,7 @@ def _llm_iterate(state: AgentState) -> dict:
             "\n".join(
                 # A pair only when there really are two classes. For an open-ended task the entry is
                 # a failure CATEGORY, and printing `predicted='incorrect'` beside it invited the
-                # orchestrator to reason about a model output that does not exist (B326).
+                # orchestrator to reason about a model output that does not exist.
                 (
                     f"    - gold={pair.get('gold')!r} predicted={pair.get('predicted')!r} "
                     f"count={pair.get('count', 0)}"
@@ -1150,7 +1150,7 @@ def _llm_iterate(state: AgentState) -> dict:
 
     # ALREADY-TRIED hyperparameter configs, incl. rolled-back ones (the memory the LLM was
     # missing — rollback pops scores so the trajectory hides these). Training is deterministic,
-    # so re-proposing any of these yields the SAME score — they are forbidden (B161).
+    # so re-proposing any of these yields the SAME score — they are forbidden.
     tried = _tried_hparam_configs(state)
     if tried:
         def _score_text(trial):
@@ -1291,7 +1291,7 @@ escalate to a larger model. Never inspect raw eval rows. Return only the decisio
             # Distinguishing "malformed JSON" from "ran out of room" matters: they need
             # OPPOSITE corrections. Reported as a parse error, the reask says "return valid
             # JSON", the model writes another over-long answer, and it fails identically —
-            # which is exactly what happened twice in slm-clinc150-cse-38179864 (B240).
+            # which is exactly what happened twice in slm-clinc150-cse-38179864.
             raise ValueError(
                 f"response was cut off after {_ITERATE_MAX_TOKENS} output tokens "
                 "(stop_reason=max_tokens), so the JSON is incomplete. The decision was too "
@@ -1310,7 +1310,7 @@ escalate to a larger model. Never inspect raw eval rows. Return only the decisio
         # (slm-clinc150-cse-38155022) recorded 19 `iterate` calls, 6 validation failures, and
         # ZERO `iterate_json_reask` events, so the reask demonstrably did not run there even
         # though the failures were ValueErrors — hence also the explicit log line below, so the
-        # next run states plainly whether self-correction was attempted (B223).
+        # next run states plainly whether self-correction was attempted.
         _log(
             _orch_id,
             f"  Decision failed validation ({type(error).__name__}: {str(error)[:160]}) "
@@ -1342,8 +1342,7 @@ class OrchestratorDecisionError(RuntimeError):
     Deliberately fatal, and deliberately not recoverable. `iterate` used to fall back to a score-band
     rule whenever this happened, which turned a broken decision into an ordinary-looking iteration
     and made the trajectory uninterpretable — the run reported interventions nobody chose, and the
-    only evidence was one `LLM call failed` line per iteration that read like a transient blip
-    (B312/B316).
+    only evidence was one `LLM call failed` line per iteration that read like a transient blip.
     """
 
 
@@ -1941,7 +1940,7 @@ def iterate_node(state: AgentState) -> AgentState:
         state["next_action"] = "train"
         return state
 
-    # Turn-budget guard (B51): ~2 productive turns per iteration (curate + train).
+    # Turn-budget guard: ~2 productive turns per iteration (curate + train).
     turn_budget = state.get("turn_budget", 0)
     turns_used = (state["iteration"] + 1) * 2  # cost of the upcoming train+eval cycle
     if turn_budget and turns_used >= turn_budget:
@@ -1949,7 +1948,7 @@ def iterate_node(state: AgentState) -> AgentState:
         state["next_action"] = "terminate"
         return state
 
-    # Wall-clock guard (B161 Addition 3): force a graceful terminal state before SLURM
+    # Wall-clock guard: force a graceful terminal state before SLURM
     # hard-kills the job at --time, so the run always writes its full summary/DAG. This is
     # the real backstop for the high stall cap + downward re-exploration.
     if _wallclock_exceeded():
@@ -2109,7 +2108,7 @@ def iterate_node(state: AgentState) -> AgentState:
 
     except Exception as exc:
         # Billing/auth/quota errors will recur on every call — fail fast with a clear
-        # message instead of silently limping through the rest of the run on fallbacks (B144).
+        # message instead of silently limping through the rest of the run on fallbacks.
         raise_if_fatal(exc, "iterate")
         # No fallback. This is a deliberate reversal of the previous behaviour, which was to take
         # the test agent's diagnosis-driven suggestion, or failing that a score-band rule.
@@ -2119,13 +2118,13 @@ def iterate_node(state: AgentState) -> AgentState:
         # `data_rebuild` five times against a validator bug, and the log recorded five
         # `using test-agent suggestion: hyperparameter` lines — indistinguishable from an
         # orchestrator that had wanted hyperparameters. The curriculum never moved and the score fell
-        # 0.789 → 0.690 while every surface in the system reported an ordinary run (B312).
+        # 0.789 → 0.690 while every surface in the system reported an ordinary run.
         #
         # A score-band rule is not a degraded version of this loop; it is a different algorithm. The
         # loop IS the orchestrator choosing an intervention from evidence, so substituting a rule and
         # reporting the result under the same name makes the whole trajectory uninterpretable — you
         # cannot tell afterwards which iterations were reasoned and which were guessed. A run that
-        # cannot obtain a decision has nothing worth reporting, so it stops here (B316).
+        # cannot obtain a decision has nothing worth reporting, so it stops here.
         _log(model_id, "")
         _log(model_id, "  " + "=" * 68)
         _log(model_id, "  ✗ FATAL: could not obtain a usable orchestrator decision")
@@ -2139,7 +2138,7 @@ def iterate_node(state: AgentState) -> AgentState:
                            "refused, so the orchestrator prompt and normalize_data_rebuild_plan "
                            "disagree about the schema. That recurs on every call until it is fixed.")
         _log(model_id, "  There is deliberately NO fallback here: a score-band rule is a different "
-                       "algorithm, and running it under this one's name is how B312 stayed invisible "
+                       "algorithm, and running it under this one's name is how a substituted decision once stayed invisible "
                        "for a whole run.")
         raise OrchestratorDecisionError(
             f"iterate could not obtain a usable orchestrator decision at iteration "
@@ -2158,7 +2157,7 @@ def iterate_node(state: AgentState) -> AgentState:
         # OrchestratorDecisionError above. This used to fall back to `fallback_data_rebuild_plan`,
         # which is now reachable only from `curate` — keeping the branch would leave a second,
         # score-derived way to produce a plan alongside the one the orchestrator actually chose, and
-        # that ambiguity is precisely what made B312 unreadable in the log.
+        # that ambiguity is precisely what made that substituted decision unreadable in the log.
         if llm_decision is None:
             raise OrchestratorDecisionError(
                 "intervention is data_rebuild but no orchestrator decision was recorded; this "

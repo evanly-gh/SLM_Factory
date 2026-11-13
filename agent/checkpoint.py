@@ -381,8 +381,8 @@ def load_run_manifest(
         )
     # The id was derived from the run dir's resolved path at creation, which the manifest stores
     # verbatim, so hash that string as stored. Also accept the id of where it resolves today: a run
-    # dir moved into a purpose folder with a symlink left at its old path (see logs/README.md) keeps
-    # its identity and stays resumable.
+    # dir moved into a purpose folder under logs/runs/ with a symlink left at its old path keeps its
+    # identity and stays resumable.
     stored_run_dir = str(payload["run_dir"])
     accepted_threads = {
         f"slm-{hashlib.sha256(stored_run_dir.encode()).hexdigest()[:24]}",
@@ -676,6 +676,9 @@ def prepare_fresh_run_directory(run_dir: str | os.PathLike) -> Path:
 
 
 _SQLITE_TYPE_KEY = "__slm_checkpoint_type__"
+# The integer range msgpack can carry natively (int64 minimum through uint64 maximum).
+_MSGPACK_INT_MIN = -(2**63)
+_MSGPACK_INT_MAX = 2**64 - 1
 
 
 def _sqlite_encode(value: Any) -> Any:
@@ -708,6 +711,14 @@ def _sqlite_encode(value: Any) -> Any:
             "weights_ref": value.weights_ref,
             "gguf_path": value.gguf_path,
         }
+    if (
+        isinstance(value, int)
+        and not isinstance(value, bool)
+        and not _MSGPACK_INT_MIN <= value <= _MSGPACK_INT_MAX
+    ):
+        # msgpack ints stop at int64/uint64; Python's do not. A 20+ digit literal in task data
+        # (xlam run 40315640) otherwise kills the checkpoint write. Exact, not clamped.
+        return {_SQLITE_TYPE_KEY: "big_int", "value": str(value)}
     if value is None or isinstance(value, (str, bool, int, float, bytes)):
         return value
     if isinstance(value, os.PathLike):
@@ -778,6 +789,8 @@ def _sqlite_decode(value: Any) -> Any:
     if kind == "set":
         items = [_sqlite_decode(item) for item in value.get("items", ())]
         return frozenset(items) if value.get("frozen") else set(items)
+    if kind == "big_int":
+        return int(value["value"])
     return {key: _sqlite_decode(item) for key, item in value.items()}
 
 

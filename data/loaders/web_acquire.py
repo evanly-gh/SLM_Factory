@@ -59,7 +59,7 @@ def survey_baseline(exa, description, log=print) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Real benchmark datasets (BUGS B119). For well-known public benchmarks the plan
+# Real benchmark datasets. For well-known public benchmarks the plan
 # names, load the ACTUAL dataset (real questions + gold answers) instead of
 # Exa-scraping webpage/repo metadata. Falls back to Exa for unknown benchmarks.
 # ---------------------------------------------------------------------------
@@ -351,7 +351,7 @@ def load_benchmark_dataset(plan: dict, log=print, max_train: int = 300, max_test
     return train, test
 
 
-# Data-acquisition budget/floors (B139). Acquisition ladder: real benchmark → bounded,
+# Data-acquisition budget/floors. Acquisition ladder: real benchmark → bounded,
 # diversified Exa rounds → verified LLM synthesis. Quality-over-quantity: `target` is an
 # UPPER bound, `floor` is the minimum we insist on before falling back to synthesis.
 MAX_ACQUIRE_ROUNDS = 3           # bounded Exa retries (each round diversifies the queries)
@@ -456,13 +456,13 @@ def mine_additional_real_rows(
     # what the model is scored against); fall back to the labels already present in the run's own
     # rows when no pinned space was supplied.
     #
-    # Two guards, and the distinction matters (B259). The ORIGINAL guard was per-source and passed
+    # Two guards, and the distinction matters. The ORIGINAL guard was per-source and passed
     # a source on ANY overlap, so a source whose labels were *partly* right admitted all of its
     # rows — that is precisely how `cloud`/`on_device`/`router`/`remote` entered a two-class
     # RouterBench run and then got deleted by quality control on every rebuild for the rest of the
     # run. It also still catches the case it was written for: a mined dataset storing its intent
     # column as a plain integer rather than a ClassLabel (`DeepPavlov/clinc150` types `label` as
-    # `Value('int64')`, so raw ids "0"/"1"/"2" were written straight into training data, B222).
+    # `Value('int64')`, so raw ids "0"/"1"/"2" were written straight into training data).
     # Whether the vocabulary is AUTHORITATIVE decides which of the two rules applies, and getting
     # this wrong in either direction is harmful. A pinned space (from the frozen eval set) or a
     # plan-declared label list is complete by construction, so a source carrying anything outside it
@@ -471,7 +471,7 @@ def mine_additional_real_rows(
     # so applying the strict rule there would reject perfectly good sources for classes the pool
     # simply had not seen yet. In that case fall back to the original any-overlap check, which still
     # catches what it was written for: raw integer class ids from a non-ClassLabel column
-    # (`DeepPavlov/clinc150` types `label` as `Value('int64')`, so "0"/"1"/"2" reached training, B222).
+    # (`DeepPavlov/clinc150` types `label` as `Value('int64')`, so "0"/"1"/"2" reached training).
     _pinned_labels = {str(v) for v in (label_space or ()) if str(v).strip()}
     _plan_labels = {
         str(v) for v in (task_plan.get("labels") or []) if str(v).strip()
@@ -488,7 +488,7 @@ def mine_additional_real_rows(
         """Drop rows whose label is outside the task's vocabulary, keeping the rest.
 
         PER ROW, not per source (2026-08-19). The old guard rejected the WHOLE source as soon as any
-        label fell outside a pinned vocabulary. That was the right instinct — B259 saw four
+        label fell outside a pinned vocabulary. That was the right instinct — one run saw four
         hallucinated classes (`cloud`, `on_device`, `router`, `remote`) enter a two-class RouterBench
         run because an unmapped value passed through verbatim — but the wrong remedy: a dataset whose
         mapping got most rows right and a few wrong is a dataset worth most of its rows.
@@ -507,8 +507,8 @@ def mine_additional_real_rows(
                 f"      [mine] {stage}: dropped {sum(rejected.values())} of {len(train)} row(s) "
                 f"whose label is outside the task's {len(_known_labels)}-class vocabulary "
                 f"[{describe_rejected_labels(rejected)}]. The label space is closed — a class "
-                "absent from the eval set cannot be scored, so those rows are unusable "
-                "(B259/B222). The rest of the source is kept."
+                "absent from the eval set cannot be scored, so those rows are unusable. "
+                "The rest of the source is kept."
             )
         if not kept:
             log(
@@ -606,7 +606,7 @@ def mine_additional_real_rows(
             # `{"input": "2026-01-01T15:41:43gym tomorrow 6 am", "output": {"title": "gym", "start":
             # "2026-01-02T06:00:00", "end": "2026-01-02T07:00:00"}}` — a reference instant plus a
             # relative request, resolved to absolute ISO with a 60-minute default. That is this task,
-            # almost exactly, and it was thrown away for arithmetic (B324).
+            # almost exactly, and it was thrown away for arithmetic.
             #
             # An offset makes sense when RE-READING a source we have already consumed. It is
             # meaningless for one we have never opened, and deduplication downstream handles overlap.
@@ -788,7 +788,7 @@ def _peek_failure_reason(error: BaseException) -> str:
 def _peek_hf_dataset(hf_id: str, log=print):
     """Load 2 rows to expose (config, split_names, columns, sample_row). None on failure.
 
-    Fully defensive (B159): EVERY datasets call — INCLUDING config-name discovery — is
+    Fully defensive: EVERY datasets call — INCLUDING config-name discovery — is
     guarded. An unloadable candidate (a script-based dataset the current `datasets` lib
     refuses, a private/removed/renamed repo, a network hiccup) must be SKIPPED by returning
     None, never crash the run. The previous version called get_dataset_config_names() in the
@@ -830,7 +830,7 @@ def _llm_map_dataset(hf_id, cfg, splits, columns, sample_row, task, plan, log=pr
     `label_space` is the task's CLOSED vocabulary. When supplied, the model is told the exact
     permitted target labels and that inventing one is forbidden; `_materialize_from_mapping`
     additionally strips any entry that targets a label outside the space, so a hallucinated class
-    cannot survive even if the model ignores the instruction (B259).
+    cannot survive even if the model ignores the instruction.
     """
     import anthropic
     from config.config import ANTHROPIC_API_KEY, ORCHESTRATOR_MODEL, orchestrator_client_kwargs
@@ -846,7 +846,7 @@ def _llm_map_dataset(hf_id, cfg, splits, columns, sample_row, task, plan, log=pr
     # State the closed vocabulary explicitly. Without it the model was free to invent plausible-
     # sounding classes, and it did: a RouterBench run (two classes, `local`/`route`) accumulated
     # `cloud`, `on_device`, `router` and `remote` — one new hallucinated class per acquire round,
-    # because the mapping is re-requested each round and is non-deterministic (B259).
+    # because the mapping is re-requested each round and is non-deterministic.
     label_rules = ""
     if _task_has_closed_labels(task) and allowed:
         label_rules = (
@@ -907,7 +907,7 @@ def _materialize_from_mapping(hf_id, cfg, splits, mapping, task, max_train, max_
     outside the space are discarded) and any row whose resulting label is still outside the space
     is dropped. The old code applied `lmap.get(str(lab), lab)`, so an unmapped source value passed
     through VERBATIM into training data — the mechanism by which `LOW`/`MEDIUM`/`HIGH` complexity
-    tiers and four invented routing classes reached a two-class task (B259).
+    tiers and four invented routing classes reached a two-class task.
     """
     from datasets import load_dataset
     from data.label_space import describe_rejected_labels, sanitize_label_map
@@ -987,7 +987,7 @@ def _materialize_from_mapping(hf_id, cfg, splits, mapping, task, max_train, max_
             # The window is now carved out of ONE materialized read rather than a second offset
             # slice. `train[offset:offset+n]` raises outright when the dataset has fewer than
             # `offset` rows, which discarded every dataset smaller than the requested slice — a
-            # 100-row corpus could not survive it (B324). Splitting in memory cannot fail that way,
+            # 100-row corpus could not survive it. Splitting in memory cannot fail that way,
             # is disjoint by construction, and costs one read instead of two.
             everything = _convert(_load(tr, max_train + max_test))
             # The test window is a formality here — the caller states it is never used as a rejection
@@ -1110,7 +1110,7 @@ def _discover_worker(plan, description, task, max_train, max_test, q):
     {"train","test","source","source_records","eval_ban","logs"}.
 
     Executed in a CHILD process so a stuck HF-hub call can be bounded by KILLING the child,
-    not by interrupting this interpreter (B159). The earlier in-process SIGALRM timeout
+    not by interrupting this interpreter. The earlier in-process SIGALRM timeout
     fired mid-import of `datasets`, leaving it "partially initialized" — which broke every
     later dataset peek AND cascaded into the unsloth/torch `_inductor` import at train time
     ('torch has no attribute _utils'). A separate process cannot corrupt the parent's
@@ -1151,7 +1151,7 @@ def _discover(plan, description, task, max_train, max_test, out, log):
         return
 
     # Search a few COMPLEMENTARY queries so a mismatched/obscure benchmark name doesn't
-    # starve the candidate pool of the canonical, loadable dataset (B159). E.g. the planner
+    # starve the candidate pool of the canonical, loadable dataset. E.g. the planner
     # named "SemEval-2018 Task 1" for a generic 6-class emotion task, whose only Exa hits
     # were script-based repos that no longer load; querying the label set as well surfaces
     # the clean single-label dataset. Queries merged in priority order, deduped.
@@ -1287,7 +1287,7 @@ def discover_and_load_hf_dataset(plan, description, task, max_train, max_test,
                                  log=print, meta=None):
     """Agentic path: Exa → candidate HF datasets → LLM picks+maps → load_dataset.
 
-    Runs in a killable `fork` subprocess with a hard wall-clock timeout (B159). Fork (not
+    Runs in a killable `fork` subprocess with a hard wall-clock timeout. Fork (not
     spawn) is required because the pipeline entrypoint run.py is not import-safe; fork also
     inherits the parent's env/clients cleanly. Fork is safe HERE because acquisition runs in
     eval_setup, before any torch/CUDA initialization. Returns (train, test) or None; on
@@ -1356,7 +1356,7 @@ def discover_and_load_hf_dataset(plan, description, task, max_train, max_test,
 
 def _stratified_take(rows: list[dict], n: int, seed: int = 42) -> list[dict]:
     """Take up to n rows, balanced across labels (round-robin by class) so a capped subset
-    stays class-balanced instead of inheriting the source imbalance (B161 stratification)."""
+    stays class-balanced instead of inheriting the source imbalance."""
     import random as _random
     if n <= 0 or len(rows) <= n:
         return rows
@@ -1436,8 +1436,8 @@ def _local_manifest_match(
 
 
 def load_local_dataset(plan, task, max_train, max_test, log=print, meta=None):
-    """Load a clean OFFLINE dataset from ``SLM_LOCAL_DATASET_DIR`` that matches the task
-    (B161 local fallback). Known benchmark aliases require the exact bundle; otherwise a
+    """Load a clean OFFLINE dataset from ``SLM_LOCAL_DATASET_DIR`` that matches the task.
+    Known benchmark aliases require the exact bundle; otherwise a
     bundle must pass a strong task+label+schema match. Unrelated same-task bundles are
     rejected so the caller can continue its acquisition ladder.
 
@@ -1577,7 +1577,7 @@ def acquire_dataset(plan: dict, description: str = "", n_per_label: int = DEFAUL
                     benchmark_max_train: int = 300, benchmark_max_test: int = 80,
                     log=print, meta: dict | None = None):
     """
-    Acquire a labeled dataset per the task plan, following the acquisition ladder (B139):
+    Acquire a labeled dataset per the task plan, following the acquisition ladder:
 
       1. A clean schema-aware local offline bundle.
       2. Deterministic remote Stage-0 for a known benchmark.
@@ -1691,7 +1691,7 @@ def acquire_dataset(plan: dict, description: str = "", n_per_label: int = DEFAUL
             "and synthesis all failed). Provide a known benchmark or check API keys."
         )
 
-    # For NER, acquired documents lack entity annotations — annotate via Claude (B48).
+    # For NER, acquired documents lack entity annotations — annotate via Claude.
     # (Synthesized NER examples already carry entities and are skipped inside the annotator.)
     if task == "NER":
         # Prefer the task plan's declared entity types over the CoNLL default, so a

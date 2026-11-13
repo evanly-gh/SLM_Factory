@@ -1,4 +1,4 @@
-"""Stop-threshold calibration (B32).
+"""Stop-threshold calibration.
 
 WHAT THIS REPLACES
     The planner used to be told: "anchor stop_threshold to the PUBLISHED STATE-OF-THE-ART for

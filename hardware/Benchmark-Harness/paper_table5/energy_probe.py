@@ -42,7 +42,8 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parent))
 import bench_common  # noqa: E402
-from common import PanelOff, ScreenKeeper, WakeHolder, is_wireless_serial, recorded_serial  # noqa: E402
+from common import (PanelOff, ScreenKeeper, WakeHolder, is_wireless_serial, portable_path,  # noqa: E402
+                    recorded_serial)
 from devenv import Adb, list_devices  # noqa: E402
 
 DEV_DIR = "/data/local/tmp/energy_probe"
@@ -422,8 +423,10 @@ def cmd_collect(args):
     print(f"Plan: {len(plan)} windows of {args.window}s ({', '.join(workloads)} x {args.repeats}), "
           f"{args.rest}s rest each, about {total_min:.0f} min. Keep the phone still and unplugged.\n")
 
-    meta = {"discovery": info, "params": {k: str(v) if isinstance(v, Path) else v for k, v in vars(args).items()
-                                          if k != "func"},
+    # recorded portably: the serial as its transport only, local paths (--out-dir) without the home directory
+    meta = {"discovery": info, "params": {k: recorded_serial(v) if k == "serial" else
+                                          portable_path(v) if isinstance(v, Path) else v
+                                          for k, v in vars(args).items() if k != "func"},
             "columns": [c[0] for c in columns], "start": datetime.now().isoformat()}
     windows, pid = [], None
     if args.screen == "auto":

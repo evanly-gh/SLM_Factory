@@ -220,7 +220,7 @@ def test_run_eval_delegates_to_disposable_worker_when_enabled(monkeypatch):
 def test_a_reference_free_task_shows_the_query_instead_of_a_blank_gold():
     """ToolEval's pass rate has no reference, so `answer` is legitimately empty on every eval row.
 
-    Printing a bare blank there reproduces B263 for a different reason: the reader cannot tell
+    Printing a bare blank there reproduces the blank-gold problem for a different reason: the reader cannot tell
     "no reference exists for this metric" from "the gold went missing". Toolbench's sample block
     was doubly unreadable because the `input` clip shows only the AutoGPT boilerplate that is
     identical on every row, so neither the query nor the gold was visible.

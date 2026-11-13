@@ -140,7 +140,7 @@ class RunHealth:
 
     def to_state(self, state) -> None:
         # Assigned as a NEW dict, never mutated in place, so it persists to the LangGraph channel
-        # (the same trap that froze `scores` at three entries and made stagnation never fire, B122).
+        # (the same trap that froze `scores` at three entries and made stagnation never fire).
         state["run_health"] = {
             "empty_rebuilds": self.empty_rebuilds,
             "empty_mining": self.empty_mining,
@@ -317,14 +317,14 @@ def observe_iteration(state, record: IterationRecord, *, log=print) -> None:
             if health.mining_shutouts >= MAX_MINING_ATTEMPTS_WITHOUT_ACCEPTANCE:
                 # Retires rather than stops. This is still worth its own diagnosis — a filter
                 # rejecting every candidate is a different fault from an empty search, and it is the
-                # shape the pre-2026-08-19 whole-source overlap check produced (B293) — but the
+                # shape the pre-2026-08-19 whole-source overlap check produced — but the
                 # remedy is the same, and it is not a reason to end a run that can still synthesize
                 # or tune.
                 _retire_mining(
                     state,
                     reason=(f"mining saw candidate rows on {health.mining_shutouts} attempts and "
                             "accepted NONE of them, which is a filter rejecting everything rather "
-                            "than an empty search (B293). Check the [mine]/[acquire] lines for "
+                            "than an empty search. Check the [mine]/[acquire] lines for "
                             "which gate is refusing them"),
                     log=log,
                 )

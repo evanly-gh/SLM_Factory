@@ -507,7 +507,7 @@ def test_evaluate_node_quantizes_and_uses_gguf_path_when_quant_set(
     mock_merge.assert_called_once()
     assert mock_merge.call_args[0][0] == "/ckpt"
     merge_call_args = mock_merge.call_args[0]
-    # B160/B161: GGUF cached by a hash of (weights_ref, quant) — not a per-iteration path,
+    # GGUF cached by a hash of (weights_ref, quant) — not a per-iteration path,
     # and quant-aware so a Q8_0 request never reuses a Q4_K_M file.
     import hashlib
     wkey = hashlib.sha1(b"/ckpt|Q4_K_M").hexdigest()[:12]

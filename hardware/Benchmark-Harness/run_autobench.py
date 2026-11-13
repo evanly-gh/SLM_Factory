@@ -75,6 +75,7 @@ MONSOON_SCRIPT = str(Path(__file__).resolve().parent.parent / "Power-Monitor" / 
 # module run_mnn_autobench.py uses, so both engines are measured identically.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import bench_common  # noqa: E402
+from paper_table5.common import portable_path  # noqa: E402  (results name no personal directories)
 
 # Set in main(): readiness gate + fixed rest applied before every broadcast (see pre_run()).
 _GATE = None
@@ -1594,7 +1595,7 @@ def main():
         "rest_seconds": args.rest_seconds,
         "initial_device_state": initial_state,
         "energy_enabled": args.energy,
-        "energy_trace": str(energy_trace.local_path) if energy_trace else None,
+        "energy_trace": portable_path(energy_trace.local_path) if energy_trace else None,
         "idle_power_mw": idle_power_mw,
     }
 

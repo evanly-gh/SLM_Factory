@@ -94,7 +94,7 @@ CALENDAR_TOOL = {
 #
 # The cost was measured. On the pooled eval set the teacher scored 0.3850, and the synthesis gate read
 # that as an incapable teacher, when really it was being asked to guess an unstated house rule on
-# nearly half the rows (B322). A fine-tuned student can infer it from thousands of examples; a
+# nearly half the rows. A fine-tuned student can infer it from thousands of examples; a
 # zero-shot or five-shot teacher cannot, and neither can a reader deciding whether the gold is right.
 #
 # The rule of thumb this encodes: if the label generator applies a convention, the prompt has to name
@@ -145,7 +145,7 @@ _TIME_24_RE = re.compile(r"\b(?P<hour>\d{1,2})\s*:\s*(?P<minute>\d{2})\b")
 # both miss it — and before 2026-08-21 that silently became "no time was stated", which took the
 # 09:00 bare-date default. The result was 123 gold rows whose answer contradicted the utterance
 # ("...on Tuesday at 6" labelled 09:00) and a curriculum where 51% of all gold started at exactly
-# 09:00, teaching the model to ignore stated times (B318).
+# 09:00, teaching the model to ignore stated times.
 #
 # Anchored on "at" specifically so it cannot swallow a DATE number: "on the 15th", "March 3",
 # "3/15" have their own patterns and must not be read as an hour.
@@ -185,7 +185,7 @@ def _next_weekday(reference: datetime, weekday: int, *, allow_today: bool) -> da
 
 # Returned when the text clearly states a clock time that this grammar cannot pin down. Distinct from
 # None, which means "no clock time was stated at all" and legitimately takes the bare-date default.
-# Collapsing the two is what produced B318.
+# Collapsing the two is what produced that bias.
 AMBIGUOUS_TIME = "ambiguous"
 
 
@@ -297,7 +297,7 @@ def resolve_datetime(surface: str, reference: datetime) -> datetime | None:
 
     A time that is STATED but ambiguous ("at 5", with nothing to say which 5) is refused rather than
     defaulted. Treating it as "no time given" is what made 123 rows contradict their own utterance and
-    pushed 51% of all gold to exactly 09:00 (B318).
+    pushed 51% of all gold to exactly 09:00.
     """
     text = _normalize_surface(surface)
     if not text or _UNRESOLVABLE.search(text):
@@ -405,7 +405,7 @@ def _with_reference(utterance: str, reference: datetime) -> str:
 
     Both the trainer and the eval harness build prompts from ``text`` through the same
     ``function_call`` builder, so stating the reference here keeps train/serve parity by
-    construction — the class of bug B250 was.
+    construction — the train/serve-skew class of bug.
     """
     stamp = reference.strftime("%Y-%m-%dT%H:%M:%S")
     return (
@@ -652,7 +652,7 @@ def load_sgd_calendar(max_test: int = 800, log=print) -> list[dict]:
 #     Training on the first and scoring on the second asks the model for a required argument it has
 #     never once seen. The metric is exact argument match, so every prediction misses `location` and
 #     the score is pinned near zero however capable the model is: run 38732020 measured 0.0084 with
-#     format_valid 1.0000 — flawless JSON, 474 of 478 wrong (B321).
+#     format_valid 1.0000 — flawless JSON, 474 of 478 wrong.
 #
 #     Interleaving SGD into the training pool while leaving the eval set pure SGD is NOT enough, and
 #     was tried first: TOPv2 outnumbers SGD nine to one, so train came out 5% location-bearing against

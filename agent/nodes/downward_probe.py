@@ -1,6 +1,6 @@
 # agent/nodes/downward_probe.py
 """
-Node 9: active downward re-exploration (B161 change 8).
+Node 9: active downward re-exploration.
 
 When the loop converges (goal met), find the SMALLEST feasible model that still clears the
 goal, to minimize on-device resource use. It re-trains + re-evaluates progressively smaller

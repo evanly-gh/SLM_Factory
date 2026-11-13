@@ -1,4 +1,4 @@
-"""`iterate` has no fallback: an unusable orchestrator decision stops the run (B316).
+"""`iterate` has no fallback: an unusable orchestrator decision stops the run.
 
 WHY THIS FILE EXISTS
     `iterate_node` used to catch anything the orchestrator call or the validator raised and carry on
@@ -12,7 +12,7 @@ WHY THIS FILE EXISTS
     which iterations were reasoned and which were guessed. Run 38658213 is the demonstration — five
     `data_rebuild` requests refused by a validator bug, five `using test-agent suggestion:
     hyperparameter` lines, a curriculum that never moved and a score that fell 0.789 → 0.690 while
-    every surface in the system reported an ordinary run (B312).
+    every surface in the system reported an ordinary run.
 
     A run that cannot obtain a decision has nothing worth reporting, so it stops. These tests pin the
     three things that makes that useful rather than merely abrupt: it raises a NAMED error, the error
@@ -20,7 +20,7 @@ WHY THIS FILE EXISTS
     deliberate.
 
 WHAT IS DELIBERATELY NOT HERE
-    The B312 shape itself — a `data_rebuild` plan the validator refuses — lives in
+    The rejected-plan shape itself — a `data_rebuild` plan the validator refuses — lives in
     `test_iterate_rejected_data_plan.py`, together with the diagnosis that names the schema
     disagreement. This file is about the general contract for ANY unusable decision.
 """
@@ -121,7 +121,7 @@ def test_a_decision_that_fails_validation_raises(mock_llm):
 def test_the_raised_error_names_the_underlying_failure(mock_llm):
     """The raise is what the runner reports, so it has to carry the diagnosis rather than only the
     fact that there was one. "could not obtain a decision" with the cause left in a log line above it
-    is the shape that made B312 take a whole GPU run to notice."""
+    is the shape that once took a whole GPU run to notice."""
     mock_llm.return_value = _unsupported_intervention_decision()
 
     with pytest.raises(_decision_error()) as excinfo:
@@ -161,9 +161,9 @@ def _fatal_block(log: str) -> str:
 def test_the_fatal_block_says_the_absence_of_a_fallback_is_deliberate(mock_llm, capsys):
     """Otherwise the next reader restores the fallback.
 
-    The line exists because "iterate raised" looks like an oversight, and the whole point of B316 is
-    that stopping is the CHOSEN behaviour: a score-band rule run under this node's name is how B312
-    stayed invisible for a whole run.
+    The line exists because "iterate raised" looks like an oversight, and the whole point is
+    that stopping is the CHOSEN behaviour: a score-band rule run under this node's name is how a
+    substituted decision stayed invisible for a whole run.
     """
     mock_llm.return_value = _unsupported_intervention_decision()
 

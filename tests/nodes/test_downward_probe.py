@@ -401,7 +401,7 @@ def test_iterate_routes_downward_only_after_threshold_with_untried_lower_tier(
     """The threshold is what gates the downward probe, not the availability of a lower tier.
 
     The below-threshold half of this case DOES consult the orchestrator, so it is stubbed with a
-    valid decision: an unusable one raises rather than routing anywhere at all (B316), which would
+    valid decision: an unusable one raises rather than routing anywhere at all, which would
     prove nothing about where a below-threshold turn goes.
     """
     from agent.nodes.iterate import iterate_node

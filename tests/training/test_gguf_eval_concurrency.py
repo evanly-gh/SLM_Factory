@@ -214,7 +214,7 @@ class TestConcurrencyIsBoundedByMemoryNotByTheTask:
         gone before `_looks_like_oom` or the halving retry can run, and a 7-day job dies with no
         diagnosis. The measured gain was ~20% (125s sequential vs 101s at 8-way over 535 prompts),
         because eight contexts submitting to one device serialise on it. Not a trade worth a crash
-        that cannot be caught (B323).
+        that cannot be caught.
         """
         monkeypatch.delenv("SLM_GGUF_EVAL_CONCURRENCY", raising=False)
         default_module = _module_copy()

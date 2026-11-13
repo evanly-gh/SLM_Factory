@@ -148,7 +148,7 @@ SPEC = TaskSpec(
     ),
     # 16,778 train rows against a 5,000-row cap leaves ~11,800 unmined, and the 12 other languages
     # sit in the same repo. Paid discovery would only rediscover mirrors of a corpus already in the
-    # cache, which is the B297 trap.
+    # cache, which is a known trap.
     allow_paid_discovery=False,
 
     model_ranking_metric=None,

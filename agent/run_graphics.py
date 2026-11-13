@@ -1006,7 +1006,7 @@ def _write_hypotheses(records, out_path: Path, meta: dict) -> None:
         "— it is what the orchestrator decided to try NEXT after seeing that row's score.",
         "",
         "Full reasoning is given below the table rather than in a cell. Hypotheses run to "
-        f"{HYPOTHESIS_MAX_CHARS} characters and are never truncated (B238), which a markdown "
+        f"{HYPOTHESIS_MAX_CHARS} characters and are never truncated, which a markdown "
         "table cannot display legibly.",
         "",
         f"| iter | {metric} | next intervention | sub-strategy |",

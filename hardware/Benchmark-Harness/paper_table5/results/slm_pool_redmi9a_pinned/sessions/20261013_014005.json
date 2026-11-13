@@ -131,8 +131,8 @@
    "cmake_args": [
     "-G",
     "Ninja",
-    "-DCMAKE_MAKE_PROGRAM=/Users/ksd/Library/Android/sdk/cmake/4.1.2/bin/ninja",
-    "-DCMAKE_TOOLCHAIN_FILE=/Users/ksd/Library/Android/sdk/ndk/30.0.14904198/build/cmake/android.toolchain.cmake",
+    "-DCMAKE_MAKE_PROGRAM=<home>/Library/Android/sdk/cmake/4.1.2/bin/ninja",
+    "-DCMAKE_TOOLCHAIN_FILE=<home>/Library/Android/sdk/ndk/30.0.14904198/build/cmake/android.toolchain.cmake",
     "-DANDROID_ABI=armeabi-v7a",
     "-DANDROID_ARM_NEON=ON",
     "-DANDROID_PLATFORM=android-28",
@@ -163,8 +163,8 @@
    "cmake_args": [
     "-G",
     "Ninja",
-    "-DCMAKE_MAKE_PROGRAM=/Users/ksd/Library/Android/sdk/cmake/4.1.2/bin/ninja",
-    "-DCMAKE_TOOLCHAIN_FILE=/Users/ksd/Library/Android/sdk/ndk/30.0.14904198/build/cmake/android.toolchain.cmake",
+    "-DCMAKE_MAKE_PROGRAM=<home>/Library/Android/sdk/cmake/4.1.2/bin/ninja",
+    "-DCMAKE_TOOLCHAIN_FILE=<home>/Library/Android/sdk/ndk/30.0.14904198/build/cmake/android.toolchain.cmake",
     "-DANDROID_ABI=armeabi-v7a",
     "-DANDROID_ARM_NEON=ON",
     "-DANDROID_PLATFORM=android-28",

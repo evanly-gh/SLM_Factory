@@ -1,6 +1,6 @@
 """Two reporting fixes: NER gold is actually shown, and the first fine-tuned score is reported.
 
-B263 — the sample-prediction display read only `answer`/`label`, but NER rows keep their gold in
+The sample-prediction display read only `answer`/`label`, but NER rows keep their gold in
 `entities`, so `gold :` printed BLANK on every NER row in both the baseline and fine-tuned blocks.
 That removed the only human check of gold against prediction from the task where it matters most: a
 legitimate `Baseline F1 = 0.0000` (the base model emitting ```json []``` on all 800 rows) was

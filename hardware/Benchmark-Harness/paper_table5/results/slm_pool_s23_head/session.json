@@ -128,8 +128,8 @@
    "cmake_args": [
     "-G",
     "Ninja",
-    "-DCMAKE_MAKE_PROGRAM=C:\\Users\\evanl\\AppData\\Local\\Android\\Sdk\\cmake\\3.22.1\\bin\\ninja.exe",
-    "-DCMAKE_TOOLCHAIN_FILE=C:/Users/evanl/AppData/Local/Android/Sdk/ndk/27.2.12479018/build/cmake/android.toolchain.cmake",
+    "-DCMAKE_MAKE_PROGRAM=<home>\\AppData\\Local\\Android\\Sdk\\cmake\\3.22.1\\bin\\ninja.exe",
+    "-DCMAKE_TOOLCHAIN_FILE=<home>/AppData/Local/Android/Sdk/ndk/27.2.12479018/build/cmake/android.toolchain.cmake",
     "-DANDROID_ABI=arm64-v8a",
     "-DANDROID_PLATFORM=android-28",
     "-DCMAKE_BUILD_TYPE=Release",
@@ -157,8 +157,8 @@
    "cmake_args": [
     "-G",
     "Ninja",
-    "-DCMAKE_MAKE_PROGRAM=C:\\Users\\evanl\\AppData\\Local\\Android\\Sdk\\cmake\\3.22.1\\bin\\ninja.exe",
-    "-DCMAKE_TOOLCHAIN_FILE=C:/Users/evanl/AppData/Local/Android/Sdk/ndk/27.2.12479018/build/cmake/android.toolchain.cmake",
+    "-DCMAKE_MAKE_PROGRAM=<home>\\AppData\\Local\\Android\\Sdk\\cmake\\3.22.1\\bin\\ninja.exe",
+    "-DCMAKE_TOOLCHAIN_FILE=<home>/AppData/Local/Android/Sdk/ndk/27.2.12479018/build/cmake/android.toolchain.cmake",
     "-DANDROID_ABI=arm64-v8a",
     "-DANDROID_PLATFORM=android-28",
     "-DCMAKE_BUILD_TYPE=Release",
@@ -174,8 +174,8 @@
     "-DGGML_OPENCL=ON",
     "-DGGML_OPENCL_USE_ADRENO_KERNELS=ON",
     "-DGGML_OPENCL_EMBED_KERNELS=ON",
-    "-DOpenCL_INCLUDE_DIR=C:/Users/evanl/.pb/src/OpenCL-Headers-886dc9b7ff48",
-    "-DOpenCL_LIBRARY=C:/Users/evanl/.pb/build/opencl-icd-loader/libOpenCL.so"
+    "-DOpenCL_INCLUDE_DIR=<home>/.pb/src/OpenCL-Headers-886dc9b7ff48",
+    "-DOpenCL_LIBRARY=<home>/.pb/build/opencl-icd-loader/libOpenCL.so"
    ],
    "binaries": [
     "llama-bench"
@@ -190,8 +190,8 @@
    "cmake_args": [
     "-G",
     "Ninja",
-    "-DCMAKE_MAKE_PROGRAM=C:\\Users\\evanl\\AppData\\Local\\Android\\Sdk\\cmake\\3.22.1\\bin\\ninja.exe",
-    "-DCMAKE_TOOLCHAIN_FILE=C:/Users/evanl/AppData/Local/Android/Sdk/ndk/27.2.12479018/build/cmake/android.toolchain.cmake",
+    "-DCMAKE_MAKE_PROGRAM=<home>\\AppData\\Local\\Android\\Sdk\\cmake\\3.22.1\\bin\\ninja.exe",
+    "-DCMAKE_TOOLCHAIN_FILE=<home>/AppData/Local/Android/Sdk/ndk/27.2.12479018/build/cmake/android.toolchain.cmake",
     "-DANDROID_ABI=arm64-v8a",
     "-DANDROID_PLATFORM=android-28",
     "-DCMAKE_BUILD_TYPE=Release",

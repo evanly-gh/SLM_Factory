@@ -124,7 +124,7 @@ def task_analysis_node(state: AgentState) -> AgentState:
     _calibrate_stop_threshold(state, task)
 
     # Data-size targets: take the orchestrator's chosen curriculum/eval sizes, clamped to
-    # [floor, ceiling] (B161). Fall back to the per-type default when the planner gave none.
+    # [floor, ceiling]. Fall back to the per-type default when the planner gave none.
 
     # Stage 1 + 2: hardware filter (inequality + on-device stub)
     feasible = run_hardware_filter(state["hardware_constraints"])

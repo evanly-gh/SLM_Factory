@@ -33,7 +33,8 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 import build_binaries  # noqa: E402
-from common import DEV_MODELS, MODELS_DIR, PAPER_MODELS, POOL_MODELS, REFS, REPOS, THIRD_PARTY, dev_bin_dir  # noqa: E402
+from common import (DEV_MODELS, MODELS_DIR, PAPER_MODELS, POOL_MODELS, REFS, REPOS, THIRD_PARTY,  # noqa: E402
+                    dev_bin_dir, portable_path)
 from devenv import IS_WINDOWS, Adb  # noqa: E402
 
 REPO_ROOT = HERE.parent.parent
@@ -241,7 +242,7 @@ def prepare_mnn(name: str, hf_id: str, hf_dir: Path, bits: int, args, manifest: 
     record(manifest, {"name": name, "hf_id": hf_id, "framework": "mnn", "quant": quant, "bits": bits,
                       "ref": args.ref, "path": dest.relative_to(MODELS_DIR).as_posix(), "files": file_map(dest),
                       "recipe": args.mnn_recipe, "converter": f"llmexport.py @ MNN {Path(env['SLM_MNN_ROOT']).name}, "
-                      f"MNNConvert {env.get('SLM_MNN_CONVERT_BIN', 'default')}"})
+                      f"MNNConvert {portable_path(env.get('SLM_MNN_CONVERT_BIN', 'default'))}"})
     print(f"[MNN] {name} {quant}: {sum(file_map(dest).values()) / 2**30:.2f} GiB")
 
 

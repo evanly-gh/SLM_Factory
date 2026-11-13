@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Write docs/RESULTS.md and docs/figures/*.png, the one results document for the Galaxy S23: the paper's Table 5
+Write hardware/docs/RESULTS.md and hardware/docs/figures/*.png, the one results document for the Galaxy S23: the paper's Table 5
 models (arXiv 2607.05475) next to the paper's four phones, the SLM_Factory pool with storage and memory, the energy
 report, how far to trust the numbers, and the differences from the paper's protocol.
 
@@ -625,6 +625,7 @@ def main():
     if failed:
         L += ["## 7. Configurations that could not run", ""]
         L += [f"- `{r['config']['id']}`: {r.get('error')}" for r in sorted(failed, key=lambda r: r["config"]["id"])]
+    DOCS.mkdir(parents=True, exist_ok=True)  # hardware/docs/ is git-ignored, so a fresh clone does not have it
     (DOCS / "RESULTS.md").write_text("\n".join(L) + "\n", encoding="utf-8")
     print(f"-> {DOCS / 'RESULTS.md'} and {len(figs)} figures in {FIGS}")
 

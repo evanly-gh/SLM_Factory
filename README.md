@@ -2,7 +2,7 @@
 
 **An agentic pipeline that fine-tunes a small language model for a task, sized to run on the phone the user actually owns.**
 
-This is the code behind the paper *Mobile AI Factory: Building Specialized Language Models for Your Mobile Device*.
+This is the code behind the paper *Mobile AI Factory: Building Specialized Language Models for Your Mobile Device* ([arXiv:2611.13509](https://arxiv.org/abs/2611.13509)).
 Given a task and a target phone, an orchestrator LLM (Claude) plans the work and searches over model size,
 quantization, training data and hyperparameters. It fine-tunes candidates with LoRA, scores each one on a
 real quantized build (llama.cpp GGUF or MNN), and returns the smallest model that meets the accuracy goal
@@ -67,8 +67,6 @@ The task registry is `tasks/__init__.py`, with one module per task:
 | format-bound | `xlam_bfcl`, `calendar_json`, `ner_bc5cdr`, `topv2`, `multiconer` |
 | out-of-distribution | `clinc150` |
 
-An eleventh task, the `address_bench` conversational address gate, lives on the `address-bench` branch.
-
 **Capabilities not used in the paper runs** (all ten tasks have them switched off, but they work if a
 task turns them on):
 - **LLM-as-a-judge for free-form tasks** (`needs_judge`, optionally `judge_overlap`). The local teacher
@@ -93,13 +91,18 @@ Best student and its fine-tuning gain on the ten tasks, from the paper's main ta
 | dialogsum | ROUGE-L | 0.482 | Qwen3-4B-Instruct Q8_0 | +0.000 |
 | topv2 | exact match | 0.599 | Qwen3-4B-Instruct Q8_0 | +0.065 |
 
-Run logs and artifacts are not in git. On the cluster they are in `logs/` (see `logs/README.md`,
-which maps every kept run to the table or figure it backs) and `artifacts/`.
+Run logs and model artifacts are not distributed with this repository. Running the pipeline writes each
+run's directory under `logs/runs/` (Slurm output under `logs/slurm/`) and caches quantized builds under
+`artifacts/`.
 
 ## Setup
 
 Training and quantized evaluation need a CUDA GPU. The launchers and setup scripts assume a Slurm
 cluster; run setup inside a Slurm job, not on a login node.
+
+**Python versions.** The pipeline's virtual environments below need Python 3.11+ (`pyproject.toml`;
+the setup scripts create 3.11 venvs with `uv`). The phone-side tools in `hardware/` use their own
+venv with Python 3.10–3.12; see `hardware/README.md`.
 
 Machine-specific settings live in one git-ignored file, `site.env`: cache and scratch directories,
 the llama.cpp checkout, and the Slurm account, partition and QOS. Every key is optional and has a
@@ -144,8 +147,11 @@ All task launchers share `tests/pipeline/_l40s_task_body.sh`, which calls `tests
 - `scripts/rescore_unseen.py`, via `tests/pipeline/rescore_unseen_l40s.slurm`, rescores the final models on
   rows the search never saw.
 - `scripts/probe_api_*.py` produce the frontier-model baselines.
-- These write into the local-only `docs/SLMF_Results/`. `plot_run_analysis.py` needs `analyze_runs.py`
-  to have run first, and `scripts/plot_results.py` needs the local `docs/SLMF_Results/RESULTS.md`.
+- These consume run directories under `logs/runs/` that you produce by running the pipeline (they are
+  not distributed), and write their tables and figures under `docs/SLMF_Results/` (created on first
+  run). `plot_run_analysis.py` needs `analyze_runs.py` to have run first. `scripts/plot_results.py`
+  redraws figures from a results write-up (`docs/SLMF_Results/RESULTS.md`) that is not distributed
+  either, so it only runs where that file exists.
 
 ## Repository layout
 
@@ -164,7 +170,24 @@ scripts/          Environment setup, dataset bundling, analysis, baselines, run 
 tests/            Unit tests; tests/pipeline/ holds run.py and the Slurm launchers
 ```
 
-Project notes, results write-ups and design documents are kept locally under `docs/` (gitignored).
+`docs/` is git-ignored: the analysis scripts above write their outputs there.
+
+## Citation
+
+This repository is the code for [Mobile AI Factory: Building Specialized Language Models for Your
+Mobile Device](https://arxiv.org/abs/2611.13509). If you use it, please cite:
+
+```bibtex
+@article{li2026mobileaifactory,
+  title   = {Mobile AI Factory: Building Specialized Language Models for Your Mobile Device},
+  author  = {Li, Evan and Deshpande, Krishna and Cheng, Wen and Gollakota, Shyamnath},
+  journal = {arXiv preprint arXiv:2611.13509},
+  year    = {2026}
+}
+```
+
+Evan Li, Krishna Deshpande and Wen Cheng contributed equally. `CITATION.cff` has the same entry
+for GitHub's "Cite this repository" button.
 
 ## License
 

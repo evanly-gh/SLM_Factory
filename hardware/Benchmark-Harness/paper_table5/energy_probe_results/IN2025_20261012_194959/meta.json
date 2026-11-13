@@ -65,7 +65,7 @@
   "no_perfetto": false,
   "allow_powered": false,
   "allow_busy": true,
-  "out_dir": "/Users/ksd/SLM_Factory_Krishna_Personal/Benchmark-Harness/paper_table5/energy_probe_results"
+  "out_dir": "<repo>/Benchmark-Harness/paper_table5/energy_probe_results"
  },
  "columns": [],
  "start": "2026-10-12T19:50:13.828923",

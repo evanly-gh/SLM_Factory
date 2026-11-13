@@ -317,7 +317,7 @@ def test_no_verifier_where_none_is_honest(task):
     an audit of 1,161 generated rows found three decidable defects going uncaught — fabricated
     extra "human references" (the count came out {1: 877, 2: 127, 3: 157} for rows with one
     author), 76 rows whose trained target disagreed with their stated answer, and 18 whose
-    "summary" carried a transcript turn label, which is the B250 continuation failure in training
+    "summary" carried a transcript turn label, which is the continuation failure in training
     data. See `verify_summarization_row`.
 
     The distinction worth keeping is between "no answer to verify" — genuinely the case for the

@@ -1,4 +1,4 @@
-"""Unit tests for the difficulty-stratified test-data agent (B161)."""
+"""Unit tests for the difficulty-stratified test-data agent."""
 import dataclasses
 import os
 os.environ.setdefault("ANTHROPIC_API_KEY", "x")

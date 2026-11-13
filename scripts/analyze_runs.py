@@ -375,6 +375,11 @@ def main() -> int:
             print(f"[{family}] {task}: {len(run['evals'])} evals, "
                   f"{run['gpu_hours_total']:.1f} GPU-h, ${run['usd_total']:.2f} API{note}",
                   file=sys.stderr)
+    if all(r.get("missing") for runs in result["families"].values() for r in runs.values()):
+        print(f"analyze_runs.py: none of the run directories in RUN_SETS exist under "
+              f"{RUNS.relative_to(ROOT)}/. Run directories are produced locally by running the pipeline "
+              "and are not distributed; edit RUN_SETS to point at your own runs.", file=sys.stderr)
+        return 1
     OUT.parent.mkdir(parents=True, exist_ok=True)
     OUT.write_text(json.dumps(result, indent=1))
     print(f"wrote {OUT.relative_to(ROOT)}", file=sys.stderr)

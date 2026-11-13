@@ -1,9 +1,9 @@
-"""B258: per-task context ceilings, eval batching, and judging that overlaps generation.
+"""Per-task context ceilings, eval batching, and judging that overlaps generation.
 
 Run 38303490 spent 22% of its wall time judging AFTER all generation had finished, with a measured
 0.0% overlap between the two GPUs.
 
-This file used to open with B257, the curriculum-size ratchet: a per-tier sizing formula could
+This file used to open with the curriculum-size ratchet: a per-tier sizing formula could
 return a smaller number for a bigger model and drop 754 already-curated rows, so the target was
 made monotonic. Both the formula and the target are gone (2026-08-19) — the curriculum is
 cumulative and only `_dedupe_into` grows it, which makes shrinking structurally impossible rather

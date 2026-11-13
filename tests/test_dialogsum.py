@@ -152,7 +152,7 @@ def test_a_missing_bertscore_venv_is_recorded_and_does_not_break_the_headline(mo
 
 
 # --------------------------------------------------------------------------
-# The B250 failure mode
+# The continue-the-conversation failure mode
 # --------------------------------------------------------------------------
 
 
@@ -174,7 +174,7 @@ def test_a_summary_may_mention_the_speakers_and_is_not_a_continuation():
 
 def test_a_reply_carrying_a_turn_label_is_a_continuation_and_a_format_failure():
     """The colon is the test: `#Person1#:` is how the TRANSCRIPT marks who is speaking, and 0 of
-    1,500 gold summaries contain it. This is the B250 failure — with no row-level instruction the
+    1,500 gold summaries contain it. This is the continuation failure — with no row-level instruction the
     model treated the transcript as something to reply to — and it must present as a prompt
     problem rather than as generic low overlap."""
     eval_set = _eval_set([_row("#Person1#: hi", ["They greet each other."])])
@@ -202,7 +202,7 @@ def test_an_empty_reply_is_its_own_category():
 
 def test_the_reasoning_block_is_not_scored_as_part_of_the_summary():
     """A CoT-trained model emits `<reasoning>` before its answer, and handing that to the scorer
-    would penalize output that contains a perfectly good summary (B251)."""
+    would penalize output that contains a perfectly good summary."""
     eval_set = _eval_set([_row("#Person1#: hi", ["They greet each other."])])
     raw = ["<reasoning>\nThe two people say hello.\n</reasoning>\n\nThey greet each other."]
     assert scorer.extract_predictions(raw, eval_set) == ["They greet each other."]
@@ -214,7 +214,7 @@ def test_the_instruction_is_resolved_once_for_the_dataset_not_per_row():
     rows = [_row("#Person1#: hi", ["a"]), {"text": "#Person1#: yo", "answer": "b", "references": ["b"]}]
     assert scorer.resolve_instruction(rows).startswith("Summarize the following conversation")
     # Even with no row carrying one, there is a real instruction and never the
-    # question-answering default that broke this task before (B250).
+    # question-answering default that broke this task before.
     assert "do not continue the conversation" in scorer.resolve_instruction([{"text": "x"}])
 
 

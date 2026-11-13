@@ -370,7 +370,7 @@ def test_validation_records_a_hash_of_every_file_and_the_cache_hit_checks_it(tmp
 
 
 def test_a_degenerate_smoke_test_reports_but_does_not_fail(tmp_path, capsys):
-    """B289's lesson, carried over verbatim: the load is the gate, generation only reports.
+    """The GGUF path's lesson, carried over verbatim: the load is the gate, generation only reports.
 
     As a fatal check this ended three healthy runs, because a small base model answering a trivial
     prompt is not a corrupt artifact. The eval score is the reliable detector.
@@ -463,7 +463,7 @@ def test_outright_garbage_at_the_configured_count_is_also_refused(tmp_path, monk
 
 
 def test_degenerate_at_both_thread_counts_is_only_a_warning(tmp_path, monkeypatch, capsys):
-    """Then there is no threading claim to make — it is a statement about the model (B289)."""
+    """Then there is no threading claim to make — it is a statement about the model."""
     artifact, _prompts, (patch_load, patch_generate) = _thread_check_mocks(
         tmp_path, monkeypatch, "!!!!!!!!!!!!", "????????????"
     )
@@ -679,7 +679,7 @@ def test_changing_an_export_setting_invalidates_the_cache(tmp_path, monkeypatch)
     """The settings are part of the key, because the files cannot say which ones built them.
 
     `quant_block` and `lm_quant_bit` change the weights. A hit across a change to either would
-    score the previous setting's model under the new one's name — B161 with a different label.
+    score the previous setting's model under the new one's name — the cross-tier reuse bug with a different label.
     """
     artifact = _write_artifact(tmp_path / "model-mnn-q4", quant_bit=4)
     monkeypatch.setattr(mnn, "MNN_QUANT_BLOCK", 64)

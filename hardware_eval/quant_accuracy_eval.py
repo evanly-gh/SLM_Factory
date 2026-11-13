@@ -117,7 +117,7 @@ def main() -> int:
             p.error("--adapter requires --base")
         from training.lora_trainer import merge_for_quantization
         print(f"[quant-eval] merging {args.adapter} onto {args.base} ...")
-        # `base_model_id` pinned rather than inferred (B219): Unsloth rewrites the adapter's
+        # `base_model_id` pinned rather than inferred: Unsloth rewrites the adapter's
         # `base_model_name_or_path` to its own pre-quantized 4-bit mirror, and a 16-bit merge from
         # that mirror is a unsloth_zoo NO-OP — it warns and writes nothing. `evaluate_node` has
         # always passed it; this script did not, so the one path a human runs by hand was the one

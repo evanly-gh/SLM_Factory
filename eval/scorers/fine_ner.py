@@ -42,7 +42,7 @@ FINE_NER_PROMPT = (
 
 
 def build_prompt(text: str) -> str:
-    """The ONE prompt. Imported by the training turn builder so the two cannot drift (B250)."""
+    """The ONE prompt. Imported by the training turn builder so the two cannot drift."""
     return FINE_NER_PROMPT.format(types=", ".join(ENTITY_TYPES), text=text)
 
 

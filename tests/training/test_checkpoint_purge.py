@@ -3,7 +3,7 @@
 These dirs hold optimizer.pt + a duplicate adapter + a duplicate tokenizer.json —
 ~1.2 GB per iteration that is dead the moment final_checkpoint is written. They were
 purged only on the fallback-retry path, so successful runs leaked 93 GB across three
-runs (see docs/superpowers/specs/2026-07-25-checkpoint-artifact-retention-design.md).
+runs.
 """
 import os
 

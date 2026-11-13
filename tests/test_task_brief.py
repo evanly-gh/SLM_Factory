@@ -10,7 +10,7 @@ WHY THIS FILE EXISTS
         which omits every convention that makes a CALENDAR row correct — the 60-minute default, ISO
         8601, resolving relative dates against the request's own reference instant. A verifier asked
         to judge against that description was judging its own guess, and calendar synthesis scored
-        0.2176 (B269).
+        0.2176.
       * It was one line. A teacher asked "is this answer correct?" with one line of context and no
         worked example is being tested on inferring the contract.
 
@@ -243,7 +243,7 @@ def test_an_unparseable_reply_falls_back(monkeypatch):
 
 def test_a_reply_missing_the_contract_falls_back(monkeypatch):
     """A brief with no output contract is worse than the fallback: it looks authored, so a reader
-    assumes the conventions were stated when they were not — which is B269 with extra steps."""
+    assumes the conventions were stated when they were not — which is the original problem with extra steps."""
     _stub_anthropic(monkeypatch, reply=json.dumps({"summary": "s", "output_contract": ""}))
     logs: list[str] = []
     brief = build_task_brief(get_task("gec_bea19"), [{"text": "q", "answer": "#### 1"}],
@@ -291,7 +291,7 @@ def test_the_context_block_falls_back_when_no_brief_was_stored():
 
 
 def test_the_two_format_bound_tasks_are_no_longer_described_identically(monkeypatch):
-    """The concrete B269 regression. Under the type-keyed table both were `function_call` and got the
+    """The concrete regression. Under the type-keyed table both were `function_call` and got the
     same sentence; now each brief is authored from its OWN rows, so calendar's conventions appear in
     calendar's brief and nowhere else."""
     _stub_anthropic(monkeypatch)

@@ -36,7 +36,7 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
-from common import DEV_ROOT, REFS, REPOS, THIRD_PARTY, dev_bin_dir  # noqa: E402
+from common import DEV_ROOT, REFS, REPOS, THIRD_PARTY, dev_bin_dir, portable_record  # noqa: E402
 from devenv import IS_WINDOWS, Adb, find_build_tool, find_ndk  # noqa: E402
 
 SRC = THIRD_PARTY / "src"
@@ -243,7 +243,7 @@ def build_llama(ref: str, ndk: Path, cmake: str, ninja: str, jobs: int, gpu: boo
         shutil.copy2(bdir / "bin" / t, out / t)
     info = {"framework": "llama.cpp", "target": target, "ref": ref, "commit": sha, "cmake_args": args,
             "binaries": targets, "built": datetime.now().isoformat()}
-    (out / "build_info.json").write_text(json.dumps(info, indent=1))
+    (out / "build_info.json").write_text(json.dumps(portable_record(info), indent=1))  # copied into results
     return info
 
 
@@ -268,7 +268,7 @@ def build_mnn(ref: str, ndk: Path, cmake: str, ninja: str, jobs: int) -> dict:
         shutil.copy2(so, out / so.name)
     info = {"framework": "mnn", "target": "mnn", "ref": ref, "commit": sha, "cmake_args": args,
             "binaries": ["llm_bench"], "libs": [p.name for p in libs], "built": datetime.now().isoformat()}
-    (out / "build_info.json").write_text(json.dumps(info, indent=1))
+    (out / "build_info.json").write_text(json.dumps(portable_record(info), indent=1))  # copied into results
     return info
 
 

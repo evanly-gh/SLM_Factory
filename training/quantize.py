@@ -66,7 +66,7 @@ class GgufDegenerateOutputError(RuntimeError):
 
     Kept separate from `QuantizationInfrastructureError` because the two need opposite responses.
     An infrastructure error means the toolchain is broken, so it re-raises and stops the run; retrying
-    would just fail again. Degenerate output has been observed to be TRANSIENT (B289): the same adapter
+    would just fail again. Degenerate output has been observed to be TRANSIENT: the same adapter
     and dataset produced a corrupt GGUF on one iteration and a good one on the next, so the correct
     response is to rebuild once. Only if the rebuild is also degenerate is it an infrastructure fault.
     """
@@ -154,7 +154,7 @@ def _smoke_test_generation(model, gguf_path: str, base_model: str | None = None)
     is not a corrupt model, and the same run's fine-tuned 0.6B artifacts passed the identical check.
 
     It is also a heuristic whose motivating evidence evaporated: the 0.0000 scores it was written to
-    catch turned out to be B290's train/serve skew, not GGUF corruption, so it has now produced three
+    catch turned out to be train/serve template skew, not GGUF corruption, so it has now produced three
     false positives and zero true ones. A heuristic that can end a multi-hour run needs far more
     certainty than this one has. The eval itself remains the real detector — a genuinely broken artifact
     scores near zero and the loop's rollback discards it — and this check's job is only to leave a

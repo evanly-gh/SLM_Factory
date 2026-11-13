@@ -1,6 +1,6 @@
 {
  "discovery": {
-  "serial": "adb-R3CW400L3TV-ceaweg._adb-tls-connect._tcp",
+  "serial": "wireless-adb",
   "manufacturer": "samsung",
   "model": "SM-S911U",
   "soc": "SM8550",
@@ -66,7 +66,7 @@
   "no_perfetto": false,
   "allow_powered": false,
   "allow_busy": false,
-  "out_dir": "C:\\Users\\evanl\\Documents\\VSCode\\Personal\\SLM_Factory-1\\Benchmark-Harness\\paper_table5\\energy_probe_results"
+  "out_dir": "<repo>\\Benchmark-Harness\\paper_table5\\energy_probe_results"
  },
  "columns": [],
  "start": "2026-10-04T23:33:44.943205",

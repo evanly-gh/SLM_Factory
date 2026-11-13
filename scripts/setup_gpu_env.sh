@@ -29,15 +29,15 @@ uv pip install --upgrade pip
 uv pip install "unsloth"
 uv pip install "trl" "transformers" "peft" "accelerate" "datasets" "bitsandbytes"
 # timm: required to load the gemma-3n-e2b-it multimodal wrapper (TimmWrapperModel),
-# otherwise its scaling-curve probe fails (see BUGS B114).
+# otherwise its scaling-curve probe fails.
 uv pip install "timm"
 # Orchestration deps (same as the dev venv). langchain-anthropic is required by
 # iterate_node's LLM per-iteration decision; without it every iteration silently
-# falls back to score-band rules (see BUGS B112).
+# falls back to score-band rules.
 uv pip install "langgraph>=0.2.0" "anthropic>=0.40.0" "exa-py" "python-dotenv" "langchain-anthropic"
 # matplotlib: run.py renders the end-of-run trajectory graphics. It is declared in
 # requirements.txt but was never installed here, so every cluster run ended with
-# "graphics: skipped (ModuleNotFoundError: No module named 'matplotlib')" (see BUGS B215).
+# "graphics: skipped (ModuleNotFoundError: No module named 'matplotlib')".
 uv pip install "matplotlib>=3.7.0"
 
 # --- Quantized-accuracy eval deps (config.QUANT_ACCURACY_EVAL / SLM_QUANT_EVAL=1) ---
@@ -57,7 +57,7 @@ if [ -x "$LLAMA_CPP_DIR/build/bin/llama-quantize" ]; then
   fi
   # llama-quantize and the llama-cpp-python native lib are built with gcc/12.3.0 and need
   # its newer libstdc++ (GLIBCXX_3.4.29/30) at RUNTIME; the RHEL8 system libstdc++ is too
-  # old, so quantization fails with "GLIBCXX_... not found" (B160). Put the gcc-12 runtime
+  # old, so quantization fails with "GLIBCXX_... not found". Put the gcc-12 runtime
   # lib on LD_LIBRARY_PATH for anything that sources this venv.
   # Location of that runtime is site-specific: SLM_GCC_LIB in site.env (unset = skip).
   GCC12_LIB="${SLM_GCC_LIB:-}"

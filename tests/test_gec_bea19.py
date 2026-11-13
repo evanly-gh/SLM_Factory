@@ -146,7 +146,7 @@ def test_a_genuinely_multi_line_reply_is_unusable_not_truncated():
     substance would shift every subsequent line in the file and score the whole corpus near zero
     for reasons unrelated to grammar. Silently keeping the first line would hide that the model
     is not obeying its output contract, so it is recorded as a format failure instead — which is
-    the alternative this repo chose over constrained decoding (B286).
+    the alternative this repo chose over constrained decoding.
     """
     eval_set = _eval_set([_row("a", "b", "S a")])
     assert scorer.extract_predictions(["She is happy .\nHope that helps!"], eval_set) == [None]

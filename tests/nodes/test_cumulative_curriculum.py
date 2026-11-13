@@ -586,7 +586,7 @@ def test_the_firewall_compares_prompt_as_well_as_text():
 def test_a_cot_task_annotates_its_rows_and_preserves_gold_reasoning(monkeypatch):
     """A source that ships gold chains-of-thought (GSM8K's `####` split did) must have them
     PRESERVED by annotation rather than regenerated: regenerating was both wasteful — one teacher
-    call per row — and quality-reducing, replacing a gold chain with a weaker teacher one (B141).
+    call per row — and quality-reducing, replacing a gold chain with a weaker teacher one.
 
     Driven through `curate._annotate_generation_cot` rather than `data.curriculum.annotate_cot`
     because the two have disagreed before: the call site once passed a `task=` keyword the callee
@@ -668,7 +668,7 @@ def test_an_invalid_plan_falls_back_rather_than_stopping_the_rebuild(monkeypatch
 
 def test_the_surgical_history_skips_a_category_that_stopped_responding(monkeypatch):
     """Without this the run keeps pouring rows at something that is not responding, which is the
-    loop the CLINC150 run got stuck in (B224)."""
+    loop the CLINC150 run got stuck in."""
     from agent.nodes.curate import _eligible_categories
 
     state = _state(surgical_category_history={
@@ -712,7 +712,7 @@ def test_categories_fall_back_to_the_last_test_report_when_the_plan_names_none()
 
 def test_surgical_synthesis_with_no_evidence_generates_nothing_and_says_why(capsys):
     """There is no failure category to aim at, so there is nothing to generate. Silence here is
-    indistinguishable from the B291 fallthrough that returned `[]` for six consecutive rebuilds."""
+    indistinguishable from the old fallthrough that returned `[]` for six consecutive rebuilds."""
     from agent.nodes.curate import _surgical_synthesize
 
     rows = _surgical_synthesize(

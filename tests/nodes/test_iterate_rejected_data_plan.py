@@ -1,4 +1,4 @@
-"""What `iterate` does when the orchestrator asks for data and its plan is refused (B312/B316).
+"""What `iterate` does when the orchestrator asks for data and its plan is refused.
 
 WHY THIS FILE EXISTS
     On verification run 38658213 the orchestrator asked for a `data_rebuild` on five consecutive
@@ -20,9 +20,9 @@ WHAT CHANGED, AND WHY IT IS NOT A COUNTER
     output as the loop's leaves a trajectory nobody can read afterwards: you cannot tell which
     iterations were reasoned and which were guessed.
 
-    So `iterate` now raises `OrchestratorDecisionError` on the FIRST unusable decision. The B312
+    So `iterate` now raises `OrchestratorDecisionError` on the FIRST unusable decision. The
     scenario below is unchanged; only the correct outcome moved, from "substitutes a hyperparameter
-    step" to "stops the run and says why" (B316).
+    step" to "stops the run and says why".
 """
 from unittest.mock import MagicMock, patch
 
@@ -86,7 +86,7 @@ def _state():
         "consecutive_no_improvement": 0,
         # The run's own shape: the test agent suggested hyperparameters, so the old fallback had
         # something plausible to substitute and the swap left no trace. Kept in the fixture so this
-        # file still reproduces the exact state that made B312 invisible — the point is that a
+        # file still reproduces the exact state that made the substitution invisible — the point is that a
         # plausible substitute being available no longer matters.
         "test_report": {
             "suggested_intervention": "hyperparameter",
@@ -113,7 +113,7 @@ def _unusable_data_decision():
 
 @patch("agent.nodes.iterate._llm_iterate")
 def test_a_refused_data_plan_stops_the_run(mock_llm):
-    """The whole of B312 in one assertion: the turn does not happen at all.
+    """The whole failure in one assertion: the turn does not happen at all.
 
     Run 38658213 needed five iterations and a GPU to notice; a raise costs one.
     """

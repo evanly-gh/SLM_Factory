@@ -20,7 +20,7 @@
                    "label", "profile", "ram_gib"],
       "additionalProperties": false,
       "properties": {
-        "serial": {"type": ["string", "null"], "description": "adb serial used (ip:port when wireless)"},
+        "serial": {"type": ["string", "null"], "description": "adb transport used: usb-adb or wireless-adb (the serial itself is not recorded)"},
         "manufacturer": {"type": ["string", "null"]},
         "model": {"type": ["string", "null"], "description": "ro.product.model, e.g. IN2025"},
         "soc": {"type": ["string", "null"], "description": "e.g. SM8250"},

@@ -84,7 +84,7 @@ def _load_named_benchmark(name: str, state: AgentState, acquire_meta: dict):
           f"(asked for {max_train}) and {len(test_examples)} eval rows (asked for {max_test})")
     # Record what we consumed per source, so a later `mine_new_real` knows which corpora still have
     # rows we have not taken. Without this the loop had no way to tell "this dataset is exhausted"
-    # from "we only ever asked for the first 3,250 rows of it" (B297).
+    # from "we only ever asked for the first 3,250 rows of it".
     state["source_progress"] = {
         source.hf_id: {
             "consumed": len(train_examples),
@@ -149,7 +149,7 @@ def _measure_teacher(state: AgentState, eval_set, train_rows: list[dict]) -> Non
         and makes it the run's `stop_threshold`.
 
     Five-shot because that is how synthesis prompts the teacher; a zero-shot number on a
-    format-bound task mostly reports whether it guessed our output contract (B276). The full eval
+    format-bound task mostly reports whether it guessed our output contract. The full eval
     set because that is the set the student is scored on, so the two numbers are comparable.
     """
     from agent.teacher_fitness import measure_teacher_fitness
@@ -185,7 +185,7 @@ def _pin_label_space(state: AgentState, eval_set) -> None:
 
     Everything downstream (mining, LLM column mapping, synthesis, quality control) treats this as
     authoritative and may only REMOVE rows that fall outside it — never extend it. See
-    `data/label_space.py` for why (B259: four hallucinated classes entered a two-class task).
+    `data/label_space.py` for why (four hallucinated classes once entered a two-class task).
     """
     from data.label_space import label_definitions_for, label_space_from_eval_set
 
@@ -311,7 +311,7 @@ def _calibrate_qwen_goal_if_pending(state: AgentState, eval_set) -> None:
 
 
 def _eval_target(target: int) -> int:
-    """Clamp the ORCHESTRATOR's eval-size target to a sane floor (B161).
+    """Clamp the ORCHESTRATOR's eval-size target to a sane floor.
     build_eval_set defaulted to 100 total, which silently capped the eval set no matter how
     many test rows were acquired (the eval-size bug). Honor the requested size with a min-30
     floor so a tiny target can never starve the eval set."""
@@ -390,7 +390,7 @@ def eval_setup_node(state: AgentState) -> AgentState:
     task = state["task"]
     plan = state.get("task_plan")
 
-    # Shared-dataset harness (B161): for a FAIR strategy comparison, all runs can load ONE
+    # Shared-dataset harness: for a FAIR strategy comparison, all runs can load ONE
     # frozen dataset + eval set (built once by scripts/prepare_shared_dataset.py) instead of
     # each independently re-acquiring — acquisition nondeterminism previously gave each
     # strategy different data, confounding the comparison. Enabled via SLM_SHARED_DATASET_DIR.
@@ -437,7 +437,7 @@ def eval_setup_node(state: AgentState) -> AgentState:
     # What used to sit here was an "autonomous" path that asked the orchestrator to plan a task TYPE
     # and then went looking for a dataset to fit it, sized to `curriculum_size_target × 0.65`. That
     # is where the mystery 3,250 came from. It is gone because a task with no loader has no scorer,
-    # no training prompt and no synthesis path either — the silent no-ops of B291 and B299 were all
+    # no training prompt and no synthesis path either — the earlier silent no-ops were all
     # downstream of pretending otherwise. Web research survives where it is useful: as rung 2 of the
     # `mine_new_real` ladder, finding a corpus to GROW a curriculum that already exists.
     acquire_meta: dict = {}
@@ -446,7 +446,7 @@ def eval_setup_node(state: AgentState) -> AgentState:
     state["train_examples"] = train_examples
     state["data_source"] = acquire_meta.get("source", "unknown")
 
-    # --- Data provenance + held-out split restriction metadata (B161) ---
+    # --- Data provenance + held-out split restriction metadata ---
     # Keep full lineage in data_sources, but only copy explicitly declared eval restrictions
     # into eval_source_ban. The field is metadata for downstream acquisition decisions; this
     # node's concrete enforcement is the normalized train/test overlap assertion below.
@@ -477,7 +477,7 @@ def eval_setup_node(state: AgentState) -> AgentState:
     print("      [eval_setup] official train/test separation: normalized overlap=0")
 
     # The loader already applied the task's own eval cap, so the split IS the target — re-applying
-    # a separate `eval_size_target` here would cap it a second time and undo the cap (B288).
+    # a separate `eval_size_target` here would cap it a second time and undo the cap.
     eval_set = build_eval_set(
         test_examples,
         task=task,
@@ -502,7 +502,7 @@ def eval_setup_node(state: AgentState) -> AgentState:
     _author_task_brief(state, train_examples)
     _gate_synthetic_data(state, eval_set, train_examples)
 
-    # Difficulty-stratify the eval set for the test-data agent (B161): label each held-out
+    # Difficulty-stratify the eval set for the test-data agent: label each held-out
     # example easy/medium/hard by the base-model zero-shot capability gradient (smallest vs
     # largest feasible model), so the test agent can report per-difficulty accuracy and give
     # targeted diagnoses. Guarded — falls back to a length heuristic on any failure.

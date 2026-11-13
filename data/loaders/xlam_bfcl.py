@@ -6,7 +6,7 @@ are shaped into the ``function_call`` row schema ``{text, answer, tools}`` where
 canonical JSON string of the gold call list ``[{"name", "arguments"}]`` — exactly what
 ``eval/scorers/function_call.py`` parses.
 
-**BFCL is not a `load_dataset`-able repo (B253).** It ships 52 category-named JSON files
+**BFCL is not a `load_dataset`-able repo.** It ships 52 category-named JSON files
 (``BFCL_v3_simple.json``, ``BFCL_v3_parallel.json``, …) that match no split-name pattern, so
 ``load_dataset(BFCL_ID, ...)`` raises ``DataFilesNotFoundError``. Worse, prompts and gold answers
 live in *separate* files joined on ``id``, and each gold argument is a **list of acceptable

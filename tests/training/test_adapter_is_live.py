@@ -1,4 +1,4 @@
-"""B254: an attached-but-zeroed LoRA adapter must fail loudly, not score the base model.
+"""An attached-but-zeroed LoRA adapter must fail loudly, not score the base model.
 
 `model.load_adapter(path)` on an Unsloth-patched model built the LoRA modules and marked them
 active while leaving every lora_B tensor at its zero init. Since LoRA computes B @ A and B is

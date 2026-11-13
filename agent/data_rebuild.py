@@ -79,7 +79,7 @@ MAX_REBUILD_ROWS = 2000
 # Rejecting them cost verification run 38658213 five consecutive iterations: the orchestrator asked
 # for `data_rebuild` every time, the plan was thrown out on `unknown field(s) ['hypothesis', 'task']`,
 # and the fallback quietly substituted a hyperparameter step — so the log read as though the
-# orchestrator had wanted hyperparameters, and no data intervention ran at all (B312). A validator
+# orchestrator had wanted hyperparameters, and no data intervention ran at all. A validator
 # that cannot accept what it just produced is a trap regardless of who steps in it.
 #
 # Their values are IGNORED: `task` and `hypothesis` come from this function's arguments, which are

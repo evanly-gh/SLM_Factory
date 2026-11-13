@@ -1,4 +1,4 @@
-"""EXACT, programmatic verifiers for generated format-bound rows (B269 / 08-17 note §8.2).
+"""EXACT, programmatic verifiers for generated format-bound rows.
 
 WHY THIS EXISTS
     `_synthesize_new_correct` is the one synthesis path where the teacher invents BOTH the input and
@@ -258,7 +258,7 @@ def verify_calendar_row(row: dict) -> tuple[bool, str]:
     # Without it a row whose request says "tomorrow at 3pm" and whose answer says 09:00 the next day
     # passed as a "well-formed calendar event with coherent datetimes", because it IS well-formed and
     # the datetimes ARE coherent. It is simply the wrong answer, which is the one defect that matters
-    # for a task scored by exact argument match (B319).
+    # for a task scored by exact argument match.
     #
     # Re-resolving with `resolve_datetime` — the SAME grammar the loader used to build the gold — is
     # what makes this an exact verifier rather than a plausibility check: no teacher call, no
@@ -430,7 +430,7 @@ def verify_summarization_row(row: dict) -> tuple[bool, str]:
          another.
 
       3. A "SUMMARY" THAT IS ACTUALLY A CONTINUATION. 18 rows carried a transcript TURN LABEL
-         (`#Person1#:`) in the answer — the B250 failure, in generated training data. Training on
+         (`#Person1#:`) in the answer — the continue-the-conversation failure, in generated training data. Training on
          those actively teaches the model to reply to the conversation instead of summarizing it,
          which is the single failure this task has already had in production.
 

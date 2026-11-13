@@ -1,4 +1,4 @@
-"""The eval-set size cap is applied ONCE, by the loader, not twice (B288).
+"""The eval-set size cap is applied ONCE, by the loader, not twice.
 
 `eval_size_target` defaulted to 800 and was applied at TWO places: as the loader's `max_test`, and
 again as `build_eval_set`'s `target`. Raising the cap in the first place therefore did nothing —
@@ -38,13 +38,13 @@ def test_eval_target_honours_a_large_request():
 
 
 def test_eval_target_floors_a_tiny_request():
-    """A 30-row floor so a small orchestrator-chosen target cannot starve the eval set (B161)."""
+    """A 30-row floor so a small orchestrator-chosen target cannot starve the eval set."""
     assert _eval_target(0) == 30
     assert _eval_target(5) == 30
 
 
 def test_the_cap_reaches_the_loader_and_is_never_applied_a_second_time(monkeypatch):
-    """The B288 invariant, driven through the production call path.
+    """The apply-the-cap-once invariant, driven through the production call path.
 
     `TaskSpec.select_cap` is handed to the loader as `max_test`, and whatever the loader returns IS
     the target `build_eval_set` is given. That is the whole fix: there is no second number left to

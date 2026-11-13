@@ -144,7 +144,7 @@ def _score_once(rows: list[dict], task: str, weights_ref: str, base_model: str,
 
     # `target=len(rows)` because these rows ARE the report split. `build_eval_set` would otherwise
     # subsample to its default of 100 — the same off-by-a-cap that made raising the eval size a
-    # no-op in the loop (B288).
+    # no-op in the loop.
     eval_set = build_eval_set(rows, task=task, target=len(rows))
     _attach_label_scores(eval_set, task, weights_ref, base_model)
     result = run_eval(

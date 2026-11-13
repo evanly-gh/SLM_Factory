@@ -106,7 +106,7 @@ class TestLabellingIsHonest:
     """
     `pi.D.plan` persists across iterations, so a hyperparameter node still carries the plan
     from the last rebuild. Rendering that as `hyperparameter/acquire` would credit a data
-    strategy to an iteration that never touched the data — the B237 false-memory defect again.
+    strategy to an iteration that never touched the data — the same false-memory defect again.
     """
 
     def test_hyperparameter_node_carrying_a_stale_plan_is_not_given_a_sub_strategy(self):

@@ -1,10 +1,10 @@
-"""The GGUF generation smoke test REPORTS; it must never end a run (B289).
+"""The GGUF generation smoke test REPORTS; it must never end a run.
 
 History worth keeping, because the second version of this check was worse than not having it. It began
 as a fatal gate on the theory that a GGUF which loads but decodes to garbage was being scored as a real
 0.0000. Two things then went wrong:
 
-1. The 0.0000 scores it was written to catch were B290 — a train/serve prefix skew — not corruption. So
+1. The 0.0000 scores it was written to catch were a train/serve prefix skew, not corruption. So
    the premise was unfounded.
 2. As a fatal check it killed three healthy runs on 2026-08-16 (`38569605` routerbench, `38569606`
    ner_bc5cdr, `38569608` calendar_json), the second of which was already four iterations in. All three

@@ -62,7 +62,7 @@ def build_run_progression(
     progression = copy.deepcopy(state.get("escalation_history") or [])
     # escalate_node stashes a finished tier WITHOUT a "kind", while every entry built below
     # carries one. Consumers that filter on kind == "model_trajectory" therefore dropped every
-    # earlier tier and graphed only the final model (B255). Tag them at the source so the
+    # earlier tier and graphed only the final model. Tag them at the source so the
     # progression is uniform whatever the producer wrote.
     for entry in progression:
         entry.setdefault("kind", "model_trajectory")

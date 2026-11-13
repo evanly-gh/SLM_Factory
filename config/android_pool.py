@@ -29,16 +29,16 @@
 #   Qwen3-1.7B                 (text)       — Tier 1 Q4 seed
 #   Qwen3-4B-Instruct-2507     (text)       — Tier 3 Q4 seed; NON-thinking
 #   Qwen3.5-0.8B               (multimodal) — Tier 0 seed; text-only LoRA via FastVisionModel
-#   Qwen3.5-2B                 (multimodal) — Tier 2 seed; base repo (not -GGUF, B107)
+#   Qwen3.5-2B                 (multimodal) — Tier 2 seed; base repo (not -GGUF)
 #   Qwen3.5-4B                 (multimodal) — Tier 3 Q4 seed
 #
 # No Qwen2.5, no distilled (DeepSeek-R1-Distill), no thinking-only (Qwen3-4B-Thinking-2507)
-# models. See docs/model_pool.md for the per-model capability write-up and "worth using for".
+# models. Each entry's comment below records its capabilities and what it is worth using for.
 #
-# Multimodal handling (B123/B136): Qwen3.5 is a "Causal LM with Vision" and is fine-tuned
+# Multimodal handling: Qwen3.5 is a "Causal LM with Vision" and is fine-tuned
 # TEXT-ONLY via Unsloth's FastVisionModel with finetune_vision_layers=False (see lora_trainer).
 # Qwen3.5-* use the BASE transformers repos, never the -GGUF repo (no transformers config,
-# cannot be fine-tuned, B107).
+# cannot be fine-tuned).
 #
 # Android framework compatibility:
 #   llama.cpp (GGUF): all models — broadest format support, CPU+Vulkan backends
@@ -470,7 +470,6 @@ ANDROID_POOL: list[ModelSpec] = [
     # 258) and the WEAKEST by far on xlam_bfcl (0.10 vs 0.45 quantized). Its 270M params
     # are 63% embedding table, leaving ~102M of transformer against SmolLM2-360M's ~315M.
     # `select_smallest` orders on file size and will therefore prefer it on every task.
-    # See `docs/Evan's Notes/08-23-...md` §4.5.
 
     # ── Qwen3-0.6B (text) — Tier 0 seed ───────────────────────────────────
     # Qwen3 Technical Report Table 8 values are Base/proxy measurements and are not
@@ -859,7 +858,7 @@ ANDROID_POOL: list[ModelSpec] = [
                 source="https://huggingface.co/Qwen/Qwen3.5-2B",
             ),
         ),
-        notes="Qwen3.5-2B (official, multimodal); text-only LoRA via FastVisionModel; base repo (not -GGUF, B107); 262K context",
+        notes="Qwen3.5-2B (official, multimodal); text-only LoRA via FastVisionModel; base repo (not -GGUF); 262K context",
         multimodal=True,
     ),
 

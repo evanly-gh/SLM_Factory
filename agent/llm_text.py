@@ -2,7 +2,7 @@
 """
 Read the assistant's TEXT out of an Anthropic response, whatever else the model emitted.
 
-Why this exists (B253): every call site used to read `resp.content[0].text`, which assumes
+Why this exists: every call site used to read `resp.content[0].text`, which assumes
 the first content block is the answer. It is not. When the orchestrator engages extended
 thinking, the response is `[ThinkingBlock, TextBlock]` — the answer is at index 1, and a
 ThinkingBlock has no `.text` at all. Reading index 0 therefore either raised AttributeError

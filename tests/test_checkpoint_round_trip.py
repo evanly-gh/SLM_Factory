@@ -129,7 +129,7 @@ def test_the_encoded_state_is_plain_json():
 
 
 def test_the_format_score_survives_the_round_trip():
-    """`format_valid` is half of the diagnosis (B290). A resume that lost it would leave the
+    """`format_valid` is half of the diagnosis. A resume that lost it would leave the
     orchestrator unable to tell a format problem from a content one for the rest of the run."""
     decoded = decode_state(encode_state(_state()))
     assert decoded["last_eval"].format_valid == 0.97

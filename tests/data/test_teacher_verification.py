@@ -7,7 +7,7 @@ output is right.
 
 Two invariants, both of which failed in production.
 
-WHAT THE TEACHER IS TOLD (B267)
+WHAT THE TEACHER IS TOLD
     The prompts used to show the teacher only the label STRING, so it read the label as an ordinary
     English word. On RouterBench — where `local` means "a small on-device model can answer this
     correctly" — it rejected 70% of generated rows with verdicts like *"the utterance is a math
@@ -23,7 +23,7 @@ WHAT A VERIFIER MAY NEVER DO
     explicit `{"valid": false}` drops one, and the teacher's stated reason is logged so a bad
     GENERATOR prompt is visible rather than silently absorbed as a low keep-rate.
 
-WHAT THE TEACHER IS TOLD, PART TWO (B269)
+WHAT THE TEACHER IS TOLD, PART TWO
     `task_description` is now a REQUIRED keyword on `verify_generated_labels`, matching
     `verify_generated_answers`. It carries the orchestrator-authored brief — what the benchmark is
     and what its output contract says — rendered by `agent.task_brief.brief_context_block`. It is
@@ -46,7 +46,7 @@ from data.curriculum import (
 )
 from tasks import get_task
 
-# A two-class label space whose label WORDS mislead (B267). Written out here because the routerbench
+# A two-class label space whose label WORDS mislead. Written out here because the routerbench
 # task these definitions came from was removed on 2026-11-11; the tests only need a closed label
 # space with definitions, not the task itself.
 ROUTER_DEFINITIONS = {
@@ -143,7 +143,7 @@ def test_no_definitions_means_no_context_block_rather_than_an_empty_heading():
 
 
 def test_real_in_class_examples_are_shown_alongside_the_definition():
-    """A decision boundary is easier to show than to describe (B276), and the examples are real rows
+    """A decision boundary is easier to show than to describe, and the examples are real rows
     so the verifier judges the class as it ACTUALLY appears."""
     prompts: list[str] = []
     _verify_labels(
@@ -164,7 +164,7 @@ def test_the_brief_reaches_the_label_verification_prompt():
 
     Before it was threaded through, the verifier was told only "you are checking one training
     example for a text classifier" — no benchmark, no output contract — so it judged the task it
-    inferred from the label word rather than the task being trained (B267/B269). The summary and the
+    inferred from the label word rather than the task being trained. The summary and the
     output contract are both asserted because they answer different questions: what the rows ARE,
     and what a correct one has to look like.
     """
@@ -183,7 +183,7 @@ def test_the_brief_reaches_the_label_verification_prompt():
 
 def test_task_description_is_required_rather_than_defaulted():
     """A default would let a caller that never learned about the brief silently keep the old,
-    context-free prompt — the exact regression the keyword exists to make impossible (B269)."""
+    context-free prompt — the exact regression the keyword exists to make impossible."""
     import inspect
 
     parameter = inspect.signature(verify_generated_labels).parameters["task_description"]
@@ -194,7 +194,7 @@ def test_task_description_is_required_rather_than_defaulted():
 def test_five_in_class_examples_are_shown_to_the_verifier():
     """Five, matching SYNTH_SHOTS: the verifier is judging the same class the generator was shown,
     so showing it fewer examples than the generator got makes the two disagree about where the
-    boundary is. Six are offered and exactly the first five appear (B276)."""
+    boundary is. Six are offered and exactly the first five appear."""
     prompts: list[str] = []
     references = [{"text": f"in-class example {i}", "label": "local"} for i in range(6)]
     _verify_labels(
@@ -211,8 +211,7 @@ def test_five_in_class_examples_are_shown_to_the_verifier():
 
 def test_the_answer_verifier_is_shown_real_request_answer_pairs():
     """On `calendar_json` the conventions ARE the task — the 60-minute default, ISO 8601, resolving
-    against the reference instant — and a verifier that has to guess them is judging its own guess
-    (B269)."""
+    against the reference instant — and a verifier that has to guess them is judging its own guess."""
     prompts: list[str] = []
     verify_generated_answers(
         [{"text": "book a dentist visit", "answer": "[]"}],
@@ -345,7 +344,7 @@ def _call(verify, rows, generate_fn):
 # zero-shot on BC5CDR and 0.7190 five-shot — a 6.4x difference — so a prompt that went out with two
 # demonstrations produced a batch whose keep rate cannot be compared with any other batch's. The
 # only way to know that happened is for the short prompt to announce itself, because the batch
-# itself looks exactly like a batch on a hard class (B276).
+# itself looks exactly like a batch on a hard class.
 
 
 def _short_shot_lines(logs: list[str]) -> list[str]:
@@ -382,7 +381,7 @@ def test_a_verification_batch_with_the_full_five_examples_is_silent():
 
 def test_answer_verification_warns_on_a_short_reference_set_too():
     """Same contract on the generation family, where the teacher invented both halves of the row
-    and the references are the only statement of the task's conventions (B269)."""
+    and the references are the only statement of the task's conventions."""
     logs: list[str] = []
     verify_generated_answers(
         [{"text": "book a dentist visit", "answer": "[]"}],

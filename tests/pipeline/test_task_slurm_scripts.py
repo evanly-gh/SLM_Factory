@@ -49,7 +49,7 @@ L40S_BENCHMARK_SCRIPTS = {
     "run_ner_bc5cdr_l40s.slurm": "ner_bc5cdr",
     # Re-added 2026-08-23. An sms_spam loader existed before the 2026-08-18 registry rebuild and
     # was deleted with the `task_type` channel; the new one is a rewrite that deduplicates before
-    # splitting and stratifies the holdout (the old one did neither — B44).
+    # splitting and stratifies the holdout (the old one did neither).
     "run_sms_spam_l40s.slurm": "sms_spam",
     # The on-device SFT suite, added 2026-09-06. Each covers a capability the tasks above did not:
     # nested structured prediction under a published low-resource protocol, a 33-class label space,
@@ -58,7 +58,7 @@ L40S_BENCHMARK_SCRIPTS = {
     "run_multiconer_l40s.slurm": "multiconer",
     "run_gec_bea19_l40s.slurm": "gec_bea19",
     "run_goemotions_l40s.slurm": "goemotions",
-    # address_bench (added 2026-10-06) and its launcher live on the `address-bench` branch.
+    # address_bench (added 2026-10-06) and its launcher are not part of this release.
 }
 
 L40S_TASK_SCRIPTS = tuple(L40S_BENCHMARK_SCRIPTS)
@@ -391,7 +391,7 @@ ABLATION_SCRIPTS.update({
 PROBE_SCRIPTS = {
     # The Aug-Sep 2026 probes (teacher few-shot, small-model, quant pass, suite harness, synthesis
     # audit, eval-backend comparison) and their scripts were removed 2026-11-11; the MNN probes
-    # below back RESULTS.md Part IV and stay.
+    # below back the paper's MNN-versus-llama.cpp results and stay.
     #
     # Does the MNN quantization backend score the same as llama.cpp on the same weights
     # (2026-09-17)? A probe: no agent loop, no teacher, no orchestrator call, two backends over
@@ -1366,9 +1366,16 @@ def test_every_slurm_script_runs_on_a_sanctioned_l40s_allocation():
             assert match is not None, (
                 f"{path.name} must pin SLM_RUN_DIR to the run it continues, under {LAUNCHER_ROOT}"
             )
-            assert (REPO_ROOT / match.group(1)).is_dir(), (
-                f"{path.name} pins SLM_RUN_DIR={match.group(1)} which does not exist"
+            run_dir = match.group(1)
+            assert run_dir.startswith("logs/runs/"), (
+                f"{path.name} pins SLM_RUN_DIR={run_dir}; a continued run lives under logs/runs/"
             )
+            # `logs/` is git-ignored run output, so a fresh clone has none and there is nothing to
+            # check the pin against. Where run output exists, the pinned run must be among it.
+            if (REPO_ROOT / "logs" / "runs").is_dir():
+                assert (REPO_ROOT / run_dir).is_dir(), (
+                    f"{path.name} pins SLM_RUN_DIR={run_dir} which does not exist"
+                )
             continue
         # The `_cse` launchers (run on gpu-l40s-cse, per their header) are the only place a 24h cap
         # is legitimate; a weeklong request there is rejected at submit time, and a 24h request on

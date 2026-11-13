@@ -26,7 +26,7 @@
    "tokenizer.txt": 6608213
   },
   "recipe": "paper-default",
-  "converter": "llmexport.py @ MNN mnn-510ac8f15d10, MNNConvert C:\\Users\\evanl\\.pb\\tools\\mnnconvert_nolog.cmd"
+  "converter": "llmexport.py @ MNN mnn-510ac8f15d10, MNNConvert <home>\\.pb\\tools\\mnnconvert_nolog.cmd"
  },
  "started": "2026-10-10T10:23:21.230003",
  "invocations": {

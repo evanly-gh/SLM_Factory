@@ -227,7 +227,7 @@ class StudentServer:
         environment = dict(os.environ)
         environment["CUDA_VISIBLE_DEVICES"] = _gpu_ids()
         # The server must not inherit the pipeline's proxy: a Squid proxy applied to a 127.0.0.1
-        # request returns a 5xx error page, which is how B161 presented.
+        # request returns a 5xx error page, which is how an earlier crash presented.
         for variable in ("HTTP_PROXY", "HTTPS_PROXY", "http_proxy", "https_proxy"):
             environment.pop(variable, None)
         self._process = subprocess.Popen(

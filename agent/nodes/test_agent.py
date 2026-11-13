@@ -1,5 +1,5 @@
 """
-Test-data agent (B161 change 9).
+Test-data agent.
 
 Owns the held-out eval set and reports, to the orchestrator, ONLY per-difficulty accuracy
 numbers plus a targeted diagnosis — never the raw examples (a contamination firewall).
@@ -7,7 +7,7 @@ Rather than clustering or exposing individual failures, it runs the eval buckete
 difficulty (easy/medium/hard) and turns the per-bucket score pattern into an actionable
 improvement suggestion (data / hyperparameters / escalate).
 
-Difficulty is labeled by the base-model zero-shot capability gradient (B161): run the
+Difficulty is labeled by the base-model zero-shot capability gradient: run the
 SMALLEST and LARGEST feasible base models zero-shot once at setup —
   easy   = both get it right
   medium = only the large model gets it right
@@ -287,7 +287,7 @@ def build_test_report(eval_set, best_result, difficulty, threshold, task) -> dic
     # The task's own failure taxonomy. Under the previous design this was an `if task_type == ...`
     # chain whose `else` reported the single constant pair `gold_verifier -> incorrect` for every
     # open-ended task, so its count was just the failure count the orchestrator already had — and
-    # it wrote pages of reasoning about that constant (B296). A task that declares
+    # it wrote pages of reasoning about that constant. A task that declares
     # `failure_category=None` reports one honest aggregate instead of a fake taxonomy.
     from tasks import get_task
 
@@ -310,7 +310,7 @@ def build_test_report(eval_set, best_result, difficulty, threshold, task) -> dic
             # fill the pair shape — and the orchestrator read it as a real model output. On calendar
             # run 38735780 it wrote about "the degenerate single-token 'incorrect' output" 65 TIMES,
             # building hypotheses on a behaviour that never occurred: the model was emitting `[]` and
-            # well-formed calls with wrong arguments, never the word "incorrect" (B326).
+            # well-formed calls with wrong arguments, never the word "incorrect".
             #
             # An open-ended task has a failure CATEGORY, not a confusion between two classes. None
             # says so, and the renderers below print a category line instead of a pair.

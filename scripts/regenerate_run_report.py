@@ -279,7 +279,7 @@ def _logs_for(run_dir: Path) -> list[Path]:
     found = [run_dir / "run.log"] if (run_dir / "run.log").is_file() else []
     slurm = PROJ / "logs" / "slurm"
     if slurm.is_dir():
-        # Recursive: finished jobs' logs are filed into purpose folders (see logs/README.md).
+        # Recursive: finished jobs' logs may be filed into purpose subfolders of logs/slurm/.
         for path in sorted(slurm.rglob("*.out")):
             try:
                 # Read the head only; "Run dir:" is printed in the first few lines.

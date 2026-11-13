@@ -6,7 +6,7 @@ both use `function_call_turn`), but neither of them gets it by falling through a
 
 The training-turn builders import their prompt from the EVAL scorer rather than reproducing it.
 That is not tidiness: when the two were written separately the model was fine-tuned on one input
-shape and scored on another (B250 for generation, and again for NER, where the training copy had
+shape and scored on another (for generation, and again for NER, where the training copy had
 quietly dropped the "Reply with [] if there are no entities" sentence). Importing makes them
 incapable of drifting.
 """

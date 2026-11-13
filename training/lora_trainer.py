@@ -298,7 +298,7 @@ def _training_turn(example: dict, task: str, ctx) -> tuple[str, str, str]:
     of those tasks died here after loading data and measuring a baseline.
 
     Each builder imports its prompt from the eval scorer rather than reproducing it, so the text
-    training sees and the text inference sends cannot drift (B250, B290).
+    training sees and the text inference sends cannot drift.
     """
     from tasks import get_task
 
@@ -345,7 +345,7 @@ def _build_completion_only_rows(
         # Was Qwen-only until 2026-08-24, when the pool stopped being Qwen-only. The rule was never
         # about Qwen: a POOL model with no chat template silently drops to the plain-text fallback
         # below, which is a different serving contract from the one `_serving_prompt_prefix` will
-        # use at eval time. That is B290 with the families swapped. Off-pool ids (ad-hoc probes,
+        # use at eval time. That is the template-skew bug with the families swapped. Off-pool ids (ad-hoc probes,
         # base checkpoints being measured deliberately) still take the fallback, because for them
         # the plain-text path IS the contract on both sides.
         raise RuntimeError(
@@ -490,7 +490,7 @@ def _load_training_model(
 
 
 def _pin_serving_chat_template(tokenizer, base_model_id: str):
-    """Replace the loaded tokenizer's chat template with the SERVED model's template (B290).
+    """Replace the loaded tokenizer's chat template with the SERVED model's template.
 
     `FastLanguageModel.from_pretrained("Qwen/Qwen3-4B-Instruct-2507")` does not load that repo. It
     silently redirects to `unsloth/qwen3-4b-instruct-2507-unsloth-bnb-4bit`, and returns that mirror's
@@ -537,7 +537,7 @@ def _pin_serving_chat_template(tokenizer, base_model_id: str):
         tokenizer.chat_template = serving_template
         print(
             f"[train]   Pinned chat template to the SERVED model {base_model_id} — the loaded "
-            f"(Unsloth mirror) template differed, which is how B290 taught the model to emit a "
+            f"(Unsloth mirror) template differed, which is how an earlier run taught the model to emit a "
             f"`<think></think>` block that inference never pre-fills."
         )
     return tokenizer
@@ -548,8 +548,8 @@ def _assert_train_serve_prefix_alignment(tokenizer, base_model_id: str) -> None:
 
     The invariant: whatever precedes the answer in training must also be in the inference prompt, byte
     for byte. Break it and the model's first generated tokens are the missing scaffolding, which then
-    lands in the scored output — worth checking directly, because it is silent otherwise. B250 was this
-    bug in the user turn; B290 was the same bug in the assistant turn, caused by a swapped-in template
+    lands in the scored output — worth checking directly, because it is silent otherwise. This bug has
+    occurred in the user turn and again in the assistant turn, there caused by a swapped-in template
     rather than by any of our own prompt strings, which is why a source-level review would not have
     found it and a rendered comparison does.
 
@@ -577,7 +577,7 @@ def _assert_train_serve_prefix_alignment(tokenizer, base_model_id: str) -> None:
     if not _is_qwen_model_id(base_model_id) and _serving_tokenizer(base_model_id) is None:
         print(
             f"[train]   ⚠ could not load the serving tokenizer for {base_model_id}; skipping the "
-            f"train/serve prefix check. This is the one guard against B290-class skew, so a real "
+            f"train/serve prefix check. This is the one guard against this class of skew, so a real "
             f"run should not reach here — check network/HF access."
         )
         return
@@ -612,7 +612,7 @@ def _assert_train_serve_prefix_alignment(tokenizer, base_model_id: str) -> None:
     inserted = training_text.split("__PROMPT_SENTINEL__", 1)[-1]
     inserted = inserted.split(sentinel, 1)[0]
     raise RuntimeError(
-        "TRAIN/SERVE PREFIX SKEW (B290): the inference prompt is not a strict prefix of the rendered "
+        "TRAIN/SERVE PREFIX SKEW: the inference prompt is not a strict prefix of the rendered "
         "training text, so the fine-tuned model's first generated tokens will be scaffolding that gets "
         "scored as its answer.\n"
         f"  model:              {base_model_id}\n"
@@ -747,7 +747,7 @@ def text_tokenizer(tok):
     Multimodal models (e.g. Qwen3.5, Gemma-3n) load as a *processor* that wraps a
     text tokenizer plus an image/video processor. Calling `apply_chat_template` /
     tokenizing text through the processor routes the text into the vision path and
-    crashes ("Incorrect image source ... Got <|im_start|>user", BUGS B123). The text
+    crashes ("Incorrect image source ... Got <|im_start|>user"). The text
     tokenizer is exposed as processor.tokenizer — use it directly for text-only LoRA
     so the vision processor is never involved. For plain text models this is a no-op.
     """
@@ -992,7 +992,7 @@ def _run_unsloth_training(
 
     model, tokenizer = _load_training_model(config, max_seq_length)
     # Before spending an hour of GPU time, confirm that what we are about to teach the model matches
-    # what inference will ask of it. B290 cost two full runs precisely because nothing checked this.
+    # what inference will ask of it. Template skew once cost two full runs precisely because nothing checked this.
     _assert_train_serve_prefix_alignment(tokenizer, config.base_model)
     # Unsloth must patch TRL before SFTTrainer is imported.
     from trl import SFTTrainer
@@ -1025,11 +1025,11 @@ def _run_unsloth_training(
     )
     _fit_micro_batch_to_logits(config, tokenizer, _length_summary)
 
-    # Early stopping / best-checkpoint (B161 Addition 2): carve a small VALIDATION split from
+    # Early stopping / best-checkpoint: carve a small VALIDATION split from
     # the TRAINING data (never the held-out eval set), evaluate periodically, and keep the
     # best-val checkpoint instead of the (often overfit) final-epoch one. LoRA memorizes tiny
     # datasets fast, so this reduces overfit + score oscillation. Guarded: mid-training saving
-    # can hit an Unsloth/SFTConfig pickle issue (B109-adjacent), so the whole early-stopping
+    # can hit an Unsloth/SFTConfig pickle issue, so the whole early-stopping
     # path falls back to the plain final-checkpoint path on ANY failure (see below).
     import os as _os
     _early_stop = _os.environ.get("SLM_EARLY_STOPPING", "1") != "0"
@@ -1060,7 +1060,7 @@ def _run_unsloth_training(
     # is passed as processing_class. The previous code passed max_seq_length/tokenizer as
     # bare SFTTrainer kwargs, which the current trl silently ignores — so NO truncation was
     # applied. Long (math CoT / NER abstract) sequences then reached Unsloth's fused
-    # cross-entropy with mismatched logits vs label lengths and crashed (see BUGS B109).
+    # cross-entropy with mismatched logits vs label lengths and crashed.
     # Build an SFTConfig with the explicit shared 4096-token max_length. Preflight above
     # rejects oversized rows instead of silently truncating prompt or target content.
     # Epochs act as a CEILING when early stopping is on (train longer, stop at best val).
@@ -1108,7 +1108,7 @@ def _run_unsloth_training(
                 greater_is_better=False,
             )
         else:
-            # "no" avoids mid-training checkpointing (Unsloth/SFTConfig pickle issue, B109).
+            # "no" avoids mid-training checkpointing (Unsloth/SFTConfig pickle issue).
             common.update(save_strategy="no")
         return SFTConfig(**common)
 
@@ -1257,7 +1257,7 @@ def _run_unsloth_training(
     # Free the training model's VRAM before the caller loads the checkpoint for eval.
     # Without this, the just-trained model stays resident and, combined with the
     # inference load, pushes large (4B) models into CPU/meta offload → Unsloth
-    # fast-generate crashes with "Invalid target device: None" (B142).
+    # fast-generate crashes with "Invalid target device: None".
     try:
         import gc
         del trainer, model
@@ -1375,7 +1375,7 @@ def merge_for_quantization(
     Unsloth rewrites the adapter's ``base_model_name_or_path`` to its own pre-quantized mirror
     (``Qwen/Qwen3-0.6B`` becomes ``unsloth/qwen3-0.6b-unsloth-bnb-4bit``). Merging that mirror
     with ``merged_16bit`` makes unsloth_zoo emit a UserWarning and write **nothing**, so callers
-    that know the real model id must pass it here (see BUGS B219).
+    that know the real model id must pass it here.
     """
     from unsloth import FastLanguageModel, FastVisionModel
     from agent.logging_setup import quiet_ml_logging
@@ -1394,7 +1394,7 @@ def merge_for_quantization(
     # unsloth_zoo refuses a 16-bit merge from a 4-bit base by warning and returning without
     # writing anything, so an empty directory here means the merge silently no-opped rather
     # than that some file went missing. Say so, instead of leaving the opaque
-    # "snapshot is incomplete" from verify_hf_model_snapshot as the only clue (B219).
+    # "snapshot is incomplete" from verify_hf_model_snapshot as the only clue.
     if not any(os.scandir(merged_dir)):
         progress.finish("FAILED (merge wrote no files)")
         raise RuntimeError(

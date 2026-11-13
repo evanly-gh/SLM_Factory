@@ -104,7 +104,7 @@ def test_load_configures_greedy_decoding_and_the_task_context(tmp_path):
     assert llm is fake
     assert fake.config["sampler_type"] == "greedy"
     # The prompt is rendered by `_serving_prompt_prefix` before it gets here, shared with the GGUF
-    # path; letting MNN apply its own template on top is the B290 failure with a new hiding place.
+    # path; letting MNN apply its own template on top is the template-skew failure with a new hiding place.
     assert fake.config["use_template"] is False
     assert fake.config["max_all_tokens"] == 4096
     assert fake.config["max_new_tokens"] == 50

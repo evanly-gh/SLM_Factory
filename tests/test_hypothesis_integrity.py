@@ -2,7 +2,7 @@
 """
 The orchestrator's hypothesis is its causal reasoning for an intervention. It is the single
 most information-dense field in the run and it was being cut in five separate places, the
-worst at the source (B238). These tests pin the full text end to end.
+worst at the source. These tests pin the full text end to end.
 
 Reference failure: in slm-clinc150-cse-38155022 every long hypothesis landed at exactly 240
 characters, ending mid-word ("...cancel->freeze_a"), so the confusion-pair list — the

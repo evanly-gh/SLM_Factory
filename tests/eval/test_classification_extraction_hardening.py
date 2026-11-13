@@ -1,4 +1,4 @@
-"""Classification extraction: fenced payload, and no more lucky-substring labels (B271).
+"""Classification extraction: fenced payload, and no more lucky-substring labels.
 
 Two defects, one symptom. RouterBench's zero-shot baselines came out 0.4615 / 0.1685 / 0.1701 /
 0.5443 across the 0.6B / 1.7B / 2B / 4B tiers — an ordering with no relation to model size, on

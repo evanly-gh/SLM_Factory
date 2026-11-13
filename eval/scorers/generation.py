@@ -26,7 +26,7 @@ from eval.judge_client import LocalJudgeClient
 # Fallback instruction, used only when a task's rows carry no `_instruction`. It suits a
 # question-answering task, which is what it was written for, and it is actively WRONG for anything
 # else: on DialogSum it told the model to "answer" a chat transcript that asks nothing, so the model
-# continued the conversation instead of summarizing it (B250). Every task that is not
+# continued the conversation instead of summarizing it. Every task that is not
 # question-answering states its own instruction on its rows.
 DEFAULT_GENERATION_INSTRUCTION = "Answer the following question:"
 
@@ -59,7 +59,7 @@ def build_generation_prompt(text: str, instruction: str) -> str:
     "Answer the following question:", while training passed the bare text with no instruction at
     all. The model was therefore fine-tuned on one input distribution and scored on another —
     the train/serve skew that `build_classify_prompt` had already been introduced to prevent on
-    the classification side (B250).
+    the classification side.
     """
     return f"{instruction}\n\n{text}"
 
@@ -89,7 +89,7 @@ def split_reasoning(raw: str) -> tuple[str, str]:
     Both halves are kept by the caller: the reasoning is real signal for diagnosing HOW the model
     reached an answer, and discarding it at the source would make that unrecoverable. It simply
     must not reach the judge, which is asked "how good is this summary?" — handing it a
-    `<reasoning>` block guarantees a poor score for output that may contain a fine summary (B251).
+    `<reasoning>` block guarantees a poor score for output that may contain a fine summary.
     """
     text = raw or ""
     match = _REASONING_BLOCK_RE.search(text)

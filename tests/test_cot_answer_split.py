@@ -9,7 +9,6 @@ reasoning block was handed to a judge asked "how good is this summary?", which g
 score for output that may contain a perfectly good summary.
 
 The reasoning is separated, not discarded: it is the part that explains WHY an answer is wrong.
-See B251.
 """
 from eval.harness import _attach_reasoning_to_failures
 from eval.scorers.generation import extract_predictions, split_reasoning

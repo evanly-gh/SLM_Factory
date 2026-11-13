@@ -50,7 +50,7 @@ def _state(feasible, **overrides):
         "initial_stop_threshold": 0.80,
         # A real registry task name. This fixture used to carry `task_type`, a field deleted with
         # the task channels, which is precisely why nothing caught `_probe_model` reading
-        # `state["task_type"]` — the fixture supplied a key production state no longer has (B311).
+        # `state["task_type"]` — the fixture supplied a key production state no longer has.
         "task": "clinc150",
         "hardware_constraints": _hw(),
         "eval_set": eval_set,

@@ -50,7 +50,7 @@ def build_function_call_prompt(example: dict) -> str:
     """The single-row prompt builder, shared by the eval harness and the trainer.
 
     Exists so `training/lora_trainer.py::_training_turn` can import it rather than reproduce the
-    format, which is the only thing that makes train/serve drift impossible (B250).
+    format, which is the only thing that makes train/serve drift impossible.
     """
     return FUNCTION_CALL_PROMPT.format(tools=_tools_str(example), text=example.get("text", ""))
 

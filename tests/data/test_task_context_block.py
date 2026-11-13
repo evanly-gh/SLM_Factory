@@ -1,4 +1,4 @@
-"""Every verifier is told the task's own vocabulary before it judges a row (B314, generalised).
+"""Every verifier is told the task's own vocabulary before it judges a row.
 
 WHY THIS FILE EXISTS
     A teacher asked to judge a row it has no context for does not decline — it invents the context and
@@ -11,14 +11,14 @@ WHY THIS FILE EXISTS
                              provided tools list" — about a tools list that was never in the prompt.
                              Every one of those rows had already passed the programmatic verifier
                              against that row's own `tools`, so each rejection was provably false.
-                             Fixed by `_row_context_block` (B314).
+                             Fixed by `_row_context_block`.
 
       the TASK's vocabulary  what is true of the whole task and therefore appears on no single row:
                              the closed class list, what each class means, the entity types. Without
                              it the teacher decides what the label space must be from the label's
                              wording, which is how a grade-school arithmetic problem was rejected from
                              RouterBench's `local` class for being "a math problem, not a local
-                             query" — 70% of generated rows discarded (B267/B269).
+                             query" — 70% of generated rows discarded.
 
     `_task_context_block` is the second half, and it is passed to BOTH verifiers so the fix is not
     per-task. These tests cover what it emits for each shape of task, that it survives the trip into
@@ -194,7 +194,7 @@ def test_an_open_ended_task_with_neither_vocabulary_yields_nothing(task):
     A heading with nothing under it reads as a section the teacher was supposed to be given and is
     worse than silence — and for this task there is genuinely nothing to enumerate at the TASK
     level: the callable surface is per row, carried by `_row_context_block` instead. Claiming a
-    label space here would be the B267 mistake manufactured rather than merely inherited. (gsm8k was
+    label space here would be the RouterBench `local` mistake manufactured rather than merely inherited. (gsm8k was
     the original case; it was removed 2026-11-11.)
 
     `dialogsum` used to be the second case and is no longer. The 2026-09-06 rework gave it real
@@ -287,7 +287,7 @@ def test_synthesize_examples_supplies_the_task_context_to_the_label_verifier():
     """The wiring, checked separately from the block's content.
 
     Both are needed: a correct block that never reaches a prompt fixes nothing, and that is exactly
-    the state `verify_generated_answers` was in before B314 — the context existed on the row and the
+    the state `verify_generated_answers` was in before the row-context fix — the context existed on the row and the
     prompt did not carry it. The expected value is built from the ANCHORS, not from the generated
     rows, so a teacher that invented a class cannot see it confirmed back as valid.
     """
@@ -335,7 +335,7 @@ def test_synthesize_examples_supplies_the_task_context_to_the_answer_verifier():
 # All eight registered tasks, not the ones that happened to have a bug
 # --------------------------------------------------------------------------
 #
-# B314 was fixed on xlam because xlam was the run being debugged. The generalisation is the point of
+# The row-context fix landed on xlam because xlam was the run being debugged. The generalisation is the point of
 # this change, so the coverage is driven off the registry: a ninth task cannot be added without either
 # declaring what its vocabulary is or failing here.
 
@@ -346,7 +346,7 @@ TASK_FIXTURES = {
     "clinc150": (CLINC_ROWS, ("transfer", "card_declined", "balance")),
     # `ham` is the reason this task declares label_definitions at all: it is corpus jargon, not
     # English, so the vocabulary reaching the verifier prompt is what stops the teacher reading it
-    # as the food and rejecting good rows — the RouterBench `local` failure (B267) in a new costume.
+    # as the food and rejecting good rows — the RouterBench `local` failure in a new costume.
     "sms_spam": (SMS_ROWS, ("ham", "spam")),
     # Span vocabulary rather than a class list: BC5CDR carries its gold in `entities`. The `answer`
     # names only the span TEXTS, so the two type names can only have reached the prompt through the
@@ -357,7 +357,7 @@ TASK_FIXTURES = {
     ),
     # The two function-calling tasks have no TASK-level vocabulary — the callable surface differs per
     # row — so their vocabulary is the row's own `tools`, carried by `_row_context_block`. That is the
-    # original B314 case, and it has to keep working alongside the task-level block. The expected
+    # original row-context case, and it has to keep working alongside the task-level block. The expected
     # tokens include a parameter the ANSWER does not mention, so the assertion cannot be satisfied by
     # the proposed answer being echoed back.
     "xlam_bfcl": (
@@ -407,7 +407,7 @@ TASK_FIXTURES = {
     ),
     # The extractive constraint is the one property a fluent generated parse violates, and it is
     # not visible in any single row — so it has to reach the teacher through the task-context
-    # block or the teacher invents a convention, which is B267/B269/B314 one level up.
+    # block or the teacher invents a convention — the missing-context failure one level up.
     "topv2": (
         [{
             "text": "set alarm for 6 am",
@@ -515,7 +515,7 @@ def test_the_task_context_block_is_carried_into_the_prompt_verbatim(task):
 #
 # `verify_generated_answers` drops a row whose `answer`/`response` is empty before it builds a prompt,
 # and a synthesized BC5CDR row carries its gold in `entities` with no `answer` at all — so for that
-# one task the teacher pass never runs, even though docs/PIPELINE.md states that it does precisely
+# one task the teacher pass never runs, even though it is meant to run there precisely
 # because the substring verifier cannot catch a MISSED entity. The fixture above therefore states the
 # spans as `answer` as well, so that this file tests the vocabulary plumbing rather than accidentally
 # pinning the gap as correct. Fixing it means changing `data/curriculum.py`, which is production code.
@@ -533,8 +533,8 @@ def test_a_task_with_datetime_conventions_states_them_to_the_verifier():
 
     Every one of those rows had already passed `verify_calendar_row`, which re-resolves the request
     with the loader's own grammar. So the teacher was overruling an exact computation with a
-    convention it had invented, which is B267/B269/B314 one level up from the tools list: a verifier
-    judging without the task's context makes the context up.
+    convention it had invented — the same missing-context failure, one level up from the tools
+    list: a verifier judging without the task's context makes the context up.
     """
     block = _task_context_block(get_task("calendar_json"), [])
     assert "8 pm IS 20:00" in block, "the 12h/24h equivalence must be stated"

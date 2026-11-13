@@ -241,7 +241,7 @@ def check_task(name: str, *, n_eval: int | None, verbose: bool) -> dict:
         # A WARNING, not a failure: curate's eval firewall removes these rows before training, so
         # the run is not contaminated. It is still worth surfacing — an official split that is not
         # actually disjoint means the loader is shipping rows the firewall then silently deletes, and
-        # in DialogSum's case the same dialogue carried CONTRADICTORY gold in the two splits (B278).
+        # in DialogSum's case the same dialogue carried CONTRADICTORY gold in the two splits.
         result["notes"].append(
             f"HYGIENE: {overlap} train row(s) appear verbatim in the eval set at the LOADER level. "
             f"curate's eval firewall removes them before training, so this does not contaminate the "

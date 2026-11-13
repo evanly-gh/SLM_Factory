@@ -1,4 +1,4 @@
-"""The task's label vocabulary is pinned once and never extended (B259).
+"""The task's label vocabulary is pinned once and never extended.
 
 RouterBench is a two-class task: `local` and `route`. Its runs trained on rows labelled `cloud`,
 `on_device`, `router` and `remote` as well. They arrived because acquisition asks an LLM to map a
@@ -204,7 +204,7 @@ def test_the_closed_space_reaches_quality_control_from_the_frozen_eval_set():
 
 
 # --------------------------------------------------------------------------
-# What the labels MEAN (B267) — the over-rejection this caused
+# What the labels MEAN — the over-rejection this caused
 # --------------------------------------------------------------------------
 
 

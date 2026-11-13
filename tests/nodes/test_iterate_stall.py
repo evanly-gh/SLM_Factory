@@ -1,4 +1,4 @@
-"""Anti-infinite-loop guarantees in iterate_node (B124 stall backstop + largest_first)."""
+"""Anti-infinite-loop guarantees in iterate_node (stall backstop + largest_first)."""
 import pytest
 from unittest.mock import patch, MagicMock
 from agent.nodes.iterate import (
@@ -14,7 +14,7 @@ from agent.nodes.iterate import (
 # boundary is only observable through what happens AFTER it: the turn proceeds to the orchestrator
 # and routes on its answer. These used to stub a failure and rely on the score-band fallback to
 # produce a route, which stopped being a route at all when the fallback was removed — an unusable
-# decision now raises `OrchestratorDecisionError` rather than substituting a rule (B316).
+# decision now raises `OrchestratorDecisionError` rather than substituting a rule.
 #
 # "DOES escalate" keeps a raising stub, used as a sentinel: escalation is a rule-based decision taken
 # WITHOUT spending an orchestrator call, so if one of these ever consults the LLM the stub makes that

@@ -45,7 +45,8 @@ sys.path.insert(0, str(HERE.parent))
 import bench_common  # noqa: E402
 import energy_probe  # noqa: E402
 from common import (DEV_MODELS, DEV_ROOT, MODELS_DIR, RESULTS_DIR, DeviceControls, boottime_s,  # noqa: E402
-                    WAKE_KICK_CMD, WakeHolder, dev_bin_dir, device_info, match_profile)
+                    WAKE_KICK_CMD, WakeHolder, dev_bin_dir, device_info, match_profile, portable_record,
+                    recorded_serial)
 from devenv import Adb  # noqa: E402
 from energy import EnergyRecorder, is_chip_method, probe_recommendation  # noqa: E402
 
@@ -440,7 +441,7 @@ class Session:
     # -- one configuration -------------------------------------------------
     def run_config(self, cfg) -> dict:
         a = self.args
-        result = {"config": {k: v for k, v in cfg.items() if k != "entry"}, "model_file": cfg["entry"],
+        result = {"config": {k: v for k, v in cfg.items() if k != "entry"}, "model_file": portable_record(cfg["entry"]),
                   "started": datetime.now().isoformat(), "invocations": {}, "windows": []}
         # Weights larger than this share of the phone's RAM cannot be resident next to Android itself: record it
         # without pushing a multi-GB file (models just under it are still caught by the swap guard while running).
@@ -647,14 +648,16 @@ class Session:
         session = {"started": datetime.now().isoformat(), "device": self.info, "profile": self.profile,
                    "energy_discovery": {k: disc[k] for k in ("root", "powercap", "powerstats", "battery_dir",
                                                               "battery_files", "battery_service")},
-                   "params": {k: v for k, v in vars(a).items() if k not in ("func",)},
+                   # recorded portably: the serial as its transport only, local paths without the home directory
+                   "params": {k: recorded_serial(v) if k == "serial" else portable_record(v)
+                              for k, v in vars(a).items() if k not in ("func",)},
                    "max_temp_c": self.max_temp, "idle_cpu_busy_at_start": idle_busy,
                    "screen_on": self.controls.screen_on, "wireless_adb": self.controls.wireless,
                    "binaries": {t: self.adb.sh(f"cat {dev_bin_dir(a.ref, t)}/build_info.json 2>/dev/null")
                                 for t in ("llama_cpu", "llama_gpu", "mnn")}}
         for k, v in list(session["binaries"].items()):
             try:
-                session["binaries"][k] = json.loads(v)
+                session["binaries"][k] = portable_record(json.loads(v))  # its cmake_args name local paths
             except ValueError:
                 session["binaries"][k] = None
         # One energy folder per session: a later session resuming into this directory must not overwrite the

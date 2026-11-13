@@ -11,7 +11,7 @@ WHY THIS FILE EXISTS
     task's own shape, which is the only way to catch a task whose spec names three functions that
     do not actually compose.
 
-    The second is the format/content split (B290). A low score means two completely different
+    The second is the format/content split. A low score means two completely different
     things: a CONTENT problem more data can fix, or a FORMAT problem only the prompt or the chat
     template can. The xlam run that forced this was diagnosed entirely from the gap between the
     two numbers — fine-tuned predictions were `<think></think>[{...}]`, scoring 0.0000 while the
@@ -31,7 +31,7 @@ from tasks import TASKS, get_task
 
 # Long enough that the classification extractor's short-answer fallback cannot fire, and free of
 # any substring of any label in this file — a chatty non-answer, which is what a base model
-# produces when it obeys the row's own embedded instruction instead of classifying (B271).
+# produces when it obeys the row's own embedded instruction instead of classifying.
 CHATTY = (
     "Certainly! Here is a fuller explanation of the matter you have raised, with several "
     "considerations and caveats that are worth bearing in mind before deciding anything."
@@ -84,7 +84,7 @@ FIXTURES: dict[str, dict] = {
     # reference 1 alone these predictions would score poorly.
     #
     # `unreadable` is a transcript TURN LABEL (`#Person1#:`), not an empty string. That is the
-    # real format failure for this task — the B250 continuation — and note the reference summaries
+    # real format failure for this task — the continuation failure — and note the reference summaries
     # themselves mention `#Person1#` without a colon, which is legitimate output.
     "dialogsum": {
         "rows": [
@@ -394,7 +394,7 @@ def test_failures_carry_the_row_and_the_prediction(task):
 def test_every_failure_gets_a_category_from_the_task_taxonomy(task):
     """Every open-ended failure used to be reported as the constant confusion pair
     `gold_verifier -> incorrect`, whose count is the failure count the orchestrator already had —
-    and it wrote pages of reasoning about that constant (B296). A category must be a non-empty
+    and it wrote pages of reasoning about that constant. A category must be a non-empty
     name, and the constant must be gone."""
     spec = get_task(task)
     assert spec.failure_category is not None, f"{task} declares no failure taxonomy"
@@ -403,7 +403,7 @@ def test_every_failure_gets_a_category_from_the_task_taxonomy(task):
         for failure in result["failures"]:
             category = spec.failure_category(failure)
             assert isinstance(category, str) and category.strip(), f"{task}/{raw_kind}"
-            assert category != "gold_verifier", f"{task} still reports the B296 constant"
+            assert category != "gold_verifier", f"{task} still reports the gold_verifier constant"
 
 
 @pytest.mark.parametrize("task", TASK_IDS)
@@ -517,7 +517,7 @@ def test_eval_result_reports_format_and_no_longer_carries_execution_diagnostics(
 
 @pytest.mark.parametrize("task", TASK_IDS)
 def test_the_training_prompt_is_the_prompt_inference_sends(task):
-    """B290/B250, at the task level: `build_training_turn` must produce the SAME prompt the eval
+    """Train/serve parity at the task level: `build_training_turn` must produce the SAME prompt the eval
     harness builds, or training teaches a prefix inference never supplies.
 
     The builders import their prompt from the eval scorer rather than reproducing it — when the
@@ -566,7 +566,7 @@ def test_a_function_call_row_with_no_answer_refuses_to_become_a_training_turn():
 
 def test_a_chain_of_thought_target_still_ends_in_the_answer():
     """Only the ANSWER is scored, so a CoT-trained target must keep the reasoning in a block the
-    extractor strips (B251) rather than merged into the answer."""
+    extractor strips rather than merged into the answer."""
     from eval.scorers.generation import split_reasoning
     from tasks._builders import TrainingContext, generation_turn
 
@@ -673,7 +673,7 @@ def test_a_scorer_handles_an_empty_eval_set_without_dividing_by_zero():
 
 def test_reasoning_is_recorded_on_failures_rather_than_judged():
     """The reasoning explains WHY an answer is wrong, so it is kept on the failure record — but it
-    must not reach the judge, which is asked "how good is this summary?" (B251)."""
+    must not reach the judge, which is asked "how good is this summary?"."""
     from eval.harness import _attach_reasoning_to_failures
 
     result = {"failures": [{"text": "q", "predicted": "18"}]}
@@ -721,7 +721,7 @@ def test_prediction_sampling_prefers_extraction_failures(capsys):
 
 
 def test_ner_gold_is_shown_even_though_it_lives_in_entities(capsys):
-    """B263: the sample display read only `answer`/`label`, so `gold :` printed BLANK on every NER
+    """The sample display read only `answer`/`label`, so `gold :` printed BLANK on every NER
     row — removing the one human check of gold against prediction from the task where it matters
     most, and making a legitimate 0.0000 baseline indistinguishable from a broken harness."""
     from eval.harness import _log_prediction_samples

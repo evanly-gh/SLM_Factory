@@ -7,12 +7,12 @@ WHY THIS EXISTS
     data, synthesis, orchestration and training. A task inherited whatever the chain's `else` branch
     happened to do, and three production bugs came from exactly that:
 
-      * B291 — `function_call` matched neither synthesis branch, so `synthesize_examples` returned
+      * `function_call` matched neither synthesis branch, so `synthesize_examples` returned
         `[]`. Six rebuilds on xlam announced 250-500 rows and produced none, silently, and the exact
         verifiers written for that path had never executed.
-      * B296 — every non-classification failure was reported as the constant confusion pair
+      * Every non-classification failure was reported as the constant confusion pair
         `gold_verifier -> incorrect`, and the orchestrator wrote pages of reasoning about it.
-      * B299 — quality control's `else` returned the dataset untouched, so xlam and calendar were
+      * Quality control's `else` returned the dataset untouched, so xlam and calendar were
         never filtered at all, and gsm8k/dialogsum filtered on a `"prompt"` key their rows lack.
         Four of eight tasks, no quality control, nothing logged.
 
@@ -55,7 +55,7 @@ class MiningSource:
     `offset_field` is what makes mining useful on a curated benchmark: the initial curriculum takes
     the first N rows, so a later `acquire` must start where that left off or it re-offers rows the
     pool already has. Without this, xlam's `acquire` could only pay Exa to rediscover mirrors of a
-    corpus already sitting in the local cache while ~57,000 unused rows went unreachable (B297).
+    corpus already sitting in the local cache while ~57,000 unused rows went unreachable.
     """
 
     hf_id: str
@@ -140,8 +140,8 @@ class TaskSpec:
     22.6% of generated rows rejected (1,965 of 8,704), including
     `"7pm start plus 60 mins is 8pm, not 20:00"` — 8pm IS 20:00 — and six rejections of the
     year-rollover the gold itself uses. Every one of those rows had already passed the programmatic
-    verifier. A model asked to judge a convention nobody told it about invents one, which is B267/
-    B269/B314 one level up from the tools list.
+    verifier. A model asked to judge a convention nobody told it about invents one — the same
+    failure seen with the missing tools list, one level up.
 
     So this is the task-level counterpart of `label_definitions`: state the conventions, or the
     teacher will make some up.
@@ -202,7 +202,7 @@ class TaskSpec:
     # ---- training -------------------------------------------------------------------
     build_training_turn: Callable[[dict, object], tuple[str, str]]
     """`(row, spec) -> (prompt, target)` for completion-only SFT. Must produce the SAME prompt the
-    eval harness sends, or training teaches a prefix inference never supplies (B290)."""
+    eval harness sends, or training teaches a prefix inference never supplies."""
 
     # ---- synthesis ------------------------------------------------------------------
     synth_verifier: Callable[[dict], bool] | None

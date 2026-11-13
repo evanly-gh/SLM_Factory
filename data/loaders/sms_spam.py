@@ -4,7 +4,7 @@ The original `data/loaders/sms_spam.py` was deleted in the 2026-08-18 registry r
 the abstract `task_type` channel it depended on. This is a rewrite, not a revert, because the old
 one carried three defects that the current task registry makes it possible to fix properly:
 
-  * **B44 — the split was not shuffled.** It took `examples[:80%]` as train. The UCI file is not
+  * **The split was not shuffled.** It took `examples[:80%]` as train. The UCI file is not
     randomly ordered, so the two halves had different class balance. Here the split is stratified
     per class and seeded, so train and eval carry the same base rate by construction.
   * **It fetched a zip over plain HTTP from `archive.ics.uci.edu`** at load time, with no checksum
@@ -101,7 +101,7 @@ def stratified_split(
     eval_fraction: float = EVAL_FRACTION,
     seed: int = SPLIT_SEED,
 ) -> tuple[list[dict], list[dict]]:
-    """Split per class so both halves carry the corpus base rate (fixes B44)."""
+    """Split per class so both halves carry the corpus base rate (the old split was unshuffled)."""
     by_label: dict[str, list[dict]] = {}
     for row in rows:
         by_label.setdefault(row["label"], []).append(row)

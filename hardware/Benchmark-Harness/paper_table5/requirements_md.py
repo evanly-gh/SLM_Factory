@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Write docs/REQUIREMENTS.md: realistic user requirements graded easy / medium / hard by how often a configuration chosen
+Write hardware/docs/REQUIREMENTS.md: realistic user requirements graded easy / medium / hard by how often a configuration chosen
 WITHOUT the target phone's measurements meets them, across the four measured phones (req_data.py).
 
   python requirements_md.py
@@ -286,7 +286,7 @@ def main():
           "only a few configurations, and which ones depends on the phone's engine, GPU driver and memory. Without "
           "measuring that phone, the Factory is usually wrong, and even another flagship's measurements often pick a "
           "configuration that fails.",
-          "- **One benchmark pass per phone** (the 104-configuration sweep in [BENCHMARKING_GUIDE.md](BENCHMARKING_GUIDE.md)) "
+          "- **One benchmark pass per phone** (the 104-configuration sweep that `run_pool.py` runs) "
           "turns every hard requirement into a lookup.", ""]
     (DOCS / "REQUIREMENTS.md").write_text("\n".join(L) + "\n", encoding="utf-8")
     print(f"-> {DOCS / 'REQUIREMENTS.md'}")

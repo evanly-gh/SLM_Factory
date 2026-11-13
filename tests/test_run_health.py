@@ -203,7 +203,7 @@ def test_the_empty_rebuild_diagnosis_names_synthesis_when_synthesis_is_what_fail
 # examined and no reason to stop anything. That shape is a mining-NOVELTY problem, and it is already
 # covered by `mining_shutouts` and the empty-rebuild counter — it is explicitly not this alarm.
 #
-# The guard as a whole exists because nothing watched across iterations at all (B308).
+# The guard as a whole exists because nothing watched across iterations at all.
 
 
 def _shrunk(before: int, shrank: int, *, rows_added: int = 500, **overrides) -> IterationRecord:
@@ -382,7 +382,7 @@ def test_mining_shutouts_are_counted_separately_from_empty_searches():
 
 def test_repeated_mining_shutouts_retire_the_route_rather_than_stopping_the_run():
     """A filter rejecting everything, not an empty search — the shape the pre-2026-08-19
-    whole-source overlap check produced on every candidate (B293).
+    whole-source overlap check produced on every candidate.
 
     At default thresholds the empty-mining counter reaches its budget first, so retirement is already
     in hand by the second shutout; this test pins the OUTCOME (route closed, run alive) so it holds
@@ -439,7 +439,7 @@ def test_a_repeat_load_failure_stops_the_run():
 
 
 # --------------------------------------------------------------------------
-# 6. What this module deliberately does NOT count: refused data plans (B312/B316)
+# 6. What this module deliberately does NOT count: refused data plans
 # --------------------------------------------------------------------------
 #
 # There was a `rejected_data_plans` counter here, tripping on the SECOND plan the validator refused.
@@ -460,7 +460,7 @@ def test_a_repeat_load_failure_stops_the_run():
 def test_the_health_block_is_replaced_rather_than_mutated_in_place():
     """LangGraph propagates a channel only when the value it holds is a NEW object. Incrementing
     the existing dict would leave every counter at its checkpointed value on the next node, so the
-    second empty rebuild would never be seen as the second one (B122)."""
+    second empty rebuild would never be seen as the second one."""
     state: dict = {}
     _observe(state, _record(iteration=1))
     first = state["run_health"]

@@ -72,7 +72,7 @@ def test_a_comma_separated_reply_becomes_a_sorted_label_list():
 
 
 def test_prose_that_echoes_the_prompts_label_list_is_a_format_failure():
-    """THE BUG THIS EXISTS FOR — B271 in multi-label form, observed live on run 39707196.
+    """THE BUG THIS EXISTS FOR — label-word harvesting from prose, in multi-label form, observed live on run 39707196.
 
     The base model replied with the PROMPT'S OWN LABEL LIST as prose: "The comment expresses a mix
     of emotions, including admiration, amusement, anger, annoyance, approval, caring, ...".

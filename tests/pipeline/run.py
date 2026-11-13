@@ -758,7 +758,7 @@ fresh_initial_state = {
     "_pending_weights_refs": None,
     "_pending_training_outputs": None,
     "_pending_configs": None,
-    # Redesign additions (B161+)
+    # Redesign additions
     "eval_source_ban": [],
     "data_sources": [],
     "data_source_usage": [],
@@ -801,7 +801,7 @@ if not _PREGRAPH_RESTORED:
     )
 
 # --------------------------------------------------------------------------
-# Compatibility shim (BUGS B111)
+# Compatibility shim
 # --------------------------------------------------------------------------
 # Several HF model repos ship custom modeling code (loaded via trust_remote_code)
 # that still imports `is_torch_fx_available` from transformers.utils.import_utils —
@@ -820,7 +820,7 @@ if not hasattr(_tf_iu, "is_torch_fx_available"):
         _tf.is_torch_fx_available = _is_torch_fx_available
 
 # --------------------------------------------------------------------------
-# Synthesis preflight (B161): synthesis is REQUIRED BY DEFAULT. Block here — BEFORE the
+# Synthesis preflight: synthesis is REQUIRED BY DEFAULT. Block here — BEFORE the
 # curate/train/eval loop — until the local synth server is reachable, retrying up to
 # SLM_SYNTH_WAIT_S. Do NOT progress the pipeline on a dead/absent endpoint; abort with a
 # clear message instead (so a run can't silently go gold-only). Opt out with SLM_REQUIRE_SYNTH=0
@@ -1501,7 +1501,7 @@ def _report_body() -> None:
 
     # Model Improvement Report — one row per VARIANT actually run (model_id + quant), so the
     # on-device deployment format is explicit and a model that appears at multiple tiers as
-    # different quants is not collapsed into one row (B161 reporting request).
+    # different quants is not collapsed into one row.
     if progression:
         log("")
         log(f"  Model Improvement Report (per quantized variant):")
@@ -1545,7 +1545,7 @@ def _report_body() -> None:
 
     # DAG Traversal for EVERY model tested (not just the final one). Each escalation reset the
     # DAG, so escalate_node stashed each model's per-iteration DAG in escalation_history; here
-    # we print all of them in order (B161 reporting request).
+    # we print all of them in order.
     if progression:
         log("")
         log(f"  DAG Traversal (all {len(progression)} models):")
@@ -1559,7 +1559,7 @@ def _report_body() -> None:
                 continue
             # Content and FORMAT side by side per iteration. They answer different questions — a low
             # content score with high format is a data problem, a low format score is a prompt or
-            # chat-template problem — and reporting only the first is what let B290 look like
+            # chat-template problem — and reporting only the first is what let a template bug look like
             # "fine-tuning does not help this task" for two whole runs.
             log(f"     {'Iter':>4}  {'Content':>8}  {'Format':>7}  {'Pruned':>6}  "
                 f"{'Config':<34}  {'Intervention'}")

@@ -36,6 +36,7 @@ MONSOON_SCRIPT = Path(__file__).resolve().parent.parent / "Power-Monitor" / "mon
 # module SmolChat's run_autobench.py uses, so both engines are measured identically.
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "Benchmark-Harness"))
 import bench_common  # noqa: E402
+from paper_table5.common import portable_path, recorded_serial  # noqa: E402  (results name no personal data)
 
 # Set in main(): readiness gate + fixed rest applied before every broadcast (see pre_run()).
 _GATE = None
@@ -1401,7 +1402,7 @@ def main():
 
     run_info = {
         "model_path": args.model_path,
-        "device": device_serial or "unknown",
+        "device": recorded_serial(device_serial) or "unknown",  # the transport, not the hardware serial
         "start_time": start_time,
         "end_time": end_time,
         "timeout_s": args.timeout,
@@ -1431,7 +1432,7 @@ def main():
         "rest_seconds": args.rest_seconds,
         "initial_device_state": initial_state,
         "energy_enabled": args.energy,
-        "energy_trace": str(energy_trace.local_path) if energy_trace else None,
+        "energy_trace": portable_path(energy_trace.local_path) if energy_trace else None,
         "idle_power_mw": idle_power_mw,
         "metric_definitions": (
             "prefill_tps = prompt_len / TTFT and decode_tps = (decode_len - 1) / (t_last_chunk - "

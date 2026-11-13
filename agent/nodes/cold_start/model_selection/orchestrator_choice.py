@@ -108,7 +108,7 @@ def orchestrator_choice_node(state: AgentState) -> AgentState:
     # The TASK NAME, which is what `_benchmark_hint` looks up in the registry. This read used to be
     # `state.get("task_type", "classification")` — a field deleted with the channels — so the lookup
     # silently missed on every run and the prompt always got the generic fallback hint instead of the
-    # family-specific one (B311).
+    # family-specific one.
     task = str(state.get("task") or "")
     task_plan = state.get("task_plan") or {}
     hw = state["hardware_constraints"]
@@ -144,7 +144,7 @@ def orchestrator_choice_node(state: AgentState) -> AgentState:
         if not re.search(r"\d+\.\d", format_capability_metrics(m))
     ]
 
-    # Offline capability descriptions plus the named-metric comparability contract (B161).
+    # Offline capability descriptions plus the named-metric comparability contract.
     from config.model_capabilities import capability_sections
     cap_doc = capability_sections([m.model_id for m in feasible])
 

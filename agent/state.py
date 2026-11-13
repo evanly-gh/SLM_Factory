@@ -27,7 +27,7 @@ class AgentState(TypedDict):
     feasible_models: list[ModelSpec]       # models that passed hardware_filter (Stages 1+2), largest→smallest
     stop_threshold: float             # calibrated target; iterate_node may lower or RAISE mid-run
     initial_stop_threshold: float     # immutable floor; stop_threshold can never go below this
-    # Provenance of the accuracy target (B32): which source set it, the anchor and headroom
+    # Provenance of the accuracy target: which source set it, the anchor and headroom
     # used, and whether calibration is still pending the first measurement. Audit trail for
     # "where did this goal come from" — see agent/threshold.py.
     threshold_calibration: Optional[dict]
@@ -52,7 +52,7 @@ class AgentState(TypedDict):
     # The task's CLOSED label vocabulary, pinned once from the frozen eval set by eval_setup:
     # {"labels": [...], "definitions": {label: what it means}, "benchmark": str|None, "source": str}.
     # Downstream stages may only DROP rows outside it, never extend it, and no LLM may introduce a
-    # class — see data/label_space.py (B259). None for task types whose `label` is a constant tag.
+    # class — see data/label_space.py. None for task types whose `label` is a constant tag.
     task_label_space: Optional[dict]
     task_plan: Optional[dict]         # orchestrator's autonomous plan (labels, exa_queries, ...)
     autonomous: bool                  # if True, task_analysis derives task/plan via LLM
@@ -140,7 +140,7 @@ class AgentState(TypedDict):
     # "the full orchestrator system prompt has already been logged this run". Undeclared keys
     # are dropped when LangGraph merges a node's returned state against this schema, so an
     # undeclared flag reads back False on the next call: iterate re-logged the entire system
-    # prompt on all 69 turns instead of once (B256).
+    # prompt on all 69 turns instead of once.
     _iterate_prompt_logged: bool
     # Iteration at which the stretch-goal question was last put to the orchestrator. iterate_node
     # routes through the threshold check twice per turn, so without this the same score would be
@@ -181,7 +181,7 @@ class AgentState(TypedDict):
     # Memo describing the intervention that was just rolled back: what was tried, its score and
     # delta, and its difficulty profile. `test_report` describes the CURRENT (restored) model, so
     # this is the only record of the failed attempt and exists so the orchestrator can avoid
-    # repeating it (B227/B231). Cleared once a new attempt is evaluated.
+    # repeating it. Cleared once a new attempt is evaluated.
     last_failed_attempt: Optional[dict]
     # Append-only per-model eval scores, including rolled-back ones. Stagnation is measured over
     # this because rollback pops state["scores"]. Reset on tier change.

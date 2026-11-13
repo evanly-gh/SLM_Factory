@@ -113,6 +113,17 @@ def test_stage0_removes_normalized_train_test_overlap(monkeypatch):
     assert any("normalized overlap" in message for message in logs)
 
 
+def _summary_row(text, answer):
+    """A dialogsum row. The task requires `references` (its three human summaries are what the
+    scorer grades against), so a row without them is rejected at load by design."""
+    return {
+        "text": text,
+        "answer": answer,
+        "references": [answer, f"{answer} (2)", f"{answer} (3)"],
+        "label": "generation",
+    }
+
+
 def _write_local_bundle(root, name, task, train, test, schema_version=1):
     bundle = root / name
     bundle.mkdir()
@@ -171,8 +182,8 @@ def _write_local_bundle(root, name, task, train, test, schema_version=1):
             "samsum",
             "dialogsum",
             "SAMSum dialogue summarization",
-            {"text": "A: hi", "answer": "A says hi.", "label": "generation"},
-            {"text": "B: bye", "answer": "B says bye.", "label": "generation"},
+            _summary_row("A: hi", "A says hi."),
+            _summary_row("B: bye", "B says bye."),
         ),
     ],
 )
@@ -230,8 +241,8 @@ def test_unknown_benchmark_can_use_exact_task_label_match(
 
 
 def test_local_fallback_does_not_import_key_bearing_config(tmp_path, monkeypatch):
-    train_row = {"text": "train dialogue", "answer": "summary", "label": "generation"}
-    test_row = {"text": "test dialogue", "answer": "summary", "label": "generation"}
+    train_row = _summary_row("train dialogue", "summary")
+    test_row = _summary_row("test dialogue", "summary")
     _write_local_bundle(tmp_path, "samsum", "dialogsum", [train_row], [test_row])
     monkeypatch.setenv("SLM_LOCAL_DATASET_DIR", str(tmp_path))
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
@@ -257,8 +268,8 @@ def test_local_fallback_does_not_import_key_bearing_config(tmp_path, monkeypatch
 
 
 def test_local_fallback_fails_closed_on_normalized_overlap(tmp_path, monkeypatch):
-    train = {"text": " Duplicated\n  Dialogue ", "answer": "summary", "label": "generation"}
-    test = {"text": "duplicated dialogue", "answer": "summary", "label": "generation"}
+    train = _summary_row(" Duplicated\n  Dialogue ", "summary")
+    test = _summary_row("duplicated dialogue", "summary")
     _write_local_bundle(tmp_path, "samsum", "dialogsum", [train], [test])
     monkeypatch.setenv("SLM_LOCAL_DATASET_DIR", str(tmp_path))
 
@@ -310,8 +321,8 @@ def test_schema_v2_local_bundle_requires_checksum_sidecar(tmp_path, monkeypatch)
 
 
 def test_explicit_legacy_schema_v1_loads_without_sidecar_and_logs(tmp_path, monkeypatch):
-    train = {"text": "train", "answer": "summary", "label": "generation"}
-    test = {"text": "test", "answer": "summary", "label": "generation"}
+    train = _summary_row("train", "summary")
+    test = _summary_row("test", "summary")
     _write_local_bundle(
         tmp_path, "samsum", "dialogsum", [train], [test], schema_version=1
     )
@@ -367,8 +378,8 @@ def test_discovery_worker_returns_precise_hf_split_provenance(monkeypatch):
     monkeypatch.setattr(
         web_acquire, "_materialize_from_mapping",
         lambda *_args, **_kwargs: (
-            [{"text": "train", "answer": "a", "label": "generation"}],
-            [{"text": "test", "answer": "b", "label": "generation"}],
+            [_summary_row("train", "a")],
+            [_summary_row("test", "b")],
         ),
     )
 
@@ -398,8 +409,8 @@ def test_discovery_worker_returns_precise_hf_split_provenance(monkeypatch):
 
 
 def test_discovery_parent_propagates_precise_metadata(monkeypatch):
-    train = [{"text": "train", "answer": "a", "label": "generation"}]
-    test = [{"text": "test", "answer": "b", "label": "generation"}]
+    train = [_summary_row("train", "a")]
+    test = [_summary_row("test", "b")]
     records = [
         {"kind": "hf", "id": "org/discovered", "config": "cfg",
          "split": "train", "role": "curriculum"},
@@ -614,7 +625,7 @@ def test_default_acquisition_tries_stage0_before_paid_after_local_miss(monkeypat
 #
 # Acceptance here is PER ROW, not per source (2026-08-19). A discovered dataset is not thrown away
 # for carrying rows we cannot use: unusable rows are dropped and the rest of the source is kept, and
-# the source is refused only when nothing survives. See docs/interventions.md section 4.1.
+# the source is refused only when nothing survives.
 
 ROUTER_LABELS = {"local", "route"}
 DISCOVERED_RECORDS = [
@@ -674,7 +685,7 @@ def test_a_mined_source_keeps_its_good_rows_and_drops_the_foreign_ones(monkeypat
     rejected label because a silent one is indistinguishable from a source that simply had few rows.
 
     The rest of the source is KEPT. The original guard rejected the whole source instead, which was
-    the right instinct and the wrong remedy: B259 saw four hallucinated classes enter a two-class
+    the right instinct and the wrong remedy: one run saw four hallucinated classes enter a two-class
     RouterBench run and cost ~1,166 quality-control deletions per rebuild for the remainder of it,
     but a dataset whose column mapping got most rows right is still worth most of its rows.
     """
@@ -692,7 +703,7 @@ def test_a_mined_source_keeps_its_good_rows_and_drops_the_foreign_ones(monkeypat
 
 def test_a_mined_source_is_refused_only_when_no_row_survives(monkeypatch):
     """"Not one row carries a label of ours" is the honest reading of "this is not our task's data",
-    and it is the only condition under which a whole source is still thrown away (B259)."""
+    and it is the only condition under which a whole source is still thrown away."""
     rows, report, logs = _mine_from_a_discovered_source(monkeypatch, [
         {"text": "novel one", "label": "cloud"},
         {"text": "novel two", "label": "on_device"},

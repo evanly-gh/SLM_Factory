@@ -94,6 +94,8 @@ def test_merge_and_quantize_delegates_when_isolation_enabled(monkeypatch):
             "merged_output_dir": "/merged",
             "gguf_output_dir": "/gguf",
             "quant": "Q4_K_M",
+            # Forwarded so the worker builds for the same backend; None = the run-wide default.
+            "backend": None,
         },
     )
 

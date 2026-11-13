@@ -46,7 +46,10 @@ mnn-benchmark-harness/stage1_check_mnn.json
 mnn-benchmark-harness/comparison_report.json
 mnn-benchmark-harness/comparison_report_s23.json
 MobileAI/
-SmolChat-Android/
+# Vendored app: its tracked files stay tracked; new files under it are ignored except the
+# Apache-2.0 modification notice.
+SmolChat-Android/*
+!SmolChat-Android/MODIFICATIONS.md
 llama.cpp-test/
 lora_adapter/
 slm-math-l40s-37576194/

@@ -8,7 +8,7 @@ WHY THIS FILE EXISTS
 
     A static instruction the generator demonstrably ignores is worth less than its own recent
     mistakes quoted back at it. That is the same reason the demonstrations are shown rather than
-    described (B276): a contract the model has only been told about is a contract it is being
+    described: a contract the model has only been told about is a contract it is being
     tested on guessing.
 
     So `record_rejection_reasons` remembers what the verifier refused and
@@ -151,7 +151,7 @@ def test_reasons_differing_only_in_whitespace_are_the_same_reason():
 
 def test_the_list_is_capped_and_keeps_the_first_distinct_reasons():
     """A prompt is a budget. Every rejection quoted is context not spent on the demonstrations,
-    which are the measured 6.4x intervention (B276), so the feedback has to stay a summary."""
+    which are the measured 6.4x intervention, so the feedback has to stay a summary."""
     curriculum = _curriculum()
     cap = curriculum.MAX_FEDBACK_REJECTIONS
     reasons = [f"defect {i}" for i in range(cap + 4)]

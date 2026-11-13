@@ -349,7 +349,7 @@ def test_non_qwen_gguf_renders_through_the_models_own_chat_template():
     """A Gemma must be served Gemma turn markers, not Qwen's ChatML.
 
     This used to raise outright, which was the right guard for a Qwen-only pool: handing a
-    non-Qwen the hardcoded `<|im_start|>` framing is silent train/serve skew, the B290 failure.
+    non-Qwen the hardcoded `<|im_start|>` framing is silent train/serve skew.
     The guard was the wrong general rule though — the served model's own tokenizer already knows
     its framing, so rendering from it is both safe and family-agnostic.
     """
@@ -605,7 +605,7 @@ def test_inference_prefetches_base_and_weights_before_language_loader():
 
 
 def test_adapter_only_loader_loads_base_then_applies_adapter(tmp_path):
-    """The adapter must be attached with PeftModel, not model.load_adapter (B254).
+    """The adapter must be attached with PeftModel, not model.load_adapter.
 
     `load_adapter` builds the LoRA modules on an Unsloth-patched model but leaves every
     lora_B tensor at its zero init, which makes the adapter an identity and silently scores

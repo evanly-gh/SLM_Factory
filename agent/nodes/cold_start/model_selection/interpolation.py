@@ -30,12 +30,12 @@ def _plog(msg: str):
     """Print to stdout so the probe/fit/selection steps land in run.log. The model-selection
     nodes previously logged only via logger.info, which the run's logging config suppresses,
     so the 3-probe scaling curve was invisible and interpolation *looked* like it jumped
-    straight to the largest model (B161)."""
+    straight to the largest model."""
     print(f"[model_selection:interpolation] {msg}")
 
 # Probes must be REPRESENTATIVE of real fine-tuning, or they systematically underestimate
 # fully-trained F1 → the fitted curve sits too low → the goal-crossing extrapolates to a huge
-# param count → nothing qualifies → default-to-largest (the failure seen in earlier runs, B161).
+# param count → nothing qualifies → default-to-largest (the failure seen in earlier runs).
 # Fix: more epochs (3, like real training) on the actual acquired curriculum, not the eval seed.
 _PROBE_EPOCHS = int(os.environ.get("SLM_PROBE_EPOCHS", "3"))
 _PROBE_LORA_RANK = 16
@@ -112,7 +112,7 @@ def _probe_model(
     if not dataset_path:
         # Prefer the ACQUIRED real curriculum (train_examples) for a representative probe;
         # fall back to the eval-set seed only if no train data is available. Stratify + cap
-        # so the probe is balanced and cheap (B161).
+        # so the probe is balanced and cheap.
         from data.loaders.web_acquire import _stratified_take
         seed_examples = list(state.get("train_examples") or [])
         src = "train_examples"
@@ -238,7 +238,7 @@ def interpolation_node(state: AgentState) -> AgentState:
           f"f1 = {a:.4f}·log(size_MB) + {b:.4f}")
 
     # Draw the curve at each distinct feasible deployment footprint, so the shape and
-    # where it sits relative to the goal is visible in the log (B161).
+    # where it sits relative to the goal is visible in the log.
     _seen_sz = set()
     _plog(f"  curve (predicted f1 by on-disk size, goal={stop_threshold:.3f}):")
     for model in sorted(feasible, key=lambda m: m.size_mb):
@@ -281,7 +281,7 @@ def interpolation_node(state: AgentState) -> AgentState:
               f"predicted f1={a * math.log(max(chosen.size_mb, 1.0)) + b:.4f})")
     else:
         # No model predicted to clear the goal. Rather than blindly defaulting to the LARGEST
-        # (which underpowered probes made happen every time before, B161), pick the model with
+        # (which underpowered probes made happen every time before), pick the model with
         # the HIGHEST PREDICTED f1 on the fitted curve — for a positive slope that's the
         # largest, but for a flat/negative slope (noisy probes) it avoids over-selecting.
         # Downward re-exploration (post-convergence) can still trim to a smaller model.

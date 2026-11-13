@@ -53,7 +53,7 @@ EXPECTED = {"train": 12_460, "dev": 500, "test": 500}
 # Carried on every row and read by `eval.scorers.summarization`, which the eval harness AND the
 # trainer both call, so the model is asked to do the same thing in training and at eval.
 #
-# Kept VERBATIM from the old loader. It is the B250 fix and it is still exactly right: without it
+# Kept VERBATIM from the old loader, and it is still exactly right: without it
 # both paths fell back to the generation family's default, "Answer the following question:", which
 # is wrong here in a way that destroys the task — a dialogue transcript asks no question, so the
 # model continued the conversation instead of summarizing it. Observed in run
@@ -207,6 +207,6 @@ def load_dialogsum(
         f"SAMSum, which is what makes it demand real abstraction")
 
     # No cross-source dedup pass. The old loader needed one because SAMSum ships a handful of
-    # dialogues in both its own train and test splits with different gold summaries (B285);
+    # dialogues in both its own train and test splits with different gold summaries;
     # DialogSum is one corpus with disjoint official splits, so there is nothing to reconcile.
     return train_rows[:max_train], test_rows[:max_test]

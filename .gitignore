@@ -50,3 +50,13 @@ data/external_eval/
 /site.env
 /.cache/
 /.tmp/
+
+# Editor / agent settings and experiment-tracker output.
+.vscode/
+.idea/
+.claude/
+wandb/
+# Model weights (built under artifacts/ or downloaded). Ignore rules never untrack files: the small
+# llama.cpp vocab GGUFs under hardware/SmolChat-Android/llama.cpp/models/ stay tracked as vendored files.
+*.gguf
+*.mnn

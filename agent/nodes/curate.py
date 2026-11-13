@@ -128,7 +128,7 @@ def _label_definitions(state: AgentState) -> dict | None:
 
     Pinned by eval_setup. Without it the teacher judges the label's wording rather than the task:
     on RouterBench, where `local` means "a small model can answer this", it rejected 70% of
-    generated rows with verdicts like "the utterance is a math problem, not a local query" (B267).
+    generated rows with verdicts like "the utterance is a math problem, not a local query".
     """
     pinned = state.get("task_label_space")
     if isinstance(pinned, dict) and pinned.get("definitions"):
@@ -413,11 +413,11 @@ def _eligible_categories(state: AgentState, plan: dict, model_id: str) -> list[d
     the scorer measured — `wrong_arguments`, `unparseable_output`, a real class confusion — rather
     than a channel-wide constant. Under the old design every open-ended task reported the single
     literal `gold_verifier -> incorrect`, whose count is the failure count the orchestrator already
-    had, and it wrote pages of reasoning about that constant (B296).
+    had, and it wrote pages of reasoning about that constant.
 
     A category already targeted whose count did not fall is EXHAUSTED and skipped: without that
     check the run keeps pouring rows at something that is not responding, which is the loop the
-    CLINC150 run got stuck in (B224).
+    CLINC150 run got stuck in.
     """
     requested = [
         entry for entry in (plan.get("target_categories") or [])
@@ -480,7 +480,7 @@ def _surgical_synthesize(
     This is now the ONLY synthesis path. The balanced label-space fill it replaced spent most of the
     teacher budget on rows chosen for class balance rather than for anything the model was getting
     wrong, and on `function_call` it produced nothing at all for six consecutive rebuilds because the
-    task matched no dispatch branch (B291).
+    task matched no dispatch branch.
 
     Generated rows are gated twice: by the task's exact programmatic verifier where one exists
     (xlam, calendar, NER — free, unfoolable) and by the teacher's own check of its own output
@@ -748,7 +748,7 @@ def _reread_known_sources(
 
     This is what did not exist before 2026-08-19: `acquire` went straight to paid web discovery,
     which then found mirrors of the very corpus sitting in the local cache and rejected them, while
-    ~57,000 unused xLAM rows stayed unreachable (B297).
+    ~57,000 unused xLAM rows stayed unreachable.
 
     Returns ``(rows, exhausted_source_ids)``.
     """

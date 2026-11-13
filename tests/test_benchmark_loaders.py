@@ -352,7 +352,7 @@ def test_bc5cdr_resolves_integer_tag_ids_and_drops_length_mismatches():
 def test_ner_training_prompt_is_byte_identical_to_the_eval_prompt():
     """The trainer used to hand-copy a version omitting "Reply with [] if there are no
     entities", so the model was tuned on one input shape and scored on another — the same class
-    of skew as B250, uncorrected through the whole 44.8h BC5CDR run."""
+    of train/serve skew, uncorrected through the whole 44.8h BC5CDR run."""
     from data.eval_set import build_eval_set
     from eval.scorers import ner as ner_scorer
     from training.lora_trainer import _training_turn

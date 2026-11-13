@@ -49,9 +49,9 @@ def _build_or_reuse_quant_artifact(
     `llmexport.py`, and both halves of the cache protocol (validate-then-record, hash-checked
     reuse) exist for each. Nothing else in this node knows which one it is holding.
 
-    CACHING (B160): keyed by the exact `weights_ref` AND the quant method, so a given
+    CACHING: keyed by the exact `weights_ref` AND the quant method, so a given
     trained checkpoint is quantized to a given format at most ONCE. Both parts of the key
-    are essential (B161): the quant must be in the key because the SAME base model can be
+    are essential: the quant must be in the key because the SAME base model can be
     selected at two tiers as different quant variants (e.g. 1.7B Q4_K_M then 1.7B Q8_0) and
     the checkpoint path collides across tiers (the iteration counter resets to 1 on
     escalation). Keying on weights_ref alone — and reusing ANY *.gguf in the dir — made the
@@ -97,7 +97,7 @@ def _build_or_reuse_quant_artifact(
             cleanup_path = source_path
         artifact_path = quantize_from_model_spec(source_path, artifact_dir, quant, backend)
         try:
-            # The load is the gate. The generation smoke test only reports (B289): as a fatal check it
+            # The load is the gate. The generation smoke test only reports: as a fatal check it
             # ended three healthy runs, because a small base model answering a trivial prompt is not a
             # corrupt artifact. A near-zero eval score is the reliable signal, and rollback handles it.
             validate_and_record(
@@ -292,7 +292,7 @@ def evaluate_node(state: AgentState) -> AgentState:
 
         # Content AND format, always both. A score alone cannot distinguish "picked the wrong
         # answer" from "produced something the scorer could not read", and that gap is exactly what
-        # diagnosed B290 — every fine-tuned prediction carried two stray `<think>` tags, so content
+        # diagnosed the stray-tag bug — every fine-tuned prediction carried two stray `<think>` tags, so content
         # collapsed while format told the real story.
         if baseline_f1 is not None:
             _log(
@@ -368,7 +368,7 @@ def evaluate_node(state: AgentState) -> AgentState:
         state["model_baselines"] = baselines
         _log(mlabel, f"  First fine-tuned score = {first_ft:.4f}")
 
-    # Count the ZERO-SHOT baseline as a candidate (B161): if fine-tuning didn't beat the
+    # Count the ZERO-SHOT baseline as a candidate: if fine-tuning didn't beat the
     # base model, KEEP the base model. This prevents reporting a fine-tune that is WORSE
     # than zero-shot (e.g. the 4B collapsed 0.64→0.27 and its good baseline was lost), and
     # lets a strong base model "converge" on its own when its zero-shot already meets the
@@ -419,7 +419,7 @@ def evaluate_node(state: AgentState) -> AgentState:
     # Assign a NEW list rather than appending in place: `scores` has no LangGraph
     # reducer, and an in-place mutation keeps the same object identity, so the change is
     # not reliably persisted to the channel — the list froze after ~3 entries and
-    # stagnation (which reads this window) never fired, looping the run forever (BUGS B122).
+    # stagnation (which reads this window) never fired, looping the run forever.
     state["scores"] = list(state.get("scores") or []) + [current_score]
     state["last_eval"] = best_result
 
@@ -429,11 +429,11 @@ def evaluate_node(state: AgentState) -> AgentState:
          f"{prev_best:.4f})  failures={len(best_result.failures)}/{len(eval_set.all)}  "
          f"trajectory={[f'{s:.3f}' for s in state['scores']]}")
 
-    # Stop-threshold calibration (B32) is completed in eval_setup from the Qwen-3.6 baseline on
+    # Stop-threshold calibration is completed in eval_setup from the Qwen-3.6 baseline on
     # E (the sole accuracy target); by the time evaluate runs, stop_threshold is already the
     # immutable floor. Nothing to late-bind here.
 
-    # Test-data agent (B161): report per-difficulty accuracy + a targeted diagnosis. This is
+    # Test-data agent: report per-difficulty accuracy + a targeted diagnosis. This is
     # the aggregate signal iterate_node uses instead of raw failure rows.
     try:
         from agent.nodes.test_agent import build_test_report
@@ -451,7 +451,7 @@ def evaluate_node(state: AgentState) -> AgentState:
             # `n/a` alone read as a measurement failure. It is a structural fact: no eval row landed
             # in this bucket. On a format-bound task neither the smallest nor the largest model can
             # produce the output contract zero-shot, so nothing separates them and `medium` is empty
-            # by construction — that happened on all 8 BC5CDR reports (B275).
+            # by construction — that happened on all 8 BC5CDR reports.
             return f"{b}=n/a(n=0, no eval row in this bucket)"
         _log(mlabel, f"  [test_agent] overall={report['overall']:.4f}  "
                      f"{_fmt('easy')}  {_fmt('medium')}  {_fmt('hard')}")
@@ -584,7 +584,7 @@ def evaluate_node(state: AgentState) -> AgentState:
             },
         },
     }
-    # New list (not in-place) so the channel change persists — see B122 note above.
+    # New list (not in-place) so the channel change persists — see the `scores` note above.
     state["dag"] = list(state.get("dag") or []) + [dag_node]
 
     # Write data-curation.md entry with hardware PASS/FAIL
@@ -638,7 +638,7 @@ def evaluate_node(state: AgentState) -> AgentState:
         # `intervention=...` in the compacted trajectory. Writing the policy guess here meant the
         # orchestrator was told it had run `hyperparameter` on iterations 4-8 of
         # slm-clinc150-cse-38155022 when the DAG shows all five were `data_rebuild/synthesize` —
-        # i.e. its memory of what it had already tried was factually wrong (B237).
+        # i.e. its memory of what it had already tried was factually wrong.
         next_intervention=dag_intervention,
         hypothesis=state.get("last_hypothesis", ""),
         eval_firewall=curation.get("eval_firewall"),

@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """
-Write docs/SCENARIOS.md: a test of the requirement filter. Realistic app use cases set limits on the four measured
-fields (peak memory, prefill tokens/s, decode tokens/s, energy per request); each configuration on the target phone is
-checked against them with its measured values from docs/RESULTS.md (req_data.py), the ones that miss any limit are
+Write hardware/docs/SCENARIOS.md: a test of the requirement filter. Realistic app use cases set limits on the four
+measured fields (peak memory, prefill tokens/s, decode tokens/s, energy per request); each configuration on the target
+phone is checked against them with its measured values (the merged data behind hardware/docs/RESULTS.md, loaded by
+req_data.py), the ones that miss any limit are
 filtered out, and the most capable survivor is picked. 20 easy, 20 medium and 20 hard scenarios.
 
   python scenarios_md.py
@@ -27,7 +28,7 @@ FIG_DIR = DOCS / "figures" / "scenarios"
 CSV_OUT = HERE / "results" / "scenarios.csv"
 PER_TIER = 20
 PHONE_ORDER = ["Galaxy S23", "OnePlus 15", "OnePlus 8 Pro", "Redmi 9A"]
-# Usable RAM (GiB, as reported in docs/RESULTS.md) and battery energy (rated mAh × 3.85 V nominal).
+# Usable RAM (GiB, as reported in hardware/docs/RESULTS.md by results_all_md.py) and battery energy (rated mAh × 3.85 V nominal).
 RAM_GIB = {"Galaxy S23": 6.91, "OnePlus 15": 14.76, "OnePlus 8 Pro": 11.24, "Redmi 9A": 3.72}
 BATTERY = {"Galaxy S23": (3900, 15.0), "OnePlus 15": (7300, 28.1), "OnePlus 8 Pro": (4510, 17.4),
            "Redmi 9A": (5000, 19.3)}
@@ -55,7 +56,7 @@ class Task:
         return any((r["model"], r["bits"]) == self.best_key for r, _, _ in kept)
 
 
-# The most accurate student per task (SLM Factory RESULTS.md I.1) as (model, bits) in this pool. The Factory's
+# The most accurate student per task (the paper's main results table, also in the root README) as (model, bits) in this pool. The Factory's
 # Q4_K_M / Q8_0 GGUFs map to the pool's 4-bit and 8-bit builds of the same model.
 BEST_STUDENT = {'clinc150': ('qwen3-4b-instruct-2507', 8),
                 'sms_spam': ('qwen3-1.7b', 4),
@@ -69,7 +70,7 @@ BEST_STUDENT = {'clinc150': ('qwen3-4b-instruct-2507', 8),
                 'topv2': ('qwen3-4b-instruct-2507', 8)}
 
 # Token counts from the Qwen3 / Qwen3.5 tokenizers (they agree within 1-3%) on each task's real prompt and chat
-# template, with an input of the task's median length (SLM Factory RESULTS.md IV.3) and a typical answer.
+# template, with an input of the task's median length (measured on the SLM Factory's eval sets) and a typical answer.
 TASKS = {t.key: t for t in [
     Task("clinc150", "CLINC150", "Intent routing",
          "classify a user's request to an assistant into one of a large fixed set of intents (banking, travel, "
@@ -475,9 +476,9 @@ def main():
          "Galaxy S23 runs 82 of 104 and the OnePlus 8 Pro 79, so an easy scenario there would have to keep 77-80% "
          "of what runs.", "",
          "## The ten tasks", "",
-         "Every scenario deploys one of the ten tasks the SLM Factory trains students for (SLM Factory "
-         "RESULTS.md, Part I), with the task's own request: its real prompt (SLM Factory `eval/scorers`) and chat "
-         "template around an input of the task's median length (RESULTS.md IV.3), counted with the Qwen3 and "
+         "Every scenario deploys one of the ten tasks the SLM Factory trains students for (the paper's main "
+         "results), with the task's own request: its real prompt (SLM Factory `eval/scorers`) and chat "
+         "template around an input of the task's median length, counted with the Qwen3 and "
          "Qwen3.5 tokenizers (they agree within 1-3%), and a typical answer.", "",
          "**The fixed part of the prompt is cached.** Every task's prompt starts with fixed text (instructions, label "
          "lists, tool schemas) and puts the input after it. A deployed app computes that prefix once and keeps its "
@@ -487,7 +488,7 @@ def main():
          "**Inputs stay the size the model was trained on.** Text longer than that (an abstract, an essay, an "
          "article, a journal entry) is sent sentence by sentence, as several requests.", "",
          "| Task | Benchmark | What the deployed model does | Cached prefix (tokens) | Prefilled per request | "
-         "Answer | Request | Factory's most accurate student (RESULTS.md I.1) |", "|---|---|---|--:|--:|--:|---|---|",
+         "Answer | Request | Factory's most accurate student (paper's main table) |", "|---|---|---|--:|--:|--:|---|---|",
          *[f"| {t.key} | {t.title} | {t.what} | {t.cached:,} | {t.prompt:,} | {t.answer} | {t.shape} | {t.best} |"
            for t in TASKS.values()],
          "",

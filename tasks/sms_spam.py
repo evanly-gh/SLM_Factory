@@ -35,7 +35,7 @@ SPEC = TaskSpec(
     closed_label_space=True,
     # `ham` is domain jargon, not English. Left undefined, the teacher reads it as the food and
     # rejects perfectly good rows for not being about pork — the same failure RouterBench hit when
-    # it read `local` as "nearby" (B267). `spam` needs the complement stated for the same reason.
+    # it read `local` as "nearby". `spam` needs the complement stated for the same reason.
     label_definitions={
         "spam": (
             "an unsolicited bulk message — advertising, a prize/competition claim, a premium-rate "

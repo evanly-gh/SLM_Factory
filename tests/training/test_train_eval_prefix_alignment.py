@@ -1,10 +1,10 @@
-"""The inference prompt must be a strict prefix of the rendered training text (B290).
+"""The inference prompt must be a strict prefix of the rendered training text.
 
 The invariant, stated once: whatever precedes the answer during training must also be present in the
 inference prompt, byte for byte. Break it and the model's first generated tokens are the missing
 scaffolding, which then gets scored as its answer.
 
-What made B290 hard to see is that no prompt string in this repo was wrong.
+What made this skew hard to see is that no prompt string in this repo was wrong.
 `FastLanguageModel.from_pretrained("Qwen/Qwen3-4B-Instruct-2507")` does not load that repo — it
 redirects to `unsloth/qwen3-4b-instruct-2507-unsloth-bnb-4bit` and returns the mirror's tokenizer,
 whose chat template applies the hybrid Qwen3 think-block convention to a thinking-free checkpoint:
@@ -94,10 +94,40 @@ def test_a_hybrid_model_requires_the_think_block():
         _assert_train_serve_prefix_alignment(_Tokenizer(_THINKING_FREE_TEMPLATE), "Qwen/Qwen3-1.7B")
 
 
-def test_non_qwen_models_are_skipped():
-    """`infer_batch_gguf` refuses non-Qwen through the hand-built ChatML path, so there is no prefix
-    of ours to compare against; asserting one would fail on templates we never claim to match."""
-    _assert_train_serve_prefix_alignment(_Tokenizer(_THINK_BLOCK_TEMPLATE), "google/gemma-3-4b-it")
+_GEMMA = "google/gemma-3-4b-it"
+_GEMMA_TEMPLATE = (
+    "<bos>{% for m in messages %}<start_of_turn>"
+    "{{ 'model' if m.role == 'assistant' else m.role }}\n{{ m.content }}<end_of_turn>\n"
+    "{% endfor %}{% if add_generation_prompt %}<start_of_turn>model\n{% endif %}"
+)
+
+
+def _serve_with(monkeypatch, tokenizer):
+    """Stand in for the served model's tokenizer, so the check never depends on the HF cache."""
+    import training.slm_helpers as helpers
+
+    monkeypatch.setattr(helpers, "_serving_tokenizer", lambda _model_id: tokenizer)
+
+
+def test_non_qwen_models_are_checked_against_their_own_served_template(monkeypatch):
+    """Every family is checked, not just Qwen (the Qwen-only gate was dropped on 2026-08-24, when
+    non-Qwen serving started rendering the model's own template). Training on the served template
+    passes; training on someone else's turn markers is the template skew and must refuse."""
+    _serve_with(monkeypatch, _Tokenizer(_GEMMA_TEMPLATE))
+
+    _assert_train_serve_prefix_alignment(_Tokenizer(_GEMMA_TEMPLATE), _GEMMA)
+    with pytest.raises(RuntimeError, match="TRAIN/SERVE PREFIX SKEW"):
+        _assert_train_serve_prefix_alignment(_Tokenizer(_THINK_BLOCK_TEMPLATE), _GEMMA)
+
+
+def test_non_qwen_model_with_unloadable_serving_tokenizer_is_reported_unverifiable(
+    monkeypatch, capsys
+):
+    """No served template means nothing to compare against: warn, do not report a spurious skew."""
+    _serve_with(monkeypatch, None)
+
+    _assert_train_serve_prefix_alignment(_Tokenizer(_THINK_BLOCK_TEMPLATE), _GEMMA)
+    assert "could not load the serving tokenizer" in capsys.readouterr().out
 
 
 def test_an_unrenderable_template_does_not_block_training():

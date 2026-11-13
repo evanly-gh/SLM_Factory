@@ -75,7 +75,7 @@ SPEC = TaskSpec(
     # across rebuilds, with reasons like "Output contains brackets and quotes, violating the plain
     # text contract" (22 of one batch) and "must be plain text, not JSON or list" (8 more). Every
     # one of those rows was CORRECTLY FORMATTED; the teacher was judging the JSON rendering of the
-    # field rather than the answer, which is the BC5CDR failure (B267/B269/B314) in a new costume.
+    # field rather than the answer, which is the BC5CDR failure in a new costume.
     #
     # It was caught rather than paid for because the pass ran in SHADOW mode: nothing was dropped.
     # In enforce mode this would have discarded roughly half of every synthesis batch and looked
@@ -186,7 +186,7 @@ SPEC = TaskSpec(
         ),
     ),
     # 43,410 train rows against a 5,000-row cap leaves ~38,000 unmined, so mining has somewhere
-    # real to go and paid discovery would only rediscover mirrors of a cached corpus (B297).
+    # real to go and paid discovery would only rediscover mirrors of a cached corpus.
     allow_paid_discovery=False,
 
     model_ranking_metric=None,

@@ -1,4 +1,4 @@
-"""Loader for the offline model-capability descriptions doc (B161).
+"""Loader for the offline model-capability descriptions doc.
 
 The doc (model_capabilities.md) gives sourced per-model capability notes plus the
 MMLU/MMLU-Pro/MMLU-Redux comparability contract, injected into orchestrator prompts (initial

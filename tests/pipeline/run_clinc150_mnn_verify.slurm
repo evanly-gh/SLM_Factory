@@ -19,7 +19,7 @@
 #   3. the artifact cache hits per (weights_ref, quant) and the reaper deletes MNN DIRECTORIES
 #      rather than failing on a path that is not a file;
 #   4. an ESCALATION rebuilds at the new tier's quant — the path that silently reused the wrong
-#      file under llama.cpp (B161) and has to be right for a second artifact shape too;
+#      file under llama.cpp and has to be right for a second artifact shape too;
 #   5. the DAG records `quant_backend` on every node, so the scores cannot later be pooled with
 #      llama.cpp numbers from the same task.
 #

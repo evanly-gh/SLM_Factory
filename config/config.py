@@ -378,8 +378,8 @@ HW_VERIFY_ON_DEVICE = os.environ.get("SLM_HW_VERIFY_ON_DEVICE", "0") == "1"
 # evaluate_node merges the LoRA adapter, quantizes to the variant's GGUF via llama.cpp,
 # and scores it through llama-cpp-python with layers offloaded to the GPU (SLM_GGUF_GPU_LAYERS,
 # default -1 = all; MNN 4-bit is exported as HQQ-32) — so Q4_K_M and Q8_0 of a model finally
-# produce DIFFERENT accuracy numbers (in theoretical mode they were identical, B156).
-# DEFAULT ON (B160): the deployed artifact is the quantized GGUF, so its measured accuracy
+# produce DIFFERENT accuracy numbers (in theoretical mode they were identical).
+# DEFAULT ON: the deployed artifact is the quantized GGUF, so its measured accuracy
 # is the number that actually matters — theoretical bf16-as-a-proxy is misleading. The GGUF
 # is cached per exact weights (evaluate._build_or_reuse_quant_artifact), so identical weights are
 # never requantized; a new build per iteration is inherent because each iteration retrains.

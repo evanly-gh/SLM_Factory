@@ -1,4 +1,4 @@
-"""Per-phone configuration table for requirements_md.py, from the same merged data as docs/RESULTS.md
+"""Per-phone configuration table for requirements_md.py, from the same merged data as hardware/docs/RESULTS.md
 (results_all_md.py)."""
 from __future__ import annotations
 

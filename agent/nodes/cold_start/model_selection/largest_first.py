@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 
 
 def _plog(msg: str):
-    """Print so model-selection reasoning reaches run.log (logger.info is suppressed, B161)."""
+    """Print so model-selection reasoning reaches run.log (logger.info is suppressed)."""
     print(f"[model_selection:largest_first] {msg}")
 
 

@@ -50,7 +50,7 @@ DEFAULT_METRICS_VENV = ".venv_metrics"
 BERTSCORE_MODEL = "roberta-large"
 BERTSCORE_LAYERS = 17
 
-# Continuing the conversation instead of summarizing it was B250, and the row-level `_instruction`
+# Continuing the conversation instead of summarizing it is a known failure, and the row-level `_instruction`
 # is the fix. This is how the failure is DETECTED if it returns.
 #
 # THE COLON IS THE WHOLE TEST, and getting this wrong is a real trap: DialogSum's gold summaries
@@ -98,7 +98,7 @@ def extract_predictions(raw_outputs: list[str], eval_set: EvalSet) -> list[str]:
     """The summary text, with any `<reasoning>` block stripped.
 
     Reuses `eval.scorers.generation.split_reasoning` so a CoT-trained model's reasoning is not
-    scored as part of its summary — the same reason that split exists for the judge path (B251).
+    scored as part of its summary — the same reason that split exists for the judge path.
     """
     from eval.scorers.generation import split_reasoning
 
@@ -212,7 +212,7 @@ def _rouge_result(eval_set: EvalSet, predictions: list[str], metric_name: str,
 
     # "Format" for a summarization task can only mean the model produced a summary rather than
     # something else. A reply carrying a transcript turn label is a CONTINUATION of the dialogue,
-    # which is the specific B250 failure this task has already had, so it counts as unusable
+    # which is the specific failure this task has already had, so it counts as unusable
     # rather than merely low-scoring.
     flags = [
         1.0 if prediction and not _looks_like_continuation(prediction) else 0.0
@@ -313,8 +313,8 @@ def failure_category_of(failure: dict) -> str:
     """Why this summary scored poorly, in categories that suggest different fixes.
 
     `continued_the_conversation` is named because it is the failure this task has actually had:
-    with no row-level instruction the model treated the transcript as something to reply to
-    (B250). If it ever returns, it must be visible as a prompt problem rather than averaged into
+    with no row-level instruction the model treated the transcript as something to reply to.
+    If it ever returns, it must be visible as a prompt problem rather than averaged into
     generic low overlap.
     """
     predicted = str(failure.get("predicted") or "").strip()

@@ -1,4 +1,4 @@
-"""B256: the orchestrator system prompt must be logged ONCE per run, not every turn.
+"""The orchestrator system prompt must be logged ONCE per run, not every turn.
 
 `_llm_iterate` sets `state["_iterate_prompt_logged"] = True` after logging, but the key was not
 declared on AgentState. LangGraph merges a node's returned state against that TypedDict schema

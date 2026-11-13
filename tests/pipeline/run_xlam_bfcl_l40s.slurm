@@ -80,7 +80,7 @@ export SLM_TEACHER_SYNTH_BYPASS=1
 #     `SYNTH_MAX_MODEL_LEN * 1.25` characters, so the cap also shrinks the room for demonstrations
 #     from ~164k chars to ~20k — and xlam is the task where too few demonstrations means ZERO kept
 #     rows, not merely worse ones (0 of 1,019 at zero-shot, 0 of 133 at the 1-2 shots that fit an
-#     8,192 context; B276). The local cap fixes a local problem and creates a remote one.
+#     8,192 context). The local cap fixes a local problem and creates a remote one.
 if [ "${SLM_SYNTH_API_MODE:-0}" != "1" ]; then
     export SLM_SYNTH_MAX_MODEL_LEN=16384
     export SLM_SYNTH_MAX_NUM_SEQS=32

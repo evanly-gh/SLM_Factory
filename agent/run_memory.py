@@ -15,7 +15,7 @@ Why the dump was inadequate (measured on slm-clinc150-cse-38155022):
   seventeen unrelated rows; the pattern — ``synthesize`` tried fifteen times and never once
   kept — was present but invisible.
 - **The prose was truncated garbage.** Each older row was cut to 100 characters mid-word, and
-  an empty hypothesis captured the following markdown heading (B238).
+  an empty hypothesis captured the following markdown heading.
 
 Source of truth is ``state["dag"]``, which is append-only and marks discarded attempts with
 ``pruned`` rather than deleting them, so rolled-back iterations remain visible here even though
@@ -47,8 +47,8 @@ def _label(node: dict) -> str:
     The sub-strategy is only meaningful for a data_rebuild. `pi.D.plan` persists across
     iterations, so a hyperparameter node still carries the plan from whichever rebuild last
     ran — rendering that as `hyperparameter/acquire` would attribute a data strategy to an
-    iteration that never rebuilt the data. That is the same class of false-memory defect as
-    B237 and would undo the fix.
+    iteration that never rebuilt the data. That would reintroduce the false-memory
+    defect this rendering exists to prevent.
     """
     intervention = str(node.get("intervention") or "?")
     if intervention != "data_rebuild":
@@ -114,7 +114,7 @@ def _confusion_line(node: dict) -> str:
     top = sorted(pairs, key=lambda p: -int(p.get("count", 0) or 0))[:5]
     # `X->Y` only when Y is a real predicted class. An open-ended task has failure categories, and
     # rendering `empty_call_list->incorrect` made the orchestrator narrate a model output that does not
-    # exist — 65 times on calendar run 38735780 (B326).
+    # exist — 65 times on calendar run 38735780.
     rendered = ", ".join(
         f"{p.get('gold')}->{p.get('predicted')} ({p.get('count')})"
         if p.get("predicted") is not None else

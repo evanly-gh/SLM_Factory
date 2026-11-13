@@ -148,7 +148,7 @@ def artifact_name(quant: str) -> str:
 
     Analogous to the GGUF path's `model-<method>.gguf`, and equally load-bearing: the cache key in
     `evaluate._build_or_reuse_quant_artifact` checks for this EXACT name so that two quant tiers of
-    the same base model cannot be mistaken for each other (B161).
+    the same base model cannot be mistaken for each other.
     """
     return f"model-mnn-q{quant_bit(quant)}"
 
@@ -469,7 +469,7 @@ def validate_and_record_mnn(
 ) -> dict:
     """Load the artifact with MNN, smoke-test generation, then record its file identity.
 
-    Same division of labour as the GGUF path (B289): THE LOAD IS THE GATE, and the generation
+    Same division of labour as the GGUF path: THE LOAD IS THE GATE, and the generation
     probe only reports. A small model given a trivial prompt is not a corrupt model, and three
     healthy runs were once killed by treating it as one; the eval score is the reliable detector
     and rollback is the reliable response.
@@ -755,7 +755,7 @@ def _assert_threaded_compute_is_sound(llm, artifact_dir: str, base_model: str | 
         return
     if looks_degenerate(configured) and looks_degenerate(reference):
         # Neither side produced content, so there is nothing to compare and no threading claim to
-        # make. This is the B289 case — a statement about the model — and it stays a warning.
+        # make. This is the weak-model case — a statement about the model — and it stays a warning.
         print(
             f"[quantize-mnn]   ⚠ the long-prompt probe decoded nothing usable at either "
             f"{_MNN_THREADS} or {MNN_REFERENCE_THREADS} threads ({configured.strip()[:40]!r}). "
@@ -833,7 +833,7 @@ def validated_mnn_cache_hit(artifact_dir: str) -> bool:
         # The EXPORT SETTINGS are part of the key, not just the file contents. `quant_block` and
         # `lm_quant_bit` change the weights, and the files on disk cannot say they were built with a
         # different value of either — so a hit here would silently score the previous setting's
-        # model under the new one's name, which is B161 with a different label. The recorded MNN
+        # model under the new one's name, which is the cross-tier reuse bug with a different label. The recorded MNN
         # commit is covered by `tool_versions` for the same reason.
         expected_bits = record.get("quant_bit")
         expected_block, expected_hqq = export_recipe(

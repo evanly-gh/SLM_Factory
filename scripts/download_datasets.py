@@ -200,7 +200,7 @@ def _convert_dialogsum(ds) -> tuple[list[dict], list[str]]:
     """Shape the raw release through the live loader's own converter.
 
     Reproducing the conversion here is how a bundle and its loader come to disagree (the old GSM8K
-    bundle lost its `_instruction` that way, the B250 failure mode), so the loader's converter is
+    bundle lost its `_instruction` that way, causing a train/serve prompt mismatch), so the loader's converter is
     reused rather than copied.
 
     No label vocabulary: summarization has no classes, so the second element is empty rather than

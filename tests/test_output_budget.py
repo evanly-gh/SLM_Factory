@@ -2,7 +2,7 @@
 """
 The orchestrator's decision is lost entirely when its response exceeds the output ceiling.
 
-Reference failure (slm-clinc150-cse-38179864, B240): the first iterate call returned exactly
+Reference failure (slm-clinc150-cse-38179864): the first iterate call returned exactly
 1536 output tokens — the cap — so the JSON was cut mid-string. The error surfaced as "no
 parseable JSON", the reask therefore told the model to "return valid JSON", it wrote another
 over-long answer, and the run fell back to the score-band default. The orchestrator had chosen

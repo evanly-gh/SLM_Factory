@@ -37,7 +37,7 @@ def annotate_cot(
     Returns examples with an added 'cot_reasoning' field, prepended to the response during
     training formatting. Whether a task wants this at all is `TaskSpec.cot_annotation`.
 
-    Efficiency (B141): examples that ALREADY carry a non-empty 'cot_reasoning' are left
+    Efficiency: examples that ALREADY carry a non-empty 'cot_reasoning' are left
     untouched — e.g. the GSM8K loader ships real gold chains-of-thought, so re-generating
     them via the teacher was both wasteful (300 sequential calls per curate, per tier) and
     quality-reducing (gold CoT replaced by a weaker teacher CoT). The examples that DO need
@@ -127,12 +127,12 @@ def apply_quality_controls(
     2026-08-18, that meant four of the eight tasks were never filtered: `function_call` fell into
     the `else`, and `math_reasoning`/`generation` entered their branch but keyed length and dedup
     on a `"prompt"` field their rows do not carry, so a 100,000-character row survived and nothing
-    was logged (B299).
+    was logged.
 
     Every step reports what it removed and why. Quality control is the single biggest consumer of
     rows in this pipeline — it deleted ~1,500 of 1,549 synthesized rows in
     slm-clinc150-cse-38155022 — and doing so silently made a curriculum arriving far under target
-    look inexplicable (B228).
+    look inexplicable.
     """
     if not dataset:
         return dataset
@@ -216,14 +216,14 @@ def _progress_map(fn, items: list, *, label: str, log, workers: int) -> list:
 # fence). Min et al. (arXiv:2202.12837) attribute exactly that to demonstrations supplying "(1) the
 # label space, (2) the distribution of the input text, and (3) the overall format of the sequence".
 # A generator asked for output in a precise contract it has only been described, not shown, is being
-# tested on guessing the contract. B276.
+# tested on guessing the contract.
 # Worked examples shown to the teacher, for BOTH generation and verification. Five, and not
 # negotiable by accident: measured 2026-08-17, the teacher scores 0.1131 span-F1 zero-shot on BC5CDR
 # and 0.7190 with five demonstrations — a 6.4x difference, with raw outputs showing exactly why
 # (wrong casing, a class the task does not have, a markdown fence). Min et al. (arXiv:2202.12837)
 # attribute that to demonstrations supplying "(1) the label space, (2) the distribution of the input
 # text, and (3) the overall format of the sequence". A generator asked for output in a contract it
-# has only been described, not shown, is being tested on guessing the contract (B276).
+# has only been described, not shown, is being tested on guessing the contract.
 #
 # Every generation and verification prompt in this module carries them, and any path that cannot
 # assemble five says so in the log rather than quietly sending fewer.
@@ -238,7 +238,7 @@ SYNTH_SHOTS = int(os.environ.get("SLM_SYNTH_SHOTS", "5"))
 # accounted for roughly half of them. The brief already says not to leave schema defaults in place, and
 # the generator kept doing it anyway. A static instruction it demonstrably ignores is worth less than
 # its own recent mistakes quoted back at it, which is the same reason the demonstrations are shown
-# rather than described (B276).
+# rather than described.
 _RECENT_REJECTIONS: list[str] = []
 MAX_FEDBACK_REJECTIONS = 6
 
@@ -411,7 +411,7 @@ def _new_example_prompt(anchor: dict, task_description: str, demos: list[dict] |
     function. Anyone tracing why BC5CDR synthesis behaved a certain way was sent to the wrong half of
     the module by a comment.
 
-    `demos` are SHOWN, not described. See SYNTH_SHOTS for why that matters (B276).
+    `demos` are SHOWN, not described. See SYNTH_SHOTS for why that matters.
 
     `task_context` is the SAME block the teacher gets when it verifies these rows, and it reached
     the verifier long before it reached here. That asymmetry is what the 2026-09-09 topv2 audit
@@ -515,7 +515,7 @@ def _new_example_prompt(anchor: dict, task_description: str, demos: list[dict] |
 # table keyed by task TYPE, under which `xlam_bfcl` and `calendar_json` were both described as
 # "converting a request into a JSON function call using only the declared tools" — which omits every
 # convention that makes a calendar row correct (the 60-minute default, ISO-8601, resolving against
-# the reference instant), so a verifier asked to judge against it was judging its own guess (B269).
+# the reference instant), so a verifier asked to judge against it was judging its own guess.
 
 
 # Fields that are the QUESTION rather than context for judging it.
@@ -538,8 +538,8 @@ def _gold_field(spec) -> str:
         `entities` and has no `answer` at all, so EVERY span row was rejected with "empty answer"
         before a prompt was built — zero teacher calls, zero rows kept, 100% of the generation budget
         wasted. `surgical_synthesis` on `ner_bc5cdr` could not add a single row, while
-        `docs/PIPELINE.md` documented the teacher pass as running for spans precisely because the
-        substring verifier cannot catch a MISSED entity (B317).
+        the teacher pass is meant to run for spans precisely because the substring verifier cannot
+        catch a MISSED entity.
     """
     required = tuple(getattr(spec, "required_fields", ()) or ())
     for field in required:
@@ -572,12 +572,12 @@ def _task_context_block(spec, rows: list[dict] | None = None) -> str:
     single row: the closed label space, what each class means, the entity-type vocabulary.
 
     WHY BOTH ARE REQUIRED
-        A verifier judging without the row's context invents it (B314: it rejected calls for using
+        A verifier judging without the row's context invents it (it once rejected calls for using
         tools "not present in the provided tools list" when no tools list was in the prompt). A
         verifier judging without the TASK's context does the same thing one level up — it decides
         what the label space must be from the label's wording, which is how a grade-school math
         problem was rejected from RouterBench's `local` class for being "a math problem, not a local
-        query", when `local` means "route this to the local model" (B267/B269).
+        query", when `local` means "route this to the local model".
 
         So: always show the tools, always show the class list. Neither is optional and neither is
         inferable from the other.
@@ -649,7 +649,7 @@ def _row_context_block(row: dict) -> str:
         call's name and arguments against that row's own `tools` schema, so each rejection was
         provably false and each discarded a valid row. Others second-guessed real xLAM conventions
         ("argument key 'is_id' is likely incorrect; schema likely uses 'id'"), which is the same
-        mistake in a subtler form: judging its own prior instead of the row (B267/B269/B314).
+        mistake in a subtler form: judging its own prior instead of the row.
 
     Built by exclusion rather than from a per-task list of context fields, so a task that gains a
     field gets it shown automatically instead of silently omitting it — omission is the failure mode
@@ -695,7 +695,7 @@ def verify_generated_answers(
     unchecked: `curate._verifier_for` returns None for every one of these task types, so
     `_synthesize_new_correct`'s `if verify_fn is not None` branch had never executed and every batch
     logged `450/450 kept`. On `calendar_json` the teacher scores 0.2176, so that is ~5,700
-    machine-invented training targets from a model that gets the task right 22% of the time (B269).
+    machine-invented training targets from a model that gets the task right 22% of the time.
 
     Same fail-open contract as `verify_generated_labels`: an unparseable reply or endpoint error
     KEEPS the row, because a verifier must never be able to empty a dataset.
@@ -723,7 +723,7 @@ def verify_generated_answers(
         for ref in _refs:
             # A share of the real context rather than a flat 400 characters. These pairs are what
             # tell the verifier the task's conventions, and on a long-row task the convention being
-            # demonstrated fell off the end — leaving the verifier judging its own guess (B269).
+            # demonstrated fell off the end — leaving the verifier judging its own guess.
             _clip = prompt_char_budget(0.10)
             q = " ".join(str(ref.get("text") or "").split())[:_clip]
             a = " ".join(_render_gold(ref, gold_field).split())[:_clip]
@@ -903,7 +903,7 @@ def _synthesize_new_correct(
     # SLM_SYNTH_CONCURRENCY (8 by default) in-flight requests, so the generation family was
     # using an eighth of the capacity it had already paid for: in
     # slm-dialogsum-samsum-cse-38186914 vLLM sat at "Running: 1 reqs" and 21% GPU utilisation
-    # for hours while filling 2,678 rows, with no progress line to show it was alive (B252).
+    # for hours while filling 2,678 rows, with no progress line to show it was alive.
     #
     # ASK FOR WHAT WE NEED, THEN TOP UP ONCE. Two rounds, never more.
     #
@@ -1153,7 +1153,7 @@ def verify_generated_labels(
     REQUIRED context, not decoration: without them the teacher judges the label WORD instead of the
     task, which is how a grade-school math problem was rejected for the `local` class because "the
     utterance is a math problem, not a local query" — 70% of generated rows discarded for the wrong
-    reason (B267/B269).
+    reason.
 
     Rows the teacher rejects are dropped, and its stated reason is logged so a bad *generator*
     prompt is visible rather than silently absorbed. Any verification failure (unparseable reply,
@@ -1164,7 +1164,7 @@ def verify_generated_labels(
 
     # Real in-class examples per label, so the verifier judges against the class as it ACTUALLY
     # appears rather than against its own reading of the label word. Same reason the generator is
-    # few-shot (B276): a decision boundary is easier to show than to describe.
+    # few-shot: a decision boundary is easier to show than to describe.
     by_label: dict[str, list[str]] = {}
     for row in (reference_rows or []):
         if isinstance(row, dict) and row.get("label") is not None:
@@ -1296,7 +1296,7 @@ def _synthesize_new_gold(
         context = _label_context_block(label, label_definitions, labels)
         # SHOW several real examples of this class, not one. The teacher's zero-shot score is a poor
         # guide to what it can produce when the distribution is demonstrated: measured 0.1131 ->
-        # 0.7190 on BC5CDR NER between zero- and five-shot (B276). Demonstrations here come from the
+        # 0.7190 on BC5CDR NER between zero- and five-shot. Demonstrations here come from the
         # SAME class, so they convey that class's phrasing and length distribution as well as format.
         same_class = by_label.get(label) or []
         demos = [row for row in same_class[:SYNTH_SHOTS + 1] if row is not anchor][:SYNTH_SHOTS]
@@ -1386,7 +1386,7 @@ def synthesize_examples(
     `brief` is the orchestrator's description of the benchmark, authored once at cold start from
     real rows (see agent/task_brief.py). It replaces a hardcoded one-line description per task
     TYPE, which could not distinguish two tasks sharing a type and told the teacher nothing about
-    the conventions that make an answer correct (B269).
+    the conventions that make an answer correct.
 
     `target_category` names the failure category this batch is aimed at, so the teacher is asked
     for rows that exercise what the model is actually getting wrong rather than for more of the
@@ -1440,7 +1440,7 @@ def synthesize_examples(
     )
     # Teacher answer-verification. The programmatic verifier above is exact but only checks FORM;
     # this asks whether the answer is actually right. Weaker than execution feedback, but the
-    # alternative was keeping 100% of whatever the teacher produced (B269).
+    # alternative was keeping 100% of whatever the teacher produced.
     if rows and _verify_synth_enabled(log=log):
         rows = verify_generated_answers(
             rows,

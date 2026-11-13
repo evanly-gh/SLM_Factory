@@ -10,7 +10,7 @@ The generation family had two prompt defects, both visible in slm-dialogsum-sams
 2. Training and eval built their inputs INDEPENDENTLY — training passed the bare text with no
    instruction at all — so the model was fine-tuned on one input shape and scored on another.
 
-Fixed by one shared builder both sides call, with the instruction carried on the rows. See B250.
+Fixed by one shared builder both sides call, with the instruction carried on the rows.
 """
 from data.eval_set import EvalSet
 from data.loaders.dialogsum import (
@@ -23,7 +23,7 @@ from eval.scorers.generation import (
     resolve_generation_instruction,
 )
 # `dialogsum` moved off the judge and onto multi-reference ROUGE on 2026-09-06, so its prompt now
-# lives in `eval.scorers.summarization`. The B250 lessons this file guards are unchanged and still
+# lives in `eval.scorers.summarization`. The lessons this file guards are unchanged and still
 # apply: ONE builder both sides call, and the instruction carried on the rows. What moved is which
 # module owns them.
 from eval.scorers.summarization import build_prompts, resolve_instruction

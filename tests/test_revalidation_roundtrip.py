@@ -8,9 +8,9 @@ lora_alpha, lora_dropout, micro_batch_size, gradient_accumulation_steps, effecti
 and batch_size — back into the decision, and the retired-key check then rejected them on the
 second pass. Every `hyperparameter` decision died with an error naming six fields the
 orchestrator never proposed, and since that pass sits outside the reask path, no
-self-correction ran — the "validation failures but ZERO reasks" puzzle from B223.
+self-correction ran — the "validation failures but ZERO reasks" puzzle.
 
-Fixed at the source: the decision now carries ONLY the five tunable knobs. See B244.
+Fixed at the source: the decision now carries ONLY the five tunable knobs.
 """
 import pytest
 

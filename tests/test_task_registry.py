@@ -4,8 +4,8 @@ WHY THIS FILE EXISTS
     The pipeline used to route eight concrete benchmarks through five abstract `task_type`
     channels, so behaviour was decided by `if task_type == ...` chains and a task inherited
     whatever the chain's `else` branch happened to do. Three production bugs came from exactly
-    that (B291 synthesis returned `[]` for `function_call`, B296 every failure was one constant
-    confusion pair, B299 four of eight tasks got no quality control at all).
+    that (synthesis returned `[]` for `function_call`, every failure was one constant confusion
+    pair, four of eight tasks got no quality control at all).
 
     `tasks/spec.py` fixes it structurally: no field on `TaskSpec` has a default, so Python refuses
     to construct a spec that has not stated every decision. This file is the guard on the OTHER
@@ -29,7 +29,7 @@ from tasks.spec import CATEGORIES, EVAL_SAMPLING, FAMILIES, TaskSpec
 # registry, so deleting a task fails here instead of silently shrinking every other assertion.
 EXPECTED_TASKS = {
     # The paper's ten tasks. gsm8k, toolbench, routerbench and proactive_listening were removed
-    # 2026-11-11; address_bench lives on the `address-bench` branch.
+    # 2026-11-11; address_bench is not part of this release.
     "dialogsum",
     "sms_spam",
     "xlam_bfcl",
@@ -73,7 +73,7 @@ def test_no_spec_field_has_a_default():
     ]
     assert defaulted == [], (
         f"TaskSpec fields {defaulted} have defaults, so a task can omit them and inherit a "
-        "decision nobody made for it — the exact shape of B291/B296/B299"
+        "decision nobody made for it — the exact shape of the old `else`-branch bugs"
     )
 
 
@@ -132,7 +132,7 @@ CAP_EXCEPTIONS = {
     # ~4,460 usable rows in total, so the default 5,000 consumed the entire pool at cold start and
     # `mine_new_real` had nothing to find on its first attempt. Synthesis is also refused on this task
     # by the fitness gate, so `data_rebuild` could not add a row by either route and every rebuild came
-    # back empty. 3,000 leaves roughly 900 rows of mining headroom (B321/B323 follow-up).
+    # back empty. 3,000 leaves roughly 900 rows of mining headroom.
     "calendar_json": 3000,
     # 5,159 rows survive deduplication and 20% is held out, so the train half is ~4,128. The
     # default 5,000 would take all of it at cold start and leave `mine_new_real` nothing to find —
@@ -408,7 +408,7 @@ def test_label_definitions_only_exist_where_there_is_a_label_space():
 def test_required_fields_are_the_fields_the_scorer_reads():
     """A task whose `required_fields` omit its own target accepts rows it cannot score — the shape
     of the generation-family bug where rows passed a `(text, label)` gate and were then filtered on
-    a `"prompt"` key they never carried (B299)."""
+    a `"prompt"` key they never carried."""
     targets = {
         # `references`, not `answer`. The scorer grades against ALL THREE of DialogSum's human
         # test summaries, and requiring only `answer` would let a source that flattens them —
@@ -493,13 +493,13 @@ def test_the_metric_name_is_read_from_the_spec_not_a_side_table():
 # decision on the record, not an omission.
 #
 # Empty on main: its only member, `address_bench` (a corpus generated upstream with no public
-# mirror), lives on the `address-bench` branch. The mechanism stays for the next such task.
+# mirror), is not part of this release. The mechanism stays for the next such task.
 NO_MINING_SOURCE: set[str] = set()
 
 
 def test_mining_sources_are_declared_where_a_corpus_exists():
     """Without a declared source, `acquire` can only pay Exa to rediscover mirrors of a corpus
-    already in the local cache while tens of thousands of unused rows stay unreachable (B297)."""
+    already in the local cache while tens of thousands of unused rows stay unreachable."""
     for name, spec in TASKS.items():
         if name in NO_MINING_SOURCE:
             assert not spec.mining_sources, (

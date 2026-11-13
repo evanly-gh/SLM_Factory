@@ -1,5 +1,5 @@
 """
-Synthesis client (B161): training-example synthesis and CoT annotation via an OpenAI-compatible
+Synthesis client: training-example synthesis and CoT annotation via an OpenAI-compatible
 teacher endpoint (config.SYNTH_ENDPOINT), instead of the Claude orchestrator API.
 
 TWO BACKENDS, ONE CLIENT
@@ -90,7 +90,7 @@ def _make_client(timeout: float):
 
       * LOCAL — proxy DISABLED. Compute nodes often export HTTP(S)_PROXY for internet access, which
         a Squid proxy then applies to the internal node:port request and returns a 5xx error page
-        (B161 crash). trust_env=False makes httpx ignore proxy/no_proxy/ca env so internal
+        (and the run crashed). trust_env=False makes httpx ignore proxy/no_proxy/ca env so internal
         node-to-node HTTP works directly.
       * API — proxy ENABLED. Reaching api.deepseek.com from a compute node REQUIRES exactly the
         proxy the local path has to avoid, so trust_env=False here would make every call time out.

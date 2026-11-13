@@ -25,7 +25,7 @@ class _TokenizerDouble:
 
     It used to render a made-up `<user>..</user><assistant>` shape. That was fine while nothing
     compared the rendered text against the inference prompt, but `_assert_train_serve_prefix_alignment`
-    (B290) does exactly that, and a Qwen tokenizer that emits non-ChatML is a configuration that cannot
+    does exactly that, and a Qwen tokenizer that emits non-ChatML is a configuration that cannot
     occur — the double was asserting against an impossible world. Emitting the hybrid-Qwen3 form (with
     the pre-filled empty think block, matching `_qwen_no_think_prompt`) keeps these tests exercising
     their real subjects instead of tripping the skew guard.
@@ -704,7 +704,7 @@ def test_early_stop_failure_reloads_fresh_model_and_full_training_rows(
 def _record_merge_write(mock_model):
     """Make a mocked save_pretrained_merged actually emit a weight file.
 
-    merge_for_quantization now rejects an empty merge directory outright (B219), so a mock that
+    merge_for_quantization now rejects an empty merge directory outright, so a mock that
     writes nothing would look like the unsloth_zoo silent no-op it is designed to catch.
     """
     mock_model.save_pretrained_merged.side_effect = (

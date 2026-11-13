@@ -1,4 +1,4 @@
-"""B253: the orchestrator's answer is not always content[0].
+"""The orchestrator's answer is not always content[0].
 
 When the model engages extended thinking the response is [ThinkingBlock, TextBlock]. Reading
 index 0 either raises (no .text) or, at the sites that guarded with isinstance, yields "" —

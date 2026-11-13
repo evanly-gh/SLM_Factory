@@ -12,7 +12,7 @@ Everything backend-specific about an artifact — how it is built, how it is val
 cache is recognised, what "its size" means, and which engine scores it — is routed through the
 functions here, so a caller can hold a quantized artifact without knowing its format. That is the
 whole reason this module exists rather than an `if backend == "mnn"` at each of the six call
-sites; the GGUF path acquired those call sites one at a time, and B161 is what a missed one costs.
+sites; the GGUF path acquired those call sites one at a time, and a quant tier silently reusing another's file is what a missed one costs.
 
 WHY IT READS THE ENVIRONMENT DIRECTLY
     `config.config` requires ANTHROPIC_API_KEY at import time, and this module is imported by
@@ -92,7 +92,7 @@ def artifact_name(quant: str, backend: str | None = None) -> str:
     Checked by name rather than by globbing for "any artifact in the directory": the same base
     model is selected at two tiers as two quant variants, the checkpoint path collides across
     tiers because the iteration counter resets on escalation, and globbing therefore made the
-    Q8_0 tier silently reuse the Q4_K_M file (B161).
+    Q8_0 tier silently reuse the Q4_K_M file.
     """
     if resolve_backend(backend) == MNN:
         from training.quantize_mnn import artifact_name as mnn_artifact_name

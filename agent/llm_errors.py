@@ -3,7 +3,7 @@
 Classify LLM API errors so the pipeline can FAIL FAST on unrecoverable ones instead of
 silently degrading to score-band fallbacks for the rest of a multi-hour run.
 
-The distinction (B144):
+The distinction:
   - FATAL (billing / auth / quota / permission): every subsequent call will also fail, so
     continuing produces a garbage run driven entirely by fallbacks. Raise a clear, actionable
     error and stop.

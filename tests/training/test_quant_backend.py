@@ -2,8 +2,8 @@
 """The routing layer between the two quantization backends.
 
 These tests exist because the GGUF path grew its call sites one at a time — evaluate, the
-downward probe, the interpolation probe, the final on-device verification — and B161 is the
-record of what one missed site costs. `training/quant_backend.py` is the single place that
+downward probe, the interpolation probe, the final on-device verification — and a quant tier once scoring
+another tier's file is the record of what one missed site costs. `training/quant_backend.py` is the single place that
 choice is now made, so it is the place to pin it.
 """
 import sys
@@ -41,7 +41,7 @@ def test_unknown_backend_raises_rather_than_falling_back(monkeypatch):
 def test_artifact_names_are_distinct_per_backend_and_quant():
     # Checked by exact name rather than by globbing the directory: the same base model is selected
     # at two tiers as two quant variants and their checkpoint paths collide, which is how the Q8_0
-    # tier once scored a Q4_K_M file (B161).
+    # tier once scored a Q4_K_M file.
     assert quant_backend.artifact_name("Q4_K_M", "llama_cpp") == "model-q4_k_m.gguf"
     assert quant_backend.artifact_name("Q8_0", "llama_cpp") == "model-q8_0.gguf"
     assert quant_backend.artifact_name("Q4_K_M", "mnn") == "model-mnn-q4"

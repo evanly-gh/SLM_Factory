@@ -83,7 +83,7 @@ os.environ["SLM_QUANT_BACKEND"] = "llama_cpp"
 # test in the same file, which had been running in 1.06s.
 #
 # Nothing here is badly written or testing the wrong thing, so they are skipped rather than deleted:
-# they cover B290's train/serve template skew, the CUDA-worker traceback contract, crash-safe
+# they cover the train/serve template skew, the CUDA-worker traceback contract, crash-safe
 # checkpoint resume, and the real dataset loaders. Run them with:
 #
 #     SLM_TEST_HEAVY=1 pytest tests/            # everything

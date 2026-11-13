@@ -1,20 +1,20 @@
-"""Regressions from the xlam `single_model` run 38566712 (B291-B298) that still apply.
+"""Regressions from the xlam `single_model` run 38566712 that still apply.
 
 That run reached 0.8530 in 16 iterations and every one of its reports was, in some way, describing
-something other than what happened. The four defects worth keeping under test are:
+something other than what happened. The three defects worth keeping under test are:
 
-  B291  The `synthesize` strategy was a SILENT no-op on `function_call`. `synthesize_examples`
+  1.    The `synthesize` strategy was a SILENT no-op on `function_call`. `synthesize_examples`
         dispatched on `("classification", "NER")` or a generation-family set, and `function_call` was
         in neither, so it fell through to a bare `return []`. The orchestrator chose synthesis for
         six of eight rebuilds, announced 250-500 rows each time against a healthy teacher endpoint,
         and got zero rows every time with nothing in the log naming a cause. The exact verifiers
         written for that exact path had therefore never once executed in production.
 
-  B296  Every open-ended failure was reported as the constant confusion pair
+  2.    Every open-ended failure was reported as the constant confusion pair
         `gold_verifier -> incorrect`, whose count is the failure count the orchestrator already has.
         It then wrote paragraphs reasoning about that constant as though it were a class confusion.
 
-  B298  The post-run accuracy chart drew ONE flat threshold line at the final value, so a run whose
+  3.    The post-run accuracy chart drew ONE flat threshold line at the final value, so a run whose
         goal moved mid-flight was shown as if every iteration had been held to the last bar. Lowers
         were not recorded anywhere at all. And the trajectory table's Config column listed four
         hyperparameters no intervention can change.
@@ -44,7 +44,7 @@ def _call(city="Paris"):
 
 
 # --------------------------------------------------------------------------
-# B291 — the synthesis path that was dead
+# The synthesis path that was dead
 # --------------------------------------------------------------------------
 
 
@@ -160,7 +160,7 @@ def test_the_row_count_reached_is_stated_in_the_log(monkeypatch):
 
 
 # --------------------------------------------------------------------------
-# B296 — failure categories, not a constant
+# Failure categories, not a constant
 # --------------------------------------------------------------------------
 
 
@@ -231,7 +231,7 @@ def test_a_category_can_be_recovered_from_a_failure_written_before_the_taxonomy_
 
 
 # --------------------------------------------------------------------------
-# B298 — a moving goal, drawn as a moving goal
+# A moving goal, drawn as a moving goal
 # --------------------------------------------------------------------------
 
 

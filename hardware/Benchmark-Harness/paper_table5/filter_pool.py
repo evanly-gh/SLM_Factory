@@ -45,7 +45,7 @@ sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parent))
 import run_paper_table5 as rpt  # noqa: E402
 from common import (PAPER_MODELS, POOL_MODELS, RESULTS_DIR, THIRD_PARTY, dev_bin_dir, device_info,  # noqa: E402
-                    is_wireless_serial, match_profile)
+                    is_wireless_serial, match_profile, portable_record, recorded_serial)
 
 CONTRACT_VERSION = 1
 # The factory's own model pool, so the phone measurements always cover the models it can pick.
@@ -215,7 +215,8 @@ class FilterSession(rpt.Session):
         peak, lim = peak_mb(rec), self.limits["max_peak_memory_mb"]
         log(f"   peak memory {peak:.0f} MB" if peak else f"   peak memory not measured (exit {rec.get('exit')})")
         if lim is not None and (peak is None or peak > lim):
-            result = {"config": {k: v for k, v in cfg.items() if k != "entry"}, "model_file": cfg["entry"],
+            result = {"config": {k: v for k, v in cfg.items() if k != "entry"},
+                      "model_file": portable_record(cfg["entry"]),
                       "started": datetime.now().isoformat(), "invocations": {}, "windows": []}
             why = f"peak memory {peak:.0f} MB > {lim:g} MB" if peak else "peak memory not measured"
             return self._fail(result, OVER + why)
@@ -553,7 +554,7 @@ def filter_pool(serial: str, limits: dict | None = None, *, pool_file=DEFAULT_PO
             disc = energy_probe.discover(adb)
             if disc["state"]["externally_powered"] and not disc["powercap"]["usable"]:
                 adb = wait_for_wireless(adb, info["serialno"], wireless_timeout_s)
-                info["serial"] = adb.serial
+                info["serial"] = recorded_serial(adb.serial)  # goes into the contract; adb.serial is used to connect
             from energy import probe_recommendation
             if not disc["powercap"]["usable"] and not profile.get("energy_method") \
                     and not probe_recommendation(info["model"]):

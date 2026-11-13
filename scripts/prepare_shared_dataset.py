@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 """
 Build ONE frozen dataset + eval set for a task and save it, so multiple strategy-comparison
-runs load IDENTICAL data (B161). This removes the acquisition-nondeterminism confound that
+runs load IDENTICAL data. This removes the acquisition-nondeterminism confound that
 previously gave each model-selection strategy a different dataset/eval set.
 
 Point the runs at the output with SLM_SHARED_DATASET_DIR=<out_dir>.

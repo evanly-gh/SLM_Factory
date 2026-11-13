@@ -12,7 +12,7 @@ from training.lora_trainer import TrainingConfig, TrainingOutput, run_lora_train
 
 # Lazy-loaded inference model cache:
 # (weights_ref, base_model, max_seq_length) -> (model, tokenizer).
-# Capped at _MAX_CACHED=1 (B142): evaluation is sequential (one checkpoint at a time),
+# Capped at _MAX_CACHED=1: evaluation is sequential (one checkpoint at a time),
 # and holding several FULL-PRECISION models resident — especially the 4B tier-3 models —
 # fills VRAM. When VRAM runs low Unsloth/accelerate silently offload layers to the CPU
 # ("Some parameters are on the meta device"), and Unsloth's fast-generate then crashes
@@ -48,7 +48,7 @@ def _qwen_no_think_prompt(prompt: str, base_model: str) -> str:
     These strings must match the SERVING template — the one belonging to the official base model that
     the GGUF is merged from — because that is what governs the deployed artifact. They are correct as
     written; the hazard is on the training side, and it is worth naming here because this function is
-    what a reader will suspect first (B290).
+    what a reader will suspect first.
 
     `Qwen/Qwen3-4B-Instruct-2507` is thinking-free, and its official template renders a bare assistant
     prefix. Unsloth's 4-bit mirror, which is what `FastLanguageModel.from_pretrained` actually loads,
@@ -101,7 +101,7 @@ def _serving_prompt_prefix(prompt: str, base_model: str) -> str:
 
     It used to be `_qwen_no_think_prompt` unconditionally, with a hard refusal for anything that
     was not a Qwen. That was the correct guard for a Qwen-only pool (serving a Gemma a ChatML
-    prompt is silent train/serve skew, the B290 failure mode) but it is the wrong general rule:
+    prompt is silent train/serve skew) but it is the wrong general rule:
     the model's own tokenizer already knows the answer. Qwen keeps its hand-written bytes so no
     previously measured score moves; everything else renders from its own template.
     """
@@ -229,7 +229,7 @@ def clear_inference_cache() -> None:
     Call this when the pipeline moves on from a model for good (e.g. on escalation) so a
     stale, no-longer-needed model never sits in VRAM competing with the next (often larger)
     model — the exact condition that pushed the 4B tier-3 model into CPU/meta offload and
-    crashed generate (B142). This is the explicit "clear what we moved on from" complement
+    crashed generate. This is the explicit "clear what we moved on from" complement
     to the _MAX_CACHED=1 LRU eviction.
     """
     _inference_cache.clear()
@@ -427,7 +427,7 @@ def _load_inference_model(
                 load_in_4bit=False,
                 trust_remote_code=True,
             )
-            # PeftModel.from_pretrained, NOT model.load_adapter (B254). On an Unsloth-patched
+            # PeftModel.from_pretrained, NOT model.load_adapter. On an Unsloth-patched
             # model, `load_adapter` builds the LoRA modules and marks them active but never
             # populates them from the checkpoint: measured 0 of 186 lora_B tensors non-zero,
             # against 186 of 186 for the same file through PeftModel. Because LoRA initializes
@@ -1165,7 +1165,7 @@ def infer_batch_gguf(
         while len(_gguf_cache) >= _MAX_CACHED and _gguf_cache_order:
             evict_key = _gguf_cache_order.pop(0)
             _gguf_cache.pop(evict_key, None)
-        # GPU offload for SPEED without changing measured accuracy (B161): the accuracy of a
+        # GPU offload for SPEED without changing measured accuracy: the accuracy of a
         # quantized GGUF is a property of its weights + tokenizer + greedy decoding, NOT the
         # compute device — running the SAME Q4_K_M/Q8_0 file on GPU yields the same predictions
         # as CPU, just ~10-50x faster (the phone runs it on CPU/NPU; only LATENCY differs, and
@@ -1260,7 +1260,7 @@ def infer_batch_gguf(
 # than delegated to MNN's own chat template, for two reasons:
 #   1. Train/serve alignment is already asserted against that rendering in
 #      `training/lora_trainer.py::_assert_train_serve_prefix_alignment`. A second, subtly different
-#      template applied only on the MNN path is precisely the B290 failure — two stray `<think>`
+#      template applied only on the MNN path is precisely the template-skew failure — two stray `<think>`
 #      tags per prediction — with a new place to hide.
 #   2. It is what makes a backend comparison mean anything. If llama.cpp and MNN were each given
 #      their own idea of the prompt, a score difference between them could be the quantization,

@@ -570,6 +570,11 @@ def escalation(metrics: dict, summary: dict) -> None:
 
 
 def main() -> int:
+    if not (DATA / "run_metrics.json").is_file():
+        print(f"plot_run_analysis.py: {(DATA / 'run_metrics.json').relative_to(ROOT)} not found; "
+              "run scripts/analyze_runs.py first (it needs run directories under logs/runs/).",
+              file=sys.stderr)
+        return 1
     metrics = json.loads((DATA / "run_metrics.json").read_text())
     summary = {"gpu_hour_usd": metrics["gpu_hour_usd"],
                "gpu_hour_usd_low": metrics["gpu_hour_usd_low"],

@@ -106,7 +106,7 @@ def rollback_node(state: AgentState) -> AgentState:
         #
         # What the orchestrator additionally needs is a memo of what was just tried and why it
         # failed, so it does not simply repeat it. That is `last_failed_attempt` below, which is
-        # NOT part of the restored state and is surfaced separately in the prompt (B227/B231).
+        # NOT part of the restored state and is surfaced separately in the prompt.
         restored_report = deepcopy(evaluation_state.get("test_report"))
         failed_report = state.get("test_report") or {}
         state["test_report"] = restored_report

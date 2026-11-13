@@ -1,0 +1,43 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite the paper below."
+title: "Mobile AI Factory"
+abstract: >-
+  Code for "Mobile AI Factory: Building Specialized Language Models for Your Mobile Device":
+  an LLM-orchestrated pipeline that curates data, fine-tunes, quantizes and evaluates small
+  language models for a target phone, plus the on-device benchmarking harness.
+type: software
+license: MIT
+repository-code: "https://github.com/evanly-gh/SLM_Factory"
+authors:
+  - given-names: Evan
+    family-names: Li
+    affiliation: "Paul G. Allen School of Computer Science and Engineering, University of Washington"
+  - given-names: Krishna
+    family-names: Deshpande
+    affiliation: "Paul G. Allen School of Computer Science and Engineering, University of Washington"
+  - given-names: Wen
+    family-names: Cheng
+    affiliation: "Paul G. Allen School of Computer Science and Engineering, University of Washington"
+  - given-names: Shyamnath
+    family-names: Gollakota
+    affiliation: "Paul G. Allen School of Computer Science and Engineering, University of Washington"
+identifiers:
+  - type: other
+    value: "arXiv:2611.13509"
+    description: "arXiv preprint"
+preferred-citation:
+  type: article
+  title: "Mobile AI Factory: Building Specialized Language Models for Your Mobile Device"
+  authors:
+    - given-names: Evan
+      family-names: Li
+    - given-names: Krishna
+      family-names: Deshpande
+    - given-names: Wen
+      family-names: Cheng
+    - given-names: Shyamnath
+      family-names: Gollakota
+  journal: "arXiv preprint arXiv:2611.13509"
+  year: 2026
+  month: 11
+  url: "https://arxiv.org/abs/2611.13509"

@@ -24,7 +24,7 @@ THE ONE-LINE-PER-SENTENCE CONTRACT
     ERRANT reads one tokenized sentence per line and aligns file lines positionally. A model that
     merges two sentences, splits one, or emits a preamble shifts every subsequent line and scores
     near zero for reasons that have nothing to do with grammar. Rather than constrained decoding —
-    which this repo weighed and rejected for classification (B286) — the extractor takes the first
+    which this repo weighed and rejected for classification — the extractor takes the first
     non-empty line and records a multi-line reply as a FORMAT failure, so `format_valid` carries
     it and the collapse is diagnosable instead of mysterious.
 

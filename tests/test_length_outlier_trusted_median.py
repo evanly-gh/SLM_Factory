@@ -1,4 +1,4 @@
-"""The length-outlier bound is anchored on trusted rows, not on the contaminated dataset (B260).
+"""The length-outlier bound is anchored on trusted rows, not on the contaminated dataset.
 
 The filter drops rows longer than 3x the median. Because the bound is RELATIVE, whatever sets the
 median sets the cutoff — so injecting short foreign rows made it delete the real benchmark data it
@@ -19,7 +19,7 @@ def _filter_length_outliers(rows):
     field their rows actually carry.
 
     The key is stated by the task rather than guessed. Guessing is what made this step a silent
-    no-op for gsm8k and dialogsum, whose rows have no `"prompt"` field (B299).
+    no-op for gsm8k and dialogsum, whose rows have no `"prompt"` field.
     """
     return length_outliers(key="text")(rows, QCContext(task_name="clinc150"))
 

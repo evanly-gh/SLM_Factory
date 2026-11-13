@@ -22,7 +22,7 @@
 # metric is the only reason that is true — see tasks/sms_spam.py.
 #
 # HISTORY WORTH KNOWING: an sms_spam loader existed before 2026-08-18 and was deleted with the
-# `task_type` channel. It is not restored, it is rewritten: the old split was unshuffled (B44), the
+# `task_type` channel. It is not restored, it is rewritten: the old split was unshuffled, the
 # corpus was never deduplicated so copies of the same message sat on both sides of the firewall,
 # and the data came over plain HTTP with no checksum. All three are fixed in the new loader.
 #

@@ -1,5 +1,5 @@
 #!/bin/bash
-# Build a SEPARATE venv for the vLLM synthesis server (B161). Kept apart from .venv_gpu
+# Build a SEPARATE venv for the vLLM synthesis server. Kept apart from .venv_gpu
 # because vLLM pins specific torch/transformers versions that can conflict with the Unsloth
 # training stack. The task scripts launch the server from this venv on its own GPU and talk to
 # it over HTTP, so the two environments never need to coexist in one interpreter.

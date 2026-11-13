@@ -36,7 +36,7 @@ TOPV2_PROMPT = (
 
 
 def build_prompt(text: str) -> str:
-    """The ONE prompt. Imported by the training turn builder so the two cannot drift (B250).
+    """The ONE prompt. Imported by the training turn builder so the two cannot drift.
 
     WHY THERE IS A WORKED EXAMPLE AND NOT A FORMAT TEMPLATE
         This prompt used to show the shape as `Format: [IN:INTENT_NAME words [SL:SLOT_NAME words ]
@@ -174,7 +174,7 @@ def failure_category_of(failure: dict) -> str:
 
     Intent errors and slot errors want different data: the first is a classification problem over
     a small label set, the second is a span problem. Reporting both as "wrong parse" told the
-    orchestrator nothing it could act on, which is the B296 shape.
+    orchestrator nothing it could act on.
     """
     predicted = failure.get("predicted")
     if predicted is None:

@@ -310,7 +310,7 @@ def test_non_object_decision_raises():
 def test_raise_prevents_termination(llm, raising_enabled):
     """A raised goal makes the score below-threshold again, so the turn carries on as an ordinary
     intervention turn — which means the orchestrator IS consulted and needs a usable answer. Stubbing
-    a failure here would raise `OrchestratorDecisionError` instead (B316) and prove nothing about
+    a failure here would raise `OrchestratorDecisionError` instead and prove nothing about
     whether the raise prevented termination."""
     state = _state(iteration=2)
     state["feasible_models"] = [_model()]

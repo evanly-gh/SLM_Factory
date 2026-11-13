@@ -1,5 +1,5 @@
 """
-All four phones in the paper's Table 5 layout: docs/RESULTS.md and docs/figures/all_*.png.
+All four phones in the paper's Table 5 layout: hardware/docs/RESULTS.md and hardware/docs/figures/all_*.png.
 
 Merges the Galaxy S23 results (results_md.py's single-phone document) with the OnePlus 15, OnePlus 8 Pro and
 Redmi 9A results (results/all_results.md, results/graphs/make_table.py) into one document with one format. Every
@@ -144,7 +144,12 @@ def apply_supplement(sup: dict, pool: dict, t5: dict, memory: dict):
 
 def manifest_storage() -> dict:
     out = {}
-    for e in json.loads((HERE / "models" / "manifest.json").read_text())["models"]:
+    path = HERE / "models" / "manifest.json"
+    if not path.is_file():
+        raise SystemExit(f"{path} not found. Model storage sizes come from the manifest that prepare_models.py "
+                         "writes when the models are prepared locally (models/ is git-ignored and not distributed); "
+                         "run prepare_models.py first.")
+    for e in json.loads(path.read_text())["models"]:
         out[(e["name"], e["framework"], e["quant"])] = sum(e["files"].values())
     return out
 
@@ -717,6 +722,7 @@ def main():
                                                                 "symbols this phone's driver lacks"))
             L.append(f"- `{cid}`: {why[:260]}")
         L += [""]
+    DOCS.mkdir(parents=True, exist_ok=True)  # hardware/docs/ is git-ignored, so a fresh clone does not have it
     (DOCS / "RESULTS.md").write_text("\n".join(L) + "\n", encoding="utf-8")
     print(f"-> {DOCS / 'RESULTS.md'} and {len([f for f in figs.values() if f])} figures")
 

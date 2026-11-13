@@ -54,7 +54,7 @@ SPEC = TaskSpec(
     entity_type_vocabulary=(),  # extracts no spans
     verifier_notes="",
     # These four had never run: `function_call` fell into `apply_quality_controls`' `else` branch
-    # and the dataset was returned untouched, so no xlam curriculum was ever filtered (B299).
+    # and the dataset was returned untouched, so no xlam curriculum was ever filtered.
     # `valid_json_answer` matters most here — a gold answer that does not parse trains the model
     # to emit something the scorer will mark wrong no matter what it predicts.
     quality_controls=(
@@ -90,7 +90,7 @@ SPEC = TaskSpec(
     cot_annotation=False,
 
     # The canonical corpus, so `acquire` can serve unseen rows from the local cache instead of
-    # paying Exa to rediscover broken mirrors of it (B297). xLAM ships ~60,000 rows and the
+    # paying Exa to rediscover broken mirrors of it. xLAM ships ~60,000 rows and the
     # initial curriculum takes the first ~3,250.
     mining_sources=(
         MiningSource(

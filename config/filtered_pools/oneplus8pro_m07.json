@@ -28,10 +28,10 @@
  "conversion_failed": {},
  "measurement": {
   "results_dirs": [
-   "C:/Users/evanl/Documents/VSCode/Personal/SLM_Factory-1/Benchmark-Harness/paper_table5/results/slm_pool_oneplus8pro_pinned",
-   "C:/Users/evanl/Documents/VSCode/Personal/SLM_Factory-1/Benchmark-Harness/paper_table5/results/slm_pool_oneplus8pro_head",
-   "C:/Users/evanl/Documents/VSCode/Personal/SLM_Factory-1/Benchmark-Harness/paper_table5/results/slm_pool_oneplus8pro_energy_pinned",
-   "C:/Users/evanl/Documents/VSCode/Personal/SLM_Factory-1/Benchmark-Harness/paper_table5/results/slm_pool_oneplus8pro_energy_head"
+   "<repo>/Benchmark-Harness/paper_table5/results/slm_pool_oneplus8pro_pinned",
+   "<repo>/Benchmark-Harness/paper_table5/results/slm_pool_oneplus8pro_head",
+   "<repo>/Benchmark-Harness/paper_table5/results/slm_pool_oneplus8pro_energy_pinned",
+   "<repo>/Benchmark-Harness/paper_table5/results/slm_pool_oneplus8pro_energy_head"
   ],
   "request": {
    "prompt_tokens": 32,

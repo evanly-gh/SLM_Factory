@@ -196,7 +196,7 @@ def test_a_non_numeric_row_count_is_rejected(value):
 
 def test_target_categories_are_carried_with_their_counts():
     """The categories come from the task's own failure taxonomy via the test report, so they name
-    something the scorer measured rather than a class the orchestrator invented (B296)."""
+    something the scorer measured rather than a class the orchestrator invented."""
     plan = _normalize(target_categories=[
         {"category": "wrong_arguments", "count": 147},
         {"category": "unparseable_output", "count": 12},
@@ -254,7 +254,7 @@ def test_the_pattern_hint_is_carried_and_bounded():
 
 def test_the_hypothesis_is_carried_in_full_up_to_its_ceiling():
     """The hypothesis is the orchestrator's causal reasoning and the single most information-dense
-    field in the run; it was being cut in five separate places (B238)."""
+    field in the run; it was being cut in five separate places."""
     from agent.data_rebuild import HYPOTHESIS_MAX_CHARS
 
     reasoning = "because " * 100
@@ -560,12 +560,12 @@ def test_curate_calls_the_fallback_with_arguments_it_accepts():
 
 
 def test_iterate_does_not_reach_the_fallback_at_all():
-    """The other half of B316, asserted where the fallback's callers are documented.
+    """The other half of the no-fallback rule, asserted where the fallback's callers are documented.
 
     `iterate` used to build a plan from this function whenever the orchestrator's decision could not
     be validated. That left TWO ways to produce a data plan — one the orchestrator chose and one
-    derived from the score — reported identically in the log, which is exactly what made B312
-    unreadable: five refused `data_rebuild` requests looked like five deliberate tuning decisions.
+    derived from the score — reported identically in the log, which is exactly what made the
+    log unreadable: five refused `data_rebuild` requests looked like five deliberate tuning decisions.
     An unusable decision now raises `OrchestratorDecisionError`, so re-introducing a call here would
     silently restore the ambiguity rather than break anything.
     """
@@ -619,7 +619,7 @@ def test_the_fallback_produces_a_plan_the_normalizer_accepts():
 
 
 # --------------------------------------------------------------------------
-# The validator must accept its own output (B312)
+# The validator must accept its own output
 # --------------------------------------------------------------------------
 #
 # `normalize_data_rebuild_plan` emits `hypothesis` and `task`, but for a while `_PLAN_FIELDS` — the
@@ -636,7 +636,7 @@ def test_the_fallback_produces_a_plan_the_normalizer_accepts():
 
 @pytest.mark.parametrize("strategy", [MINE_NEW_REAL, SURGICAL_SYNTHESIS])
 def test_normalizing_an_already_normalized_plan_returns_the_same_plan(strategy):
-    """THE test that would have caught B312: the validator has to accept its own output.
+    """THE test that would have caught the refused-plan bug: the validator has to accept its own output.
 
     `curate_node` re-normalizes the plan `iterate` already normalized, so a validator whose output
     is not valid input fails every rebuild at the second gate rather than the first — and the
@@ -711,7 +711,7 @@ def test_a_task_carried_in_the_plan_is_ignored_in_favour_of_the_argument():
 
 
 def test_a_genuinely_unknown_field_still_raises_after_the_widening():
-    """Widening `_PLAN_FIELDS` for B312 must not have turned the check off.
+    """Widening `_PLAN_FIELDS` to accept its own output must not have turned the check off.
 
     `resample_fraction` belonged to the `resample` strategy deleted on 2026-08-19, so a plan that
     sets it was written against a contract that no longer exists — exactly what the check is for.

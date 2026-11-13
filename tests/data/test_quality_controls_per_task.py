@@ -1,4 +1,4 @@
-"""Quality control runs on every task, and is EFFECTIVE on that task's own row shape (B299).
+"""Quality control runs on every task, and is EFFECTIVE on that task's own row shape.
 
 WHY THIS FILE EXISTS
     Quality control used to be one `if task_type == ...` chain in `data/curriculum.py` ending in
@@ -182,7 +182,7 @@ def test_quality_control_delegates_to_the_task_declared_steps(task, monkeypatch)
 
 
 # --------------------------------------------------------------------------
-# The 100,000-character row (the measured B299 artifact)
+# The 100,000-character row (a measured artifact)
 # --------------------------------------------------------------------------
 
 
@@ -210,7 +210,7 @@ def test_a_hundred_thousand_character_row_is_removed(task):
 def test_the_removal_report_names_the_step_the_count_and_the_reason(task):
     """Quality control is the single biggest consumer of rows in this pipeline — it deleted ~1,500
     of 1,549 synthesized rows in one run — and doing so silently made a curriculum arriving far
-    under target look inexplicable (B228)."""
+    under target look inexplicable."""
     build = ROW_BUILDERS[task]
     _kept, logs = _run(task, [*_healthy(task),
                               {**build(999), "text": HUGE, "_provenance": "mined_real"}])
@@ -231,7 +231,7 @@ def test_the_removal_report_names_the_step_the_count_and_the_reason(task):
 
 
 def test_a_length_step_pointed_at_a_field_the_rows_lack_reports_that_it_skipped():
-    """This is B299's exact shape, kept as an executable statement of it.
+    """This is the original no-op's exact shape, kept as an executable statement of it.
 
     A step whose key is absent from every row silently passes the whole dataset. It must announce
     that it could not measure anything, because a silent pass here is indistinguishable from a
@@ -307,7 +307,7 @@ def test_a_gold_answer_that_is_already_a_list_is_accepted(task):
 def test_a_row_labelled_outside_the_frozen_vocabulary_is_dropped(task):
     """A row whose label cannot appear in the eval set can never be scored against it, so it is pure
     training noise. This is where mined sources carrying raw integer class ids get removed
-    (B222/B229) and where a hallucinated class dies (B259)."""
+    and where a hallucinated class dies."""
     rows = _healthy(task)
     foreign = {**ROW_BUILDERS[task](500), "label": "cloud"}
     kept, logs = _run(task, [*rows, foreign])
@@ -395,13 +395,13 @@ def test_entity_diversity_leaves_a_diverse_batch_alone():
 
 
 # --------------------------------------------------------------------------
-# The trusted median (B260)
+# The trusted median
 # --------------------------------------------------------------------------
 
 
 def test_the_length_bound_is_anchored_on_the_task_own_real_rows():
     """The filter is RELATIVE, so whatever sets the median sets the cutoff. A verbose teacher would
-    otherwise raise the bar and license its own outliers (B260).
+    otherwise raise the bar and license its own outliers.
 
     Here the trusted rows are short and the untrusted ones are long: the cutoff must come from the
     short ones, so the long generated rows are removed rather than becoming the new normal.

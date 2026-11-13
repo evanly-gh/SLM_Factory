@@ -12,7 +12,7 @@ Approach: Structured compaction of data-curation.md. Last 3 iterations kept in f
 
 STATUS: this is now the FALLBACK path. `agent/run_memory.py` builds the orchestrator's context
 from `state["dag"]` instead, because a flat dump of the log cannot distinguish a kept improvement
-from a rolled-back attempt (B239). compact_trajectory still runs on iteration 1, before the DAG
+from a rolled-back attempt. compact_trajectory still runs on iteration 1, before the DAG
 has any nodes, and for callers with no DAG in state.
 
 Integration: iterate_node._llm_iterate() calls build_run_memory() first and falls back to
@@ -97,7 +97,7 @@ def _field(section: str, label: str) -> str:
     newlines, an EMPTY field silently captured the next non-empty line of the document.
     Iteration 1 has no orchestrator hypothesis, so its summary came out as
     `- Iter 1: ... — ### Hardware profile (Phase 1: theoretical)` — the heading of the
-    following section presented to the model as its own past reasoning (B238).
+    following section presented to the model as its own past reasoning.
 
     Anchoring to the line keeps an empty field empty.
     """

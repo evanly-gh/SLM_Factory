@@ -26,7 +26,7 @@
    "tokenizer.mtok": 7342051
   },
   "recipe": "paper-default",
-  "converter": "llmexport.py @ MNN mnn-a8ec49781e19, MNNConvert C:\\Users\\evanl\\.pb\\tools\\mnnconvert_nolog.cmd"
+  "converter": "llmexport.py @ MNN mnn-a8ec49781e19, MNNConvert <home>\\.pb\\tools\\mnnconvert_nolog.cmd"
  },
  "started": "2026-10-08T20:01:27.058501",
  "invocations": {
