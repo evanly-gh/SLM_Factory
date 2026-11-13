@@ -355,6 +355,16 @@ def _blank(k, error, reason) -> dict:
             "reasons": [reason], "passes": False}
 
 
+def _portable_dir(d) -> str:
+    """A results directory as recorded in a contract: relative to this folder when it is inside it,
+    else just its name, so an operator's absolute (laptop or cluster) path never leaks into one."""
+    path = Path(d).resolve()
+    try:
+        return path.relative_to(HERE).as_posix()
+    except ValueError:
+        return path.name
+
+
 def build_contract(phone: dict, dirs: list[Path], gpu: dict, lim: dict, request: dict, rank_by: str,
                    pool: dict | None = None, expected=None, not_tried: dict | None = None,
                    conversion: dict | None = None) -> dict:
@@ -410,7 +420,7 @@ def build_contract(phone: dict, dirs: list[Path], gpu: dict, lim: dict, request:
         "phone": phone,
         "gpu": gpu,
         "conversion_failed": conversion or {},
-        "measurement": {"results_dirs": [Path(d).as_posix() for d in dirs], "request": request,
+        "measurement": {"results_dirs": [_portable_dir(d) for d in dirs], "request": request,
                         "configs_expected": len(keys),
                         "configs_measured": sum(k in bench for k in keys),
                         "configs_benchmarked": sum(c["benchmarked"] for c in configs),

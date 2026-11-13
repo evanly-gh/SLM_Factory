@@ -1,8 +1,5 @@
 #!/bin/bash
 #SBATCH --job-name=slm-goemotions-ckpt
-#SBATCH --account=ckpt-intelligentsystems
-#SBATCH --partition=ckpt-g2
-#SBATCH --qos=ckpt-gpu
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --gres=gpu:l40s:2
@@ -11,7 +8,11 @@
 #SBATCH --time=12:00:00
 #SBATCH --requeue
 #SBATCH --signal=B:USR1@7200
-#SBATCH --output=/mmfs1/gscratch/intelligentsystems/evanly/SLM_Factory/logs/slurm/slm-goemotions-ckpt-%j.out
+#SBATCH --output=logs/slurm/slm-goemotions-ckpt-%j.out
+#
+# ALLOCATION: originally run on account ckpt-intelligentsystems / partition ckpt-g2 / QOS
+# ckpt-gpu (preemptible), not the site default in site.env. To reproduce on that allocation:
+#   scripts/submit.sh -A ckpt-intelligentsystems -p ckpt-g2 -q ckpt-gpu tests/pipeline/run_goemotions_ckpt.slurm
 #
 # CURATED BENCHMARK: goemotions (in-distribution, SELECTION metric ekman_macro_f1, REPORTED metric
 # macro_auprc). Added 2026-09-06 with the on-device SFT suite. SLM_BENCHMARK_TASK pins the loader.
@@ -105,4 +106,4 @@ export SLM_VERIFY_SYNTH=shadow
 export SLM_TEACHER_SYNTH_BYPASS=1
 
 export TASK="Fine tune a small model to label the emotions expressed in short social media comments across 27 emotions plus neutral, allowing multiple labels per comment (GoEmotions dataset style), targeting on-device tone detection for reply suggestions on my Samsung Galaxy S24 Ultra with 12GB RAM and 256GB storage"
-source /mmfs1/gscratch/intelligentsystems/evanly/SLM_Factory/tests/pipeline/_l40s_task_body.sh
+source "${SLM_ROOT:-$SLURM_SUBMIT_DIR}/tests/pipeline/_l40s_task_body.sh"

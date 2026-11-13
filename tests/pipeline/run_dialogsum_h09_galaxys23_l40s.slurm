@@ -1,8 +1,5 @@
 #!/bin/bash
 #SBATCH --job-name=slm-dialogsum-h09-s23-l40s
-#SBATCH --account=gpu-l40s-intelligentsystems
-#SBATCH --partition=gpu-l40s
-#SBATCH --qos=normal
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --gres=gpu:l40s:2
@@ -11,7 +8,7 @@
 #SBATCH --time=3-00:00:00
 #SBATCH --requeue
 #SBATCH --signal=B:USR1@7200
-#SBATCH --output=/mmfs1/gscratch/intelligentsystems/evanly/SLM_Factory/logs/slurm/slm-dialogsum-h09-s23-l40s-%j.out
+#SBATCH --output=logs/slurm/slm-dialogsum-h09-s23-l40s-%j.out
 #
 # CURATED BENCHMARK: dialogsum (in-distribution, SELECTION metric rouge_l, REPORTED metric
 # rouge_1_2_l_bertscore). SLM_BENCHMARK_TASK pins the loader.
@@ -54,7 +51,7 @@
 #   BERTScore is a REPORT-only metric and never runs in the loop: roberta-large on CPU, ~10 minutes
 #   for the full split. `_l40s_task_body.sh` points `METRICS_VENV` at its venv.
 #
-# Dedicated gpu-l40s-intelligentsystems quota: 2x L40S (auto-2gpu profile), seven-day wall.
+# Dedicated allocation: 2x L40S (auto-2gpu profile), seven-day wall.
 # --requeue + USR1 remain a safety net against node failure, not a wall-clock mechanism.
 export SLM_CUDA_ISOLATION=1
 export SLM_BENCHMARK_TASK=dialogsum
@@ -65,7 +62,7 @@ export SLM_BENCHMARK_TASK=dialogsum
 # Pool: config/filtered_pools/galaxys23_h09.json, derived from SCENARIOS.md H09 by filter_pool.py's
 # rule (see its "provenance" field; the same derivation reproduces the M07 contract). Everything else
 # is identical to run_dialogsum_l40s.slurm (the main run), as for the M07 run.
-SLM_FILTERED_POOL=/mmfs1/gscratch/intelligentsystems/evanly/SLM_Factory/config/filtered_pools/galaxys23_h09.json
+SLM_FILTERED_POOL="${SLM_ROOT:-$SLURM_SUBMIT_DIR}/config/filtered_pools/galaxys23_h09.json"
 if [ ! -s "$SLM_FILTERED_POOL" ]; then
   echo "FATAL: $SLM_FILTERED_POOL missing; get it from the hardware side (filter_pool.py) first" >&2
   exit 1
@@ -102,4 +99,4 @@ export SLM_VERIFY_SYNTH=shadow
 export SLM_TEACHER_SYNTH_BYPASS=1
 
 export TASK="Fine tune a small model to summarize spoken conversations in one to three sentences (DialogSum chat and meeting transcripts, scored against three human reference summaries), targeting deployment on my Samsung Galaxy S23 with 8GB RAM and 256GB storage"
-source /mmfs1/gscratch/intelligentsystems/evanly/SLM_Factory/tests/pipeline/_l40s_task_body.sh
+source "${SLM_ROOT:-$SLURM_SUBMIT_DIR}/tests/pipeline/_l40s_task_body.sh"

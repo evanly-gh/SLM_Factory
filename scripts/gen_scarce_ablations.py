@@ -88,8 +88,7 @@ def build(task: str) -> tuple[Path, str]:
     # Rename the job and its log, so the ablation never writes over its baseline's output.
     text = re.sub(r"^#SBATCH --job-name=.*$", f"#SBATCH --job-name={job}", text, flags=re.M)
     text = re.sub(r"^#SBATCH --output=.*$",
-                  "#SBATCH --output=/mmfs1/gscratch/intelligentsystems/evanly/SLM_Factory/"
-                  f"logs/slurm/{job}-%j.out", text, flags=re.M)
+                  f"#SBATCH --output=logs/slurm/{job}-%j.out", text, flags=re.M)
 
     header = HEADER.format(baseline_script=baseline_script, baseline_log=TASKS[task])
 
@@ -102,8 +101,7 @@ def build(task: str) -> tuple[Path, str]:
     text = "\n".join(lines[: last_sbatch + 1]) + "\n" + header + "\n" + "\n".join(rest)
 
     # The exports go immediately BEFORE the body source line, so they are in scope for it.
-    source_line = ("source /mmfs1/gscratch/intelligentsystems/evanly/SLM_Factory/tests/pipeline/"
-                   "_l40s_task_body.sh")
+    source_line = 'source "${SLM_ROOT:-$SLURM_SUBMIT_DIR}/tests/pipeline/_l40s_task_body.sh"'
     assert text.count(source_line) == 1, f"{baseline_script}: expected one body source line"
     text = text.replace(source_line, ABLATION_EXPORTS.strip() + "\n" + source_line)
     if not text.endswith("\n"):

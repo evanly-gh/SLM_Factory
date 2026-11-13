@@ -1,8 +1,5 @@
 #!/bin/bash
 #SBATCH --job-name=slm-ner-bc5cdr-ablation-sizesweep-continue-l40s
-#SBATCH --account=gpu-l40s-intelligentsystems
-#SBATCH --partition=gpu-l40s
-#SBATCH --qos=normal
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --gres=gpu:l40s:2
@@ -11,7 +8,7 @@
 #SBATCH --time=5-00:00:00
 #SBATCH --requeue
 #SBATCH --signal=B:USR1@7200
-#SBATCH --output=/mmfs1/gscratch/intelligentsystems/evanly/SLM_Factory/logs/slurm/slm-ner-bc5cdr-ablation-sizesweep-continue-l40s-%j.out
+#SBATCH --output=logs/slurm/slm-ner-bc5cdr-ablation-sizesweep-continue-l40s-%j.out
 #
 # ============================================================================================
 # CONTINUATION OF THE NAIVE SWEEP — the 9 variants job 40827150 never reached (added 2026-10-07)
@@ -62,7 +59,7 @@
 # EVERY OTHER SETTING IS 40827150'S, UNCHANGED, because run.py compares this launcher's live
 # `runtime_config_snapshot` against the manifest and refuses any drift beyond the budget.
 # ============================================================================================
-export SLM_RUN_DIR=/mmfs1/gscratch/intelligentsystems/evanly/SLM_Factory/logs/runs/slm-ner-bc5cdr-ablation-sizesweep-l40s-40827150
+export SLM_RUN_DIR="${SLM_ROOT:-$SLURM_SUBMIT_DIR}/logs/runs/slm-ner-bc5cdr-ablation-sizesweep-l40s-40827150"
 
 export SLM_CUDA_ISOLATION=1
 export SLM_BENCHMARK_TASK=ner_bc5cdr
@@ -83,4 +80,4 @@ export SLM_MNN_HQQ=0
 export SLM_MNN_QUANT_BLOCK=64
 
 export TASK="Fine tune a small model for biomedical named entity recognition on PubMed abstracts, extracting Chemical and Disease entity spans (BC5CDR dataset style), targeting deployment on my Samsung Galaxy S24 Ultra with 12GB RAM and 256GB storage"
-source /mmfs1/gscratch/intelligentsystems/evanly/SLM_Factory/tests/pipeline/_l40s_task_body.sh
+source "${SLM_ROOT:-$SLURM_SUBMIT_DIR}/tests/pipeline/_l40s_task_body.sh"

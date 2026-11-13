@@ -1,8 +1,5 @@
 #!/bin/bash
 #SBATCH --job-name=slm-calendar-json-ablation-scarce-l40s
-#SBATCH --account=gpu-l40s-intelligentsystems
-#SBATCH --partition=gpu-l40s
-#SBATCH --qos=normal
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --gres=gpu:l40s:2
@@ -11,7 +8,7 @@
 #SBATCH --time=7-00:00:00
 #SBATCH --requeue
 #SBATCH --signal=B:USR1@7200
-#SBATCH --output=/mmfs1/gscratch/intelligentsystems/evanly/SLM_Factory/logs/slurm/slm-calendar-json-ablation-scarce-l40s-%j.out
+#SBATCH --output=logs/slurm/slm-calendar-json-ablation-scarce-l40s-%j.out
 #
 # ============================================================================================
 # ABLATION — DATA SCARCE (100 real rows, mining off, goal calibrated as normal)
@@ -45,7 +42,7 @@
 # for CONTENT rather than form, by re-resolving the request with the loader's own grammar
 # (`data/synth_verifiers.verify_calendar_row`) — no teacher call, no judgement.
 #
-# Dedicated gpu-l40s-intelligentsystems quota: 2x L40S (synth server on GPU0, pipeline on GPU1 — the
+# Dedicated allocation: 2x L40S (synth server on GPU0, pipeline on GPU1 — the
 # auto-2gpu profile in _l40s_task_body.sh). --requeue + USR1 checkpoint contract is the safety net
 # against node failure and maintenance across a 7-day reservation.
 export SLM_CUDA_ISOLATION=1
@@ -85,4 +82,4 @@ export SLM_ABLATION_TRAIN_CAP=100
 export SLM_ABLATION_DISALLOW_MINING=1
 export SLM_MIN_CURRICULUM_ROWS=50
 unset SLM_SYNTH_API_MODE
-source /mmfs1/gscratch/intelligentsystems/evanly/SLM_Factory/tests/pipeline/_l40s_task_body.sh
+source "${SLM_ROOT:-$SLURM_SUBMIT_DIR}/tests/pipeline/_l40s_task_body.sh"

@@ -1,8 +1,5 @@
 #!/bin/bash
 #SBATCH --job-name=slm-topv2-ablation-scarce-l40s
-#SBATCH --account=gpu-l40s-intelligentsystems
-#SBATCH --partition=gpu-l40s
-#SBATCH --qos=normal
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --gres=gpu:l40s:2
@@ -11,7 +8,7 @@
 #SBATCH --time=7-00:00:00
 #SBATCH --requeue
 #SBATCH --signal=B:USR1@7200
-#SBATCH --output=/mmfs1/gscratch/intelligentsystems/evanly/SLM_Factory/logs/slurm/slm-topv2-ablation-scarce-l40s-%j.out
+#SBATCH --output=logs/slurm/slm-topv2-ablation-scarce-l40s-%j.out
 #
 # ============================================================================================
 # ABLATION — DATA SCARCE (100 real rows, mining off, goal calibrated as normal)
@@ -62,7 +59,7 @@
 # published number comes from that script on the full 11,449-row test split, never from this run's
 # in-loop eval, which is capped at 1,000 rows for checkpoint selection only.
 #
-# Dedicated gpu-l40s-intelligentsystems quota: 2x L40S (auto-2gpu profile), seven-day wall.
+# Dedicated allocation: 2x L40S (auto-2gpu profile), seven-day wall.
 # --requeue + USR1 remain a safety net against node failure, not a wall-clock mechanism.
 export SLM_CUDA_ISOLATION=1
 export SLM_BENCHMARK_TASK=topv2
@@ -127,4 +124,4 @@ export SLM_ABLATION_TRAIN_CAP=100
 export SLM_ABLATION_DISALLOW_MINING=1
 export SLM_MIN_CURRICULUM_ROWS=50
 unset SLM_SYNTH_API_MODE
-source /mmfs1/gscratch/intelligentsystems/evanly/SLM_Factory/tests/pipeline/_l40s_task_body.sh
+source "${SLM_ROOT:-$SLURM_SUBMIT_DIR}/tests/pipeline/_l40s_task_body.sh"

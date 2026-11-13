@@ -307,7 +307,7 @@ JUDGE_REQUEST_TIMEOUT_S = max(
 # this BEFORE the agentic Exa path so a known task always has clean data to fall back to.
 LOCAL_DATASET_DIR = os.environ.get(
     "SLM_LOCAL_DATASET_DIR",
-    "/mmfs1/gscratch/intelligentsystems/evanly/SLM_Factory/data/local",
+    os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data", "local"),
 )
 
 # --- Aggregate wall-clock guard (graceful terminal state before SLURM SIGKILL) ---

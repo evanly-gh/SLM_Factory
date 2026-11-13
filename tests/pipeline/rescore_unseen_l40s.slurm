@@ -1,8 +1,5 @@
 #!/bin/bash
 #SBATCH --job-name=slm-rescore-unseen
-#SBATCH --account=gpu-l40s-intelligentsystems
-#SBATCH --partition=gpu-l40s
-#SBATCH --qos=normal
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --gres=gpu:l40s:1
@@ -10,14 +7,15 @@
 #SBATCH --mem=64G
 #SBATCH --time=0-08:00:00
 #SBATCH --array=0-11%4
-#SBATCH --output=/mmfs1/gscratch/intelligentsystems/evanly/SLM_Factory/logs/slurm/rescore-unseen-%A_%a.out
+#SBATCH --output=logs/slurm/rescore-unseen-%A_%a.out
 # Rescore each Table-3 model on held-out rows its run never selected on (scripts/rescore_unseen.py).
 # Inference only: one L40S per task, no teacher, no API calls. Paper context: §5.1 "selection set".
-# Second pass (difficulty control): sbatch --array=1-6,8,10 --export=ALL,RESCORE_TAG=_control,RESCORE_FLAGS="--no-replay --control-base" <this file>
+# Second pass (difficulty control): scripts/submit.sh --array=1-6,8,10 --export=ALL,RESCORE_TAG=_control,RESCORE_FLAGS="--no-replay --control-base" <this file>
 # Third pass (noise): RESCORE_TAG=_chunks RESCORE_FLAGS="--no-replay --control-base --chunk-rows 1000 --max-chunks 5"
 set -eo pipefail
 export LD_LIBRARY_PATH="${LD_LIBRARY_PATH:-}"
-PROJ=/mmfs1/gscratch/intelligentsystems/evanly/SLM_Factory
+source "${SLM_ROOT:-$SLURM_SUBMIT_DIR}/scripts/site_env.sh"
+PROJ="$SLM_ROOT"
 cd "$PROJ"
 
 RUNS=(
@@ -37,7 +35,6 @@ RUNS=(
 read -r TASK RUN <<< "${RUNS[$SLURM_ARRAY_TASK_ID]}"
 
 export PATH="$HOME/.local/bin:$PATH"
-export HF_HOME=/mmfs1/gscratch/intelligentsystems/evanly/.hf-cache
 export HF_HUB_DISABLE_XET=1
 export ERRANT_VENV="$PROJ/.venv_errant"
 export METRICS_VENV="$PROJ/.venv_metrics"

@@ -1,8 +1,5 @@
 #!/bin/bash
 #SBATCH --job-name=slm-xlam-bfcl-l40s
-#SBATCH --account=gpu-l40s-intelligentsystems
-#SBATCH --partition=gpu-l40s
-#SBATCH --qos=normal
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --gres=gpu:l40s:2
@@ -11,7 +8,7 @@
 #SBATCH --time=7-00:00:00
 #SBATCH --requeue
 #SBATCH --signal=B:USR1@7200
-#SBATCH --output=/mmfs1/gscratch/intelligentsystems/evanly/SLM_Factory/logs/slurm/slm-xlam-bfcl-l40s-%j.out
+#SBATCH --output=logs/slurm/slm-xlam-bfcl-l40s-%j.out
 #
 # CURATED BENCHMARK: xlam_bfcl (format-bound, metric ast_arg_match). SLM_BENCHMARK_TASK
 # pins the deterministic loader (train on Salesforce xLAM-60k, evaluate on the Berkeley
@@ -21,7 +18,7 @@
 # (public; BFCL ships a loader script, trust_remote_code). Scoring is judge-free executable AST
 # argument match.
 #
-# Dedicated gpu-l40s-intelligentsystems quota: 2x L40S (synth server on GPU0, pipeline on GPU1 —
+# Dedicated allocation: 2x L40S (synth server on GPU0, pipeline on GPU1 —
 # the auto-2gpu profile in _l40s_task_body.sh). --requeue + USR1 checkpoint contract is a safety
 # net against node failure/maintenance.
 export SLM_CUDA_ISOLATION=1
@@ -91,4 +88,4 @@ if [ "${SLM_SYNTH_API_MODE:-0}" != "1" ]; then
 fi
 
 export TASK="Fine tune a small model for function/tool calling (train on xLAM-60k, evaluate on the Berkeley Function-Calling Leaderboard), targeting deployment on my Samsung Galaxy S24 Ultra with 12GB RAM and 256GB storage"
-source /mmfs1/gscratch/intelligentsystems/evanly/SLM_Factory/tests/pipeline/_l40s_task_body.sh
+source "${SLM_ROOT:-$SLURM_SUBMIT_DIR}/tests/pipeline/_l40s_task_body.sh"

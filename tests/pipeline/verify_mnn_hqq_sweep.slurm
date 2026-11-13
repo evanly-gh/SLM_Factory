@@ -1,15 +1,12 @@
 #!/bin/bash
 #SBATCH --job-name=slm-mnn-hqq-sweep
-#SBATCH --account=gpu-l40s-intelligentsystems
-#SBATCH --partition=gpu-l40s
-#SBATCH --qos=normal
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --gres=gpu:l40s:1
 #SBATCH --cpus-per-task=16
 #SBATCH --mem=120G
 #SBATCH --time=12:00:00
-#SBATCH --output=/mmfs1/gscratch/intelligentsystems/evanly/SLM_Factory/logs/slurm/%x-%j.out
+#SBATCH --output=logs/slurm/%x-%j.out
 #
 # CAN MNN'S 4-BIT EXPORT MATCH llama.cpp's Q4_K_M? (2026-09-28)
 #
@@ -24,7 +21,7 @@
 #   RECIPE=mnn_hqq_b32   MNN 4-bit, block 32, --hqq              (finer groups, ~11% larger)
 #
 # One job per recipe, submitted as
-#   sbatch --job-name=slm-mnn-hqq-sweep-<recipe> --export=ALL,RECIPE=<recipe> verify_mnn_hqq_sweep.slurm
+#   scripts/submit.sh --job-name=slm-mnn-hqq-sweep-<recipe> --export=ALL,RECIPE=<recipe> tests/pipeline/verify_mnn_hqq_sweep.slurm
 #
 # WEIGHTS, 8 per recipe: four pool models, each untrained (zero-shot, where the gap is largest) and
 # with the best clinc150 adapter from MNN loop run 40298521 (what the loop actually ships).
@@ -33,12 +30,11 @@
 # (weights, recipe) pair is its own quant_accuracy_eval invocation and scoring runs in a worker.
 set -eo pipefail
 export LD_LIBRARY_PATH="${LD_LIBRARY_PATH:-}"
-PROJ=/mmfs1/gscratch/intelligentsystems/evanly/SLM_Factory
+source "${SLM_ROOT:-$SLURM_SUBMIT_DIR}/scripts/site_env.sh"
+PROJ="$SLM_ROOT"
 cd "$PROJ"
 export PATH="$HOME/.local/bin:$PATH"
-export HF_HOME=/mmfs1/gscratch/intelligentsystems/evanly/.hf-cache
 export HF_HUB_DISABLE_XET=1
-export UV_CACHE_DIR=/mmfs1/gscratch/intelligentsystems/evanly/.uv-cache
 
 source /etc/profile.d/modules.sh 2>/dev/null || true
 CUDA_MOD=$(module avail cuda 2>&1 | grep -oE "cuda/12\.8[0-9.]*" | sort -V | tail -1)
@@ -72,7 +68,7 @@ RUN=logs/runs/slm-clinc150-mnn-verify-40298521
 EVAL_SET="$RUN/artifacts/eval_set.json"
 TRAINED="$RUN/artifacts/training"
 STAMP="${SLURM_JOB_ID:-manual-$$}"
-OUT=/mmfs1/gscratch/intelligentsystems/evanly/tmp/mnn-hqq-sweep-$STAMP
+OUT="$SLM_TMP_DIR/mnn-hqq-sweep-$STAMP"
 REPORTS=logs/quant_eval/mnn-hqq-sweep-$STAMP-$RECIPE
 
 # base model | adapter (best fine-tuned iteration of that tier in 40298521)

@@ -1,8 +1,5 @@
 #!/bin/bash
 #SBATCH --job-name=slm-ner-ablation-reset-cse
-#SBATCH --account=gpu-l40s-cse
-#SBATCH --partition=gpu-l40s
-#SBATCH --qos=normal
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --gres=gpu:l40s:2
@@ -11,7 +8,11 @@
 #SBATCH --time=24:00:00
 #SBATCH --requeue
 #SBATCH --signal=B:USR1@7200
-#SBATCH --output=/mmfs1/gscratch/intelligentsystems/evanly/SLM_Factory/logs/slurm/slm-ner-ablation-reset-cse-%j.out
+#SBATCH --output=logs/slurm/slm-ner-ablation-reset-cse-%j.out
+#
+# ALLOCATION: originally run on account gpu-l40s-cse / partition gpu-l40s / QOS normal, not the
+# site default in site.env; the 24h --time above is that account's MaxWall. To reproduce:
+#   scripts/submit.sh -A gpu-l40s-cse -p gpu-l40s -q normal tests/pipeline/run_ner_bc5cdr_ablation_reset_cse.slurm
 #
 # ============================================================================================
 # ABLATION 1 of 3 — DOES REUSING THE CURRICULUM ACROSS MODEL TIERS BUY ANYTHING?
@@ -58,7 +59,7 @@ export SLM_ABLATION_RESET_DATA_ON_ESCALATION=1
 #      eval.scorers.ner.NER_PROMPT instead of hand-copying a version that omitted the
 #      "Reply with [] if there are no entities" sentence. Verified byte-identical.
 #
-# Dedicated gpu-l40s-intelligentsystems quota: 2x L40S (auto-2gpu profile), seven-day wall.
+# Dedicated allocation: 2x L40S (auto-2gpu profile), seven-day wall.
 # --requeue + USR1 remain a safety net against node failure, not a wall-clock mechanism.
 export SLM_CUDA_ISOLATION=1
 export SLM_BENCHMARK_TASK=ner_bc5cdr
@@ -93,4 +94,4 @@ export SLM_VERIFY_SYNTH=0
 export SLM_TEACHER_SYNTH_BYPASS=1
 
 export TASK="Fine tune a small model for biomedical named entity recognition on PubMed abstracts, extracting Chemical and Disease entity spans (BC5CDR dataset style), targeting deployment on my Samsung Galaxy S24 Ultra with 12GB RAM and 256GB storage"
-source /mmfs1/gscratch/intelligentsystems/evanly/SLM_Factory/tests/pipeline/_l40s_task_body.sh
+source "${SLM_ROOT:-$SLURM_SUBMIT_DIR}/tests/pipeline/_l40s_task_body.sh"

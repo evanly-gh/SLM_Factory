@@ -20,13 +20,13 @@
 # no `-u`: lmod init references unbound LD_LIBRARY_PATH.
 set -eo pipefail
 export LD_LIBRARY_PATH="${LD_LIBRARY_PATH:-}"
-PROJ=/mmfs1/gscratch/intelligentsystems/evanly/SLM_Factory
+# Repo root, caches (UV_CACHE_DIR, PIP_CACHE_DIR, HF_HOME) and scratch come from site.env via
+# scripts/site_env.sh, located relative to this file so no launcher or body holds a machine path.
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)/scripts/site_env.sh"
+PROJ="$SLM_ROOT"
 cd "$PROJ"
 export PATH="$HOME/.local/bin:$PATH"
-export UV_CACHE_DIR=/mmfs1/gscratch/intelligentsystems/evanly/.uv-cache
-export HF_HOME=/mmfs1/gscratch/intelligentsystems/evanly/.hf-cache
 export HF_HUB_DISABLE_XET=1
-export PIP_CACHE_DIR=/mmfs1/gscratch/intelligentsystems/evanly/.pip-cache
 
 # --- Report-metric interpreters, defaulted HERE rather than in each launcher ---
 # `gec_bea19` scores through the real ERRANT CLI and `dialogsum`'s report metric adds BERTScore.

@@ -1,12 +1,11 @@
 #!/bin/bash
 # Build the GPU virtualenv for real (Unsloth) training. Run on a GPU node (it pulls a
-# CUDA torch). Caches go to gscratch (home is only 10GB).
+# CUDA torch). Keep the caches off a small home quota: set them in site.env.
 set -euo pipefail
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/site_env.sh"   # SLM_ROOT, caches (see site.env)
 export PATH="$HOME/.local/bin:$PATH"
-export UV_CACHE_DIR="${UV_CACHE_DIR:-/mmfs1/gscratch/intelligentsystems/evanly/.uv-cache}"
-export PIP_CACHE_DIR="${PIP_CACHE_DIR:-/mmfs1/gscratch/intelligentsystems/evanly/.pip-cache}"
 
-cd /mmfs1/gscratch/intelligentsystems/evanly/SLM_Factory
+cd "$SLM_ROOT"
 
 # logs/ is gitignored, so these cannot be committed into existence — and Slurm does not
 # create an --output directory, it fails the job. Create both here so a fresh checkout
@@ -48,9 +47,9 @@ uv pip install "gguf"
 CMAKE_ARGS="-DGGML_CUDA=OFF" FORCE_CMAKE=1 uv pip install "llama-cpp-python"
 
 # llama.cpp CLI tools (llama-quantize + convert_hf_to_gguf.py) are located via PATH by
-# training/quantize.py (shutil.which). Point at the prebuilt checkout on gscratch and
-# make the tools available to anything that sources this venv's activate script.
-LLAMA_CPP_DIR="${LLAMA_CPP_DIR:-/mmfs1/gscratch/intelligentsystems/evanly/llama.cpp}"
+# training/quantize.py (shutil.which). Point at the prebuilt checkout (LLAMA_CPP_DIR, from
+# site.env via site_env.sh) and make the tools available to anything that sources this venv's
+# activate script.
 if [ -x "$LLAMA_CPP_DIR/build/bin/llama-quantize" ]; then
   LLAMA_PATH_LINE="export PATH=\"$LLAMA_CPP_DIR/build/bin:$LLAMA_CPP_DIR:\$PATH\"  # SLM_Factory llama.cpp tools"
   if ! grep -qF "SLM_Factory llama.cpp tools" .venv_gpu/bin/activate; then
@@ -60,14 +59,15 @@ if [ -x "$LLAMA_CPP_DIR/build/bin/llama-quantize" ]; then
   # its newer libstdc++ (GLIBCXX_3.4.29/30) at RUNTIME; the RHEL8 system libstdc++ is too
   # old, so quantization fails with "GLIBCXX_... not found" (B160). Put the gcc-12 runtime
   # lib on LD_LIBRARY_PATH for anything that sources this venv.
-  GCC12_LIB="/sw/gcc/12.3.0/lib64"
+  # Location of that runtime is site-specific: SLM_GCC_LIB in site.env (unset = skip).
+  GCC12_LIB="${SLM_GCC_LIB:-}"
   LLAMA_LDLIB_LINE="export LD_LIBRARY_PATH=\"$GCC12_LIB:\${LD_LIBRARY_PATH:-}\"  # SLM_Factory gcc12 libstdc++ (GLIBCXX for llama.cpp/llama-cpp-python)"
-  if [ -d "$GCC12_LIB" ] && ! grep -qF "SLM_Factory gcc12 libstdc++" .venv_gpu/bin/activate; then
+  if [ -n "$GCC12_LIB" ] && [ -d "$GCC12_LIB" ] && ! grep -qF "SLM_Factory gcc12 libstdc++" .venv_gpu/bin/activate; then
     echo "$LLAMA_LDLIB_LINE" >> .venv_gpu/bin/activate
   fi
 else
   echo "[setup] NOTE: llama-quantize not found under $LLAMA_CPP_DIR/build/bin — build it with:"
-  echo "        module load cmake/3.25.1 gcc/12.3.0"
+  echo "        (with CMake and GCC >= 12 on PATH, e.g. via your cluster's modules)"
   echo "        cmake -S \"$LLAMA_CPP_DIR\" -B \"$LLAMA_CPP_DIR/build\" -DGGML_CUDA=OFF -DLLAMA_CURL=OFF"
   echo "        cmake --build \"$LLAMA_CPP_DIR/build\" -j --target llama-quantize"
 fi

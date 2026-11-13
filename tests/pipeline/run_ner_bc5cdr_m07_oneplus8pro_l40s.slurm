@@ -1,8 +1,5 @@
 #!/bin/bash
 #SBATCH --job-name=slm-ner-bc5cdr-m07-op8pro-l40s
-#SBATCH --account=gpu-l40s-intelligentsystems
-#SBATCH --partition=gpu-l40s
-#SBATCH --qos=normal
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --gres=gpu:l40s:2
@@ -11,7 +8,7 @@
 #SBATCH --time=3-00:00:00
 #SBATCH --requeue
 #SBATCH --signal=B:USR1@7200
-#SBATCH --output=/mmfs1/gscratch/intelligentsystems/evanly/SLM_Factory/logs/slurm/slm-ner-bc5cdr-m07-op8pro-l40s-%j.out
+#SBATCH --output=logs/slurm/slm-ner-bc5cdr-m07-op8pro-l40s-%j.out
 #
 # SCENARIO M07 (hardware/docs/SCENARIOS.md): ner_bc5cdr on a OnePlus 8 Pro,
 # "Paper-alert abstract index". Limits: peak memory <= 5,800 MB, prefill >= 2.96 tokens/s,
@@ -24,7 +21,7 @@
 #
 # Pointed at explicitly rather than placed at the default config/filtered_pool.json, which would
 # also apply to every other run started from this checkout.
-export SLM_FILTERED_POOL=/mmfs1/gscratch/intelligentsystems/evanly/SLM_Factory/config/filtered_pools/oneplus8pro_m07.json
+export SLM_FILTERED_POOL="${SLM_ROOT:-$SLURM_SUBMIT_DIR}/config/filtered_pools/oneplus8pro_m07.json"
 export SLM_CUDA_ISOLATION=1
 export SLM_BENCHMARK_TASK=ner_bc5cdr
 # TEACHER VERIFICATION OF GENERATED ROWS: OFF for this task.
@@ -58,4 +55,4 @@ export SLM_VERIFY_SYNTH=0
 export SLM_TEACHER_SYNTH_BYPASS=1
 
 export TASK="Fine tune a small model for biomedical named entity recognition on PubMed abstracts, extracting Chemical and Disease entity spans (BC5CDR dataset style), targeting deployment on my OnePlus 8 Pro with 12GB RAM and 256GB storage"
-source /mmfs1/gscratch/intelligentsystems/evanly/SLM_Factory/tests/pipeline/_l40s_task_body.sh
+source "${SLM_ROOT:-$SLURM_SUBMIT_DIR}/tests/pipeline/_l40s_task_body.sh"

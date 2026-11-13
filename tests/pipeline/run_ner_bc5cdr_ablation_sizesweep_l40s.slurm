@@ -1,8 +1,5 @@
 #!/bin/bash
 #SBATCH --job-name=slm-ner-bc5cdr-ablation-sizesweep-l40s
-#SBATCH --account=gpu-l40s-intelligentsystems
-#SBATCH --partition=gpu-l40s
-#SBATCH --qos=normal
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --gres=gpu:l40s:2
@@ -11,7 +8,7 @@
 #SBATCH --time=7-00:00:00
 #SBATCH --requeue
 #SBATCH --signal=B:USR1@7200
-#SBATCH --output=/mmfs1/gscratch/intelligentsystems/evanly/SLM_Factory/logs/slurm/slm-ner-bc5cdr-ablation-sizesweep-l40s-%j.out
+#SBATCH --output=logs/slurm/slm-ner-bc5cdr-ablation-sizesweep-l40s-%j.out
 #
 # ============================================================================================
 # ABLATION — WHAT DOES THE TIERING SYSTEM SAVE? (naive exhaustive sweep, added 2026-09-28)
@@ -53,7 +50,7 @@
 # autonomous path, where it reached BC5CDR only because the orchestrator happened to emit a plan
 # web_acquire could resolve — not reproducible. SLM_BENCHMARK_TASK pins the loader.
 #
-# Dedicated gpu-l40s-intelligentsystems quota: 2x L40S (auto-2gpu profile), seven-day wall.
+# Dedicated allocation: 2x L40S (auto-2gpu profile), seven-day wall.
 # --requeue + USR1 remain a safety net against node failure, not a wall-clock mechanism.
 export SLM_CUDA_ISOLATION=1
 export SLM_BENCHMARK_TASK=ner_bc5cdr
@@ -67,4 +64,4 @@ export SLM_STOP_THRESHOLD=0.99
 unset SLM_SYNTH_API_MODE
 
 export TASK="Fine tune a small model for biomedical named entity recognition on PubMed abstracts, extracting Chemical and Disease entity spans (BC5CDR dataset style), targeting deployment on my Samsung Galaxy S24 Ultra with 12GB RAM and 256GB storage"
-source /mmfs1/gscratch/intelligentsystems/evanly/SLM_Factory/tests/pipeline/_l40s_task_body.sh
+source "${SLM_ROOT:-$SLURM_SUBMIT_DIR}/tests/pipeline/_l40s_task_body.sh"

@@ -267,6 +267,9 @@ def check_task(name: str, *, n_eval: int | None, verbose: bool) -> dict:
 
 
 def main() -> int:
+    from config.site import load_site_env
+
+    load_site_env()  # HF_HOME and the caches from site.env, before anything imports huggingface
     import tasks
 
     ap = argparse.ArgumentParser()
@@ -278,7 +281,6 @@ def main() -> int:
     ap.add_argument("-v", "--verbose", action="store_true")
     args = ap.parse_args()
 
-    os.environ.setdefault("HF_HOME", "/mmfs1/gscratch/intelligentsystems/evanly/.hf-cache")
     results = []
     for name in args.task:
         print(f"\n{'=' * 78}\n### {name}\n{'=' * 78}")

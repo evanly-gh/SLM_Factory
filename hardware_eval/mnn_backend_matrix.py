@@ -239,7 +239,9 @@ def parse_args():
     p.add_argument("--precisions", default=",".join(ALL_PRECISIONS))
     p.add_argument("--devices", default=",".join(ALL_DEVICES))
     p.add_argument("--tier", type=int, default=0, help="only models whose lowest tier is this")
-    p.add_argument("--out", default="/mmfs1/gscratch/intelligentsystems/evanly/tmp/mnn-matrix")
+    from config.site import tmp_dir
+
+    p.add_argument("--out", default=os.path.join(tmp_dir(), "mnn-matrix"))
     p.add_argument("--report", default=os.path.join(PROJ, "logs/probes/mnn-backend-matrix.json"))
     p.add_argument("--discard", action="store_true",
                    help="delete each artifact after scoring it (the full matrix is ~40GB otherwise)")

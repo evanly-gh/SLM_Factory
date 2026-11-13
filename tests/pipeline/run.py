@@ -178,6 +178,13 @@ if force_model:
 from agent.logging_setup import set_ml_env
 set_ml_env()
 
+# Machine-specific settings (caches, HF_HOME, SLM_TMP_DIR, LLAMA_CPP_DIR) from site.env, so a
+# direct `python tests/pipeline/run.py` sees the same values a Slurm launcher exports. Never
+# overrides the environment; must run before anything imports huggingface/transformers.
+from config.site import load_site_env
+
+load_site_env()
+
 from dotenv import load_dotenv
 # override=True: .env is the source of truth for API keys. A SLURM job inherits the submitting
 # shell's environment, so a stale/placeholder ANTHROPIC_API_KEY/EXA_API_KEY there would other-

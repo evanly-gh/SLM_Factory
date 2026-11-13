@@ -22,6 +22,7 @@ CLAUDE.md
 data/local
 artifacts/
 exports/
+outputs/
 
 logs/
 unsloth_compiled_cache/
@@ -44,3 +45,8 @@ data/_kaggle_tmp/
 # Local evaluation inputs (fresh / external rows used by scripts/rescore_unseen.py).
 data/fresh_sets/
 data/external_eval/
+
+# Machine-specific settings (template: site.env.example) and the default cache/scratch dirs.
+/site.env
+/.cache/
+/.tmp/

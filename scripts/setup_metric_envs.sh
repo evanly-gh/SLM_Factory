@@ -19,10 +19,10 @@
 # gec_bea19 and BERTScore is a dialogsum REPORT metric, so both run at most once per eval pass and
 # BERTScore only from scripts/report_eval.py.
 set -euo pipefail
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/site_env.sh"   # SLM_ROOT, caches (see site.env)
 export PATH="$HOME/.local/bin:$PATH"
-export UV_CACHE_DIR="${UV_CACHE_DIR:-/mmfs1/gscratch/intelligentsystems/evanly/.uv-cache}"
 
-cd /mmfs1/gscratch/intelligentsystems/evanly/SLM_Factory
+cd "$SLM_ROOT"
 
 # THE SPACY MODEL IS PINNED TO AN EXACT WHEEL, not `python -m spacy download en_core_web_sm`.
 # ERRANT's edit extraction aligns source against hypothesis using en_core_web_sm's POS tags and

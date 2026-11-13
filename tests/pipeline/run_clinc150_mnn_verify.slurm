@@ -1,15 +1,12 @@
 #!/bin/bash
 #SBATCH --job-name=slm-clinc150-mnn-verify
-#SBATCH --account=gpu-l40s-intelligentsystems
-#SBATCH --partition=gpu-l40s
-#SBATCH --qos=normal
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --gres=gpu:l40s:2
 #SBATCH --cpus-per-task=16
 #SBATCH --mem=160G
 #SBATCH --time=06:00:00
-#SBATCH --output=/mmfs1/gscratch/intelligentsystems/evanly/SLM_Factory/logs/slurm/slm-clinc150-mnn-verify-%j.out
+#SBATCH --output=logs/slurm/slm-clinc150-mnn-verify-%j.out
 #
 # VERIFICATION RUN for the MNN quantization backend inside the FULL agent loop (added 2026-09-17).
 #
@@ -99,4 +96,4 @@ export SLM_MNN_THREADS=8
 # Deliberately NOT requeued: a verification run that dies should stay dead so the failure is
 # examined rather than silently restarted.
 export TASK="Fine tune a small model for user-intent classification (CLINC150: 150 intents plus out-of-scope detection), targeting deployment on my Samsung Galaxy S24 Ultra with 12GB RAM and 256GB storage"
-source /mmfs1/gscratch/intelligentsystems/evanly/SLM_Factory/tests/pipeline/_l40s_task_body.sh
+source "${SLM_ROOT:-$SLURM_SUBMIT_DIR}/tests/pipeline/_l40s_task_body.sh"

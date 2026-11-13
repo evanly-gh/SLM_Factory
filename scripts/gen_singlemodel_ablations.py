@@ -215,8 +215,7 @@ def build(task: str) -> tuple[Path, str]:
     # Rename the job and its log, so the ablation never writes over its baseline's output.
     text = re.sub(r"^#SBATCH --job-name=.*$", f"#SBATCH --job-name={job}", text, flags=re.M)
     text = re.sub(r"^#SBATCH --output=.*$",
-                  "#SBATCH --output=/mmfs1/gscratch/intelligentsystems/evanly/SLM_Factory/"
-                  f"logs/slurm/{job}-%j.out", text, flags=re.M)
+                  f"#SBATCH --output=logs/slurm/{job}-%j.out", text, flags=re.M)
     # Cut the baseline's seven-day request down to this arm's actual envelope — see the
     # `wall_hours` note on TASKS. Left at 7 days, every one of these is unschedulable ahead of the
     # October13_Maintenance reservation and gets no backfill besides.
@@ -247,13 +246,8 @@ def build(task: str) -> tuple[Path, str]:
     text = "\n".join(lines[: last_sbatch + 1]) + "\n" + header + "\n" + "\n".join(rest)
 
     # The two exports go immediately BEFORE the body source line, so they are in scope for it.
-    text = text.replace(
-        "source /mmfs1/gscratch/intelligentsystems/evanly/SLM_Factory/tests/pipeline/"
-        "_l40s_task_body.sh",
-        ABLATION_EXPORTS.strip()
-        + "\nsource /mmfs1/gscratch/intelligentsystems/evanly/SLM_Factory/tests/pipeline/"
-        "_l40s_task_body.sh",
-    )
+    source_line = 'source "${SLM_ROOT:-$SLURM_SUBMIT_DIR}/tests/pipeline/_l40s_task_body.sh"'
+    text = text.replace(source_line, ABLATION_EXPORTS.strip() + "\n" + source_line)
     if not text.endswith("\n"):
         text += "\n"
     return PIPELINE / f"run_{task}_ablation_singlemodel_l40s.slurm", text

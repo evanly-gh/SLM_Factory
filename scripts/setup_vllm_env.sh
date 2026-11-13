@@ -4,10 +4,10 @@
 # training stack. The task scripts launch the server from this venv on its own GPU and talk to
 # it over HTTP, so the two environments never need to coexist in one interpreter.
 set -euo pipefail
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/site_env.sh"   # SLM_ROOT, caches (see site.env)
 export PATH="$HOME/.local/bin:$PATH"
-export UV_CACHE_DIR="${UV_CACHE_DIR:-/mmfs1/gscratch/intelligentsystems/evanly/.uv-cache}"
 
-cd /mmfs1/gscratch/intelligentsystems/evanly/SLM_Factory
+cd "$SLM_ROOT"
 
 if ! .venv_vllm/bin/python -c '' >/dev/null 2>&1; then
   echo "[setup] creating .venv_vllm"

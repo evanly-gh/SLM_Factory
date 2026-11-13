@@ -1,8 +1,5 @@
 #!/bin/bash
 #SBATCH --job-name=slm-calendar-json-l40s
-#SBATCH --account=gpu-l40s-intelligentsystems
-#SBATCH --partition=gpu-l40s
-#SBATCH --qos=normal
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --gres=gpu:l40s:2
@@ -11,7 +8,7 @@
 #SBATCH --time=7-00:00:00
 #SBATCH --requeue
 #SBATCH --signal=B:USR1@7200
-#SBATCH --output=/mmfs1/gscratch/intelligentsystems/evanly/SLM_Factory/logs/slurm/slm-calendar-json-l40s-%j.out
+#SBATCH --output=logs/slurm/slm-calendar-json-l40s-%j.out
 #
 # CURATED BENCHMARK: calendar_json (format-bound, metric ast_arg_match). SLM_BENCHMARK_TASK pins the
 # deterministic loader — TOPv2 reminder utterances plus the frozen SGD Calendar_1 bundle — instead of
@@ -25,7 +22,7 @@
 # for CONTENT rather than form, by re-resolving the request with the loader's own grammar
 # (`data/synth_verifiers.verify_calendar_row`) — no teacher call, no judgement.
 #
-# Dedicated gpu-l40s-intelligentsystems quota: 2x L40S (synth server on GPU0, pipeline on GPU1 — the
+# Dedicated allocation: 2x L40S (synth server on GPU0, pipeline on GPU1 — the
 # auto-2gpu profile in _l40s_task_body.sh). --requeue + USR1 checkpoint contract is the safety net
 # against node failure and maintenance across a 7-day reservation.
 export SLM_CUDA_ISOLATION=1
@@ -61,4 +58,4 @@ export SLM_VERIFY_SYNTH=0
 export SLM_TEACHER_SYNTH_BYPASS=1
 
 export TASK="Fine tune a small model to convert natural-language scheduling requests into Google Calendar events.insert JSON with resolved ISO-8601 timestamps, targeting deployment on my Samsung Galaxy S24 Ultra with 12GB RAM and 256GB storage"
-source /mmfs1/gscratch/intelligentsystems/evanly/SLM_Factory/tests/pipeline/_l40s_task_body.sh
+source "${SLM_ROOT:-$SLURM_SUBMIT_DIR}/tests/pipeline/_l40s_task_body.sh"

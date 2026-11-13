@@ -5,16 +5,23 @@
 # still works but on CPU (slow) — training/slm_helpers.py falls back automatically.
 #
 # RUN ON A GPU NODE (needs nvcc matching the torch CUDA build). e.g.:
-#   srun -A intelligentsystems -p ckpt-g2 --gres=gpu:l40:1 --time=1:00:00 --pty \
+#   srun -A <account> -p <gpu-partition> --gres=gpu:l40:1 --time=1:00:00 --pty \
 #        bash scripts/build_llamacpp_cuda.sh
-# When submitted with sbatch, send the log to the GPU-infrastructure directory rather
-# than logs/slurm/ (which is for pipeline run logs):
-#   sbatch --output=logs/gpu_setup/llamacpp-cuda-build-%j.out scripts/build_llamacpp_cuda.sh
+# When submitted with sbatch (from the repo root, via scripts/submit.sh so site.env supplies the
+# account/partition), send the log to the GPU-infrastructure directory rather than logs/slurm/
+# (which is for pipeline run logs):
+#   bash scripts/submit.sh --output=logs/gpu_setup/llamacpp-cuda-build-%j.out scripts/build_llamacpp_cuda.sh
 # NOTE: no `-u` (nounset) — the Lmod bash init references $LD_LIBRARY_PATH, which is unbound
 # in a fresh SLURM shell and would abort the script before any build. Pre-init it and use -eo.
 set -eo pipefail
 export LD_LIBRARY_PATH="${LD_LIBRARY_PATH:-}"
-PROJ=/mmfs1/gscratch/intelligentsystems/evanly/SLM_Factory
+# Locate the repo: SLM_ROOT if set; else this script's own directory when run with bash/srun;
+# else the submit directory, because under sbatch Slurm runs a COPY from its spool directory.
+_slm_scripts="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+[ -f "$_slm_scripts/site_env.sh" ] || _slm_scripts="${SLM_ROOT:-$SLURM_SUBMIT_DIR}/scripts"
+[ -n "${SLM_ROOT:-}" ] && _slm_scripts="$SLM_ROOT/scripts"
+source "$_slm_scripts/site_env.sh"   # SLM_ROOT, caches, SLM_TMP_DIR (see site.env)
+PROJ="$SLM_ROOT"
 cd "$PROJ"
 mkdir -p logs/gpu_setup
 export PATH="$HOME/.local/bin:$PATH"
@@ -44,7 +51,7 @@ echo "[build] CUDACXX=$CUDACXX  CUDA_HOME=$CUDA_HOME"
 # assembler rejects with "no such instruction", failing the whole build (B199).
 export CMAKE_ARGS="-DGGML_CUDA=on -DCMAKE_CUDA_COMPILER=$CUDACXX -DGGML_NATIVE=OFF"
 export FORCE_CMAKE=1
-export TMPDIR=/mmfs1/gscratch/intelligentsystems/evanly/tmp
+export TMPDIR="$SLM_TMP_DIR"
 mkdir -p "$TMPDIR"
 
 # Reinstall ONLY llama-cpp-python from source (CUDA compile). --no-deps keeps the venv's

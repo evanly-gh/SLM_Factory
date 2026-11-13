@@ -1,15 +1,12 @@
 #!/bin/bash
 #SBATCH --job-name=slm-mnn-matrix
-#SBATCH --account=gpu-l40s-intelligentsystems
-#SBATCH --partition=gpu-l40s
-#SBATCH --qos=normal
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --gres=gpu:l40s:1
 #SBATCH --cpus-per-task=16
 #SBATCH --mem=160G
 #SBATCH --time=20:00:00
-#SBATCH --output=/mmfs1/gscratch/intelligentsystems/evanly/SLM_Factory/logs/slurm/slm-mnn-matrix-%j.out
+#SBATCH --output=logs/slurm/slm-mnn-matrix-%j.out
 #
 # DOES THE MNN BACKEND WORK FOR EVERY TIER, AT EVERY PRECISION, ON THE GPU?
 #
@@ -34,10 +31,10 @@
 # ONE GPU, and no requeue: this is a measurement, not a results run.
 set -eo pipefail
 export LD_LIBRARY_PATH="${LD_LIBRARY_PATH:-}"
-PROJ=/mmfs1/gscratch/intelligentsystems/evanly/SLM_Factory
+source "${SLM_ROOT:-$SLURM_SUBMIT_DIR}/scripts/site_env.sh"
+PROJ="$SLM_ROOT"
 cd "$PROJ"
 export PATH="$HOME/.local/bin:$PATH"
-export HF_HOME=/mmfs1/gscratch/intelligentsystems/evanly/.hf-cache
 export HF_HUB_DISABLE_XET=1
 
 source /etc/profile.d/modules.sh 2>/dev/null || true
@@ -60,6 +57,6 @@ nvidia-smi --query-gpu=name,memory.total --format=csv,noheader || true
 python hardware_eval/mnn_backend_matrix.py \
   --rows "${MNN_MATRIX_ROWS:-100}" \
   --devices cuda,cpu \
-  --out "/mmfs1/gscratch/intelligentsystems/evanly/tmp/mnn-matrix-$STAMP" \
+  --out "$SLM_TMP_DIR/mnn-matrix-$STAMP" \
   --discard \
   --report "logs/probes/mnn-backend-matrix-$STAMP.json"

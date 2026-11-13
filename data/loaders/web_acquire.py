@@ -764,7 +764,7 @@ def _peek_failure_reason(error: BaseException) -> str:
 
     The raw `datasets` message is not worth a log line: it is a paragraph of hub internals, and
     truncating it to 80 characters cut it mid-path — "Couldn't find any data file at
-    /mmfs1/gscratch/intelligentsystems/evanly/SLM_Fac" made it look as though a local directory
+    /path/to/SLM_Fac" made it look as though a local directory
     were being passed as a hub id, which it never was. The repo id is already in the log line;
     what is missing is the category of failure, which is what this returns.
     """

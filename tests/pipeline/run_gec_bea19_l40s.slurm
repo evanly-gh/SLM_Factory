@@ -1,8 +1,5 @@
 #!/bin/bash
 #SBATCH --job-name=slm-gec-bea19-l40s
-#SBATCH --account=gpu-l40s-intelligentsystems
-#SBATCH --partition=gpu-l40s
-#SBATCH --qos=normal
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --gres=gpu:l40s:2
@@ -11,7 +8,7 @@
 #SBATCH --time=7-00:00:00
 #SBATCH --requeue
 #SBATCH --signal=B:USR1@7200
-#SBATCH --output=/mmfs1/gscratch/intelligentsystems/evanly/SLM_Factory/logs/slurm/slm-gec-bea19-l40s-%j.out
+#SBATCH --output=logs/slurm/slm-gec-bea19-l40s-%j.out
 #
 # CURATED BENCHMARK: gec_bea19 (in-distribution, metric errant_f05). Added 2026-09-06 with the
 # on-device SFT suite. SLM_BENCHMARK_TASK pins the loader.
@@ -53,7 +50,7 @@
 #
 # LICENCE: research/educational only. Not commercially releasable.
 #
-# Dedicated gpu-l40s-intelligentsystems quota: 2x L40S (auto-2gpu profile), seven-day wall.
+# Dedicated allocation: 2x L40S (auto-2gpu profile), seven-day wall.
 # --requeue + USR1 remain a safety net against node failure, not a wall-clock mechanism.
 export SLM_CUDA_ISOLATION=1
 export SLM_BENCHMARK_TASK=gec_bea19
@@ -90,4 +87,4 @@ export SLM_VERIFY_SYNTH=shadow
 export SLM_TEACHER_SYNTH_BYPASS=1
 
 export TASK="Fine tune a small model to correct grammatical errors in learner English sentences, changing as little as possible (W&I+LOCNESS BEA-2019 dataset style), targeting on-device keyboard correction on my Samsung Galaxy S24 Ultra with 12GB RAM and 256GB storage"
-source /mmfs1/gscratch/intelligentsystems/evanly/SLM_Factory/tests/pipeline/_l40s_task_body.sh
+source "${SLM_ROOT:-$SLURM_SUBMIT_DIR}/tests/pipeline/_l40s_task_body.sh"

@@ -1,8 +1,5 @@
 #!/bin/bash
 #SBATCH --job-name=slm-ner-ablation-deepseek-cse
-#SBATCH --account=gpu-l40s-cse
-#SBATCH --partition=gpu-l40s
-#SBATCH --qos=normal
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --gres=gpu:l40s:1
@@ -11,7 +8,11 @@
 #SBATCH --time=24:00:00
 #SBATCH --requeue
 #SBATCH --signal=B:USR1@7200
-#SBATCH --output=/mmfs1/gscratch/intelligentsystems/evanly/SLM_Factory/logs/slurm/slm-ner-ablation-deepseek-cse-%j.out
+#SBATCH --output=logs/slurm/slm-ner-ablation-deepseek-cse-%j.out
+#
+# ALLOCATION: originally run on account gpu-l40s-cse / partition gpu-l40s / QOS normal, not the
+# site default in site.env; the 24h --time above is that account's MaxWall. To reproduce:
+#   scripts/submit.sh -A gpu-l40s-cse -p gpu-l40s -q normal tests/pipeline/run_ner_bc5cdr_ablation_deepseek_teacher_cse.slurm
 #
 # ============================================================================================
 # ABLATION 2b of 3 — DOES THE TEACHER MODEL CHANGE THE QUALITY OF THE SYNTHETIC DATA?
@@ -68,7 +69,7 @@ export SLM_STOP_THRESHOLD=0.80
 #      eval.scorers.ner.NER_PROMPT instead of hand-copying a version that omitted the
 #      "Reply with [] if there are no entities" sentence. Verified byte-identical.
 #
-# Dedicated gpu-l40s-intelligentsystems quota: 1x L40S (api-teacher-1gpu profile — see the
+# Dedicated allocation: 1x L40S (api-teacher-1gpu profile — see the
 # ablation header above for why this is one card and not the baseline's two), seven-day wall.
 # --requeue + USR1 remain a safety net against node failure, not a wall-clock mechanism.
 export SLM_CUDA_ISOLATION=1
@@ -110,4 +111,4 @@ export SLM_VERIFY_SYNTH=0
 export SLM_TEACHER_SYNTH_BYPASS=1
 
 export TASK="Fine tune a small model for biomedical named entity recognition on PubMed abstracts, extracting Chemical and Disease entity spans (BC5CDR dataset style), targeting deployment on my Samsung Galaxy S24 Ultra with 12GB RAM and 256GB storage"
-source /mmfs1/gscratch/intelligentsystems/evanly/SLM_Factory/tests/pipeline/_l40s_task_body.sh
+source "${SLM_ROOT:-$SLURM_SUBMIT_DIR}/tests/pipeline/_l40s_task_body.sh"

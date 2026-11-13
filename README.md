@@ -98,9 +98,15 @@ which maps every kept run to the table or figure it backs) and `artifacts/`.
 
 ## Setup
 
-Training and quantized evaluation need a CUDA GPU. Run setup inside a Slurm job, not on a login node.
+Training and quantized evaluation need a CUDA GPU. The launchers and setup scripts assume a Slurm
+cluster; run setup inside a Slurm job, not on a login node.
+
+Machine-specific settings live in one git-ignored file, `site.env`: cache and scratch directories,
+the llama.cpp checkout, and the Slurm account, partition and QOS. Every key is optional and has a
+default (caches and scratch under the repo); a variable already set in your environment wins.
 
 ```bash
+cp site.env.example site.env          # then set SBATCH_ACCOUNT / SBATCH_PARTITION / cache dirs
 uv sync                               # .venv: analysis/plotting env (pyproject.toml, uv.lock)
 bash scripts/setup_gpu_env.sh         # .venv_gpu: training + evaluation stack
 bash scripts/build_llamacpp_cuda.sh   # llama.cpp with CUDA, for GGUF builds and inference
@@ -114,14 +120,19 @@ python scripts/download_datasets.py   # rebuild the bc5cdr and dialogsum bundles
 
 ## Running
 
-Each task has a Slurm launcher. It starts the vLLM teacher on one GPU and the pipeline on the other:
+Each task has a Slurm launcher. It starts the vLLM teacher on one GPU and the pipeline on the other.
+Submit through `scripts/submit.sh`, which loads `site.env` and submits from the repo root (logs go to
+`logs/slurm/`); any extra `sbatch` options you pass override `site.env`:
 
 ```bash
-sbatch tests/pipeline/run_ner_bc5cdr_l40s.slurm           # main run
-sbatch tests/pipeline/run_ner_bc5cdr_ablation_singlemodel_l40s.slurm   # one-shot model pick
-sbatch tests/pipeline/run_ner_bc5cdr_ablation_scarce_l40s.slurm        # 100 real rows
-sbatch tests/pipeline/run_ner_bc5cdr_m07_oneplus8pro_l40s.slurm        # phone-in-the-loop pool
+scripts/submit.sh tests/pipeline/run_ner_bc5cdr_l40s.slurm                    # main run
+scripts/submit.sh tests/pipeline/run_ner_bc5cdr_ablation_singlemodel_l40s.slurm   # one-shot model pick
+scripts/submit.sh tests/pipeline/run_ner_bc5cdr_ablation_scarce_l40s.slurm        # 100 real rows
+scripts/submit.sh tests/pipeline/run_ner_bc5cdr_m07_oneplus8pro_l40s.slurm        # phone-in-the-loop pool
 ```
+
+The launchers request 2x NVIDIA L40S (`--gres=gpu:l40s:2`); on another cluster, change the GPU type
+in the launcher or override it on the command line.
 
 All task launchers share `tests/pipeline/_l40s_task_body.sh`, which calls `tests/pipeline/run.py`. Settings are
 `SLM_`-prefixed environment variables (`SLM_BENCHMARK_TASK`, `SLM_MODEL_SELECTION_STRATEGY`,
@@ -154,3 +165,9 @@ tests/            Unit tests; tests/pipeline/ holds run.py and the Slurm launche
 ```
 
 Project notes, results write-ups and design documents are kept locally under `docs/` (gitignored).
+
+## License
+
+MIT; see `LICENSE`. Vendored third-party code keeps its own license: `hardware/SmolChat-Android/`
+(Apache-2.0) and the `llama.cpp` tree inside it (MIT). Datasets are downloaded from their original
+sources at run time and are covered by their own licenses.

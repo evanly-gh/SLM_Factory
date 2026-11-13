@@ -7,7 +7,27 @@ from pathlib import Path
 
 PIPELINE_DIR = Path(__file__).parent
 
-# The curated-benchmark pipeline scripts: 2x L40S on gpu-l40s-intelligentsystems, each pinning one
+# SITE INDEPENDENCE (2026-11-13). No launcher names an account, partition or QOS: sbatch reads them
+# from SBATCH_ACCOUNT / SBATCH_PARTITION / SBATCH_QOS, which scripts/submit.sh loads from site.env.
+# Launchers are submitted from the repo root, so `--output` is relative to it, and the shared body
+# is found through SLM_ROOT (exported by submit.sh) or the submit directory. The allocation a run
+# originally used is recorded in a comment in its header, never in a directive.
+BODY_SOURCE_LINE = 'source "${SLM_ROOT:-$SLURM_SUBMIT_DIR}/tests/pipeline/_l40s_task_body.sh"'
+LAUNCHER_ROOT = "${SLM_ROOT:-$SLURM_SUBMIT_DIR}"
+SITE_DIRECTIVES = ("account", "partition", "qos")
+MACHINE_PATH_RE = re.compile(r"/mmfs1|gscratch|intelligentsystems")
+
+
+def _machine_specific_lines(source: str) -> list[str]:
+    """Directives and executable lines (not prose comments) naming this cluster's paths/accounts."""
+    return [
+        line for line in source.splitlines()
+        if MACHINE_PATH_RE.search(line)
+        and (line.startswith("#SBATCH") or not line.lstrip().startswith("#"))
+    ]
+
+# The curated-benchmark pipeline scripts: 2x L40S on the site's default allocation (site.env's
+# SBATCH_ACCOUNT / SBATCH_PARTITION / SBATCH_QOS, applied by scripts/submit.sh), each pinning one
 # task via SLM_BENCHMARK_TASK. The value IS the registry key: the filename suffix, the exported
 # variable and `tasks.TASKS` all use the same name, so there is no second table to keep in step —
 # which is what the two hand-synchronised dicts here used to be
@@ -433,8 +453,7 @@ VARIANT_SCRIPTS = {
     "run_ner_bc5cdr_m07_oneplus8pro_l40s.slurm": {
         "baseline": "run_ner_bc5cdr_l40s.slurm",
         "added": (
-            "export SLM_FILTERED_POOL=/mmfs1/gscratch/intelligentsystems/evanly/SLM_Factory/config/"
-            "filtered_pools/oneplus8pro_m07.json",
+            f'export SLM_FILTERED_POOL="{LAUNCHER_ROOT}/config/filtered_pools/oneplus8pro_m07.json"',
             'export TASK="Fine tune a small model for biomedical named entity recognition on PubMed '
             "abstracts, extracting Chemical and Disease entity spans (BC5CDR dataset style), "
             'targeting deployment on my OnePlus 8 Pro with 12GB RAM and 256GB storage"',
@@ -448,8 +467,7 @@ VARIANT_SCRIPTS = {
     "run_dialogsum_h09_galaxys23_l40s.slurm": {
         "baseline": "run_dialogsum_l40s.slurm",
         "added": (
-            "SLM_FILTERED_POOL=/mmfs1/gscratch/intelligentsystems/evanly/SLM_Factory/config/"
-            "filtered_pools/galaxys23_h09.json",
+            f'SLM_FILTERED_POOL="{LAUNCHER_ROOT}/config/filtered_pools/galaxys23_h09.json"',
             'if [ ! -s "$SLM_FILTERED_POOL" ]; then',
             'echo "FATAL: $SLM_FILTERED_POOL missing; get it from the hardware side (filter_pool.py) '
             'first" >&2',
@@ -715,13 +733,13 @@ def test_every_ablation_switch_is_read_by_the_code():
                 )
 
 
-def test_l40s_benchmark_scripts_use_2xl40s_on_int_sys_with_requeue_contract():
+def test_l40s_benchmark_scripts_use_2xl40s_on_the_site_allocation_with_requeue_contract():
     for filename, key in L40S_BENCHMARK_SCRIPTS.items():
         source = (PIPELINE_DIR / filename).read_text(encoding="utf-8")
         directives = _sbatch_directives(source)
-        assert directives["partition"] == "gpu-l40s", filename
-        assert directives["account"] == "gpu-l40s-intelligentsystems", filename
-        assert directives["qos"] == "normal", filename
+        # The allocation comes from site.env through scripts/submit.sh, never from the launcher.
+        for name in SITE_DIRECTIVES:
+            assert name not in directives, f"{filename} hardcodes --{name}"
         assert directives["gres"] == "gpu:l40s:2", filename
         assert directives["mem"] == "160G", filename
         assert directives["time"] == "7-00:00:00", filename
@@ -729,7 +747,7 @@ def test_l40s_benchmark_scripts_use_2xl40s_on_int_sys_with_requeue_contract():
         assert "#SBATCH --signal=B:USR1@7200" in source, filename
         assert f"export SLM_BENCHMARK_TASK={key}" in source, filename
         assert "export SLM_CUDA_ISOLATION=1" in source, filename
-        assert "source " in source and "_l40s_task_body.sh" in source, filename
+        assert BODY_SOURCE_LINE in source, filename
         assert "gpu:a40" not in source.lower(), filename
         assert "gpu:a100" not in source.lower(), filename
         assert "partition=ckpt" not in source, filename
@@ -748,8 +766,9 @@ def test_a_task_is_configured_identically_on_all_accounts():
     the launcher that had most recently been run. A run submitted to CSE would have silently re-hit
     both problems.
 
-    ACCOUNT-level differences are expected and excluded: the account name, the job name, the output
-    path, and the wall clock, since gpu-l40s-cse enforces MaxWall=1-00:00:00.
+    ACCOUNT-level differences are expected and excluded: the job name, the output path, the header
+    comment recording which allocation it ran on (the account itself is no longer a directive; it is
+    chosen at submit time), and the wall clock, since gpu-l40s-cse enforces MaxWall=1-00:00:00.
     """
     account_specific = {"SLM_RUN_DIR"}
     offenders: list[str] = []
@@ -801,8 +820,9 @@ def test_cse_scripts_match_the_registry_and_use_the_24h_requeue_contract():
     for filename, key in CSE_BENCHMARK_SCRIPTS.items():
         source = (PIPELINE_DIR / filename).read_text(encoding="utf-8")
         directives = _sbatch_directives(source)
-        assert directives["account"] == "gpu-l40s-cse", filename
-        assert directives["partition"] == "gpu-l40s", filename
+        # Submitted with `scripts/submit.sh -A gpu-l40s-cse ...`, recorded in the header comment.
+        for name in SITE_DIRECTIVES:
+            assert name not in directives, f"{filename} hardcodes --{name}"
         assert directives["gres"] == "gpu:l40s:2", filename
         # gpu-l40s-cse enforces MaxWall=1-00:00:00; anything longer is rejected at submit.
         assert directives["time"] == "24:00:00", filename
@@ -836,7 +856,8 @@ def test_every_registry_task_can_actually_be_launched():
 def test_l40s_benchmark_scripts_log_to_logs_slurm():
     for filename in L40S_BENCHMARK_SCRIPTS:
         directives = _sbatch_directives((PIPELINE_DIR / filename).read_text(encoding="utf-8"))
-        assert "/logs/slurm/" in directives["output"], filename
+        # Relative: resolved against the submit directory, which scripts/submit.sh makes the repo root.
+        assert directives["output"].startswith("logs/slurm/"), filename
 
 
 # --- Shared 2-GPU task body: GPU-profile math + durability contract -------------
@@ -1146,11 +1167,18 @@ def test_pipeline_task_scripts_log_to_logs_slurm():
     for name in L40S_TASK_SCRIPTS:
         directives = _sbatch_directives((PIPELINE_DIR / name).read_text())
         output = directives["output"]
-        assert "/logs/slurm/" in output, f"{name} must log to logs/slurm/, got {output}"
+        assert output.startswith("logs/slurm/"), f"{name} must log to logs/slurm/, got {output}"
 
 
 def test_every_slurm_script_runs_on_a_sanctioned_l40s_allocation():
-    """Two allocations, both 2x L40S on the same partition, and nothing else.
+    """Every source launcher is accounted for, site-independent, and on L40S hardware.
+
+    SINCE 2026-11-13 NO LAUNCHER NAMES AN ACCOUNT, PARTITION OR QOS: scripts/submit.sh supplies them
+    from site.env, and the three families below that ran elsewhere (ckpt, CSE) say so in a header
+    comment with the `submit.sh -A/-p/-q` line that reproduces them. What this test asserts per
+    family is therefore what is still in the file — GPU type and count, wall clock, requeue, job
+    name — plus the absence of any directive or path that ties a launcher to this cluster. The
+    history below explains why the families exist; it is no longer enforced through `--account`.
 
     This test used to require `gpu-l40s-intelligentsystems` everywhere. The reason was sound —
     the old gpu-l40s-cse and ckpt-g2 variants ran the same pipeline under a different wall clock
@@ -1184,17 +1212,28 @@ def test_every_slurm_script_runs_on_a_sanctioned_l40s_allocation():
                  | PROBE_SCRIPTS | VERIFICATION_SCRIPTS | CONTINUATION_SCRIPTS
                  | set(VARIANT_SCRIPTS))
     assert {p.name for p in scripts} == accounted
+    body = PIPELINE_DIR / "_l40s_task_body.sh"
+    assert _machine_specific_lines(body.read_text(encoding="utf-8")) == [], body.name
     for path in scripts:
         source = path.read_text(encoding="utf-8")
         directives = _sbatch_directives(source)
+        # Site independence, for every family: the allocation comes from site.env, logs land under
+        # the submit directory (the repo root), the body is found through SLM_ROOT, and no executable
+        # line or directive names this cluster's filesystem or accounts.
+        for name in SITE_DIRECTIVES:
+            assert name not in directives, f"{path.name} hardcodes --{name}"
+        assert directives["output"].startswith("logs/slurm/"), path.name
+        if re.search(r"^\s*(source|\.) .*_l40s_task_body\.sh", source, re.M):
+            assert BODY_SOURCE_LINE in source, path.name
+        assert _machine_specific_lines(source) == [], path.name
         if path.name in CKPT_BENCHMARK_SCRIPTS:
             # The preemptible family, sanctioned 2026-08-27 for the three cheap tasks named in
             # CKPT_BENCHMARK_SCRIPTS. Its rules are checked here and nowhere else, so the ONE thing
             # that made ckpt unacceptable before cannot come back: an unlabelled ckpt run whose
             # numbers get pooled with dedicated ones. The `-ckpt` job name is what keeps them
             # distinguishable in `logs/slurm/`, and it is asserted.
-            assert directives["account"] == "ckpt-intelligentsystems", path.name
-            assert directives["partition"] == "ckpt-g2", path.name
+            # Submitted with `scripts/submit.sh -A <ckpt account> -p ckpt-g2 -q ckpt-gpu` (header).
+            assert "ckpt-g2" in source, f"{path.name} must record the ckpt allocation it ran on"
             assert directives["gres"] == "gpu:l40s:2", (
                 f"{path.name}: ckpt-g2 also offers l40 and h200, and the device database is "
                 "calibrated on L40S — an unpinned request silently changes the hardware"
@@ -1211,9 +1250,6 @@ def test_every_slurm_script_runs_on_a_sanctioned_l40s_allocation():
                 f"{path.name} is preemptible and must be time-boxed"
             )
             continue
-        assert directives["account"] in {
-            "gpu-l40s-intelligentsystems", "gpu-l40s-cse"}, path.name
-        assert directives["partition"] == "gpu-l40s", path.name
         assert "gpu:a40" not in source.lower(), path.name
         assert "gpu:a100" not in source.lower(), path.name
         assert "partition=ckpt" not in source, path.name
@@ -1271,7 +1307,7 @@ def test_every_slurm_script_runs_on_a_sanctioned_l40s_allocation():
                 )
             else:
                 assert directives["time"] == (
-                    "24:00:00" if directives["account"].endswith("-cse") else "7-00:00:00"
+                    "24:00:00" if path.name.endswith("_cse.slurm") else "7-00:00:00"
                 ), path.name
             assert "--requeue" in source, path.name
             assert "#SBATCH --signal=B:USR1@7200" in source, (
@@ -1285,7 +1321,6 @@ def test_every_slurm_script_runs_on_a_sanctioned_l40s_allocation():
                 f"{path.name}: the job name must carry 'ablation' so an arm is never mistaken for "
                 "the baseline it is being compared against"
             )
-            assert "/logs/slurm/" in directives["output"], path.name
             continue
         assert directives["gres"] == "gpu:l40s:2", path.name
         if path.name in VARIANT_SCRIPTS:
@@ -1295,7 +1330,6 @@ def test_every_slurm_script_runs_on_a_sanctioned_l40s_allocation():
             assert 24 <= hours <= 168, f"{path.name} requests {directives['time']}"
             assert "--requeue" in source, path.name
             assert "#SBATCH --signal=B:USR1@7200" in source, path.name
-            assert "/logs/slurm/" in directives["output"], path.name
             continue
         if path.name in VERIFICATION_SCRIPTS:
             # A verification run is time-boxed and NOT requeued, on purpose: it exists to answer one
@@ -1326,15 +1360,20 @@ def test_every_slurm_script_runs_on_a_sanctioned_l40s_allocation():
             assert "#SBATCH --signal=B:USR1@7200" in source, path.name
             # The whole point of the family: it must pin an EXISTING run directory, or it silently
             # starts a fresh run under a name that claims to be a continuation.
-            match = re.search(r"^export SLM_RUN_DIR=(\S+)", source, re.M)
-            assert match is not None, f"{path.name} must pin SLM_RUN_DIR to the run it continues"
-            assert pathlib.Path(match.group(1)).is_dir(), (
+            match = re.search(
+                rf'^export SLM_RUN_DIR="{re.escape(LAUNCHER_ROOT)}/(\S+)"$', source, re.M
+            )
+            assert match is not None, (
+                f"{path.name} must pin SLM_RUN_DIR to the run it continues, under {LAUNCHER_ROOT}"
+            )
+            assert (REPO_ROOT / match.group(1)).is_dir(), (
                 f"{path.name} pins SLM_RUN_DIR={match.group(1)} which does not exist"
             )
             continue
-        # The CSE account is the only place a 24h cap is legitimate; a weeklong request there is
-        # rejected at submit time, and a 24h request on the dedicated account is a mistake.
-        expected_wall = "24:00:00" if directives["account"].endswith("-cse") else "7-00:00:00"
+        # The `_cse` launchers (run on gpu-l40s-cse, per their header) are the only place a 24h cap
+        # is legitimate; a weeklong request there is rejected at submit time, and a 24h request on
+        # the dedicated account is a mistake.
+        expected_wall = "24:00:00" if path.name.endswith("_cse.slurm") else "7-00:00:00"
         assert directives["time"] == expected_wall, path.name
 
 
@@ -1410,7 +1449,7 @@ def test_an_explicit_context_override_is_set_before_the_body_is_sourced():
         if "SLM_MAX_SEQ_LENGTH" not in source or "_l40s_task_body.sh" not in source:
             continue
         assert source.index("export SLM_MAX_SEQ_LENGTH") < source.index(
-            "source /mmfs1"
+            BODY_SOURCE_LINE
         ), f"{path.name} sets SLM_MAX_SEQ_LENGTH after sourcing the body, where it is a no-op"
 
 

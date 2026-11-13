@@ -1,8 +1,5 @@
 #!/bin/bash
 #SBATCH --job-name=slm-xlam-bfcl-ablation-singlemodel-l40s
-#SBATCH --account=gpu-l40s-intelligentsystems
-#SBATCH --partition=gpu-l40s
-#SBATCH --qos=normal
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --gres=gpu:l40s:2
@@ -11,7 +8,7 @@
 #SBATCH --time=36:00:00
 #SBATCH --requeue
 #SBATCH --signal=B:USR1@7200
-#SBATCH --output=/mmfs1/gscratch/intelligentsystems/evanly/SLM_Factory/logs/slurm/slm-xlam-bfcl-ablation-singlemodel-l40s-%j.out
+#SBATCH --output=logs/slurm/slm-xlam-bfcl-ablation-singlemodel-l40s-%j.out
 #
 # ============================================================================================
 # ABLATION — ONE SHOT AT THE WHOLE POOL (orchestrator picks once, no ladder)
@@ -74,7 +71,7 @@
 # (public; BFCL ships a loader script, trust_remote_code). Scoring is judge-free executable AST
 # argument match.
 #
-# Dedicated gpu-l40s-intelligentsystems quota: 2x L40S (synth server on GPU0, pipeline on GPU1 —
+# Dedicated allocation: 2x L40S (synth server on GPU0, pipeline on GPU1 —
 # the auto-2gpu profile in _l40s_task_body.sh). --requeue + USR1 checkpoint contract is a safety
 # net against node failure/maintenance.
 export SLM_CUDA_ISOLATION=1
@@ -146,4 +143,4 @@ fi
 export TASK="Fine tune a small model for function/tool calling (train on xLAM-60k, evaluate on the Berkeley Function-Calling Leaderboard), targeting deployment on my Samsung Galaxy S24 Ultra with 12GB RAM and 256GB storage"
 export SLM_MODEL_SELECTION_STRATEGY=single_model
 unset SLM_SYNTH_API_MODE
-source /mmfs1/gscratch/intelligentsystems/evanly/SLM_Factory/tests/pipeline/_l40s_task_body.sh
+source "${SLM_ROOT:-$SLURM_SUBMIT_DIR}/tests/pipeline/_l40s_task_body.sh"

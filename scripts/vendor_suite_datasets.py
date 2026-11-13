@@ -243,7 +243,9 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
 
-    os.environ.setdefault("HF_HOME", "/mmfs1/gscratch/intelligentsystems/evanly/.hf-cache")
+    from config.site import load_site_env
+
+    load_site_env()  # HF_HOME from site.env (default <repo>/.cache/huggingface)
     os.environ.setdefault("HF_HUB_DISABLE_XET", "1")
     os.makedirs(LOCAL_ROOT, exist_ok=True)
     for name in args.only:

@@ -72,7 +72,7 @@ os.environ["SLM_QUANT_BACKEND"] = "llama_cpp"
 # --------------------------------------------------------------------------
 # Heavyweight test modules, skipped unless asked for
 # --------------------------------------------------------------------------
-# Each of these files imports something large off /mmfs1 — `transformers`, `torch` in a subprocess,
+# Each of these files imports something large off the shared filesystem — `transformers`, `torch` in a subprocess,
 # `matplotlib`, the dataset loaders — and this is a network filesystem, so a cold read costs tens of
 # seconds while the same import is instant once the page cache is warm. Seven files were ~280s of a
 # 320s suite; the remaining ~1,400 tests finish in about 40s between them.

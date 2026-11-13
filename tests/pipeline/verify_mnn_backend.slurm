@@ -1,15 +1,12 @@
 #!/bin/bash
 #SBATCH --job-name=slm-mnn-backend-verify
-#SBATCH --account=gpu-l40s-intelligentsystems
-#SBATCH --partition=gpu-l40s
-#SBATCH --qos=normal
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --gres=gpu:l40s:1
 #SBATCH --cpus-per-task=16
 #SBATCH --mem=120G
 #SBATCH --time=08:00:00
-#SBATCH --output=/mmfs1/gscratch/intelligentsystems/evanly/SLM_Factory/logs/slurm/slm-mnn-backend-verify-%j.out
+#SBATCH --output=logs/slurm/slm-mnn-backend-verify-%j.out
 #
 # BACKEND A/B: the same fine-tuned adapter, quantized to 4 bits by BOTH toolchains and scored on
 # the SAME eval rows. This is the acceptance test for the MNN quantization backend, and it is an
@@ -34,12 +31,11 @@
 # the phone does anyway.
 set -eo pipefail
 export LD_LIBRARY_PATH="${LD_LIBRARY_PATH:-}"
-PROJ=/mmfs1/gscratch/intelligentsystems/evanly/SLM_Factory
+source "${SLM_ROOT:-$SLURM_SUBMIT_DIR}/scripts/site_env.sh"
+PROJ="$SLM_ROOT"
 cd "$PROJ"
 export PATH="$HOME/.local/bin:$PATH"
-export HF_HOME=/mmfs1/gscratch/intelligentsystems/evanly/.hf-cache
 export HF_HUB_DISABLE_XET=1
-export UV_CACHE_DIR=/mmfs1/gscratch/intelligentsystems/evanly/.uv-cache
 
 source /etc/profile.d/modules.sh 2>/dev/null || true
 CUDA_MOD=$(module avail cuda 2>&1 | grep -oE "cuda/12\.8[0-9.]*" | sort -V | tail -1)
@@ -69,7 +65,7 @@ EVAL_SET="$RUN/artifacts/eval_set.json"
 BASE=HuggingFaceTB/SmolLM2-360M-Instruct
 ROWS="${MNN_VERIFY_ROWS:-150}"
 STAMP="${SLURM_JOB_ID:-manual-$$}"
-OUT=/mmfs1/gscratch/intelligentsystems/evanly/tmp/mnn-verify-$STAMP
+OUT="$SLM_TMP_DIR/mnn-verify-$STAMP"
 REPORTS=logs/quant_eval
 
 test -d "$ADAPTER" || { echo "ERROR: adapter not found: $ADAPTER"; exit 2; }

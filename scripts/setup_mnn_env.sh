@@ -64,11 +64,10 @@
 # fresh SLURM shell and would abort the script before any build. Pre-init it and use -eo.
 set -eo pipefail
 export LD_LIBRARY_PATH="${LD_LIBRARY_PATH:-}"
-PROJ=/mmfs1/gscratch/intelligentsystems/evanly/SLM_Factory
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/site_env.sh"   # SLM_ROOT, caches (see site.env)
+PROJ="$SLM_ROOT"
 cd "$PROJ"
 export PATH="$HOME/.local/bin:$PATH"
-export UV_CACHE_DIR="${UV_CACHE_DIR:-/mmfs1/gscratch/intelligentsystems/evanly/.uv-cache}"
-export PIP_CACHE_DIR="${PIP_CACHE_DIR:-/mmfs1/gscratch/intelligentsystems/evanly/.pip-cache}"
 
 FORCE=0
 [ "${1:-}" = "--force" ] && FORCE=1
@@ -228,7 +227,7 @@ else
   exit 1
 fi
 echo "NOTE: whether CUDA actually REGISTERS can only be checked on a GPU node. Run:"
-echo "  srun -A gpu-l40s-intelligentsystems -p gpu-l40s --gres=gpu:l40s:1 --time=00:20:00 \\"
+echo "  srun -A ${SBATCH_ACCOUNT:-<account>} -p ${SBATCH_PARTITION:-<gpu-partition>} --gres=gpu:l40s:1 --time=00:20:00 \\"
 echo "    bash -c 'source .venv_gpu/bin/activate && python hardware_eval/mnn_backend_matrix.py \\"
 echo "             --models HuggingFaceTB/SmolLM2-360M-Instruct --precisions Q4_K_M --rows 25 --discard'"
 
