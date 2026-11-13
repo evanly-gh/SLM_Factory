@@ -12,8 +12,8 @@ For each configuration (model x quantization x framework x backend) of one build
     Q8_0 on the GPU held 0.24 GB RSS but 1.42 GB of GPU memory.
 Throughput of this single run is not used: the benchmarks measure that under the full protocol.
 
-  python memory_usage.py --serial S --ref pinned --pool-file pools/slm_factory_android_pool.py --results-dir results/slm_pool_s23_pinned
-  python memory_usage.py --serial S --ref head   --pool-file pools/slm_factory_android_pool.py --results-dir results/slm_pool_s23_head
+  python memory_usage.py --serial S --ref pinned --pool-file ../../../config/android_pool.py --results-dir results/slm_pool_s23_pinned
+  python memory_usage.py --serial S --ref head   --pool-file ../../../config/android_pool.py --results-dir results/slm_pool_s23_head
 
 Writes <results-dir>/memory/<config id>.json; resumable (--force reruns). Configurations whose benchmark result says
 "does not fit in RAM" are recorded with their storage only.

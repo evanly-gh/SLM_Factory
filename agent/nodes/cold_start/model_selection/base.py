@@ -23,8 +23,3 @@ def select_smallest(models: list[ModelSpec]) -> ModelSpec:
 def select_largest(models: list[ModelSpec]) -> ModelSpec:
     """Return the largest model by real on-disk weight size."""
     return max(models, key=lambda m: m.size_mb)
-
-
-def select_by_ram_target(models: list[ModelSpec], target_mb: int) -> ModelSpec:
-    """Return the model whose on-disk weight size is closest to target_mb."""
-    return min(models, key=lambda m: abs(m.size_mb - target_mb))

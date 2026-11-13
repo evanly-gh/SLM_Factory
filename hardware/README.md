@@ -141,4 +141,3 @@ python mnn-benchmark-harness/compare_engines.py --results-dir Benchmark-Harness/
 
 - The modified MNN Chat app's source is not in this repository (see step 5).
 - `Benchmark-Harness/paper_table5/` has its own setup and usage (`paper_table5/README.md`); it is not covered by the steps above.
-- `Benchmark-Harness/run_llamacpp_table5.py` (llama.cpp replication of a prior paper's Table 5) is a work in progress.

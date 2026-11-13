@@ -84,7 +84,7 @@ result = filter_pool("SERIAL", {"max_peak_memory_mb": 2048, "min_prefill_tps": 1
 | Decode speed | `--min-decode` | `min_decode_tps` | tokens/s |
 | Energy per request | `--max-energy-j` | `max_energy_j` | J for `prompt_tokens` + `answer_tokens` (default 256 + 256) |
 
-Optional: `--pool-file` (default `pools/slm_factory_android_pool.py`), `--gguf` / `--mnn` (default Q4_0 Q8_0 F16 /
+Optional: `--pool-file` (default `../../../config/android_pool.py`, the factory's pool), `--gguf` / `--mnn` (default Q4_0 Q8_0 F16 /
 4 8 16), `--rank-by decode|prefill|energy`, `--wireless-timeout` (s, default 900), `--screen`.
 
 **Running it on a phone, step by step.** Run from this folder (`Benchmark-Harness/paper_table5`) with the

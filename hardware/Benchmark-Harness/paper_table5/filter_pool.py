@@ -48,7 +48,8 @@ from common import (PAPER_MODELS, POOL_MODELS, RESULTS_DIR, THIRD_PARTY, dev_bin
                     is_wireless_serial, match_profile)
 
 CONTRACT_VERSION = 1
-DEFAULT_POOL = HERE / "pools" / "slm_factory_android_pool.py"
+# The factory's own model pool, so the phone measurements always cover the models it can pick.
+DEFAULT_POOL = HERE.parents[2] / "config" / "android_pool.py"
 FORMAT = {"llama.cpp": "GGUF", "mnn": "MNN"}
 QUANT_BITS = {"Q4_0": 4, "Q4_K_M": 4, "Q4": 4, "Q8_0": 8, "Q8": 8, "F16": 16}
 MNN_QUANT = {4: "Q4", 8: "Q8", 16: "F16"}
