@@ -187,7 +187,8 @@ Mobile Device](https://arxiv.org/abs/2611.13509). If you use it, please cite:
 ```
 
 Evan Li, Krishna Deshpande and Wen Cheng contributed equally. `CITATION.cff` has the same entry
-for GitHub's "Cite this repository" button.
+for GitHub's "Cite this repository" button. The arXiv paper is a first version (v1), and this
+repository contains a subset of the code used for it.
 
 ## License
 
