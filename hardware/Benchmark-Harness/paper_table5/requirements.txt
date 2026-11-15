@@ -24,3 +24,4 @@ tqdm
 yaspin
 perfetto
 truststore
+matplotlib  # results_md.py, results_all_md.py and scenarios_md.py draw the figures
