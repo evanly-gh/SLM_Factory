@@ -91,7 +91,9 @@ Best student and its fine-tuning gain on the ten tasks, from the paper's main ta
 | dialogsum | ROUGE-L | 0.482 | Qwen3-4B-Instruct Q8_0 | +0.000 |
 | topv2 | exact match | 0.599 | Qwen3-4B-Instruct Q8_0 | +0.065 |
 
-Run logs and model artifacts are not distributed with this repository. Running the pipeline writes each
+Phone-ready builds of four representative models (two llama.cpp GGUF, two MNN) are on Hugging Face in the
+[Mobile AI Factory collection](https://huggingface.co/collections/evanlyhf/mobile-ai-factory-6af92b8e982acc9f5a79bf93).
+Other run logs and model artifacts are not distributed with this repository. Running the pipeline writes each
 run's directory under `logs/runs/` (Slurm output under `logs/slurm/`) and caches quantized builds under
 `artifacts/`.
 
