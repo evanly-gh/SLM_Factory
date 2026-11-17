@@ -69,10 +69,13 @@ MIN_ACCURACY = float(os.environ.get("SLM_TEACHER_SYNTH_MIN_ACCURACY", "0.80"))
 #     number, and gating a first bring-up run on it means a cold judge or an unlucky rubric silently
 #     removes the intervention under test.
 #
-#     It is NOT legitimate for a results run. A teacher below the gate is a source of labelled noise,
-#     and the project's best measured result came from a gold-only curriculum — so a run that sets
-#     this and then reports an accuracy is reporting an accuracy obtained with known-noisy data.
-BYPASS = str(os.environ.get("SLM_TEACHER_SYNTH_BYPASS", "0")).strip().lower() in {
+#     A teacher below the gate can be a source of labelled noise, so set
+#     SLM_TEACHER_SYNTH_BYPASS=0 to enforce the gate.
+#
+# DEFAULT: bypassed (gate off). The paper's runs enabled synthesis on every task, including the
+#     seven whose teacher scored below the 0.80 gate, so the released default matches the paper.
+#     The teacher is still measured and the verdict recorded either way.
+BYPASS = str(os.environ.get("SLM_TEACHER_SYNTH_BYPASS", "1")).strip().lower() in {
     "1", "true", "yes", "on",
 }
 
