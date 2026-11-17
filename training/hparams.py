@@ -41,6 +41,10 @@ MAX_LEARNING_RATE = 5e-4
 MIN_EPOCHS = 1
 MAX_EPOCHS = 8
 MAX_EFFECTIVE_BATCH_SIZE = 64
+# The learning-rate values the deterministic neighbour search steps through. The orchestrator may
+# set any value in [MIN_LEARNING_RATE, MAX_LEARNING_RATE]; this ladder is only the grid that the
+# rule-based searches (`deterministic_neighbor_configs`, `one_step_neighbor_configs`) move on.
+LEARNING_RATE_LADDER = (1e-5, 5e-5, 1e-4, 2e-4, 3e-4, 5e-4)
 
 DEFAULT_LORA_RANK = 16
 DEFAULT_LORA_ALPHA_MULTIPLIER = 2
@@ -365,10 +369,7 @@ def deterministic_neighbor_configs(
     for field, allowed in (
         ("weight_decay", VALID_WEIGHT_DECAYS),
         ("nr_epochs", range(MIN_EPOCHS, MAX_EPOCHS + 1)),
-        (
-            "learning_rate",
-            (1e-5, 5e-5, 1e-4, 2e-4, 3e-4, 5e-4),
-        ),
+        ("learning_rate", LEARNING_RATE_LADDER),
     ):
         for alternative in allowed:
             if alternative != base[field]:
@@ -387,10 +388,7 @@ def deterministic_neighbor_configs(
     def current_first(current, allowed):
         return (current, *(item for item in allowed if item != current))
 
-    learning_rates = current_first(
-        base["learning_rate"],
-        (1e-5, 5e-5, 1e-4, 2e-4, 3e-4, 5e-4),
-    )
+    learning_rates = current_first(base["learning_rate"], LEARNING_RATE_LADDER)
     # Weight decay is the fastest-changing axis so a multi-axis alternative is
     # reached quickly after all one-axis neighbors are tried. Batch shape and dropout
     # are absent by design — see the one-axis loop above.
@@ -423,3 +421,80 @@ def deterministic_neighbor_configs(
         )
         if unseen(config):
             yield config
+
+
+# The five axes a hyperparameter intervention controls, in the orchestrator's vocabulary.
+TUNABLE_AXES = ("lora_rank", "alpha_ratio", "weight_decay", "learning_rate", "nr_epochs")
+
+
+def tunable_knobs(values: Mapping[str, Any]) -> dict[str, Any]:
+    """Project a config onto the five tunable knobs (`alpha_ratio` rather than absolute alpha)."""
+    config, _ = normalize_hyperparams(values)
+    rank = config["lora_rank"]
+    ratio = config["lora_alpha"] / rank
+    return {
+        "lora_rank": rank,
+        "alpha_ratio": int(ratio) if float(ratio).is_integer() else ratio,
+        "weight_decay": config["weight_decay"],
+        "learning_rate": config["learning_rate"],
+        "nr_epochs": config["nr_epochs"],
+    }
+
+
+def tunable_identity(values: Mapping[str, Any]) -> tuple[Any, ...]:
+    """Identity over the five tunable knobs only (batch shape and dropout are not searched)."""
+    config, _ = normalize_hyperparams(values)
+    return (
+        config["lora_rank"],
+        config["lora_alpha"],
+        config["weight_decay"],
+        config["learning_rate"],
+        config["nr_epochs"],
+    )
+
+
+def _ladder_steps(current: float, ladder: Iterable[float]) -> list[float]:
+    """The ladder values one step below and one step above `current`.
+
+    `current` need not sit on the ladder (the orchestrator may choose e.g. lr=7e-5): the steps are
+    then the nearest ladder values strictly below and strictly above it.
+    """
+    ordered = sorted(ladder)
+    below = [value for value in ordered if value < current and not math.isclose(value, current)]
+    above = [value for value in ordered if value > current and not math.isclose(value, current)]
+    return ([below[-1]] if below else []) + ([above[0]] if above else [])
+
+
+def one_step_neighbor_configs(
+    values: Mapping[str, Any],
+) -> list[tuple[str, Any, Any, dict[str, Any]]]:
+    """Every config that differs from `values` by ONE step along ONE tunable axis.
+
+    The ladders are the ones the search space already declares:
+
+        lora_rank      VALID_LORA_RANKS (4, 8, 16, 32, 64); alpha_ratio held, so alpha follows rank
+        alpha_ratio    VALID_ALPHA_RATIOS (1, 2, 4)
+        weight_decay   VALID_WEIGHT_DECAYS (0.0, 0.01, 0.05, 0.1)
+        learning_rate  LEARNING_RATE_LADDER (1e-5, 5e-5, 1e-4, 2e-4, 3e-4, 5e-4)
+        nr_epochs      MIN_EPOCHS..MAX_EPOCHS in steps of 1
+
+    Returns ``(axis, old, new, knobs)`` tuples, where ``knobs`` is the neighbour in the five-knob
+    form a hyperparameter decision carries. Order is deterministic (axis order above, step down
+    before step up), so a seeded draw over the list is reproducible.
+    """
+    base = tunable_knobs(values)
+    ladders = {
+        "lora_rank": VALID_LORA_RANKS,
+        "alpha_ratio": VALID_ALPHA_RATIOS,
+        "weight_decay": VALID_WEIGHT_DECAYS,
+        "learning_rate": LEARNING_RATE_LADDER,
+        "nr_epochs": tuple(range(MIN_EPOCHS, MAX_EPOCHS + 1)),
+    }
+    out: list[tuple[str, Any, Any, dict[str, Any]]] = []
+    for axis in TUNABLE_AXES:
+        for step in _ladder_steps(float(base[axis]), ladders[axis]):
+            knobs = dict(base)
+            integer_axis = axis in ("lora_rank", "alpha_ratio", "nr_epochs")
+            knobs[axis] = int(step) if integer_axis else float(step)
+            out.append((axis, base[axis], knobs[axis], knobs))
+    return out

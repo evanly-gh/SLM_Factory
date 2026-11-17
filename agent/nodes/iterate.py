@@ -1758,10 +1758,14 @@ def _ladder_enabled(strategy: str | None = None) -> bool:
     Consulted at all three ladder gates — stagnation escalation, eval-cap escalation, and the
     post-convergence downward probe. Reading the strategy at each site independently is how one of
     them ends up missed, so they all go through here.
+
+    Also False under SLM_ABLATION_NO_ESCALATION=1, which pins the run to its model whatever the
+    strategy (see agent/ablations.py).
     """
+    from agent.ablations import escalation_disabled
     from config.config import model_ladder_enabled
 
-    return model_ladder_enabled(strategy)
+    return model_ladder_enabled(strategy) and not escalation_disabled()
 
 
 def _route_score_at_threshold(
@@ -1830,6 +1834,10 @@ def _route_score_at_threshold(
             "not accepting as terminal; continuing without an intervention API call",
         )
         stagnant = _is_stagnant(_eval_history(state)) if stagnant is None else stagnant
+        from agent.ablations import escalation_disabled
+
+        if escalation_disabled():
+            stagnant = False
         state["llm_iterate_decision"] = None
         if stagnant and not _ladder_enabled():
             state["next_action"] = "terminate"
@@ -1958,6 +1966,28 @@ def iterate_node(state: AgentState) -> AgentState:
         state["next_action"] = "terminate"
         return state
 
+    from agent.ablations import (
+        POLICY_RANDOM,
+        decision_policy,
+        escalation_disabled,
+        max_search_iterations,
+    )
+
+    # Explicit search budget (SLM_ABLATION_MAX_ITERS): `iteration` 1 is the first fine-tune, so N
+    # search turns end at iteration N+1. Checked before convergence routing so the budget is the
+    # same for every arm; a goal met on the last turn is still banked so the report says so.
+    max_iters = max_search_iterations()
+    if max_iters and int(state["iteration"]) >= max_iters + 1:
+        if state["scores"][-1] >= state["stop_threshold"]:
+            _bank_convergence(state, state["scores"][-1], model_id)
+        _log(
+            model_id,
+            f"  Search budget exhausted: {int(state['iteration']) - 1} search turn(s) after the "
+            f"first fine-tune (SLM_ABLATION_MAX_ITERS={max_iters}) — TERMINATING",
+        )
+        state["next_action"] = "terminate"
+        return state
+
     current_score = state["scores"][-1]
     policy = apply_iteration_policy(current_score)
 
@@ -1995,6 +2025,13 @@ def iterate_node(state: AgentState) -> AgentState:
     if eval_cap_hit and not stagnant:
         _log(model_id, f"  Eval cap reached: {evals_run} evals on this model without meeting the "
              f"goal (>= {MAX_EVALS_BEFORE_ESCALATION})")
+    if escalation_disabled() and (stagnant or eval_cap_hit):
+        # Neither escalate nor terminate: the run stays on this model until the explicit search
+        # budget (SLM_ABLATION_MAX_ITERS), the turn budget, the wall clock or run health stops it.
+        _log(model_id, "  SLM_ABLATION_NO_ESCALATION=1 — stagnation / eval cap ignored; the search "
+             "continues on this model")
+        stagnant = False
+        eval_cap_hit = False
 
     # Q9: stagnation/stall escalation is a RULE-BASED decision — take it WITHOUT spending an
     # orchestrator LLM call (the LLM cannot override it anyway). Only applies below the stop
@@ -2052,13 +2089,25 @@ def iterate_node(state: AgentState) -> AgentState:
     llm_decision = None
     hypothesis = ""
     intervention = policy["intervention"]  # initialized to fallback; overwritten by LLM if successful
+    # SLM_ABLATION_POLICY=random swaps ONLY the source of the decision (agent/random_policy.py).
+    # The draw is validated, logged, stored and routed by exactly the code below, so the DAG, the
+    # curation log and the run log record it where an orchestrator decision would be.
+    random_policy = decision_policy() == POLICY_RANDOM
+    decision_source = "RANDOM" if random_policy else "LLM"
     try:
-        _log(model_id, "  Calling orchestrator LLM for intervention decision...")
+        if random_policy:
+            from agent.random_policy import random_decision
+
+            _log(model_id, "  Drawing intervention from the RANDOM policy (no orchestrator call)...")
+            raw_decision = random_decision(state, log=lambda message: _log(model_id, message))
+        else:
+            _log(model_id, "  Calling orchestrator LLM for intervention decision...")
+            raw_decision = _llm_iterate(state)
         # Defense in depth: normal calls are validated by _parse_decision_json,
         # but revalidated here so alternate/mock/provider paths cannot bypass the
         # threshold and intervention contracts and crash after the fallback guard.
         llm_decision = _validate_decision_json(
-            _llm_iterate(state),
+            raw_decision,
             task=state["task"],
             state=state,
             allow_internal=True,
@@ -2066,7 +2115,7 @@ def iterate_node(state: AgentState) -> AgentState:
         intervention = llm_decision.get("intervention", "")
         hypothesis = llm_decision.get("hypothesis", "")
 
-        _log(model_id, f"  LLM decision: intervention={intervention}")
+        _log(model_id, f"  {decision_source} decision: intervention={intervention}")
         _log(model_id, f"  Hypothesis: {hypothesis}")
         _dropped = llm_decision.get("_dropped_fields") or []
         if _dropped:

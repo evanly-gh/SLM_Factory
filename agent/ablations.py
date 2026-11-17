@@ -21,6 +21,25 @@ has already made the choice being questioned:
       to be the only thing that decides. This flag forces it off regardless of what the teacher
       measured, leaving mining and hyperparameters as the run's whole action space.
 
+  SLM_ABLATION_POLICY=llm|random  (+ SLM_ABLATION_POLICY_SEED)
+      How much of the search gain is the orchestrator's CHOICE, rather than the deterministic rules
+      around it (rollback, the empty-rebuild watchdog, the synthetic-row allocation)? `random`
+      replaces only the iterate node's intervention choice with a seeded uniform draw over the same
+      option set the orchestrator is offered; everything downstream is unchanged. See
+      `agent/random_policy.py` for the exact semantics.
+
+  SLM_ABLATION_NO_ESCALATION=1
+      Neither the stagnation window nor the per-model eval cap moves or ends the run, and the
+      downward probe is off: the run stays on its model until SLM_ABLATION_MAX_ITERS (or the turn
+      budget, wall clock or run-health watchdog) stops it. Independent of the policy, so the LLM arm
+      of the policy ablation runs under exactly the same rule. Pair it with `single_model` +
+      SLM_FORCE_MODEL to fix the variant.
+
+  SLM_ABLATION_MAX_ITERS=N
+      An explicit search budget: the run terminates once N search turns have followed the first
+      fine-tune on the current model (`iteration` >= N + 1). Counts every turn, including one whose
+      rebuild added no rows and therefore skipped train+eval, exactly as the eval cap does.
+
 WHY THE FLAGS ARE READ PER CALL rather than captured in module constants at import: the constant
 form (`agent.teacher_fitness.BYPASS`) cannot be exercised by a test without reloading the module,
 and an ablation whose behaviour is hard to test is an ablation whose results are hard to trust.
@@ -111,9 +130,82 @@ def train_cap_override() -> int | None:
     return value
 
 
+POLICY_LLM = "llm"
+POLICY_RANDOM = "random"
+_POLICIES = (POLICY_LLM, POLICY_RANDOM)
+
+
+def decision_policy() -> str:
+    """Who chooses each iteration's intervention: the orchestrator LLM (default) or a seeded draw.
+
+    An unknown value raises rather than falling back to `llm`, for the reason `train_cap_override`
+    gives: a typo would otherwise run the baseline under the ablation's job name.
+    """
+    raw = str(os.environ.get("SLM_ABLATION_POLICY", POLICY_LLM)).strip().lower() or POLICY_LLM
+    if raw not in _POLICIES:
+        raise ValueError(
+            f"SLM_ABLATION_POLICY={raw!r} must be one of {list(_POLICIES)}; refusing to fall back "
+            f"to the LLM policy under an ablation's name"
+        )
+    return raw
+
+
+def policy_seed() -> int:
+    """Seed of the random policy. Defaults to SLM_SEED (the run's training seed), then 0."""
+    raw = str(os.environ.get("SLM_ABLATION_POLICY_SEED", "")).strip()
+    if not raw:
+        raw = str(os.environ.get("SLM_SEED", "0")).strip() or "0"
+    try:
+        return int(raw)
+    except ValueError as error:
+        raise ValueError(f"SLM_ABLATION_POLICY_SEED={raw!r} is not an integer") from error
+
+
+def escalation_disabled() -> bool:
+    """Stagnation / the eval cap neither escalate nor terminate; no downward probe either."""
+    return _flag("SLM_ABLATION_NO_ESCALATION")
+
+
+def max_search_iterations() -> int:
+    """Search turns allowed after the first fine-tune on a model, or 0 for no explicit budget."""
+    raw = str(os.environ.get("SLM_ABLATION_MAX_ITERS", "")).strip()
+    if not raw:
+        return 0
+    try:
+        value = int(raw)
+    except ValueError as error:
+        raise ValueError(f"SLM_ABLATION_MAX_ITERS={raw!r} is not an integer") from error
+    if value <= 0:
+        raise ValueError(f"SLM_ABLATION_MAX_ITERS={value} must be positive (unset it for no cap)")
+    return value
+
+
 def active_ablations() -> list[str]:
     """Human-readable list of what is switched on, for the run header and the final report."""
     active = []
+    if decision_policy() == POLICY_RANDOM:
+        active.append(
+            f"SLM_ABLATION_POLICY=random (seed {policy_seed()}) — each intervention is drawn "
+            "uniformly from {hyperparameter, mine_new_real, surgical_synthesis} as available this "
+            "turn; hyperparameter = a random untried one-step neighbour of the current best config. "
+            "No orchestrator call is made for the intervention choice"
+        )
+    max_iters = max_search_iterations()
+    if escalation_disabled():
+        if not max_iters:
+            raise ValueError(
+                "SLM_ABLATION_NO_ESCALATION=1 removes the stagnation and eval-cap stops, so it "
+                "requires SLM_ABLATION_MAX_ITERS to bound the run"
+            )
+        active.append(
+            "SLM_ABLATION_NO_ESCALATION=1 — stagnation and the per-model eval cap neither escalate "
+            "nor terminate, and there is no downward probe: the run stays on its model"
+        )
+    if max_iters:
+        active.append(
+            f"SLM_ABLATION_MAX_ITERS={max_iters} — the run terminates after {max_iters} search "
+            "turn(s) following the first fine-tune"
+        )
     if reset_data_on_escalation():
         active.append(
             "SLM_ABLATION_RESET_DATA_ON_ESCALATION=1 — the curriculum is rewound to the seed "

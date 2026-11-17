@@ -133,6 +133,14 @@ _RESUME_ENV_DEFAULTS: dict[str, str] = {
     # arm would be silently meaningless rather than visibly broken.
     "SLM_ABLATION_DISALLOW_MINING": "0",
     "SLM_ABLATION_TRAIN_CAP": "",
+    # The policy ablation (agent/random_policy.py) and the two switches that give both of its arms
+    # the same budget on one pinned model. A resume that changed any of them would finish the run
+    # under a different decision-maker, a different stop rule, or a different budget than the one
+    # its first half was produced under.
+    "SLM_ABLATION_POLICY": "llm",
+    "SLM_ABLATION_POLICY_SEED": "",
+    "SLM_ABLATION_NO_ESCALATION": "0",
+    "SLM_ABLATION_MAX_ITERS": "",
     # Whether the API teacher reasons before answering. Resume-sensitive because it changes
     # what the teacher IS: run 39562029 generated its rows with reasoning left on (the default
     # before this was wired up) at ~7,100 output tokens per row, and a resume that switched it
