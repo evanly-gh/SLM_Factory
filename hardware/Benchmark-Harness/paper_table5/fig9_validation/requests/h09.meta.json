@@ -1,0 +1,43 @@
+{
+ "scenario": "h09",
+ "run": "slm-dialogsum-h09-s23-l40s-43019548",
+ "task": "dialogsum",
+ "base_model": "Qwen/Qwen3-0.6B",
+ "eval_set": {
+  "path": "logs/runs/phone_in_the_loop/slm-dialogsum-h09-s23-l40s-43019548/artifacts/eval_set.json",
+  "sha256": "8db808664bba6105a2bfe69fb7e8eec5c726777f5ae3b39c67fceb834dfdd50e",
+  "rows": 500
+ },
+ "tokenizer": {
+  "path": "logs/runs/phone_in_the_loop/slm-dialogsum-h09-s23-l40s-43019548/artifacts/training/Qwen_Qwen3-0.6B__Q8_0/iter14-d6/final_checkpoint/tokenizer.json",
+  "sha256": "476870a1f2fb6f6a2759a6ede2383bf9d5d738f17844563b65c91965b722ae09",
+  "end_of_turn": "<|im_end|>",
+  "end_of_turn_id": 151645
+ },
+ "selection": "eval rows 0..299 in stored order (measured); rows 497..499 (warm-up)",
+ "prompt_format": "training.slm_helpers._serving_prompt_prefix(task.build_prompts(row)), use_template=false",
+ "answer": "task.build_training_turn target; answer_tokens excludes the end-of-turn token",
+ "eval_max_new_tokens": 512,
+ "measured": {
+  "prompt_tokens": {
+   "n": 300,
+   "min": 91,
+   "median": 219.0,
+   "mean": 239.1,
+   "p95": 413.15000000000003,
+   "max": 1272,
+   "sum": 71727
+  },
+  "answer_tokens": {
+   "n": 300,
+   "min": 9,
+   "median": 26.0,
+   "mean": 28.3,
+   "p95": 48.0,
+   "max": 102,
+   "sum": 8497
+  }
+ },
+ "warmup_rows": 3,
+ "jsonl_sha256": "8f1a392f7950c8eec508be30964785778182e5df65b62eac203a0b6b2ee45cd1"
+}
