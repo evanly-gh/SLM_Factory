@@ -12,6 +12,11 @@
 # Inference only: one L40S per task, no teacher, no API calls. Paper context: §5.1 "selection set".
 # Second pass (difficulty control): scripts/submit.sh --array=1-6,8,10 --export=ALL,RESCORE_TAG=_control,RESCORE_FLAGS="--no-replay --control-base" <this file>
 # Third pass (noise): RESCORE_TAG=_chunks RESCORE_FLAGS="--no-replay --control-base --chunk-rows 1000 --max-chunks 5"
+# First-FT pass (Table 5 "First FT" column): the same chunks/fresh sets, scored with the run's first fine-tune
+# of its chosen variant; replay is kept, so the log must reproduce Table 3's First FT. 5 and 7 are skipped:
+# their best model IS the first fine-tune. <trash> = the 2026-11-11 cleanup's trash/artifacts (intermediate GGUFs).
+#   --array=1-4,6,8,10 RESCORE_TAG=_first_ft_chunks RESCORE_FLAGS="--first-ft --reuse-from <trash> --chunk-rows 1000 --max-chunks 5"
+#   --array=0 RESCORE_TAG=_first_ft_fresh_unused RESCORE_FLAGS="--first-ft --reuse-from <trash> --external-rows data/fresh_sets/calendar_unused.jsonl"
 set -eo pipefail
 export LD_LIBRARY_PATH="${LD_LIBRARY_PATH:-}"
 source "${SLM_ROOT:-$SLURM_SUBMIT_DIR}/scripts/site_env.sh"

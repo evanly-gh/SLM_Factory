@@ -26,6 +26,7 @@ Usage (GPU job; see tests/pipeline/rescore_unseen_l40s.slurm):
   python scripts/rescore_unseen.py --task sms_spam \
       --run-dir logs/runs/slm-sms-spam-calibrated-l40s-42806318 --out logs/reports/unseen/x.json
   python scripts/rescore_unseen.py ... --dry-run     # parse only: best model, no data, no GPU
+  python scripts/rescore_unseen.py ... --first-ft    # score the chosen variant's FIRST fine-tune instead
 """
 from __future__ import annotations
 
@@ -43,6 +44,11 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 WEIGHTS_RE = re.compile(r"^\[evaluate\]\[(?P<label>.+?)\]\s+weights: (?P<ref>\S+)")
 SCORE_RE = re.compile(
     r"^\[evaluate\]\[(?P<model>.+?) \[(?P<quant>[\w.]+)\]\] Score: (?P<metric>\w+)=(?P<score>[\d.]+)")
+FIRST_FT_RE = re.compile(
+    r"^\[evaluate\]\[(?P<model>.+?) \[(?P<quant>[\w.]+)\]\]\s+First fine-tuned score = (?P<score>[\d.]+)")
+# The per-config result printed right after each `weights:` line ("  → span_f1=0.7051  format_valid=…").
+CONFIG_RESULT_RE = re.compile(
+    r"^\[evaluate\]\[(?P<model>.+?) \[(?P<quant>[\w.]+)\]\]\s+→ (?P<metric>\w+)=(?P<score>[\d.]+)")
 
 
 def log(*parts) -> None:
@@ -71,6 +77,44 @@ def best_model(run_dir: str) -> dict:
     best = max(evals, key=lambda e: e["score"])
     best["n_evals"] = len(evals)
     return best
+
+
+def first_ft_model(run_dir: str, best: dict) -> dict:
+    """The FIRST fine-tune of the variant the run chose (the best model's model and quant): the
+    highest-scoring config of that variant's iteration 1, i.e. the checkpoint behind the run's
+    `First fine-tuned score` line and Table 3's "First FT" column. Every config result (`weights:`
+    then `→ metric=`) logged since the previous variant's First-FT line belongs to iteration 1."""
+    pending, configs, start = None, [], 0
+    with open(os.path.join(run_dir, "run.log"), errors="replace") as fh:
+        for line in fh:
+            w = WEIGHTS_RE.match(line)
+            if w:
+                pending = w.group("ref")
+                continue
+            c = CONFIG_RESULT_RE.match(line)
+            if c and pending is not None:
+                configs.append({"model_id": c.group("model"), "quant": c.group("quant"),
+                                "metric": c.group("metric"), "score": float(c.group("score")),
+                                "weights_ref": pending})
+                pending = None
+                continue
+            f = FIRST_FT_RE.match(line)
+            if not f:
+                continue
+            if (f.group("model"), f.group("quant")) != (best["model_id"], best["quant"]):
+                start = len(configs)
+                continue
+            logged = float(f.group("score"))
+            cands = [e for e in configs[start:]
+                     if (e["model_id"], e["quant"]) == (best["model_id"], best["quant"])]
+            if not cands:
+                raise SystemExit("no iteration-1 config results before the First fine-tuned score line")
+            pick = dict(max(cands, key=lambda e: e["score"]))
+            if abs(pick["score"] - logged) > 5e-5:
+                raise SystemExit(f"iteration-1 best {pick['score']} != logged First FT {logged}")
+            pick.update({"first_ft_logged": logged, "iteration1_configs": len(cands)})
+            return pick
+    raise SystemExit(f"no 'First fine-tuned score' line for {best['model_id']} [{best['quant']}]")
 
 
 def row_keys(rows) -> set[str]:
@@ -112,13 +156,27 @@ def main(argv=None) -> int:
                     help="JSONL of rows from ANOTHER dataset, each with a `set` index: score each set "
                          "(factory, and base with --control-base) instead of the task's own unseen "
                          "rows. Rows are given as-is; dedup against the task's data is the caller's job")
+    ap.add_argument("--first-ft", action="store_true",
+                    help="score the run's FIRST fine-tune of its chosen variant (Table 3 'First FT') "
+                         "instead of its best model. Row selection is unchanged, so with the same "
+                         "--seed/--chunk-rows/--max-chunks/--external-rows the rows are the same as "
+                         "the best model's report")
+    ap.add_argument("--reuse-from", default=None,
+                    help="read-only fallback cache: a directory laid out like `artifacts/` (e.g. the "
+                         "cleanup trash's artifacts/) where a validated quantized artifact for the "
+                         "scored weights is used in place if `artifacts/` has none, instead of rebuilding")
     args = ap.parse_args(argv)
 
-    best = best_model(args.run_dir)
+    run_best = best_model(args.run_dir)
+    best = first_ft_model(args.run_dir, run_best) if args.first_ft else run_best
     quant = None if best["quant"].lower() in ("bf16", "none") else best["quant"]
     log(f"task={args.task} run={os.path.basename(args.run_dir)}")
-    log(f"best of {best['n_evals']} evals: {best['model_id']} [{best['quant']}] "
-        f"{best['metric']}={best['score']:.4f}")
+    log(f"best of {run_best['n_evals']} evals: {run_best['model_id']} [{run_best['quant']}] "
+        f"{run_best['metric']}={run_best['score']:.4f}")
+    if args.first_ft:
+        log(f"--first-ft: scoring the first fine-tune of that variant "
+            f"({best['iteration1_configs']} iteration-1 config(s)): "
+            f"{best['metric']}={best['score']:.4f} (logged First FT {best['first_ft_logged']:.4f})")
     log(f"weights: {best['weights_ref']}  (exists: {os.path.exists(best['weights_ref'])})")
     if args.dry_run:
         return 0
@@ -172,6 +230,7 @@ def main(argv=None) -> int:
     log(f"unused training-split rows (never in any training dataset or the selection set): "
         f"{len(unused_train)} of {len(train_split)}")
     report = {"task": args.task, "run_dir": args.run_dir, "best": best,
+              **({"scored_model": "first_ft", "run_best": run_best} if args.first_ft else {}),
               "full_split_rows": len(keyed), "selection_rows": len(sel_keys),
               "training_rows_excluded_from": len(train_keys), "unseen_available": len(unseen),
               "train_split_rows": len(train_split), "unused_train_available": len(unused_train),
@@ -185,8 +244,22 @@ def main(argv=None) -> int:
         from agent.nodes.evaluate import _build_quant_artifact_for_eval
         from training.quant_backend import backend_for_model
         backend = backend_for_model(best["model_id"], quant)
-        artifact = _build_quant_artifact_for_eval(best["weights_ref"], best["model_id"], quant,
-                                                  f"{best['model_id']} [{quant}]")
+        if args.reuse_from:
+            import hashlib
+            from training.quant_backend import artifact_name, artifacts_subdir, validated_cache_hit
+            rel = os.path.join(artifacts_subdir(backend), best["model_id"].replace("/", "_"),
+                               hashlib.sha1(f"{best['weights_ref']}|{quant}".encode()).hexdigest()[:12],
+                               artifact_name(quant, backend))
+            if not validated_cache_hit(os.path.join("artifacts", rel), backend):
+                fallback = os.path.join(args.reuse_from, rel)
+                if validated_cache_hit(fallback, backend):
+                    artifact = fallback
+                    log(f"--reuse-from: validated artifact found, used in place: {fallback}")
+                else:
+                    log(f"--reuse-from: no validated artifact at {fallback}; building")
+        if artifact is None:
+            artifact = _build_quant_artifact_for_eval(best["weights_ref"], best["model_id"], quant,
+                                                      f"{best['model_id']} [{quant}]")
         log(f"artifact: {artifact} (backend {backend})")
 
     # Keep only unseen rows whose rendered prompt is no longer than the longest selection-set
