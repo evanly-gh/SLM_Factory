@@ -46,6 +46,14 @@ from tasks import get_task
 
 SPEC = get_task("sms_spam")
 
+
+@pytest.fixture(autouse=True)
+def _enforce_the_gate(monkeypatch):
+    """These tests describe the gate itself, so run them with it enforced (bypass is the default)."""
+    import agent.teacher_fitness as teacher_fitness
+
+    monkeypatch.setattr(teacher_fitness, "BYPASS", False)
+
 # Deliberately disjoint text markers. Every assertion below about which rows reached a prompt is a
 # substring test, so a train row and an eval row must never be confusable.
 EVAL_ROWS = (

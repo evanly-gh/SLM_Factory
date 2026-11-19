@@ -143,8 +143,9 @@ def _measure_teacher(state: AgentState, eval_set, train_rows: list[dict]) -> Non
     The verdict lands in ``state["teacher_fitness"]`` and is read by two consumers that used to
     each take their own measurement:
 
-      * the SYNTHESIS GATE — below `MIN_ACCURACY`, `surgical_synthesis` leaves the intervention
-        menu for the rest of the run (see agent/teacher_fitness.py);
+      * the SYNTHESIS GATE — bypassed by default (the score is recorded but synthesis stays on);
+        with SLM_TEACHER_SYNTH_BYPASS=0, below `MIN_ACCURACY` `surgical_synthesis` leaves the
+        intervention menu for the rest of the run (see agent/teacher_fitness.py);
       * the ACCURACY GOAL — `_calibrate_qwen_goal_if_pending`, below, floors the same score at 0.8
         and makes it the run's `stop_threshold`.
 

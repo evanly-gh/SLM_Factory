@@ -16,10 +16,9 @@ has already made the choice being questioned:
       flag rewinds the curriculum to `dataset_v1.jsonl` on every promotion.
 
   SLM_SYNTH_DISALLOW
-      Does synthetic data help at all? `synthesis_allowed` can only be forced ON (by
-      SLM_TEACHER_SYNTH_BYPASS); nothing could force it off, because the fitness gate is supposed
-      to be the only thing that decides. This flag forces it off regardless of what the teacher
-      measured, leaving mining and hyperparameters as the run's whole action space.
+      Does synthetic data help at all? SLM_TEACHER_SYNTH_BYPASS (on by default) only ever forces
+      synthesis ON; this flag forces it off regardless of what the teacher measured, leaving
+      mining and hyperparameters as the run's whole action space.
 
   SLM_ABLATION_POLICY=llm|random  (+ SLM_ABLATION_POLICY_SEED)
       How much of the search gain is the orchestrator's CHOICE, rather than the deterministic rules

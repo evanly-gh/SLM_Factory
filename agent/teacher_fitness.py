@@ -165,9 +165,8 @@ def _apply_operator_overrides(verdict: dict, spec, *, log=print) -> dict:
 
     The two overrides pull in opposite directions and REFUSAL WINS, checked first and returning
     immediately. `SLM_SYNTH_DISALLOW` is the ablation asking what the pipeline achieves with no
-    synthetic data; letting `SLM_TEACHER_SYNTH_BYPASS` — which the curated launchers all set, to
-    protect against a teacher drifting below the gate mid-experiment — hand synthesis back would
-    make the ablation silently unanswerable.
+    synthetic data; letting `SLM_TEACHER_SYNTH_BYPASS` — on by default, as in the paper's runs —
+    hand synthesis back would make the ablation silently unanswerable.
     """
     # Imported here, as in `synthesis_allowed` below, because `agent.ablations` reaches
     # `agent.checkpoint` for its atomic JSONL writer and this module is on that import path.
@@ -199,11 +198,10 @@ def _apply_operator_overrides(verdict: dict, spec, *, log=print) -> dict:
     score = verdict.get("score")
     measured = f"{score:.4f}" if isinstance(score, (int, float)) else "unmeasured"
     log(
-        f"      [teacher] ⚠ SLM_TEACHER_SYNTH_BYPASS=1 — {spec.name}'s teacher measured "
-        f"{measured} against a {MIN_ACCURACY:.2f} gate it did NOT clear, and synthetic data is "
-        f"being ALLOWED anyway by operator override. Every generated row is still verified "
-        f"individually. Any accuracy from this run was obtained with data the gate would have "
-        f"refused; do not report it as a clean result."
+        f"      [teacher] {spec.name}'s teacher measured {measured}, below the "
+        f"{MIN_ACCURACY:.2f} gate; synthesis stays enabled because the gate is bypassed "
+        f"(the default, as in the paper's runs). Every generated row is still checked "
+        f"individually. Set SLM_TEACHER_SYNTH_BYPASS=0 to enforce the gate."
     )
     return verdict
 

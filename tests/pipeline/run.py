@@ -1662,9 +1662,9 @@ def _report_body() -> None:
             + (f" ({_fitness.get('reason')})" if _fitness.get("reason") else ""))
         log(f"    → floored at 0.80, this set the run's accuracy goal ({threshold:.4f})")
         if _fitness.get("bypassed"):
-            log("    ⚠ SLM_TEACHER_SYNTH_BYPASS=1: the gate was NOT cleared and synthetic data "
-                "was allowed anyway. Any accuracy above was obtained with data the gate would "
-                "have refused.")
+            log("    gate bypassed (the default, as in the paper's runs): the teacher did not "
+                "clear it and synthesis stayed enabled. Set SLM_TEACHER_SYNTH_BYPASS=0 to "
+                "enforce the gate.")
         if _fitness.get("disallowed_by_operator"):
             log("    ⚠ SLM_SYNTH_DISALLOW=1: synthetic data was refused by operator override "
                 "rather than by the gate above. No generated row entered the curriculum, whatever "
